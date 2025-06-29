@@ -9,6 +9,17 @@ from app.pystoned_model import run_pystoned_model
 from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot, plot_efficiency_vs_size
 import io
 
+import streamlit as st
+import pandas as pd
+
+# --- LÖSENORDSSKYDD ---
+PASSWORD = "lokalnat2025"  # ← du kan ändra detta till vad du vill
+password = st.text_input("Ange lösenord för att gå vidare", type="password")
+
+if password != PASSWORD:
+    st.warning("Fel lösenord. Försök igen.")
+    st.stop()
+
 st.set_page_config(page_title="Effektiviseringsdashboard", layout="wide")
 st.title("Effektiviseringsdashboard för lokalnätsföretag")
 st.markdown("Välj modell och se effektivitet, krav och utfall för olika företag.")
