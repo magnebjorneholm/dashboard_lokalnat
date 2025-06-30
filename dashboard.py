@@ -12,12 +12,19 @@ import io
 import streamlit as st
 import pandas as pd
 
+import streamlit as st
+
 # --- LÖSENORDSSKYDD ---
 PASSWORD = st.secrets["password"]
-password = st.text_input("Ange lösenord för att gå vidare", type="password")
+password = st.text_input("Ange lösenord", type="password")
 
-if password != PASSWORD:
+# Visa felmeddelande först efter att användaren försökt skriva in något
+if password and password != PASSWORD:
     st.warning("Fel lösenord. Försök igen.")
+    st.stop()
+
+# Stoppa appen tills korrekt lösenord skrivits
+if password != PASSWORD:
     st.stop()
 
 st.set_page_config(page_title="Effektiviseringsdashboard", layout="wide")
