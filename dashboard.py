@@ -13,7 +13,7 @@ import streamlit as st
 import pandas as pd
 
 # --- LÖSENORDSSKYDD ---
-PASSWORD = "lokalnat2025"  # ← du kan ändra detta till vad du vill
+PASSWORD = st.secrets["password"]
 password = st.text_input("Ange lösenord för att gå vidare", type="password")
 
 if password != PASSWORD:
