@@ -1,5 +1,3 @@
-# pystoned_model.py
-
 import pandas as pd
 import numpy as np
 from pystoned import CNLS, StoNED
@@ -10,53 +8,84 @@ def run_pystoned_model(
     fun: str = "prod",
     cet: str = "addi",
     trunkering_min: float = 0.162416,
-    trunkering_max: float = 0.3
+    trunkering_max: float = 0.3,
+    input_cols: list = ["OPEXp", "CAPEX"],
+    output_cols: list = ["CU"],
+    outlier_filter: bool = True,
+    kravmetod: str = "absolut"  # "absolut" eller "percentilbaserat"
 ) -> pd.DataFrame:
     """
-    Kör en StoNED-modell med parametrar.
-    
-    Parametrar:
-        df: indata med kolumnerna OPEXp, CAPEX, CU
-        rts: skalavkastning ("crs", "vrs", etc.)
-        fun: typ av funktion ("prod", "cost")
-        cet: typ av teknik ("addi", "mult", etc.)
-        trunkering_min: nedre gräns för intäktsreduktion
-        trunkering_max: övre gräns för intäktsreduktion
+    Kör en StoNED-modell (PyStoned) med möjlighet att välja metod
+    för effektivitetskravsberäkning: 'absolut' eller 'percentilbaserat'.
 
-    Returnerar:
-        DataFrame med kolumnerna Effektivitet och Effkrav_proc
+    - Effektivitet θ = 1 / (1 + u_hat) beräknas via KDE.
+    - Outliers identifieras via boxplotregel på θ.
+    - Effektivitetskrav härleds antingen från θ direkt eller via rankskala.
     """
     df = df.copy()
+    x = df[input_cols].to_numpy()
+    y = df[output_cols].to_numpy()
 
-    x = df[["OPEXp", "CAPEX"]].to_numpy()
-    y = df[["CU"]].to_numpy()  # output = antal kunder
+    # Första skattning
+    cnls1 = CNLS.CNLS(y=y, x=x, rts=rts, fun=fun, cet=cet)
+    cnls1.optimize(solver="local" if cet == "mult" else None)
+    stoned1 = StoNED.StoNED(cnls1)
+    stoned1.get_technical_inefficiency(method="QLE")
+    u_hat1 = stoned1.get_technical_inefficiency(method="KDE")
+    theta1 = 1 / (1 + u_hat1)
 
-    # 1. Estimera CNLS-produktionsfront
-    cnls = CNLS.CNLS(
-        y=y,
-        x=x,
-        rts=rts,
-        fun=fun,
-        cet=cet
-    )
-    if cet == "mult":
-        cnls.optimize(solver="local")  # krävs för multiplicativ teknologi
+    if outlier_filter:
+        q25 = np.percentile(theta1, 25)
+        q75 = np.percentile(theta1, 75)
+        threshold = q25 - 2 * (q75 - q25)
+        mask = theta1 >= threshold
+        df["is_outlier"] = ~mask
+        x = x[mask]
+        y = y[mask]
     else:
-        cnls.optimize()
+        df["is_outlier"] = False
+        mask = np.ones(len(df), dtype=bool)
 
+    # Andra skattning utan outliers
+    cnls2 = CNLS.CNLS(y=y, x=x, rts=rts, fun=fun, cet=cet)
+    cnls2.optimize(solver="local" if cet == "mult" else None)
+    stoned2 = StoNED.StoNED(cnls2)
+    stoned2.get_technical_inefficiency(method="QLE")
+    u_hat2 = stoned2.get_technical_inefficiency(method="KDE")
+    theta2 = 1 / (1 + u_hat2)
 
-    # 2. StoNED med QLE och KDE
-    stoned = StoNED.StoNED(cnls)
-    stoned.get_technical_inefficiency(method="QLE")
-    u_hat = stoned.get_technical_inefficiency(method="KDE")
-    theta = 1 / (1 + u_hat)
+    # Förkräva krav
+    result_theta = []
+    result_krav = []
+    j = 0
 
-    # 3. Trunkering av effektivitetskrav
-    revred = 1 - theta
-    revred_compress = np.clip(revred, trunkering_min, trunkering_max)
-    effkrav_proc = ((1 + revred_compress / 4) ** 0.25) - 1
+    for is_outlier in df["is_outlier"]:
+        if is_outlier:
+            result_theta.append(np.nan)
+            result_krav.append(np.nan)
+        else:
+            t = theta2[j]
+            result_theta.append(t)
 
-    df["Effektivitet"] = theta
-    df["Effkrav_proc"] = effkrav_proc
+            if kravmetod == "absolut":
+                revred = 1 - t
+                revred_compress = np.clip(revred, trunkering_min, trunkering_max)
+                krav = ((1 + revred_compress / 4) ** 0.25) - 1
 
+            elif kravmetod == "percentilbaserat":
+                revred_all = 1 - theta2
+                r10, r90 = np.percentile(revred_all, 10), np.percentile(revred_all, 90)
+                revred_scaled = (revred_all[j] - r10) / (r90 - r10)
+                revred_scaled = np.clip(revred_scaled, 0, 1)
+                krav = revred_scaled * (trunkering_max - trunkering_min) + trunkering_min
+
+            else:
+                raise ValueError(f"Ogiltig kravmetod: {kravmetod}")
+
+            result_krav.append(krav)
+            j += 1
+
+    df["Effektivitet"] = result_theta
+    df["Effkrav_proc"] = result_krav
+    df["Kravmetod"] = kravmetod
     return df
