@@ -3,6 +3,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import numpy as np
 
 from app.data_loader import load_data
 from app.dea_model import run_dea_model
@@ -15,7 +16,6 @@ from app.plots import (
 )
 from app.run_logger import list_runs, load_run
 
-from app.model_compare import generate_summary_table
 
 #Lösenordsskydd
 if "access_granted" not in st.session_state:
@@ -42,7 +42,7 @@ df = load_data(data_file)
 # --- Modellval ---
 modellval = st.sidebar.selectbox(
     "Välj modell",
-    ["DEA", "SFA", "PyStoned", "Jämför körningar", "Effektivitetsjämförelse", "Företagsanalys"]
+    ["DEA", "SFA", "PyStoned", "Jämför körningar", "Företagsanalys"]
 )
 
 
@@ -57,6 +57,7 @@ if modellval == "DEA":
 
     input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=all_inputs)
     output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=all_outputs)
+    use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers före beräkning", value=True)
 
     if not input_cols or not output_cols:
         st.warning("Välj minst en input och en output för att köra modellen.")
@@ -85,8 +86,16 @@ if modellval == "DEA":
             trunkering_min=dea_trunk_min,
             trunkering_max=dea_trunk_max,
             input_cols=input_cols,
-            output_cols=output_cols
+            output_cols=output_cols,
+            outlier_filter=use_outlier_filter
         )
+
+        n_outliers = result["is_outlier"].sum()
+        if n_outliers > 0:
+            st.warning(f"{n_outliers} företag har identifierats som outliers och exkluderats från modellberäkning.")
+            st.dataframe(result[result["is_outlier"]][["Företag", "Effektivitet"]])
+        else:
+            st.info("Inga outliers identifierades i denna körning.")
 
         st.dataframe(result[["Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc"]])
         plot_efficiency_histogram(result["Effektivitet"], title="DEA: Effektivitet")
@@ -113,6 +122,17 @@ elif modellval == "PyStoned":
 
     st.sidebar.subheader("PyStoned-parametrar")
 
+    all_inputs = ["CAPEX", "OPEXp"]
+    all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
+
+    input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=["CAPEX", "OPEXp"])
+    output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=["CU"])
+    use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers före beräkning", value=True)
+
+    if not input_cols or not output_cols:
+        st.warning("Välj minst en input och en output för att köra modellen.")
+        st.stop()
+
     st.sidebar.caption("**Skalavkastning (RTS)**\n"
                        "- `crs`: Konstant skalavkastning – output ökar proportionellt med input.\n"
                        "- `vrs`: Variabel skalavkastning – tillåter t.ex. stordriftsfördelar.")
@@ -127,6 +147,13 @@ elif modellval == "PyStoned":
                        "- `addi`: Additiv teknologi – tillåter absoluta skillnader i ineffektivitet.\n"
                        "- `mult`: Multiplikativ teknologi – kräver särskild solver (`ipopt`) och används sällan i prototyper.")
     cet_val = st.sidebar.selectbox("Teknologi (CET)", ["addi", "mult"], index=0)
+
+    kravmetod = st.sidebar.radio(
+    "Metod för att beräkna effektivitetskrav (endast för PyStoned):",
+    options=["absolut", "percentilbaserat"],
+    index=0,
+    help="Välj om kravet ska baseras direkt på ineffektivitet (1 - effektivitet) eller anpassas efter fördelningen av ineffektivitet."
+    )
 
     st.sidebar.caption("**Trunkering av intäktsreduktion**\n"
                        "Anger hur mycket ineffektivitet (1 − effektivitet) får påverka kraven.\n"
@@ -149,8 +176,18 @@ elif modellval == "PyStoned":
             fun=fun_val,
             cet=cet_val,
             trunkering_min=trunk_min,
-            trunkering_max=trunk_max
+            trunkering_max=trunk_max,
+            input_cols=input_cols,
+            output_cols=output_cols,
+            outlier_filter=use_outlier_filter,
         )
+
+        n_outliers = result["is_outlier"].sum()
+        if n_outliers > 0:
+            st.warning(f"{n_outliers} företag har identifierats som outliers och exkluderats från modellberäkning.")
+            st.dataframe(result[result["is_outlier"]][["Företag", "Effektivitet"]])
+        else:
+            st.info("Inga outliers identifierades i denna körning.")
 
         # --- Spara körningen som YAML + Feather ---
         from app.run_logger import save_run
@@ -159,7 +196,11 @@ elif modellval == "PyStoned":
             "fun": fun_val,
             "cet": cet_val,
             "trunkering_min": trunk_min,
-            "trunkering_max": trunk_max
+            "trunkering_max": trunk_max,
+            "input_cols": input_cols,
+            "output_cols": output_cols,
+            "outlier_filter": use_outlier_filter,
+            "kravmetod": kravmetod
         }, result)
 
         st.dataframe(result[["Företag", "Effektivitet", "Effkrav_proc"]])
@@ -201,19 +242,24 @@ elif modellval == "Jämför körningar":
 
     params_a, df_a = load_run(run_id_a)
     params_b, df_b = load_run(run_id_b)
+    st.write("⚙️ Parametrar för körning A")
+    st.json(params_a)
+    st.write("⚙️ Parametrar för körning B")
+    st.json(params_b)
 
+
+    # Skapa dataframe med gemensamma företag och deras effektivitet
     merged = df_a[["Företag", "Effektivitet"]].rename(columns={"Effektivitet": "Eff_A"}).merge(
         df_b[["Företag", "Effektivitet"]].rename(columns={"Effektivitet": "Eff_B"}),
         on="Företag",
         how="inner"
-    )
+    ).dropna()
 
     if merged.empty:
-        st.error("Inga gemensamma företag hittades.")
-        st.stop()
-
-    merged["Diff"] = merged["Eff_B"] - merged["Eff_A"]
-    corr = merged["Eff_A"].corr(merged["Eff_B"])
+        st.info("Inga gemensamma företag att jämföra.")
+    else:
+        merged["Diff"] = merged["Eff_B"] - merged["Eff_A"]
+        corr = merged["Eff_A"].corr(merged["Eff_B"])
 
     st.subheader("Korrelation")
     st.write(f"Pearson-korrelation mellan effektivitet A och B: **{corr:.4f}**")
@@ -221,54 +267,45 @@ elif modellval == "Jämför körningar":
     st.subheader("Största skillnader (Eff_B − Eff_A)")
     st.dataframe(merged.sort_values("Diff", key=abs, ascending=False).head())
 
-    st.subheader("Scatterplot: Effektivitet A vs B")
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.scatter(merged["Eff_A"], merged["Eff_B"], alpha=0.7)
-    ax.plot([0, 1], [0, 1], color="gray", linestyle="--")
-    ax.set_xlabel("Effektivitet – Körning A")
-    ax.set_ylabel("Effektivitet – Körning B")
-    ax.set_title("Effektivitet A vs B")
-    ax.grid(True)
+    # Lägg till kravdata
+    merged["Krav_A"] = df_a.set_index("Företag").loc[merged["Företag"], "Effkrav_proc"].values
+    merged["Krav_B"] = df_b.set_index("Företag").loc[merged["Företag"], "Effkrav_proc"].values
 
+    # Layout för två plots
     col1, col2 = st.columns([2, 2])
+
     with col1:
+        st.subheader("Scatterplot: Effektivitet – A vs B")
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.scatter(merged["Eff_A"], merged["Eff_B"], alpha=0.7)
+        ax.plot([0, 1], [0, 1], color="gray", linestyle="--")
+        ax.set_xlabel("Effektivitet – Körning A")
+        ax.set_ylabel("Effektivitet – Körning B")
+        ax.set_title("Effektivitet A vs B")
+        ax.grid(True)
         st.pyplot(fig, use_container_width=False)
 
-
-elif modellval == "Effektivitetsjämförelse":
-    st.header("Effektivitetsjämförelse")
-
-    from app.run_logger import list_runs, load_run
-
-    runs = list_runs()
-    run_id = st.selectbox("Välj tidigare körning", runs)
-    params, df = load_run(run_id)
-
-    kr_bas_col = st.selectbox("Bas för krav i kr", ["OPEXp", "TOTEX"])
-    trunk_min = st.slider("Min trunkering", 0.0, 0.3, 0.162416)
-    trunk_max = st.slider("Max trunkering", 0.1, 0.5, 0.3)
-
-
-    table = generate_summary_table(df, trunk_min, trunk_max, kr_bas_col)
-    st.subheader("Effektivitet och krav")
-    st.dataframe(table)
-
-    # Förbered data för diagram – ta bort företag med icke-finit värde
-    chart_data = table[["Företag", "Effkrav_kr"]].copy()
-    chart_data["Effkrav_kr"] = pd.to_numeric(chart_data["Effkrav_kr"], errors="coerce")
-    filtered = chart_data.dropna(subset=["Effkrav_kr"])
-
-    removed_firms = set(chart_data["Företag"]) - set(filtered["Företag"])
-    if removed_firms:
-        st.warning(f"Följande företag har filtrerats bort från diagrammet p.g.a. ogiltiga värden: {', '.join(removed_firms)}")
-
-    if not filtered.empty:
-        st.bar_chart(filtered.set_index("Företag"))
-    else:
-        st.info("Inga giltiga värden att visa i diagrammet.")
+    with col2:
+        st.subheader("Scatterplot: Effektivitetskrav (%) – A vs B")
+        fig_k, ax_k = plt.subplots(figsize=(5, 5))
+        ax_k.scatter(merged["Krav_A"] * 100, merged["Krav_B"] * 100, alpha=0.7)
+        ax_k.plot([1, 2], [1, 2], color="gray", linestyle="--")
+        ax_k.set_xlim(1, 2)
+        ax_k.set_ylim(1, 2)
+        ax_k.set_xlabel("Effektiviseringskrav (%) – Körning A")
+        ax_k.set_ylabel("Effektiviseringskrav (%) – Körning B")
+        ax_k.set_title("Effektiviseringskrav A vs B (%-enheter)")
+        ax_k.grid(True)
+        st.pyplot(fig_k, use_container_width=False)
 
 elif modellval == "Företagsanalys":
     st.header("Företagsanalys")
+    st.info(
+        "Denna vy tillåter analys och simulering även för företag som identifierats som outliers i tidigare modellkörning. "
+        "Effektivitetsmåtten för sådana företag kan saknas (NaN), men deras data kan ändras och testas i nya scenarier. "
+        "Simuleringar bygger alltid en ny front baserat på de ändrade värdena för detta företag. "
+        "Detta innebär att resultatet inte är direkt jämförbart med den ursprungliga modellkörningen."
+    )
 
     from app.run_logger import list_runs, load_run
 
@@ -281,37 +318,56 @@ elif modellval == "Företagsanalys":
     if "last_firm" not in st.session_state:
         st.session_state["last_firm"] = selected_firm
     elif selected_firm != st.session_state["last_firm"]:
-            st.session_state["sim_history"] = []
-            st.session_state["sim_inputs"] = []
-            st.session_state["last_firm"] = selected_firm
-            st.rerun()
+        st.session_state["sim_history"] = []
+        st.session_state["sim_inputs"] = []
+        st.session_state["last_firm"] = selected_firm
+        st.rerun()
 
     row = df[df["Företag"] == selected_firm].iloc[0]
 
+    if "is_outlier" in df.columns and row["is_outlier"]:
+        st.warning("⚠️ Det här företaget identifierades som outlier i vald modellkörning och exkluderades från beräkning.")
+
     st.write("Redigera indata:")
     edited_row = {}
-    for col in ["OPEXp", "CAPEX", "CU", "MW", "NS", "MWhl", "MWhh"]:
+    for col in ["OPEXp", "CAPEX", "TOTEX", "CU", "MW", "NS", "MWhl", "MWhh"]:
         edited_row[col] = st.number_input(f"{col}", value=float(row[col]))
 
     modelltyp = st.selectbox("Modell", ["DEA", "PyStoned"])
     rts_val = st.selectbox("RTS", ["crs", "vrs"])
+        
+    if modelltyp == "PyStoned":
+        fun_val = st.selectbox("Funktionstyp", ["prod", "cost"], index=1)
+        cet_val = st.selectbox("Teknologi (CET)", ["addi", "mult"], index=0)
+        kravmetod_val = st.selectbox("Effektivitetskrav – metod", ["absolut", "percentilbaserat"], index=0)
+        
+        if cet_val == "mult":
+            st.warning("Teknologin 'mult' kräver solvern 'ipopt', som inte är tillgänglig i din miljö. Välj 'addi' istället.")
+            st.stop()
+    else:
+        fun_val = None
+        cet_val = None
+        kravmetod_val = None
+
+    if cet_val == "mult":
+        st.warning("Teknologin 'mult' kräver solvern 'ipopt', som inte är tillgänglig i din miljö. Välj 'addi' istället.")
+        st.stop()
+    
     output_cols = st.multiselect("Outputvariabler", ["CU", "MW", "NS", "MWhl", "MWhh"], default=["CU"])
+    input_cols = ["CAPEX", "OPEXp"]
+    use_outlier_filter = st.checkbox("Filtrera bort outliers", value=True)
     trunk_min = st.slider("Min trunkering", 0.0, 0.3, 0.162416)
     trunk_max = st.slider("Max trunkering", 0.1, 0.5, 0.3)
     kr_bas_col = st.selectbox("Bas för krav i kr", ["OPEXp", "TOTEX"])
 
-    # Initiera historik om det inte finns
     if "sim_history" not in st.session_state:
         st.session_state["sim_history"] = []
     if "sim_inputs" not in st.session_state:
         st.session_state["sim_inputs"] = []
 
-    # Kör ny simulering
     if st.button("Kör simulering"):
         df_sim = pd.DataFrame([edited_row])
         df_sim["Företag"] = selected_firm
-
-
         df_ref = df[df["Företag"] != selected_firm].copy()
         df_combined = pd.concat([df_ref, df_sim], ignore_index=True)
 
@@ -321,82 +377,96 @@ elif modellval == "Företagsanalys":
                 rts=rts_val,
                 trunkering_min=trunk_min,
                 trunkering_max=trunk_max,
-                input_cols=["CAPEX", "OPEXp"],
-                output_cols=output_cols
+                input_cols=input_cols,
+                output_cols=output_cols,
+                outlier_filter=use_outlier_filter
             )
         elif modelltyp == "PyStoned":
             result = run_pystoned_model(
                 df_combined,
                 rts=rts_val,
-                fun="cost",
-                cet="addi",
+                fun=fun_val,
+                cet=cet_val,
                 trunkering_min=trunk_min,
-                trunkering_max=trunk_max
+                trunkering_max=trunk_max,
+                input_cols=input_cols,
+                output_cols=output_cols,
+                outlier_filter=use_outlier_filter,
+                kravmetod=kravmetod_val
             )
 
         res_firm = result[result["Företag"] == selected_firm].copy()
         effkrav_kr = res_firm["Effkrav_proc"].values[0] * res_firm[kr_bas_col].values[0]
         sim_index = len([r for r in st.session_state["sim_history"] if r["Scenario"].startswith("Simulering")])
 
-        # Lägg till resultat
         st.session_state["sim_history"].append({
             "Scenario": f"Simulering {sim_index + 1}",
             "Företag": selected_firm,
             "Effektivitet": res_firm["Effektivitet"].values[0],
             "Effkrav (%)": res_firm["Effkrav_proc"].values[0] * 100,
-            "Effkrav (kr)": effkrav_kr
+            "Effkrav (kr)": effkrav_kr,
+            "Funktion": fun_val,
+            "Teknologi": cet_val,
+            "Kravmetod": kravmetod_val
         })
 
-        # Lägg till antaganden
         input_record = {
             "Scenario": f"Simulering {sim_index + 1}",
             "Företag": selected_firm,
             "RTS": rts_val,
+            "Inputval": ", ".join(input_cols),
             "Outputval": ", ".join(output_cols),
             "Trunk min": trunk_min,
             "Trunk max": trunk_max,
-            "Kr-bas": kr_bas_col
+            "Kr-bas": kr_bas_col,
+            "Outlierfilter": use_outlier_filter,
+            "Kravmetod": kravmetod_val,
+            "Funktion": fun_val,
+            "Teknologi": cet_val,
         }
         input_record.update({k: v for k, v in edited_row.items()})
         st.session_state["sim_inputs"].append(input_record)
 
-    # Ursprungligt resultat
     if not any(row["Scenario"] == "Ursprungligt" for row in st.session_state["sim_history"]):
         original_row = df[df["Företag"] == selected_firm].iloc[0]
-        effkrav_kr_orig = original_row["Effkrav_proc"] * original_row[kr_bas_col]
-        st.session_state["sim_history"].insert(0, {
-            "Scenario": "Ursprungligt",
-            "Företag": selected_firm,
-            "Effektivitet": original_row["Effektivitet"],
-            "Effkrav (%)": original_row["Effkrav_proc"] * 100,
-            "Effkrav (kr)": effkrav_kr_orig
-        })
-        st.session_state["sim_inputs"].insert(0, {
-            "Scenario": "Ursprungligt",
-            "Företag": selected_firm,
-            "RTS": params.get("rts", ""),
-            "Outputval": ", ".join(params.get("output_cols", [])),
-            "Trunk min": float(params.get("trunkering_min", 0.0) or 0.0),
-            "Trunk max": float(params.get("trunkering_max", 0.0) or 0.0),
-            "Kr-bas": kr_bas_col,
-            **{k: original_row[k] for k in ["OPEXp", "CAPEX", "CU", "MW", "NS", "MWhl", "MWhh"]}
-        })
+        if pd.notnull(original_row["Effkrav_proc"]) and pd.notnull(original_row["Effektivitet"]):
+            effkrav_kr_orig = original_row["Effkrav_proc"] * original_row[kr_bas_col]
+            st.session_state["sim_history"].insert(0, {
+                "Scenario": "Ursprungligt",
+                "Företag": selected_firm,
+                "Effektivitet": original_row["Effektivitet"],
+                "Effkrav (%)": original_row["Effkrav_proc"] * 100,
+                "Effkrav (kr)": effkrav_kr_orig,
+                "Kravmetod": params.get("kravmetod", kravmetod_val),
+            })
+            st.session_state["sim_inputs"].insert(0, {
+                "Scenario": "Ursprungligt",
+                "Företag": selected_firm,
+                "RTS": params.get("rts", ""),
+                "Inputval": ", ".join(params.get("input_cols", input_cols)),
+                "Outputval": ", ".join(params.get("output_cols", output_cols)),
+                "Trunk min": float(params.get("trunkering_min", 0.0) or 0.0),
+                "Trunk max": float(params.get("trunkering_max", 0.0) or 0.0),
+                "Kr-bas": kr_bas_col,
+                "Outlierfilter": params.get("outlier_filter", True),
+                "Kravmetod": kravmetod_val,
+                **{k: original_row[k] for k in ["OPEXp", "CAPEX", "CU", "MW", "NS", "MWhl", "MWhh"]}
+            })
 
-    # Rensningsknapp
     if st.button("🧹 Rensa simuleringar"):
         st.session_state["sim_history"] = []
         st.session_state["sim_inputs"] = []
 
-    # Visa resultat
     st.subheader("Resultatöversikt")
     hist_df = pd.DataFrame(st.session_state["sim_history"])
+    if "is_outlier" not in hist_df.columns and "is_outlier" in df.columns:
+        hist_df["is_outlier"] = hist_df["Företag"].map(df.set_index("Företag")["is_outlier"])
     st.dataframe(hist_df)
 
     st.subheader("Körningsantaganden")
     input_df = pd.DataFrame(st.session_state["sim_inputs"])
     st.dataframe(input_df)
 
-    # Export till Excel
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         hist_df.to_excel(writer, sheet_name="Resultat", index=False)
