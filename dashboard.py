@@ -103,6 +103,17 @@ if modellval == "DEA":
         plot_efficiency_histogram(result["Effkrav_proc"] * 100, title="DEA: Årligt effektiviseringskrav (%)")
         plot_efficiency_boxplot(result["Effektivitet"], title="DEA: Effektivitet (boxplot)")
         plot_efficiency_vs_size(result, size_col="MWhl", eff_col="Effektivitet")
+
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+            result.to_excel(writer, sheet_name="Resultat", index=False)
+
+        st.download_button(
+            label="📥 Ladda ned resultat för DEA-modellen som Excel",
+            data=buffer.getvalue(),
+            file_name="resultat_dea.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
     else:
         st.info("⚙️ Välj modellspecifikationer och klicka på 'Kör DEA-modellen' för att se resultat.")
 
@@ -180,6 +191,7 @@ elif modellval == "PyStoned":
             input_cols=input_cols,
             output_cols=output_cols,
             outlier_filter=use_outlier_filter,
+            kravmetod=kravmetod,
         )
 
         n_outliers = result["is_outlier"].sum()
@@ -188,20 +200,6 @@ elif modellval == "PyStoned":
             st.dataframe(result[result["is_outlier"]][["Företag", "Effektivitet"]])
         else:
             st.info("Inga outliers identifierades i denna körning.")
-
-        # --- Spara körningen som YAML + Feather ---
-        from app.run_logger import save_run
-        save_run("PyStoned", {
-            "rts": rts_val,
-            "fun": fun_val,
-            "cet": cet_val,
-            "trunkering_min": trunk_min,
-            "trunkering_max": trunk_max,
-            "input_cols": input_cols,
-            "output_cols": output_cols,
-            "outlier_filter": use_outlier_filter,
-            "kravmetod": kravmetod
-        }, result)
 
         st.dataframe(result[["Företag", "Effektivitet", "Effkrav_proc"]])
         plot_efficiency_histogram(result["Effektivitet"], title="PyStoned: Effektivitet")
@@ -242,13 +240,20 @@ elif modellval == "Jämför körningar":
 
     params_a, df_a = load_run(run_id_a)
     params_b, df_b = load_run(run_id_b)
-    st.write("⚙️ Parametrar för körning A")
-    st.json(params_a)
-    st.write("⚙️ Parametrar för körning B")
-    st.json(params_b)
 
+    # --- Visa modellspecifikationer i två tabeller ---
+    st.subheader("Modellspecifikationer")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### Körning A")
+        df_a_spec = pd.DataFrame(params_a.items(), columns=["Parameter", "Värde"])
+        st.table(df_a_spec)
+    with col2:
+        st.markdown("### Körning B")
+        df_b_spec = pd.DataFrame(params_b.items(), columns=["Parameter", "Värde"])
+        st.table(df_b_spec)
 
-    # Skapa dataframe med gemensamma företag och deras effektivitet
+    # --- Sammanfoga gemensamma företag ---
     merged = df_a[["Företag", "Effektivitet"]].rename(columns={"Effektivitet": "Eff_A"}).merge(
         df_b[["Företag", "Effektivitet"]].rename(columns={"Effektivitet": "Eff_B"}),
         on="Företag",
@@ -257,22 +262,28 @@ elif modellval == "Jämför körningar":
 
     if merged.empty:
         st.info("Inga gemensamma företag att jämföra.")
+        st.stop()
+
+    merged["Diff"] = merged["Eff_B"] - merged["Eff_A"]
+    corr = merged["Eff_A"].corr(merged["Eff_B"])
+
+    st.subheader("Effektivitetsjämförelse")
+    st.markdown(f"**Pearson-korrelation mellan effektivitet A och B:** `{corr:.4f}`")
+    st.markdown("#### Största skillnader (Eff_B − Eff_A)")
+    st.dataframe(merged.sort_values("Diff", key=abs, ascending=False).head(10))
+    st.markdown("#### Samtliga gemensamma företag")
+    st.dataframe(merged.sort_values("Företag"))
+
+    # --- Lägg till effektivitetskrav för scatterplot ---
+    if "Effkrav_proc" in df_a.columns and "Effkrav_proc" in df_b.columns:
+        merged["Krav_A"] = df_a.set_index("Företag").loc[merged["Företag"], "Effkrav_proc"].values * 100
+        merged["Krav_B"] = df_b.set_index("Företag").loc[merged["Företag"], "Effkrav_proc"].values * 100
     else:
-        merged["Diff"] = merged["Eff_B"] - merged["Eff_A"]
-        corr = merged["Eff_A"].corr(merged["Eff_B"])
+        st.warning("Effektivitetskrav saknas i en eller båda körningarna – scatterplot för krav kan inte visas.")
+        st.stop()
 
-    st.subheader("Korrelation")
-    st.write(f"Pearson-korrelation mellan effektivitet A och B: **{corr:.4f}**")
-
-    st.subheader("Största skillnader (Eff_B − Eff_A)")
-    st.dataframe(merged.sort_values("Diff", key=abs, ascending=False).head())
-
-    # Lägg till kravdata
-    merged["Krav_A"] = df_a.set_index("Företag").loc[merged["Företag"], "Effkrav_proc"].values
-    merged["Krav_B"] = df_b.set_index("Företag").loc[merged["Företag"], "Effkrav_proc"].values
-
-    # Layout för två plots
-    col1, col2 = st.columns([2, 2])
+    # --- Två scatterplots ---
+    col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Scatterplot: Effektivitet – A vs B")
@@ -288,15 +299,16 @@ elif modellval == "Jämför körningar":
     with col2:
         st.subheader("Scatterplot: Effektivitetskrav (%) – A vs B")
         fig_k, ax_k = plt.subplots(figsize=(5, 5))
-        ax_k.scatter(merged["Krav_A"] * 100, merged["Krav_B"] * 100, alpha=0.7)
+        ax_k.scatter(merged["Krav_A"], merged["Krav_B"], alpha=0.7)
         ax_k.plot([1, 2], [1, 2], color="gray", linestyle="--")
-        ax_k.set_xlim(1, 2)
-        ax_k.set_ylim(1, 2)
+        ax_k.set_xlim(1.0, 2.0)
+        ax_k.set_ylim(1.0, 2.0)
         ax_k.set_xlabel("Effektiviseringskrav (%) – Körning A")
         ax_k.set_ylabel("Effektiviseringskrav (%) – Körning B")
-        ax_k.set_title("Effektiviseringskrav A vs B (%-enheter)")
+        ax_k.set_title("Effektiviseringskrav A vs B")
         ax_k.grid(True)
         st.pyplot(fig_k, use_container_width=False)
+
 
 elif modellval == "Företagsanalys":
     st.header("Företagsanalys")

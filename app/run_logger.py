@@ -38,6 +38,9 @@ def load_run(run_id):
     with open(os.path.join(path, "params.yaml")) as f:
         params = yaml.safe_load(f)
     df = pd.read_feather(os.path.join(path, "result.feather"))
+    for col in ["Effektivitet", "Effkrav_proc", "Supereffektivitet", "potential"]:
+        if col in df.columns:
+            df[col] = df[col].where(df[col].notna(), "OUTLIER")
     return params, df
 
 def compare_runs(run_id_a, run_id_b):
