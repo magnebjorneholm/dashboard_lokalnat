@@ -1,6 +1,3 @@
-# app/data_loader.py
-# Modul för att läsa och validera indata
-
 import pandas as pd
 
 def load_data(filepath):
@@ -19,7 +16,6 @@ def load_data(filepath):
     if missing_cols:
         raise ValueError(f"Följande kolumner saknas i Excel-filen: {missing_cols}")
 
-    # Ta bort rader med noll eller negativt i input/output
-    df = df[(df[["OPEXp", "CAPEX", "CU", "MW", "NS", "MWhl", "MWhh"]] > 0).all(axis=1)]
+    # Ingen filtrering av nollor eller NaN – låt modellerna själva hantera det
     df.reset_index(drop=True, inplace=True)
     return df
