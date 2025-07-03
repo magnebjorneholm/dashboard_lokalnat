@@ -77,7 +77,12 @@ def run_dea_model(
     j = 0
     for i, is_outlier in enumerate(df["is_outlier"]):
         if is_outlier:
-            theta = eff1[i]
+                result_effektivitet.append(0.0)
+                result_supereffektivitet.append(0.0)
+                result_potential.append(1.0)
+                result_effkrav_proc.append(0.01)  # 1 % per år, inte 100 %
+        else:
+            theta = eff2[j]
             if isinstance(theta, (int, float)) and not np.isnan(theta):
                 effektivitet = min(theta, 1)
                 revred = 1 - effektivitet
@@ -89,27 +94,10 @@ def run_dea_model(
                 result_potential.append(revred)
                 result_effkrav_proc.append(revred_compress_yearly)
             else:
-                result_effektivitet.append("OUTLIER")
-                result_supereffektivitet.append("OUTLIER")
-                result_potential.append("OUTLIER")
-                result_effkrav_proc.append("OUTLIER")
-        else:
-            theta = eff2[j]
-            if theta == "OUTLIER":
-                result_effektivitet.append("OUTLIER")
-                result_supereffektivitet.append("OUTLIER")
-                result_potential.append("OUTLIER")
-                result_effkrav_proc.append("OUTLIER")
-            else:
-                effektivitet = min(theta, 1)
-                revred = 1 - effektivitet
-                revred_compress = np.clip(revred, trunkering_min, trunkering_max)
-                revred_compress_yearly = ((1 + revred_compress / 4) ** 0.25) - 1
-
-                result_effektivitet.append(effektivitet)
-                result_supereffektivitet.append(theta)
-                result_potential.append(revred)
-                result_effkrav_proc.append(revred_compress_yearly)
+                result_effektivitet.append(np.nan)
+                result_supereffektivitet.append(np.nan)
+                result_potential.append(np.nan)
+                result_effkrav_proc.append(np.nan)
             j += 1
 
     df["Effektivitet"] = result_effektivitet

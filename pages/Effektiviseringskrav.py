@@ -7,7 +7,7 @@ import numpy as np
 
 from app.data_loader import load_data
 from app.dea_model import run_dea_model
-from app.sfa_model import run_sfa_model
+from Gammalt.sfa_model import run_sfa_model
 from app.pystoned_model import run_pystoned_model
 from app.plots import (
     plot_efficiency_histogram,
@@ -16,20 +16,8 @@ from app.plots import (
 )
 from app.run_logger import list_runs, load_run
 
-
-#Lösenordsskydd
-if "access_granted" not in st.session_state:
-    st.session_state.access_granted = False
-
-if not st.session_state.access_granted:
-    password_input = st.text_input("Ange lösenord", type="password")
-    if password_input == st.secrets["password"]:
-        st.session_state.access_granted = True
-        st.rerun()
-    elif password_input != "":
-        st.warning("Fel lösenord. Försök igen.")
+if "access_granted" not in st.session_state or not st.session_state.access_granted:
     st.stop()
-
 
 st.set_page_config(page_title="Effektiviseringsdashboard", layout="wide")
 st.title("Effektiviseringsdashboard för lokalnätsföretag")
@@ -98,11 +86,12 @@ if modellval == "DEA":
             st.info("Inga outliers identifierades i denna körning.")
 
         st.dataframe(result[["Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc"]])
-        plot_efficiency_histogram(result["Effektivitet"], title="DEA: Effektivitet")
-        plot_efficiency_histogram(result["Supereffektivitet"], title="DEA: Supereffektivitet")
-        plot_efficiency_histogram(result["Effkrav_proc"] * 100, title="DEA: Årligt effektiviseringskrav (%)")
-        plot_efficiency_boxplot(result["Effektivitet"], title="DEA: Effektivitet (boxplot)")
-        plot_efficiency_vs_size(result, size_col="MWhl", eff_col="Effektivitet")
+        df_plot = result[result["is_outlier"] == False]
+        plot_efficiency_histogram(df_plot["Effektivitet"], title="DEA: Effektivitet (utan outliers)")
+        plot_efficiency_histogram(df_plot["Supereffektivitet"], title="DEA: Supereffektivitet (utan outliers)")
+        plot_efficiency_histogram(df_plot["Effkrav_proc"] * 100, title="DEA: Årligt effektiviseringskrav (%) (utan outliers)")
+        plot_efficiency_boxplot(df_plot["Effektivitet"], title="DEA: Effektivitet (boxplot, utan outliers)")
+        plot_efficiency_vs_size(df_plot, size_col="MWhl", eff_col="Effektivitet")
 
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
@@ -325,6 +314,9 @@ elif modellval == "Företagsanalys":
     run_id = st.selectbox("Välj tidigare körning", runs)
     params, df = load_run(run_id)
 
+    if "TOTEX" not in df.columns and "OPEXp" in df.columns and "CAPEX" in df.columns:
+        df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
+
     selected_firm = st.selectbox("Välj företag", df["Företag"].unique())
 
     if "last_firm" not in st.session_state:
@@ -457,8 +449,8 @@ elif modellval == "Företagsanalys":
                 "RTS": params.get("rts", ""),
                 "Inputval": ", ".join(params.get("input_cols", input_cols)),
                 "Outputval": ", ".join(params.get("output_cols", output_cols)),
-                "Trunk min": float(params.get("trunkering_min", 0.0) or 0.0),
-                "Trunk max": float(params.get("trunkering_max", 0.0) or 0.0),
+                "Trunk min": float(params.get("trunkering_min", trunk_min) or trunk_min),
+                "Trunk max": float(params.get("trunkering_max", trunk_max) or trunk_max),
                 "Kr-bas": kr_bas_col,
                 "Outlierfilter": params.get("outlier_filter", True),
                 "Kravmetod": kravmetod_val,
@@ -468,6 +460,8 @@ elif modellval == "Företagsanalys":
     if st.button("🧹 Rensa simuleringar"):
         st.session_state["sim_history"] = []
         st.session_state["sim_inputs"] = []
+        st.session_state["last_firm"] = selected_firm
+        st.rerun()
 
     st.subheader("Resultatöversikt")
     hist_df = pd.DataFrame(st.session_state["sim_history"])
