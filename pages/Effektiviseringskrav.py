@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import io
 import numpy as np
+import geopandas as gpd
 
 from app.data_loader import load_data
 from app.dea_model import run_dea_model
@@ -15,6 +16,7 @@ from app.plots import (
     plot_efficiency_vs_size,
 )
 from app.run_logger import list_runs, load_run
+from spatial_analysis import lägg_till_grannsnitt
 
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
     st.stop()
@@ -30,7 +32,7 @@ df = load_data(data_file)
 # --- Modellval ---
 modellval = st.sidebar.selectbox(
     "Välj modell",
-    ["DEA", "SFA", "PyStoned", "Jämför körningar", "Företagsanalys"]
+    ["DEA", "SFA", "PyStoned", "Jämför körningar", "Företagsanalys", "Geografisk karta"]
 )
 
 
@@ -78,10 +80,13 @@ if modellval == "DEA":
             outlier_filter=use_outlier_filter
         )
 
-        n_outliers = result["is_outlier"].sum()
+        df_outliers = result[result["is_outlier"] == True][["Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc"]]
+        df_outliers["Effkrav_proc"] = df_outliers["Effkrav_proc"].round(4)
+
+        n_outliers = len(df_outliers)
         if n_outliers > 0:
-            st.warning(f"{n_outliers} företag har identifierats som outliers och exkluderats från modellberäkning.")
-            st.dataframe(result[result["is_outlier"]][["Företag", "Effektivitet"]])
+            st.warning(f"{n_outliers} företag har identifierats som outliers, exkluderats från fronten och tilldelats ett fast årligt effektiviseringskrav på 1 %.")
+            st.dataframe(df_outliers)
         else:
             st.info("Inga outliers identifierades i denna körning.")
 
@@ -90,9 +95,7 @@ if modellval == "DEA":
         plot_efficiency_histogram(df_plot["Effektivitet"], title="DEA: Effektivitet (utan outliers)")
         plot_efficiency_histogram(df_plot["Supereffektivitet"], title="DEA: Supereffektivitet (utan outliers)")
         plot_efficiency_histogram(df_plot["Effkrav_proc"] * 100, title="DEA: Årligt effektiviseringskrav (%) (utan outliers)")
-        plot_efficiency_boxplot(df_plot["Effektivitet"], title="DEA: Effektivitet (boxplot, utan outliers)")
-        plot_efficiency_vs_size(df_plot, size_col="MWhl", eff_col="Effektivitet")
-
+        
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
             result.to_excel(writer, sheet_name="Resultat", index=False)
@@ -193,8 +196,6 @@ elif modellval == "PyStoned":
         st.dataframe(result[["Företag", "Effektivitet", "Effkrav_proc"]])
         plot_efficiency_histogram(result["Effektivitet"], title="PyStoned: Effektivitet")
         plot_efficiency_histogram(result["Effkrav_proc"] * 100, title="PyStoned: Årligt effektiviseringskrav (%)")
-        plot_efficiency_boxplot(result["Effektivitet"], title="PyStoned: Effektivitet (boxplot)")
-        plot_efficiency_vs_size(result, size_col="MWhl", eff_col="Effektivitet")
 
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
@@ -483,3 +484,53 @@ elif modellval == "Företagsanalys":
         file_name=f"simulering_{selected_firm}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+
+elif modellval == "Geografisk karta":
+    from app.run_logger import list_runs, load_run
+    from heatmap_view import show_heatmap, load_shapes
+    from spatial_analysis import lägg_till_grannsnitt
+
+    runs = list_runs()
+    if not runs:
+        st.warning("Inga modellkörningar hittades.")
+        st.stop()
+
+    run_id = st.selectbox("Välj körning", runs, index=0)
+    _, df_resultat = load_run(run_id)
+
+    karttyp = st.selectbox("Välj karttyp", ["Statisk", "Dynamisk"])
+
+    möjliga_indikatorer = ["Effektivitet"]
+    if "Supereffektivitet" in df_resultat.columns:
+        möjliga_indikatorer.append("Supereffektivitet")
+
+    indikator = st.selectbox("Välj indikator", möjliga_indikatorer)
+    visa_karta = st.checkbox("Visa karta", value=True)
+
+    if visa_karta:
+        # Visa heatmap
+        show_heatmap(df_resultat, karttyp=karttyp, indikator=indikator)
+
+        # Grannsnittsanalys
+        st.subheader("🔍 Relativ effektivitet: Grannanalys")
+
+        gdf_shapes = load_shapes()
+        df_merge = df_resultat[["REId", indikator]].copy()
+        gdf_shapes = gdf_shapes.merge(df_merge, on="REId", how="left")
+
+        # Sätt geometri aktiv om den tappats
+        gdf_shapes = gpd.GeoDataFrame(gdf_shapes, geometry="geometry", crs=gdf_shapes.crs)
+
+        gdf_analys = lägg_till_grannsnitt(gdf_shapes, indikator=indikator, k=4)
+
+        with st.expander("Visa grannsnittsanalys"):
+            st.markdown("**Relativ effektivitet jämfört med geografiska grannar**")
+            st.markdown(f"_Baseras på {indikator.lower()} och 4 närmaste grannar._")
+
+            df_grann = gdf_analys[["REId", indikator, "grannsnitt", "eff_gap"]].dropna().copy()
+            df_grann = df_grann.sort_values("eff_gap")
+
+            st.dataframe(df_grann.style
+                         .background_gradient(cmap="RdYlGn", subset=["eff_gap"]),
+                         use_container_width=True)
