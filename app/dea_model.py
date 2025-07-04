@@ -77,10 +77,10 @@ def run_dea_model(
     j = 0
     for i, is_outlier in enumerate(df["is_outlier"]):
         if is_outlier:
-                result_effektivitet.append(0.0)
-                result_supereffektivitet.append(0.0)
+                result_effektivitet.append(min(eff1[i], 1))
+                result_supereffektivitet.append(eff1[i])     
                 result_potential.append(1.0)
-                result_effkrav_proc.append(0.01)  # 1 % per år, inte 100 %
+                result_effkrav_proc.append(0.01)
         else:
             theta = eff2[j]
             if isinstance(theta, (int, float)) and not np.isnan(theta):
