@@ -100,7 +100,7 @@ def show_heatmap(df_resultat, karttyp="Statisk", indikator="Effektivitet"):
                 "label": "Ingen data"
             }
         )
-        ax.set_title(f"{indikator} per koncessionsområde (medel om flera REId)", fontsize=13)
+        ax.set_title(f"{indikator} per geografiskt verksamhetsområde (medel om flera REId)", fontsize=13)
         ax.axis("off")
         st.pyplot(fig)
 

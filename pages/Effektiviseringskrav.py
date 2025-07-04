@@ -522,15 +522,41 @@ elif modellval == "Geografisk karta":
         # Sätt geometri aktiv om den tappats
         gdf_shapes = gpd.GeoDataFrame(gdf_shapes, geometry="geometry", crs=gdf_shapes.crs)
 
-        gdf_analys = lägg_till_grannsnitt(gdf_shapes, indikator=indikator, k=4)
+        # Val av metod för grannanalys
+        st.subheader("Parametrar för grannanalys")
+        metod = st.selectbox("Metod för grannanalys", ["knn", "distanceband"], index=0)
+        avståndsviktning = st.checkbox("Använd avståndsviktning", value=False)
 
+        if metod == "knn":
+            k_val = st.slider("Antal närmaste grannar (k)", 1, 10, 4)
+            gdf_analys = lägg_till_grannsnitt(
+                gdf_shapes,
+                indikator=indikator,
+                method="knn",
+                k=k_val,
+                avståndsviktning=avståndsviktning
+            )
+            metodtext = f"{k_val} närmaste grannar (centroid-baserat)"
+        else:
+            d_val = st.slider("Maximalt avstånd (meter)", 1000, 100000, 50000, step=1000)
+            gdf_analys = lägg_till_grannsnitt(
+                gdf_shapes,
+                indikator=indikator,
+                method="distanceband",
+                distance_threshold=d_val,
+                avståndsviktning=avståndsviktning
+            )
+            metodtext = f"alla grannar inom {d_val} meter (centroid-baserat)"
+
+        # Visa tabell
         with st.expander("Visa grannsnittsanalys"):
             st.markdown("**Relativ effektivitet jämfört med geografiska grannar**")
-            st.markdown(f"_Baseras på {indikator.lower()} och 4 närmaste grannar._")
+            vikttext = "med avståndsviktning" if avståndsviktning else "utan avståndsviktning"
+            st.markdown(f"_Baseras på {indikator.lower()} och {metodtext}, {vikttext}._")
 
             df_grann = gdf_analys[["REId", indikator, "grannsnitt", "eff_gap"]].dropna().copy()
             df_grann = df_grann.sort_values("eff_gap")
 
             st.dataframe(df_grann.style
-                         .background_gradient(cmap="RdYlGn", subset=["eff_gap"]),
-                         use_container_width=True)
+                        .background_gradient(cmap="RdYlGn", subset=["eff_gap"]),
+                        use_container_width=True)
