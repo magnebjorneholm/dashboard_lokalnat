@@ -62,4 +62,9 @@ def lägg_till_grannsnitt(gdf, indikator="Effektivitet", method="knn", k=4, dist
     gdf["eff_gap"] = gdf[indikator] - gdf["grannsnitt"]
     gdf = gdf.drop(columns=["centroid"])
 
+    if "Företag" in gdf.columns:
+        namn_df = gdf[["REId", "Företag"]].drop_duplicates()
+        gdf = gdf.drop(columns=["Företag"])
+        gdf = gdf.merge(namn_df, on="REId", how="left")
+
     return gdf

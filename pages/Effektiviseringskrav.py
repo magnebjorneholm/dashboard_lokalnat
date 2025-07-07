@@ -67,7 +67,7 @@ if modellval == "DEA":
     dea_trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
 
     # --- Körmodellknapp ---
-    run_model = st.sidebar.button("🔁 Kör DEA-modellen")
+    run_model = st.sidebar.button("Kör DEA")
 
     if run_model:
         result = run_dea_model(
@@ -101,13 +101,13 @@ if modellval == "DEA":
             result.to_excel(writer, sheet_name="Resultat", index=False)
 
         st.download_button(
-            label="📥 Ladda ned resultat för DEA-modellen som Excel",
+            label="Ladda ned resultat för DEA-modellen som Excel",
             data=buffer.getvalue(),
             file_name="resultat_dea.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
     else:
-        st.info("⚙️ Välj modellspecifikationer och klicka på 'Kör DEA-modellen' för att se resultat.")
+        st.info("Välj modellspecifikationer och klicka på 'Kör DEA-modellen' för att se resultat.")
 
 
 elif modellval == "SFA":
@@ -166,7 +166,7 @@ elif modellval == "PyStoned":
     trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
 
     # Kör endast om användaren klickar på knappen
-    run_model = st.sidebar.button("🔁 Kör PyStoned-modellen")
+    run_model = st.sidebar.button("Kör PyStoned")
 
     if cet_val == "mult":
         st.warning("Teknologin 'mult' kräver solvern 'ipopt', som inte är tillgänglig i din miljö. Välj 'addi' istället.")
@@ -201,13 +201,13 @@ elif modellval == "PyStoned":
         with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
             result.to_excel(writer, sheet_name="Resultat", index=False)
         st.download_button(
-            label=f"📄 Ladda ned resultat för {modellval}-modellen som Excel",
+            label=f"Ladda ned resultat för {modellval}-modellen som Excel",
             data=buffer.getvalue(),
             file_name=f"resultat_{modellval.lower()}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.info("⚙️ Välj modellspecifikationer och klicka på 'Kör PyStoned-modellen' för att se resultat.")
+        st.info("Välj modellspecifikationer och klicka på 'Kör PyStoned-modellen' för att se resultat.")
 
 
 elif modellval == "Jämför körningar":
@@ -303,63 +303,44 @@ elif modellval == "Jämför körningar":
 elif modellval == "Företagsanalys":
     st.header("Företagsanalys")
     st.info(
-        "Denna vy tillåter analys och simulering även för företag som identifierats som outliers i tidigare modellkörning. "
-        "Effektivitetsmåtten för sådana företag kan saknas (NaN), men deras data kan ändras och testas i nya scenarier. "
-        "Simuleringar bygger alltid en ny front baserat på de ändrade värdena för detta företag. "
-        "Detta innebär att resultatet inte är direkt jämförbart med den ursprungliga modellkörningen."
+        "Testa olika scenarier för ett företag med valfria specifikationer. "
+        "Första körningen i denna flik sparas som referens. "
+        "Senare körningar numreras som Simulering 1, 2, 3... och jämförs med referensen. "
+        "Körningar sparas inte mellan sessioner – du börjar från noll varje gång du öppnar fliken eller klickar 'Rensa'."
     )
 
-    from app.run_logger import list_runs, load_run
-
-    runs = list_runs()
-    run_id = st.selectbox("Välj tidigare körning", runs)
-    params, df = load_run(run_id)
-
-    if "TOTEX" not in df.columns and "OPEXp" in df.columns and "CAPEX" in df.columns:
-        df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
-
-    selected_firm = st.selectbox("Välj företag", df["Företag"].unique())
-
-    if "last_firm" not in st.session_state:
-        st.session_state["last_firm"] = selected_firm
-    elif selected_firm != st.session_state["last_firm"]:
-        st.session_state["sim_history"] = []
-        st.session_state["sim_inputs"] = []
-        st.session_state["last_firm"] = selected_firm
-        st.rerun()
+    df = load_data("data/Data_modeller.xlsx")
+    df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
+    företag_namn = df["Företag"].unique()
+    selected_firm = st.selectbox("Välj företag", företag_namn)
 
     row = df[df["Företag"] == selected_firm].iloc[0]
 
-    if "is_outlier" in df.columns and row["is_outlier"]:
-        st.warning("⚠️ Det här företaget identifierades som outlier i vald modellkörning och exkluderades från beräkning.")
-
-    st.write("Redigera indata:")
+    st.subheader("Redigera företagets data")
     edited_row = {}
     for col in ["OPEXp", "CAPEX", "TOTEX", "CU", "MW", "NS", "MWhl", "MWhh"]:
         edited_row[col] = st.number_input(f"{col}", value=float(row[col]))
 
+    st.subheader("Välj modellspecifikation")
     modelltyp = st.selectbox("Modell", ["DEA", "PyStoned"])
     rts_val = st.selectbox("RTS", ["crs", "vrs"])
-        
+
     if modelltyp == "PyStoned":
         fun_val = st.selectbox("Funktionstyp", ["prod", "cost"], index=1)
         cet_val = st.selectbox("Teknologi (CET)", ["addi", "mult"], index=0)
         kravmetod_val = st.selectbox("Effektivitetskrav – metod", ["absolut", "percentilbaserat"], index=0)
-        
         if cet_val == "mult":
-            st.warning("Teknologin 'mult' kräver solvern 'ipopt', som inte är tillgänglig i din miljö. Välj 'addi' istället.")
+            st.warning("Teknologin 'mult' kräver solvern 'ipopt', som inte stöds i din miljö.")
             st.stop()
     else:
         fun_val = None
         cet_val = None
         kravmetod_val = None
 
-    if cet_val == "mult":
-        st.warning("Teknologin 'mult' kräver solvern 'ipopt', som inte är tillgänglig i din miljö. Välj 'addi' istället.")
-        st.stop()
-    
-    output_cols = st.multiselect("Outputvariabler", ["CU", "MW", "NS", "MWhl", "MWhh"], default=["CU"])
-    input_cols = ["CAPEX", "OPEXp"]
+    möjliga_inputs = ["CAPEX", "OPEXp"]
+    möjliga_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
+    input_cols = st.multiselect("Inputvariabler", möjliga_inputs, default=["CAPEX", "OPEXp"])
+    output_cols = st.multiselect("Outputvariabler", möjliga_outputs, default=["CU"])
     use_outlier_filter = st.checkbox("Filtrera bort outliers", value=True)
     trunk_min = st.slider("Min trunkering", 0.0, 0.3, 0.162416)
     trunk_max = st.slider("Max trunkering", 0.1, 0.5, 0.3)
@@ -367,18 +348,18 @@ elif modellval == "Företagsanalys":
 
     if "sim_history" not in st.session_state:
         st.session_state["sim_history"] = []
-    if "sim_inputs" not in st.session_state:
         st.session_state["sim_inputs"] = []
 
-    if st.button("Kör simulering"):
-        df_sim = pd.DataFrame([edited_row])
-        df_sim["Företag"] = selected_firm
-        df_ref = df[df["Företag"] != selected_firm].copy()
-        df_combined = pd.concat([df_ref, df_sim], ignore_index=True)
+    if st.button("Kör modell"):
+        df_mod = df.copy()
+        mask = df_mod["Företag"] == selected_firm
+        for col in edited_row:
+            df_mod.loc[mask, col] = edited_row[col]
 
+        # Kör vald modell
         if modelltyp == "DEA":
             result = run_dea_model(
-                df_combined,
+                df_mod,
                 rts=rts_val,
                 trunkering_min=trunk_min,
                 trunkering_max=trunk_max,
@@ -388,7 +369,7 @@ elif modellval == "Företagsanalys":
             )
         elif modelltyp == "PyStoned":
             result = run_pystoned_model(
-                df_combined,
+                df_mod,
                 rts=rts_val,
                 fun=fun_val,
                 cet=cet_val,
@@ -402,10 +383,15 @@ elif modellval == "Företagsanalys":
 
         res_firm = result[result["Företag"] == selected_firm].copy()
         effkrav_kr = res_firm["Effkrav_proc"].values[0] * res_firm[kr_bas_col].values[0]
-        sim_index = len([r for r in st.session_state["sim_history"] if r["Scenario"].startswith("Simulering")])
+
+        # Namnge scenario
+        scen_namn = (
+            "Referens" if len(st.session_state["sim_history"]) == 0
+            else f"Simulering {len(st.session_state['sim_history'])}"
+        )
 
         st.session_state["sim_history"].append({
-            "Scenario": f"Simulering {sim_index + 1}",
+            "Scenario": scen_namn,
             "Företag": selected_firm,
             "Effektivitet": res_firm["Effektivitet"].values[0],
             "Effkrav (%)": res_firm["Effkrav_proc"].values[0] * 100,
@@ -415,8 +401,8 @@ elif modellval == "Företagsanalys":
             "Kravmetod": kravmetod_val
         })
 
-        input_record = {
-            "Scenario": f"Simulering {sim_index + 1}",
+        st.session_state["sim_inputs"].append({
+            "Scenario": scen_namn,
             "Företag": selected_firm,
             "RTS": rts_val,
             "Inputval": ", ".join(input_cols),
@@ -428,46 +414,16 @@ elif modellval == "Företagsanalys":
             "Kravmetod": kravmetod_val,
             "Funktion": fun_val,
             "Teknologi": cet_val,
-        }
-        input_record.update({k: v for k, v in edited_row.items()})
-        st.session_state["sim_inputs"].append(input_record)
+            **edited_row
+        })
 
-    if not any(row["Scenario"] == "Ursprungligt" for row in st.session_state["sim_history"]):
-        original_row = df[df["Företag"] == selected_firm].iloc[0]
-        if pd.notnull(original_row["Effkrav_proc"]) and pd.notnull(original_row["Effektivitet"]):
-            effkrav_kr_orig = original_row["Effkrav_proc"] * original_row[kr_bas_col]
-            st.session_state["sim_history"].insert(0, {
-                "Scenario": "Ursprungligt",
-                "Företag": selected_firm,
-                "Effektivitet": original_row["Effektivitet"],
-                "Effkrav (%)": original_row["Effkrav_proc"] * 100,
-                "Effkrav (kr)": effkrav_kr_orig,
-                "Kravmetod": params.get("kravmetod", kravmetod_val),
-            })
-            st.session_state["sim_inputs"].insert(0, {
-                "Scenario": "Ursprungligt",
-                "Företag": selected_firm,
-                "RTS": params.get("rts", ""),
-                "Inputval": ", ".join(params.get("input_cols", input_cols)),
-                "Outputval": ", ".join(params.get("output_cols", output_cols)),
-                "Trunk min": float(params.get("trunkering_min", trunk_min) or trunk_min),
-                "Trunk max": float(params.get("trunkering_max", trunk_max) or trunk_max),
-                "Kr-bas": kr_bas_col,
-                "Outlierfilter": params.get("outlier_filter", True),
-                "Kravmetod": kravmetod_val,
-                **{k: original_row[k] for k in ["OPEXp", "CAPEX", "CU", "MW", "NS", "MWhl", "MWhh"]}
-            })
-
-    if st.button("🧹 Rensa simuleringar"):
+    if st.button("Rensa körningar"):
         st.session_state["sim_history"] = []
         st.session_state["sim_inputs"] = []
-        st.session_state["last_firm"] = selected_firm
         st.rerun()
 
     st.subheader("Resultatöversikt")
     hist_df = pd.DataFrame(st.session_state["sim_history"])
-    if "is_outlier" not in hist_df.columns and "is_outlier" in df.columns:
-        hist_df["is_outlier"] = hist_df["Företag"].map(df.set_index("Företag")["is_outlier"])
     st.dataframe(hist_df)
 
     st.subheader("Körningsantaganden")
@@ -479,11 +435,12 @@ elif modellval == "Företagsanalys":
         hist_df.to_excel(writer, sheet_name="Resultat", index=False)
         input_df.to_excel(writer, sheet_name="Antaganden", index=False)
     st.download_button(
-        label="📄 Ladda ned resultatöversikt som Excel",
+        label="Ladda ned resultatöversikt som Excel",
         data=buffer.getvalue(),
         file_name=f"simulering_{selected_firm}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
 
 
 elif modellval == "Geografisk karta":
@@ -513,18 +470,18 @@ elif modellval == "Geografisk karta":
         show_heatmap(df_resultat, karttyp=karttyp, indikator=indikator)
 
         # Grannsnittsanalys
-        st.subheader("🔍 Relativ effektivitet: Grannanalys")
+        st.subheader("Jämför med grannar")
 
         gdf_shapes = load_shapes()
-        df_merge = df_resultat[["REId", indikator]].copy()
+        df_merge = df_resultat[["REId", "Företag", indikator]].copy()
         gdf_shapes = gdf_shapes.merge(df_merge, on="REId", how="left")
 
         # Sätt geometri aktiv om den tappats
         gdf_shapes = gpd.GeoDataFrame(gdf_shapes, geometry="geometry", crs=gdf_shapes.crs)
 
         # Val av metod för grannanalys
-        st.subheader("Parametrar för grannanalys")
-        metod = st.selectbox("Metod för grannanalys", ["knn", "distanceband"], index=0)
+        st.subheader("Parametrar")
+        metod = st.selectbox("Metod", ["knn", "distanceband"], index=0)
         avståndsviktning = st.checkbox("Använd avståndsviktning", value=False)
 
         if metod == "knn":
@@ -549,12 +506,12 @@ elif modellval == "Geografisk karta":
             metodtext = f"alla grannar inom {d_val} meter (centroid-baserat)"
 
         # Visa tabell
-        with st.expander("Visa grannsnittsanalys"):
+        with st.expander("Visa analys"):
             st.markdown("**Relativ effektivitet jämfört med geografiska grannar**")
             vikttext = "med avståndsviktning" if avståndsviktning else "utan avståndsviktning"
             st.markdown(f"_Baseras på {indikator.lower()} och {metodtext}, {vikttext}._")
 
-            df_grann = gdf_analys[["REId", indikator, "grannsnitt", "eff_gap"]].dropna().copy()
+            df_grann = gdf_analys[["REId", "Företag", indikator, "grannsnitt", "eff_gap"]].dropna().copy()
             df_grann = df_grann.sort_values("eff_gap")
 
             st.dataframe(df_grann.style
