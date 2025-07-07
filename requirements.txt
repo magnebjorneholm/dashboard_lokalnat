@@ -1,9 +1,24 @@
-streamlit
+# Grundläggande datahantering
 pandas
 numpy
-matplotlib
 openpyxl
-pulp
-pystoned
 xlsxwriter
+pyarrow
+
+# Modellpaket
+pystoned @ git+https://github.com/ds2010/pyStoNED
+pulp
+
+# Visualisering och dashboard
+matplotlib
+streamlit
+streamlit-folium
+folium
+
+# Geodata
+geopandas
+libpysal
+shapely
+
+# Annat
 pyyaml
