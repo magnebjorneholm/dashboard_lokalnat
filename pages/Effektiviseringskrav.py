@@ -121,7 +121,7 @@ elif modellval == "SFA":
 
 
 elif modellval == "PyStoned":
-    st.header("PyStoned-modell2")
+    st.header("PyStoned-modell")
 
     st.sidebar.subheader("PyStoned-parametrar")
 
