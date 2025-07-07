@@ -1,12 +1,15 @@
-modell: DEA
+modell: PyStoned
 parametrar:
+  cet: addi
+  fun: prod
   input_cols:
   - CAPEX
   - OPEXp
+  kravmetod: absolut
   outlier_filter: true
   output_cols:
-  - MW
+  - CU
   rts: crs
   trunkering_max: 0.3
   trunkering_min: 0.162416
-timestamp: 2025-07-07_12-02-25
+timestamp: 2025-07-07_12-35-34
