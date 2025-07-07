@@ -1,0 +1,7 @@
+[server]
+headless = true
+port = $PORT
+enableCORS = false
+
+[app]
+target = "streamlit_app.py"
