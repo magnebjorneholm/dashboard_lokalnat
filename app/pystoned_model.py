@@ -33,6 +33,10 @@ def run_pystoned_model(
     if email is None:
         raise ValueError("NEOS_EMAIL is not set in .streamlit/secrets.toml")
    
+    print("Använder solver med NEOS och e-post:", email)
+    cnls1.optimize(email=email)
+
+
     cnls1 = CNLS.CNLS(y=y, x=x, rts=rts, fun=fun, cet=cet)
     cnls1.optimize(email=email)
     stoned1 = StoNED.StoNED(cnls1)
@@ -51,6 +55,11 @@ def run_pystoned_model(
         mask = np.ones(len(df), dtype=bool)
         df["is_outlier"] = False
 
+    
+    print("Andra körningen med NEOS och e-post:", email)
+    cnls2.optimize(email=email)
+
+    
     # Andra skattning utan outliers
     x_clean = x[mask]
     y_clean = y[mask]
