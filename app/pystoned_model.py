@@ -25,18 +25,18 @@ def run_pystoned_model(
     - Outliers får sina krav baserat på θ1 (första körningen).
     """
     df = df.copy()
+    email = st.secrets.get("NEOS_EMAIL", None)
+    
+    if email is None:
+        raise ValueError("NEOS_EMAIL is not set in .streamlit/secrets.toml")
+
     x = df[input_cols].to_numpy()
     y = df[output_cols].to_numpy()
 
     # Första skattning (alla med)
-    email = st.secrets.get("NEOS_EMAIL", None)
-    if email is None:
-        raise ValueError("NEOS_EMAIL is not set in .streamlit/secrets.toml")
+    
    
     print("Använder solver med NEOS och e-post:", email)
-    cnls1.optimize(email=email)
-
-
     cnls1 = CNLS.CNLS(y=y, x=x, rts=rts, fun=fun, cet=cet)
     cnls1.optimize(email=email)
     stoned1 = StoNED.StoNED(cnls1)
@@ -57,14 +57,10 @@ def run_pystoned_model(
 
     
     print("Andra körningen med NEOS och e-post:", email)
-    cnls2.optimize(email=email)
-
-    
-    # Andra skattning utan outliers
     x_clean = x[mask]
     y_clean = y[mask]
     cnls2 = CNLS.CNLS(y=y_clean, x=x_clean, rts=rts, fun=fun, cet=cet)
-    cnls2.optimize(email = email)
+    cnls2.optimize(email=email)
     stoned2 = StoNED.StoNED(cnls2)
     stoned2.get_technical_inefficiency(method="QLE")
     u_hat2 = stoned2.get_technical_inefficiency(method="KDE")
