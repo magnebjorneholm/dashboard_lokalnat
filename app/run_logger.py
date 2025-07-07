@@ -31,6 +31,7 @@ import os
 import yaml # type: ignore
 
 def list_runs():
+    os.makedirs("runs", exist_ok=True)
     return sorted(os.listdir("runs"))
 
 def load_run(run_id):
