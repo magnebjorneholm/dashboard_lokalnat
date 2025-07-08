@@ -32,7 +32,7 @@ df = load_data(data_file)
 # --- Modellval ---
 modellval = st.sidebar.selectbox(
     "Välj modell",
-    ["DEA", "SFA", "PyStoned", "PyStoned (batch)", "Jämför körningar", "Företagsanalys", "Geografisk karta"]
+    ["DEA", "SFA", "PyStoned", "PyStoned (färdig körning)" ,"Jämför körningar", "Företagsanalys", "Geografisk karta"]
 )
 
 
@@ -112,6 +112,9 @@ if modellval == "DEA":
 
 elif modellval == "SFA":
     st.header("SFA-modell")
+    st.warning("Tekniska problem")
+    st.stop()
+
     result = run_sfa_model(df)
     st.dataframe(result[["Företag", "Effektivitet", "Effkrav_proc"]])
     plot_efficiency_histogram(result["Effektivitet"], title="SFA: Effektivitet")
@@ -122,6 +125,8 @@ elif modellval == "SFA":
 
 elif modellval == "PyStoned":
     st.header("PyStoned-modell")
+    st.warning("Tekniska problem, gå till modellen under och lek med färdiga pystoned-körningar")
+    st.stop()
 
     st.sidebar.subheader("PyStoned-parametrar")
 
@@ -209,45 +214,65 @@ elif modellval == "PyStoned":
     else:
         st.info("Välj modellspecifikationer och klicka på 'Kör PyStoned-modellen' för att se resultat.")
 
-elif modellval == "PyStoned (batch)":
-    st.header("PyStoned – körs som batch utanför Streamlit")
 
-    st.markdown(
-        "Denna version körs som en extern process för att undvika att Streamlit hänger sig. "
-        "Den använder input från Excel-filen och skriver resultat till ny Excel-fil."
-    )
+elif modellval == "PyStoned (färdig körning)":
+    st.header("PyStoned: Ladda färdiga körningar")
+    st.warning("Work in progress;)")
+    st.stop()
 
-    import subprocess
-    import time
-    import os
+    from app.run_logger import list_runs, load_run
+    from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
 
-    input_path = "Data_modeller.xlsx"
-    output_path = "data/pystoned_resultat.xlsx"
+    runs = list_runs()
+    pystoned_runs = [r for r in runs if r.lower().startswith("pystoned")]
 
-    if st.button("Kör batchmodell"):
-        if os.path.exists(output_path):
-            os.remove(output_path)
+    if not pystoned_runs:
+        st.warning("Inga färdiga PyStoned-körningar hittades.")
+        st.stop()
 
-        st.info("Modellen körs i bakgrunden... detta kan ta upp till 20 sekunder.")
-        process = subprocess.Popen(["python", "data/pystoned_batch_runner.py"])
+    run_id = st.selectbox("Välj en körning", pystoned_runs)
+    params, df = load_run(run_id)
 
-        timeout = 20
-        poll_interval = 1
-        waited = 0
+    if "Effektivitet" not in df.columns:
+        st.error("Ingen 'Effektivitet'-kolumn hittades i körningen.")
+        st.stop()
 
-        while waited < timeout:
-            if os.path.exists(output_path):
-                break
-            time.sleep(poll_interval)
-            waited += poll_interval
+    st.sidebar.subheader("Beräkna effektivitetskrav")
+    kravmetod = st.sidebar.radio("Metod för krav", ["absolut", "percentilbaserad"], index=0)
+    trunk_min = st.sidebar.slider("Minsta trunkering", 0.0, 0.3, 0.162, step=0.005)
+    trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
 
-        if os.path.exists(output_path):
-            st.success("✅ Modellkörning klar.")
-            result_df = pd.read_excel(output_path)
-            st.dataframe(result_df)
+    def beräkna_effkrav(eff, metod, t_min, t_max):
+        ineff = 1 - eff
+        if metod == "absolut":
+            krav = ineff.clip(lower=t_min, upper=t_max)
+        elif metod == "percentilbaserad":
+            gräns = ineff.quantile(0.9)
+            krav = ineff.clip(upper=gräns).clip(lower=t_min, upper=t_max)
         else:
-            st.error("❌ Timeout – inget resultat hittades.")
+            krav = ineff
+        return krav
 
+    df = df.copy()
+    df["Effkrav_proc"] = beräkna_effkrav(df["Effektivitet"].astype(float), kravmetod, trunk_min, trunk_max)
+
+    st.subheader("Resultat")
+    st.dataframe(df[["Företag", "Effektivitet", "Effkrav_proc"]])
+
+    plot_efficiency_histogram(df["Effektivitet"], title="Effektivitet")
+    plot_efficiency_boxplot(df["Effektivitet"], title="Effektivitet (boxplot)")
+    plot_efficiency_histogram(df["Effkrav_proc"] * 100, title="Effektiviseringskrav (%)")
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        df[["Företag", "Effektivitet", "Effkrav_proc"]].to_excel(writer, sheet_name="Resultat", index=False)
+
+    st.download_button(
+        "Ladda ned resultat som Excel",
+        data=buffer.getvalue(),
+        file_name=f"krav_{run_id}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 
 elif modellval == "Jämför körningar":
@@ -480,7 +505,6 @@ elif modellval == "Företagsanalys":
         file_name=f"simulering_{selected_firm}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
 
 
 elif modellval == "Geografisk karta":
