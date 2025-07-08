@@ -32,7 +32,7 @@ df = load_data(data_file)
 # --- Modellval ---
 modellval = st.sidebar.selectbox(
     "Välj modell",
-    ["DEA", "SFA", "PyStoned", "Jämför körningar", "Företagsanalys", "Geografisk karta"]
+    ["DEA", "SFA", "PyStoned", "PyStoned (batch)", "Jämför körningar", "Företagsanalys", "Geografisk karta"]
 )
 
 
@@ -208,6 +208,46 @@ elif modellval == "PyStoned":
         )
     else:
         st.info("Välj modellspecifikationer och klicka på 'Kör PyStoned-modellen' för att se resultat.")
+
+elif modellval == "PyStoned (batch)":
+    st.header("PyStoned – körs som batch utanför Streamlit")
+
+    st.markdown(
+        "Denna version körs som en extern process för att undvika att Streamlit hänger sig. "
+        "Den använder input från Excel-filen och skriver resultat till ny Excel-fil."
+    )
+
+    import subprocess
+    import time
+    import os
+
+    input_path = "Data_modeller.xlsx"
+    output_path = "data/pystoned_resultat.xlsx"
+
+    if st.button("Kör batchmodell"):
+        if os.path.exists(output_path):
+            os.remove(output_path)
+
+        st.info("Modellen körs i bakgrunden... detta kan ta upp till 20 sekunder.")
+        process = subprocess.Popen(["python", "data/pystoned_batch_runner.py"])
+
+        timeout = 20
+        poll_interval = 1
+        waited = 0
+
+        while waited < timeout:
+            if os.path.exists(output_path):
+                break
+            time.sleep(poll_interval)
+            waited += poll_interval
+
+        if os.path.exists(output_path):
+            st.success("✅ Modellkörning klar.")
+            result_df = pd.read_excel(output_path)
+            st.dataframe(result_df)
+        else:
+            st.error("❌ Timeout – inget resultat hittades.")
+
 
 
 elif modellval == "Jämför körningar":

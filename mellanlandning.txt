@@ -1,171 +1,112 @@
-elif modellval == "Företagsanalys":
-    st.header("Företagsanalys")
-    st.info(
-        "Denna vy tillåter analys och simulering även för företag som identifierats som outliers i tidigare modellkörning. "
-        "Effektivitetsmåtten för sådana företag kan saknas (NaN), men deras data kan ändras och testas i nya scenarier. "
-        "Simuleringar bygger alltid en ny front baserat på de ändrade värdena för detta företag. "
-        "Detta innebär att resultatet inte är direkt jämförbart med den ursprungliga modellkörningen."
-    )
+import pandas as pd
+import numpy as np
+from pystoned import CNLS, StoNED
+from app.run_logger import save_run
 
-    from app.run_logger import list_runs, load_run
+def run_pystoned_model(
+    df: pd.DataFrame,
+    rts: str = "crs",
+    fun: str = "prod",
+    cet: str = "addi",
+    trunkering_min: float = 0.162416,
+    trunkering_max: float = 0.3,
+    input_cols: list = ["OPEXp", "CAPEX"],
+    output_cols: list = ["CU"],
+    outlier_filter: bool = True,
+    kravmetod: str = "absolut"  # "absolut" eller "percentilbaserat"
+) -> pd.DataFrame:
+    """
+    Kör en StoNED-modell (PyStoned) med möjlighet att välja metod
+    för effektivitetskravsberäkning: 'absolut' eller 'percentilbaserat'.
 
-    runs = list_runs()
-    run_id = st.selectbox("Välj tidigare körning", runs)
-    params, df = load_run(run_id)
+    - Effektivitet θ = 1 / (1 + u_hat) beräknas via KDE.
+    - Outliers identifieras via boxplotregel på θ.
+    - Outliers får sina krav baserat på θ1 (första körningen).
+    """
+    df = df.copy()
+    x = df[input_cols].to_numpy()
+    y = df[output_cols].to_numpy()
 
-    if "TOTEX" not in df.columns and "OPEXp" in df.columns and "CAPEX" in df.columns:
-        df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
+    # Första skattning (alla med)
+    cnls1 = CNLS.CNLS(y=y, x=x, rts=rts, fun=fun, cet=cet)
+    cnls1.optimize(solver="local" if cet == "mult" else None)
+    stoned1 = StoNED.StoNED(cnls1)
+    stoned1.get_technical_inefficiency(method="QLE")
+    u_hat1 = stoned1.get_technical_inefficiency(method="KDE")
+    theta1 = 1 / (1 + u_hat1)
 
-    selected_firm = st.selectbox("Välj företag", df["Företag"].unique())
-
-    if "last_firm" not in st.session_state:
-        st.session_state["last_firm"] = selected_firm
-    elif selected_firm != st.session_state["last_firm"]:
-        st.session_state["sim_history"] = []
-        st.session_state["sim_inputs"] = []
-        st.session_state["last_firm"] = selected_firm
-        st.rerun()
-
-    row = df[df["Företag"] == selected_firm].iloc[0]
-
-    if "is_outlier" in df.columns and row["is_outlier"]:
-        st.warning("⚠️ Det här företaget identifierades som outlier i vald modellkörning och exkluderades från beräkning.")
-
-    st.write("Redigera indata:")
-    edited_row = {}
-    for col in ["OPEXp", "CAPEX", "TOTEX", "CU", "MW", "NS", "MWhl", "MWhh"]:
-        edited_row[col] = st.number_input(f"{col}", value=float(row[col]))
-
-    modelltyp = st.selectbox("Modell", ["DEA", "PyStoned"])
-    rts_val = st.selectbox("RTS", ["crs", "vrs"])
-        
-    if modelltyp == "PyStoned":
-        fun_val = st.selectbox("Funktionstyp", ["prod", "cost"], index=1)
-        cet_val = st.selectbox("Teknologi (CET)", ["addi", "mult"], index=0)
-        kravmetod_val = st.selectbox("Effektivitetskrav – metod", ["absolut", "percentilbaserat"], index=0)
-        
-        if cet_val == "mult":
-            st.warning("Teknologin 'mult' kräver solvern 'ipopt', som inte är tillgänglig i din miljö. Välj 'addi' istället.")
-            st.stop()
+    # Outlieridentifiering
+    if outlier_filter:
+        q25 = np.percentile(theta1, 25)
+        q75 = np.percentile(theta1, 75)
+        threshold = q25 - 2 * (q75 - q25)
+        mask = theta1 >= threshold
+        df["is_outlier"] = ~mask
     else:
-        fun_val = None
-        cet_val = None
-        kravmetod_val = None
+        mask = np.ones(len(df), dtype=bool)
+        df["is_outlier"] = False
 
-    if cet_val == "mult":
-        st.warning("Teknologin 'mult' kräver solvern 'ipopt', som inte är tillgänglig i din miljö. Välj 'addi' istället.")
-        st.stop()
-    
-    möjliga_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
-    möjliga_inputs = ["CAPEX", "OPEXp"]
+    # Andra skattning utan outliers
+    x_clean = x[mask]
+    y_clean = y[mask]
+    cnls2 = CNLS.CNLS(y=y_clean, x=x_clean, rts=rts, fun=fun, cet=cet)
+    cnls2.optimize(solver="local" if cet == "mult" else None)
+    stoned2 = StoNED.StoNED(cnls2)
+    stoned2.get_technical_inefficiency(method="QLE")
+    u_hat2 = stoned2.get_technical_inefficiency(method="KDE")
+    theta2 = 1 / (1 + u_hat2)
 
-    input_cols = st.multiselect(
-        "Inputvariabler", 
-        möjliga_inputs, 
-        default=params.get("input_cols", möjliga_inputs)
-    )
+    # Tilldela theta och krav
+    result_theta = []
+    result_krav = []
+    j = 0
 
-    output_cols = st.multiselect(
-        "Outputvariabler", 
-        möjliga_outputs, 
-        default=params.get("output_cols", ["CU"])
-    )
+    for i, is_outlier in enumerate(df["is_outlier"]):
+        if is_outlier:
+            t = theta1[i]
+        else:
+            t = theta2[j]
+            j += 1
 
-    use_outlier_filter = st.checkbox("Filtrera bort outliers", value=True)
-    trunk_min = st.slider("Min trunkering", 0.0, 0.3, 0.162416)
-    trunk_max = st.slider("Max trunkering", 0.1, 0.5, 0.3)
-    kr_bas_col = st.selectbox("Bas för krav i kr", ["OPEXp", "TOTEX"])
+        result_theta.append(t)
 
-    if "sim_history" not in st.session_state:
-        st.session_state["sim_history"] = []
-    if "sim_inputs" not in st.session_state:
-        st.session_state["sim_inputs"] = []
+        if kravmetod == "absolut":
+            revred = 1 - t
+            revred_compress = np.clip(revred, trunkering_min, trunkering_max)
+            krav = ((1 + revred_compress / 4) ** 0.25) - 1
+        elif kravmetod == "percentilbaserat":
+            revred_all = 1 - theta2
+            r10, r90 = np.percentile(revred_all, 10), np.percentile(revred_all, 90)
+            revred_raw = 1 - t
+            revred_scaled = (revred_raw - r10) / (r90 - r10)
+            revred_scaled = np.clip(revred_scaled, 0, 1)
+            revred_compress = revred_scaled * (trunkering_max - trunkering_min) + trunkering_min
+            krav = ((1 + revred_compress / 4) ** 0.25) - 1
+        else:
+            raise ValueError(f"Ogiltig kravmetod: {kravmetod}")
 
-    if st.button("Kör simulering"):
-        df_sim = pd.DataFrame([edited_row])
-        df_sim["Företag"] = selected_firm
-        df_ref = df[df["Företag"] != selected_firm].copy()
-        df_combined = pd.concat([df_ref, df_sim], ignore_index=True)
+        result_krav.append(krav)
 
-        if modelltyp == "DEA":
-            result = run_dea_model(
-                df_combined,
-                rts=rts_val,
-                trunkering_min=trunk_min,
-                trunkering_max=trunk_max,
-                input_cols=input_cols,
-                output_cols=output_cols,
-                outlier_filter=use_outlier_filter
-            )
-        elif modelltyp == "PyStoned":
-            result = run_pystoned_model(
-                df_combined,
-                rts=rts_val,
-                fun=fun_val,
-                cet=cet_val,
-                trunkering_min=trunk_min,
-                trunkering_max=trunk_max,
-                input_cols=input_cols,
-                output_cols=output_cols,
-                outlier_filter=use_outlier_filter,
-                kravmetod=kravmetod_val
-            )
+    df["Effektivitet"] = result_theta
+    df["Effkrav_proc"] = result_krav
+    df["Kravmetod"] = kravmetod
 
-        res_firm = result[result["Företag"] == selected_firm].copy()
-        effkrav_kr = res_firm["Effkrav_proc"].values[0] * res_firm[kr_bas_col].values[0]
-        sim_index = len([r for r in st.session_state["sim_history"] if r["Scenario"].startswith("Simulering")])
+    # Konvertera till float för loggning
+    df_for_loggning = df.copy()
+    for col in ["Effektivitet", "Effkrav_proc"]:
+        if col in df_for_loggning.columns:
+            df_for_loggning[col] = pd.to_numeric(df_for_loggning[col], errors="coerce")
 
-        st.session_state["sim_history"].append({
-            "Scenario": f"Simulering {sim_index + 1}",
-            "Företag": selected_firm,
-            "Effektivitet": res_firm["Effektivitet"].values[0],
-            "Effkrav (%)": res_firm["Effkrav_proc"].values[0] * 100,
-            "Effkrav (kr)": effkrav_kr,
-            "Funktion": fun_val,
-            "Teknologi": cet_val,
-            "Kravmetod": kravmetod_val
-        })
+    save_run("PyStoned", {
+        "rts": rts,
+        "fun": fun,
+        "cet": cet,
+        "input_cols": input_cols,
+        "output_cols": output_cols,
+        "trunkering_min": trunkering_min,
+        "trunkering_max": trunkering_max,
+        "outlier_filter": outlier_filter,
+        "kravmetod": kravmetod
+    }, df_for_loggning)
 
-        input_record = {
-            "Scenario": f"Simulering {sim_index + 1}",
-            "Företag": selected_firm,
-            "RTS": rts_val,
-            "Inputval": ", ".join(params.get("parametrar", {}).get("input_cols", input_cols)),
-            "Outputval": ", ".join(params.get("parametrar", {}).get("output_cols", output_cols)),
-            "Trunk min": trunk_min,
-            "Trunk max": trunk_max,
-            "Kr-bas": kr_bas_col,
-            "Outlierfilter": use_outlier_filter,
-            "Kravmetod": kravmetod_val,
-            "Funktion": fun_val,
-            "Teknologi": cet_val,
-        }
-        input_record.update({k: v for k, v in edited_row.items()})
-        st.session_state["sim_inputs"].append(input_record)
-
-    if st.button("🧹 Rensa simuleringar"):
-        st.session_state["sim_history"] = []
-        st.session_state["sim_inputs"] = []
-        st.session_state["last_firm"] = selected_firm
-        st.rerun()
-
-    st.subheader("Resultatöversikt")
-    hist_df = pd.DataFrame(st.session_state["sim_history"])
-    if "is_outlier" not in hist_df.columns and "is_outlier" in df.columns:
-        hist_df["is_outlier"] = hist_df["Företag"].map(df.set_index("Företag")["is_outlier"])
-    st.dataframe(hist_df)
-
-    st.subheader("Körningsantaganden")
-    input_df = pd.DataFrame(st.session_state["sim_inputs"])
-    st.dataframe(input_df)
-
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-        hist_df.to_excel(writer, sheet_name="Resultat", index=False)
-        input_df.to_excel(writer, sheet_name="Antaganden", index=False)
-    st.download_button(
-        label="📄 Ladda ned resultatöversikt som Excel",
-        data=buffer.getvalue(),
-        file_name=f"simulering_{selected_firm}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    return df
