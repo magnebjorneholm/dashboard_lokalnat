@@ -66,6 +66,12 @@ if modellval == "DEA":
     dea_trunk_min = st.sidebar.slider("Minsta trunkering", 0.0, 0.3, 0.162416, step=0.005)
     dea_trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
 
+    dea_outlier_krav = st.sidebar.slider(
+        "Årligt krav för outliers (%)",
+         1.0, 1.82, 1.0, 0.01,
+        help="Vilket fast krav (i procent) ska ges till företag som klassas som outliers?"
+    )
+
     # --- Körmodellknapp ---
     run_model = st.sidebar.button("Kör DEA")
 
@@ -77,7 +83,8 @@ if modellval == "DEA":
             trunkering_max=dea_trunk_max,
             input_cols=input_cols,
             output_cols=output_cols,
-            outlier_filter=use_outlier_filter
+            outlier_filter=use_outlier_filter,
+            outlier_krav=dea_outlier_krav/100
         )
 
         df_outliers = result[result["is_outlier"] == True][["Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc"]]
@@ -85,7 +92,7 @@ if modellval == "DEA":
 
         n_outliers = len(df_outliers)
         if n_outliers > 0:
-            st.warning(f"{n_outliers} företag har identifierats som outliers, exkluderats från fronten och tilldelats ett fast årligt effektiviseringskrav på 1 %.")
+            st.warning(f"{n_outliers} företag har identifierats som outliers, exkluderats från fronten och tilldelats ett fast årligt effektiviseringskrav på {dea_outlier_krav:.1f} %.")
             st.dataframe(df_outliers)
         else:
             st.info("Inga outliers identifierades i denna körning.")
@@ -216,63 +223,132 @@ elif modellval == "PyStoned":
 
 
 elif modellval == "PyStoned (färdig körning)":
-    st.header("PyStoned: Ladda färdiga körningar")
-    st.warning("Work in progress;)")
-    st.stop()
+    st.header("PyStoned: Färdig körning med dynamiskt krav")
 
-    from app.run_logger import list_runs, load_run
+    import os
+    import yaml
+    import pandas as pd
+    from datetime import datetime
     from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
 
-    runs = list_runs()
-    pystoned_runs = [r for r in runs if r.lower().startswith("pystoned")]
+    BASE_DIR = "runs_pystoned"
+    os.makedirs(BASE_DIR, exist_ok=True)
 
-    if not pystoned_runs:
-        st.warning("Inga färdiga PyStoned-körningar hittades.")
+    # --- Hämta alla färdiga körningar ---
+    runs = sorted(os.listdir(BASE_DIR))
+    if not runs:
+        st.warning("Inga färdiga PyStoned-körningar hittades i 'runs_pystoned/'.")
         st.stop()
 
-    run_id = st.selectbox("Välj en körning", pystoned_runs)
-    params, df = load_run(run_id)
+    # --- Välj körning ---
+    run_id = st.selectbox("Välj en körning", runs)
+
+    # --- Läs in params.yaml och result.feather ---
+    params_path = os.path.join(BASE_DIR, run_id, "params.yaml")
+    result_path = os.path.join(BASE_DIR, run_id, "result.feather")
+
+    with open(params_path) as f:
+        params = yaml.safe_load(f)
+    df = pd.read_feather(result_path)
 
     if "Effektivitet" not in df.columns:
         st.error("Ingen 'Effektivitet'-kolumn hittades i körningen.")
         st.stop()
 
-    st.sidebar.subheader("Beräkna effektivitetskrav")
-    kravmetod = st.sidebar.radio("Metod för krav", ["absolut", "percentilbaserad"], index=0)
+    # --- Visa modellspecifikation ---
+    st.subheader("Modellspecifikation")
+    p = params.get("parametrar", {})
+
+    visade_keys = {
+        "input_cols": "Inputs",
+        "output_cols": "Outputs",
+        "outlier_filter": "Outlierfilter",
+        "rts": "RTS",
+        "cet": "Teknologi (CET)",
+        "fun": "Funktionstyp"
+    }
+    rows = []
+    for key, label in visade_keys.items():
+        val = p.get(key, "-")
+        if isinstance(val, list):
+            val = ", ".join(val)
+        rows.append((label, val))
+
+    df_spec = pd.DataFrame(rows, columns=["Parameter", "Värde"])
+    df_spec["Värde"] = df_spec["Värde"].astype(str)   # <--- DENNA RAD
+    st.table(df_spec)
+
+    # --- Policyval ---
+    st.sidebar.subheader("Omberäkna effektivitetskrav")
+    kravmetod = st.sidebar.radio("Ny metod för krav", ["absolut", "percentilbaserad"], index=0)
     trunk_min = st.sidebar.slider("Minsta trunkering", 0.0, 0.3, 0.162, step=0.005)
     trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
 
-    def beräkna_effkrav(eff, metod, t_min, t_max):
-        ineff = 1 - eff
-        if metod == "absolut":
-            krav = ineff.clip(lower=t_min, upper=t_max)
-        elif metod == "percentilbaserad":
-            gräns = ineff.quantile(0.9)
-            krav = ineff.clip(upper=gräns).clip(lower=t_min, upper=t_max)
+    # --- Beräkna nytt krav ---
+    if st.button("Beräkna nytt effektivitetskrav"):
+        import numpy as np
+        t = 1 - df["Effektivitet"].astype(float)
+        theta2 = t.copy()
+
+        if kravmetod == "absolut":
+            revred = 1 - t
+            revred_compress = np.clip(revred, trunk_min, trunk_max)
+            krav = ((1 + revred_compress / 4) ** 0.25) - 1
+
+        elif kravmetod == "percentilbaserad":
+            revred_all = 1 - theta2
+            r10, r90 = np.percentile(revred_all, 10), np.percentile(revred_all, 90)
+            revred_raw = 1 - t
+            revred_scaled = (revred_raw - r10) / (r90 - r10)
+            revred_scaled = np.clip(revred_scaled, 0, 1)
+            revred_compress = revred_scaled * (trunk_max - trunk_min) + trunk_min
+            krav = ((1 + revred_compress / 4) ** 0.25) - 1
+
         else:
-            krav = ineff
-        return krav
+            st.error("Ogiltig kravmetod.")
+            st.stop()
 
-    df = df.copy()
-    df["Effkrav_proc"] = beräkna_effkrav(df["Effektivitet"].astype(float), kravmetod, trunk_min, trunk_max)
+        # Uppdatera df i minnet
+        df = df.copy()
+        df["Effkrav_proc"] = krav
 
-    st.subheader("Resultat")
-    st.dataframe(df[["Företag", "Effektivitet", "Effkrav_proc"]])
+        st.success("Nytt effektivitetskrav har beräknats.")
+        st.dataframe(df[["Företag", "Effektivitet", "Effkrav_proc"]])
 
-    plot_efficiency_histogram(df["Effektivitet"], title="Effektivitet")
-    plot_efficiency_boxplot(df["Effektivitet"], title="Effektivitet (boxplot)")
-    plot_efficiency_histogram(df["Effkrav_proc"] * 100, title="Effektiviseringskrav (%)")
+        # Plotta grafer
+        plot_efficiency_histogram(df["Effektivitet"], title="Effektivitet")
+        plot_efficiency_boxplot(df["Effektivitet"], title="Effektivitet (boxplot)")
+        plot_efficiency_histogram(df["Effkrav_proc"] * 100, title="Effektiviseringskrav (%)")
 
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-        df[["Företag", "Effektivitet", "Effkrav_proc"]].to_excel(writer, sheet_name="Resultat", index=False)
+        # Exportera Excel
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+            df[["Företag", "Effektivitet", "Effkrav_proc"]].to_excel(writer, sheet_name="Resultat", index=False)
+        st.download_button(
+            "Ladda ned resultat som Excel",
+            data=buffer.getvalue(),
+            file_name=f"krav_{run_id}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
-    st.download_button(
-        "Ladda ned resultat som Excel",
-        data=buffer.getvalue(),
-        file_name=f"krav_{run_id}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        # --- Möjlighet att spara som ny körning ---
+        if st.checkbox("Spara denna version i runs_pystoned"):
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            new_run_id = f"{run_id}_justerad_{timestamp}"
+            new_path = os.path.join(BASE_DIR, new_run_id)
+            os.makedirs(new_path, exist_ok=True)
+
+            # uppdatera params
+            nya_params = params.copy()
+            nya_params["kravmetod"] = kravmetod
+            nya_params["trunkering_min"] = trunk_min
+            nya_params["trunkering_max"] = trunk_max
+
+            with open(os.path.join(new_path, "params.yaml"), "w") as f:
+                yaml.dump(nya_params, f)
+
+            df.to_feather(os.path.join(new_path, "result.feather"))
+            st.success(f"Ny version sparad i {new_path}")
 
 
 elif modellval == "Jämför körningar":
@@ -527,9 +603,13 @@ elif modellval == "Geografisk karta":
         möjliga_indikatorer.append("Supereffektivitet")
 
     indikator = st.selectbox("Välj indikator", möjliga_indikatorer)
-    visa_karta = st.checkbox("Visa karta", value=True)
+    if "visa_karta" not in st.session_state:
+        st.session_state.visa_karta = False
 
-    if visa_karta:
+    if st.button("Visa karta", key="visa_karta_button"):
+        st.session_state.visa_karta = True
+
+    if st.session_state.visa_karta:
         # Visa heatmap
         show_heatmap(df_resultat, karttyp=karttyp, indikator=indikator)
 
@@ -550,34 +630,57 @@ elif modellval == "Geografisk karta":
 
         if metod == "knn":
             k_val = st.slider("Antal närmaste grannar (k)", 1, 10, 4)
-            gdf_analys = lägg_till_grannsnitt(
-                gdf_shapes,
-                indikator=indikator,
-                method="knn",
-                k=k_val,
-                avståndsviktning=avståndsviktning
-            )
-            metodtext = f"{k_val} närmaste grannar (centroid-baserat)"
         else:
             d_val = st.slider("Maximalt avstånd (meter)", 1000, 100000, 50000, step=1000)
-            gdf_analys = lägg_till_grannsnitt(
-                gdf_shapes,
-                indikator=indikator,
-                method="distanceband",
-                distance_threshold=d_val,
-                avståndsviktning=avståndsviktning
-            )
-            metodtext = f"alla grannar inom {d_val} meter (centroid-baserat)"
 
-        # Visa tabell
-        with st.expander("Visa analys"):
-            st.markdown("**Relativ effektivitet jämfört med geografiska grannar**")
-            vikttext = "med avståndsviktning" if avståndsviktning else "utan avståndsviktning"
-            st.markdown(f"_Baseras på {indikator.lower()} och {metodtext}, {vikttext}._")
+        # --- Session state ---
+        if "visa_grannanalys" not in st.session_state:
+            st.session_state.visa_grannanalys = False
+            st.session_state.gdf_analys = None
+            st.session_state.metodtext = None
 
-            df_grann = gdf_analys[["REId", "Företag", indikator, "grannsnitt", "eff_gap"]].dropna().copy()
-            df_grann = df_grann.sort_values("eff_gap")
+        # --- Knapp för att köra analys ---
+        if st.button("Kör grannskapsanalys", key="run_neighbour_analysis"):
+            st.session_state.visa_grannanalys = True
+            st.session_state.metod_val = metod
+            st.session_state.avståndsviktning_val = avståndsviktning
 
-            st.dataframe(df_grann.style
-                        .background_gradient(cmap="RdYlGn", subset=["eff_gap"]),
-                        use_container_width=True)
+            if metod == "knn":
+                st.session_state.k_val = k_val
+                gdf_analys = lägg_till_grannsnitt(
+                    gdf_shapes,
+                    indikator=indikator,
+                    method="knn",
+                    k=k_val,
+                    avståndsviktning=avståndsviktning
+                )
+                st.session_state.gdf_analys = gdf_analys
+                st.session_state.metodtext = f"{k_val} närmaste grannar (centroid-baserat)"
+
+            else:
+                st.session_state.d_val = d_val
+                gdf_analys = lägg_till_grannsnitt(
+                    gdf_shapes,
+                    indikator=indikator,
+                    method="distanceband",
+                    distance_threshold=d_val,
+                    avståndsviktning=avståndsviktning
+                )
+                st.session_state.gdf_analys = gdf_analys
+                st.session_state.metodtext = f"alla grannar inom {d_val} meter (centroid-baserat)"
+
+        # --- Visa analys endast om knapp tryckts och resultat finns ---
+        if st.session_state.visa_grannanalys and st.session_state.gdf_analys is not None:
+            with st.expander("Visa analys"):
+                st.markdown("**Relativ effektivitet jämfört med geografiska grannar**")
+                vikttext = "med avståndsviktning" if st.session_state.avståndsviktning_val else "utan avståndsviktning"
+                st.markdown(f"_Baseras på {indikator.lower()} och {st.session_state.metodtext}, {vikttext}._")
+
+                df_grann = st.session_state.gdf_analys[["REId", "Företag", indikator, "grannsnitt", "eff_gap"]].dropna().copy()
+                df_grann = df_grann.sort_values("eff_gap")
+
+                st.dataframe(df_grann.style
+                            .background_gradient(cmap="RdYlGn", subset=["eff_gap"]),
+                            use_container_width=True)
+
+                

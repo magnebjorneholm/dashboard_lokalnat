@@ -10,7 +10,8 @@ def run_dea_model(
     trunkering_max: float = 0.3,
     input_cols: list = ["CAPEX", "OPEXp"],
     output_cols: list = ["CU", "MW", "NS", "MWhl", "MWhh"],
-    outlier_filter: bool = True
+    outlier_filter: bool = True,
+    outlier_krav: float = 0.01 
 ) -> pd.DataFrame:
     """
     Kör DEA med eller utan outlierfiltrering enligt EI:s metod.
@@ -80,7 +81,7 @@ def run_dea_model(
                 result_effektivitet.append(min(eff1[i], 1))
                 result_supereffektivitet.append(eff1[i])     
                 result_potential.append(1.0)
-                result_effkrav_proc.append(0.01)
+                result_effkrav_proc.append(outlier_krav)
         else:
             theta = eff2[j]
             if isinstance(theta, (int, float)) and not np.isnan(theta):
