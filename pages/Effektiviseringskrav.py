@@ -42,7 +42,7 @@ if modellval == "DEA":
     st.sidebar.subheader("DEA-parametrar")
 
     # --- Kolumnval ---
-    all_inputs = ["CAPEX", "OPEXp"]
+    all_inputs = ["CAPEX", "OPEXp", "TOTEX"]
     all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
 
     input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=all_inputs)
@@ -132,15 +132,18 @@ elif modellval == "SFA":
 
 elif modellval == "PyStoned":
     st.header("PyStoned-modell")
-    st.warning("Tekniska problem, gå till modellen under och lek med färdiga pystoned-körningar")
-    st.stop()
-
+    
     st.sidebar.subheader("PyStoned-parametrar")
 
-    all_inputs = ["CAPEX", "OPEXp"]
+    all_inputs = ["CAPEX", "OPEXp", "TOTEX"]
     all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
 
     input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=["CAPEX", "OPEXp"])
+
+    if "TOTEX" in input_cols and ("CAPEX" in input_cols or "OPEXp" in input_cols):
+        st.warning("Välj antingen TOTEX eller CAPEX+OPEXp, inte båda samtidigt.")
+        st.stop()
+
     output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=["CU"])
     use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers före beräkning", value=True)
 
@@ -231,8 +234,10 @@ elif modellval == "PyStoned (färdig körning)":
     from datetime import datetime
     from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
 
-    BASE_DIR = "runs_pystoned"
+    BASE_DIR = "runs_pystoned"  # Härifrån hämtas alla färdiga körningar
+    SAVE_DIR = "runs"           # Här ska nya justerade versioner sparas
     os.makedirs(BASE_DIR, exist_ok=True)
+    os.makedirs(SAVE_DIR, exist_ok=True)
 
     # --- Hämta alla färdiga körningar ---
     runs = sorted(os.listdir(BASE_DIR))
@@ -275,8 +280,23 @@ elif modellval == "PyStoned (färdig körning)":
         rows.append((label, val))
 
     df_spec = pd.DataFrame(rows, columns=["Parameter", "Värde"])
-    df_spec["Värde"] = df_spec["Värde"].astype(str)   # <--- DENNA RAD
+    df_spec["Värde"] = df_spec["Värde"].astype(str)
     st.table(df_spec)
+
+    # --- Visa outliers om de finns ---
+    if "is_outlier" in df.columns:
+        df_outliers = df[df["is_outlier"] == True][["Företag", "Effektivitet"]]
+        if not df_outliers.empty:
+            st.warning(f"{len(df_outliers)} företag har identifierats som outliers och exkluderats från fronten.")
+            st.dataframe(df_outliers)
+        else:
+            st.info("Inga outliers identifierades i denna körning.")
+    else:
+        st.info("Ingen outlier-information finns sparad för denna körning.")
+
+    # Visa tabell och histogram
+    st.dataframe(df[["Företag", "Effektivitet"]])
+    plot_efficiency_histogram(df["Effektivitet"], title="PyStoned: Effektivitet") 
 
     # --- Policyval ---
     st.sidebar.subheader("Omberäkna effektivitetskrav")
@@ -288,21 +308,28 @@ elif modellval == "PyStoned (färdig körning)":
     if st.button("Beräkna nytt effektivitetskrav"):
         import numpy as np
         t = 1 - df["Effektivitet"].astype(float)
-        theta2 = t.copy()
 
         if kravmetod == "absolut":
-            revred = 1 - t
-            revred_compress = np.clip(revred, trunk_min, trunk_max)
+            revred_compress = np.clip(t, trunk_min, trunk_max)
             krav = ((1 + revred_compress / 4) ** 0.25) - 1
 
         elif kravmetod == "percentilbaserad":
-            revred_all = 1 - theta2
-            r10, r90 = np.percentile(revred_all, 10), np.percentile(revred_all, 90)
-            revred_raw = 1 - t
-            revred_scaled = (revred_raw - r10) / (r90 - r10)
-            revred_scaled = np.clip(revred_scaled, 0, 1)
-            revred_compress = revred_scaled * (trunk_max - trunk_min) + trunk_min
-            krav = ((1 + revred_compress / 4) ** 0.25) - 1
+            if "is_outlier" in df.columns:
+                revred_all = t[df["is_outlier"] == False]
+            else:
+                revred_all = t
+
+            r10, r90 = np.percentile(revred_all.values, [10, 90])
+
+            krav_list = []
+            for ineff in t:
+                revred_scaled = (ineff - r10) / (r90 - r10)
+                revred_scaled = np.clip(revred_scaled, 0, 1)
+                revred_compress = revred_scaled * (trunk_max - trunk_min) + trunk_min
+                krav_val = ((1 + revred_compress / 4) ** 0.25) - 1
+                krav_list.append(krav_val)
+
+            krav = pd.Series(krav_list, index=df.index)
 
         else:
             st.error("Ogiltig kravmetod.")
@@ -311,13 +338,17 @@ elif modellval == "PyStoned (färdig körning)":
         # Uppdatera df i minnet
         df = df.copy()
         df["Effkrav_proc"] = krav
+        st.session_state["justerat_df"] = df.copy()
+        st.session_state["justerade_params"] = {
+            "kravmetod": kravmetod,
+            "trunkering_min": trunk_min,
+            "trunkering_max": trunk_max,
+        }
 
         st.success("Nytt effektivitetskrav har beräknats.")
-        st.dataframe(df[["Företag", "Effektivitet", "Effkrav_proc"]])
+        
 
         # Plotta grafer
-        plot_efficiency_histogram(df["Effektivitet"], title="Effektivitet")
-        plot_efficiency_boxplot(df["Effektivitet"], title="Effektivitet (boxplot)")
         plot_efficiency_histogram(df["Effkrav_proc"] * 100, title="Effektiviseringskrav (%)")
 
         # Exportera Excel
@@ -332,23 +363,21 @@ elif modellval == "PyStoned (färdig körning)":
         )
 
         # --- Möjlighet att spara som ny körning ---
-        if st.checkbox("Spara denna version i runs_pystoned"):
+    if "justerat_df" in st.session_state:
+        if st.button("Spara denna version"):
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             new_run_id = f"{run_id}_justerad_{timestamp}"
-            new_path = os.path.join(BASE_DIR, new_run_id)
+            new_path = os.path.join(SAVE_DIR, new_run_id)
             os.makedirs(new_path, exist_ok=True)
 
-            # uppdatera params
             nya_params = params.copy()
-            nya_params["kravmetod"] = kravmetod
-            nya_params["trunkering_min"] = trunk_min
-            nya_params["trunkering_max"] = trunk_max
+            nya_params.update(st.session_state["justerade_params"])
 
             with open(os.path.join(new_path, "params.yaml"), "w") as f:
                 yaml.dump(nya_params, f)
 
-            df.to_feather(os.path.join(new_path, "result.feather"))
-            st.success(f"Ny version sparad i {new_path}")
+            st.session_state["justerat_df"].to_feather(os.path.join(new_path, "result.feather"))
+            st.success(f"Ny version sparad i {new_path}")  
 
 
 elif modellval == "Jämför körningar":

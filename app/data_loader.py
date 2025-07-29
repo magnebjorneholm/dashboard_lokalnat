@@ -16,6 +16,8 @@ def load_data(filepath):
     if missing_cols:
         raise ValueError(f"Följande kolumner saknas i Excel-filen: {missing_cols}")
 
+    df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
+
     # Ingen filtrering av nollor eller NaN – låt modellerna själva hantera det
     df.reset_index(drop=True, inplace=True)
     return df
