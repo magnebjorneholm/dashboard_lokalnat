@@ -1,0 +1,16 @@
+modell: PyStoned
+parametrar:
+  cet: addi
+  fun: prod
+  input_cols:
+  - TOTEX
+  kravmetod: absolut
+  outlier_filter: true
+  output_cols:
+  - CU
+  - MWhl
+  - MWhh
+  rts: crs
+  trunkering_max: 0.3
+  trunkering_min: 0.162416
+timestamp: 2025-07-29_13-01-16

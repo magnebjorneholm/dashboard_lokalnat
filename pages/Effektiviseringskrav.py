@@ -45,7 +45,16 @@ if modellval == "DEA":
     all_inputs = ["CAPEX", "OPEXp", "TOTEX"]
     all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
 
-    input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=all_inputs)
+    st.sidebar.caption("**Inputs**\n"
+                       "- `CAPEX + OPEXp`: Separata poster för investeringar och drift – visar om ineffektivitet ligger i kapital eller drift.\n"
+                       "- `TOTEX`: Summerar kostnaderna – ger en totalbedömning och bortser från kostnadsstruktur.")
+    
+    input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=["CAPEX", "OPEXp"])
+
+    if "TOTEX" in input_cols and ("CAPEX" in input_cols or "OPEXp" in input_cols):
+        st.warning("Välj antingen TOTEX eller CAPEX+OPEXp, inte båda samtidigt.")
+        st.stop()
+
     output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=all_outputs)
     use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers före beräkning", value=True)
 
@@ -137,6 +146,10 @@ elif modellval == "PyStoned":
 
     all_inputs = ["CAPEX", "OPEXp", "TOTEX"]
     all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
+
+    st.sidebar.caption("**Inputs**\n"
+        "- `CAPEX + OPEXp`: Separata poster för investeringar och drift – visar om ineffektivitet ligger i kapital eller drift.\n"
+        "- `TOTEX`: Summerar kostnaderna – ger en totalbedömning och bortser från kostnadsstruktur.")
 
     input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=["CAPEX", "OPEXp"])
 
@@ -366,7 +379,7 @@ elif modellval == "PyStoned (färdig körning)":
     if "justerat_df" in st.session_state:
         if st.button("Spara denna version"):
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            new_run_id = f"{run_id}_justerad_{timestamp}"
+            new_run_id = f"Pystoned_{run_id}_{timestamp}"
             new_path = os.path.join(SAVE_DIR, new_run_id)
             os.makedirs(new_path, exist_ok=True)
 
