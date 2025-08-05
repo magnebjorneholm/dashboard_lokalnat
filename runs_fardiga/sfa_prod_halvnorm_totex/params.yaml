@@ -1,0 +1,14 @@
+modell: SFA Cobb-Douglas produktionsfront
+ineffDecrease: yes
+distribution: halvnormal
+skattning: MLE
+output: CU
+input:
+- TOTEX
+- MWhl
+- MWhh
+- MW
+- NS
+effektivitet: theta_final = exp(-û)
+obs: 136
+datum: '2025-08-05'

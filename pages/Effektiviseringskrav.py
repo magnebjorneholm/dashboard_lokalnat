@@ -32,7 +32,7 @@ df = load_data(data_file)
 # --- Modellval ---
 modellval = st.sidebar.selectbox(
     "Välj modell",
-    ["DEA", "SFA", "PyStoned", "PyStoned (färdig körning)" ,"Jämför körningar", "Företagsanalys", "Geografisk karta"]
+    ["DEA", "SFA", "PyStoned", "Färdiga körningar", "Jämför körningar", "Företagsanalys", "Geografisk karta"]
 )
 
 
@@ -238,8 +238,8 @@ elif modellval == "PyStoned":
         st.info("Välj modellspecifikationer och klicka på 'Kör PyStoned-modellen' för att se resultat.")
 
 
-elif modellval == "PyStoned (färdig körning)":
-    st.header("PyStoned: Färdig körning med dynamiskt krav")
+elif modellval == "Färdiga körningar":
+    st.header("Färdiga körningar med dynamiska krav")
 
     import os
     import yaml
@@ -247,7 +247,8 @@ elif modellval == "PyStoned (färdig körning)":
     from datetime import datetime
     from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
 
-    BASE_DIR = "runs_pystoned"  # Härifrån hämtas alla färdiga körningar
+    BASE_DIR = "runs_fardiga"   # Härifrån hämtas alla färdiga körningar
+    BASE_DIR = "runs_fardiga"   # Härifrån hämtas alla färdiga körningar
     SAVE_DIR = "runs"           # Här ska nya justerade versioner sparas
     os.makedirs(BASE_DIR, exist_ok=True)
     os.makedirs(SAVE_DIR, exist_ok=True)
@@ -255,7 +256,7 @@ elif modellval == "PyStoned (färdig körning)":
     # --- Hämta alla färdiga körningar ---
     runs = sorted(os.listdir(BASE_DIR))
     if not runs:
-        st.warning("Inga färdiga PyStoned-körningar hittades i 'runs_pystoned/'.")
+        st.warning("Inga färdiga PyStoned-körningar hittades")
         st.stop()
 
     # --- Välj körning ---
@@ -309,7 +310,7 @@ elif modellval == "PyStoned (färdig körning)":
 
     # Visa tabell och histogram
     st.dataframe(df[["Företag", "Effektivitet"]])
-    plot_efficiency_histogram(df["Effektivitet"], title="PyStoned: Effektivitet") 
+    plot_efficiency_histogram(df["Effektivitet"], title="Effektivitet") 
 
     # --- Policyval ---
     st.sidebar.subheader("Omberäkna effektivitetskrav")
@@ -376,6 +377,7 @@ elif modellval == "PyStoned (färdig körning)":
         )
 
         # --- Möjlighet att spara som ny körning ---
+    
     if "justerat_df" in st.session_state:
         if st.button("Spara denna version"):
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -390,7 +392,7 @@ elif modellval == "PyStoned (färdig körning)":
                 yaml.dump(nya_params, f)
 
             st.session_state["justerat_df"].to_feather(os.path.join(new_path, "result.feather"))
-            st.success(f"Ny version sparad i {new_path}")  
+            st.success(f"Ny version sparad i {new_path}") 
 
 
 elif modellval == "Jämför körningar":
@@ -416,15 +418,40 @@ elif modellval == "Jämför körningar":
 
     # --- Visa modellspecifikationer i två tabeller ---
     st.subheader("Modellspecifikationer")
+
+    def flatten_params(params_dict):
+        """
+        Konverterar alla värden i parameterns dict till strängar
+        så att DataFrame blir Arrow-kompatibel.
+        """
+        result = {}
+        for key, val in params_dict.items():
+            if isinstance(val, list):
+                val = ", ".join(map(str, val))
+            elif isinstance(val, dict):
+                val = str(val)
+            elif val is None:
+                val = "-"
+            else:
+                val = str(val)
+            result[key] = val
+        return result
+
+    params_a_flat = flatten_params(params_a)
+    params_b_flat = flatten_params(params_b)
+
+    df_a_spec = pd.DataFrame(params_a_flat.items(), columns=["Parameter", "Värde"])
+    df_b_spec = pd.DataFrame(params_b_flat.items(), columns=["Parameter", "Värde"])
+
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### Körning A")
-        df_a_spec = pd.DataFrame(params_a.items(), columns=["Parameter", "Värde"])
         st.table(df_a_spec)
+
     with col2:
         st.markdown("### Körning B")
-        df_b_spec = pd.DataFrame(params_b.items(), columns=["Parameter", "Värde"])
         st.table(df_b_spec)
+
 
     # --- Sammanfoga gemensamma företag ---
     merged = df_a[["Företag", "Effektivitet"]].rename(columns={"Effektivitet": "Eff_A"}).merge(

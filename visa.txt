@@ -1,0 +1,126 @@
+elif modellval == "Färdiga körningar":
+    st.header("Färdiga körningar med dynamiska krav")
+
+    import os
+    import yaml
+    import pandas as pd
+    from datetime import datetime
+    from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
+
+    BASE_DIR = "runs_fardiga"   # Härifrån hämtas alla färdiga körningar
+    SAVE_DIR = "runs"           # Här ska nya justerade versioner sparas
+    os.makedirs(BASE_DIR, exist_ok=True)
+    os.makedirs(SAVE_DIR, exist_ok=True)
+
+    # --- Hämta alla färdiga körningar ---
+    runs = sorted(os.listdir(BASE_DIR))
+    if not runs:
+        st.warning("Inga färdiga körningar hittades i 'runs_fardiga/'.")
+        st.stop()
+
+    # --- Välj körning ---
+    run_id = st.selectbox("Välj en körning", runs)
+
+    # --- Läs in params.yaml och result.feather ---
+    params_path = os.path.join(BASE_DIR, run_id, "params.yaml")
+    result_path = os.path.join(BASE_DIR, run_id, "result.feather")
+
+    with open(params_path) as f:
+        params = yaml.safe_load(f)
+    df = pd.read_feather(result_path)
+
+    if "Effektivitet" not in df.columns:
+        st.error("Ingen 'Effektivitet'-kolumn hittades i körningen.")
+        st.stop()
+
+    # --- Visa modellspecifikation ---
+    st.subheader("Modellspecifikation")
+    p = params.get("parametrar", {})
+
+    visade_keys = {
+        "input_cols": "Inputs",
+        "output_cols": "Outputs",
+        "outlier_filter": "Outlierfilter",
+        "rts": "RTS",
+        "cet": "Teknologi (CET)",
+        "fun": "Funktionstyp",
+        "ineff_dist": "Ineffektivitetens fördelning",
+        "est_method": "Skattningsmetod",
+        "truncation": "Trunkering",
+        "kde": "KDE-användning",
+    }
+
+    rows = []
+    for key, label in visade_keys.items():
+        val = p.get(key, "-")
+        if isinstance(val, list):
+            val = ", ".join(val)
+        rows.append((label, val))
+
+    df_spec = pd.DataFrame(rows, columns=["Parameter", "Värde"])
+    df_spec["Värde"] = df_spec["Värde"].astype(str)
+    st.table(df_spec)
+
+    # --- Visa outliers om de finns ---
+    if "is_outlier" in df.columns:
+        df_outliers = df[df["is_outlier"] == True][["Företag", "Effektivitet"]]
+        if not df_outliers.empty:
+            st.warning(f"{len(df_outliers)} företag har identifierats som outliers och exkluderats från fronten.")
+            st.dataframe(df_outliers)
+        else:
+            st.info("Inga outliers identifierades i denna körning.")
+    else:
+        st.info("Ingen outlier-information finns sparad för denna körning.")
+
+    # Visa tabell och histogram
+    st.dataframe(df[["Företag", "Effektivitet"]])
+    plot_efficiency_histogram(df["Effektivitet"], title="Effektivitet") 
+
+    # --- Policyval ---
+    st.sidebar.subheader("Omberäkna effektivitetskrav")
+    kravmetod = st.sidebar.radio("Ny metod för krav", ["absolut", "percentilbaserad"], index=0)
+    trunk_min = st.sidebar.slider("Minsta trunkering", 0.0, 0.3, 0.162, step=0.005)
+    trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
+
+    # --- Beräkna nytt krav ---
+    if st.button("Beräkna nytt effektivitetskrav"):
+        import numpy as np
+        t = 1 - df["Effektivitet"].astype(float)
+
+        if kravmetod == "absolut":
+            revred_compress = np.clip(t, trunk_min, trunk_max)
+            krav = ((1 + revred_compress / 4) ** 0.25) - 1
+
+        elif kravmetod == "percentilbaserad":
+            if "is_outlier" in df.columns:
+                revred_all = t[df["is_outlier"] == False]
+            else:
+                revred_all = t
+
+            r10, r90 = np.percentile(revred_all.values, [10, 90])
+
+            krav_list = []
+            for ineff in t:
+                revred_scaled = (ineff - r10) / (r90 - r10)
+                revred_scaled = np.clip(revred_scaled, 0, 1)
+                revred_compress = revred_scaled * (trunk_max - trunk_min) + trunk_min
+                krav_val = ((1 + revred_compress / 4) ** 0.25) - 1
+                krav_list.append(krav_val)
+
+            krav = pd.Series(krav_list, index=df.index)
+
+        else:
+            st.error("Ogiltig kravmetod.")
+            st.stop()
+
+        # Uppdatera df i minnet
+        df = df.copy()
+        df["Effkrav_proc"] = krav
+        st.session_state["justerat_df"] = df.copy()
+        st.session_state["justerade_params"] = {
+            "kravmetod": kravmetod,
+            "trunkering_min": trunk_min,
+            "trunkering_max": trunk_max,
+        }
+
+        st.success("Nytt effektivitetskrav har beräknats.")
