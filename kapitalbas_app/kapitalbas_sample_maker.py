@@ -1,11 +1,10 @@
-# SKAPA FINAL_CAPBASE_PROTOTYP.PARQUET
 # Innehåller tre representativa nät + kontroll av dataintegritet
 
 import pandas as pd
 
 # === Filvägar ===
 input_path = "kapitalbas_filer/final_capbase.parquet"
-output_path = "kapitalbas_filer/final_capbase_prototyp.parquet"
+output_path = "kapitalbas_filer/final_capbase_sample.parquet"
 
 # === Valda nät ===
 valda_nät = [3035, 160, 7]

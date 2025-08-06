@@ -248,7 +248,6 @@ elif modellval == "Färdiga körningar":
     from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
 
     BASE_DIR = "runs_fardiga"   # Härifrån hämtas alla färdiga körningar
-    BASE_DIR = "runs_fardiga"   # Härifrån hämtas alla färdiga körningar
     SAVE_DIR = "runs"           # Här ska nya justerade versioner sparas
     os.makedirs(BASE_DIR, exist_ok=True)
     os.makedirs(SAVE_DIR, exist_ok=True)
@@ -256,7 +255,7 @@ elif modellval == "Färdiga körningar":
     # --- Hämta alla färdiga körningar ---
     runs = sorted(os.listdir(BASE_DIR))
     if not runs:
-        st.warning("Inga färdiga PyStoned-körningar hittades")
+        st.warning("Inga färdiga körningar hittades")
         st.stop()
 
     # --- Välj körning ---
@@ -276,26 +275,14 @@ elif modellval == "Färdiga körningar":
 
     # --- Visa modellspecifikation ---
     st.subheader("Modellspecifikation")
-    p = params.get("parametrar", {})
+    spec = params.get("parametrar", params)
 
-    visade_keys = {
-        "input_cols": "Inputs",
-        "output_cols": "Outputs",
-        "outlier_filter": "Outlierfilter",
-        "rts": "RTS",
-        "cet": "Teknologi (CET)",
-        "fun": "Funktionstyp"
-    }
-    rows = []
-    for key, label in visade_keys.items():
-        val = p.get(key, "-")
-        if isinstance(val, list):
-            val = ", ".join(val)
-        rows.append((label, val))
+    # Filtrera bort "obs" om det finns
+    if isinstance(spec, dict) and "obs" in spec:
+        spec = {k: v for k, v in spec.items() if k != "obs"}
 
-    df_spec = pd.DataFrame(rows, columns=["Parameter", "Värde"])
-    df_spec["Värde"] = df_spec["Värde"].astype(str)
-    st.table(df_spec)
+    st.json(spec)
+
 
     # --- Visa outliers om de finns ---
     if "is_outlier" in df.columns:
@@ -381,7 +368,7 @@ elif modellval == "Färdiga körningar":
     if "justerat_df" in st.session_state:
         if st.button("Spara denna version"):
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            new_run_id = f"Pystoned_{run_id}_{timestamp}"
+            new_run_id = f"{run_id}_{timestamp}"
             new_path = os.path.join(SAVE_DIR, new_run_id)
             os.makedirs(new_path, exist_ok=True)
 
@@ -419,38 +406,19 @@ elif modellval == "Jämför körningar":
     # --- Visa modellspecifikationer i två tabeller ---
     st.subheader("Modellspecifikationer")
 
-    def flatten_params(params_dict):
-        """
-        Konverterar alla värden i parameterns dict till strängar
-        så att DataFrame blir Arrow-kompatibel.
-        """
-        result = {}
-        for key, val in params_dict.items():
-            if isinstance(val, list):
-                val = ", ".join(map(str, val))
-            elif isinstance(val, dict):
-                val = str(val)
-            elif val is None:
-                val = "-"
-            else:
-                val = str(val)
-            result[key] = val
-        return result
-
-    params_a_flat = flatten_params(params_a)
-    params_b_flat = flatten_params(params_b)
-
-    df_a_spec = pd.DataFrame(params_a_flat.items(), columns=["Parameter", "Värde"])
-    df_b_spec = pd.DataFrame(params_b_flat.items(), columns=["Parameter", "Värde"])
+    def utan_obs(params_dict):
+        if isinstance(params_dict, dict) and "obs" in params_dict:
+            return {k: v for k, v in params_dict.items() if k != "obs"}
+        return params_dict
 
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### Körning A")
-        st.table(df_a_spec)
+        st.json(utan_obs(params_a))
 
     with col2:
         st.markdown("### Körning B")
-        st.table(df_b_spec)
+        st.json(utan_obs(params_b))
 
 
     # --- Sammanfoga gemensamma företag ---

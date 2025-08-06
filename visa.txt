@@ -1,126 +1,134 @@
-elif modellval == "Färdiga körningar":
-    st.header("Färdiga körningar med dynamiska krav")
+ # === TAB 3: Tail-andelar ===
+    with tab3:
+        st.markdown("### Tail-andelar i kapitalbasen")
 
-    import os
-    import yaml
-    import pandas as pd
-    from datetime import datetime
-    from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
+        # === Ladda sample och totalsats
+        sample_df = pd.read_parquet("kapitalbas_filer/capbase_compress_tail_sample.parquet")
+        total_df = pd.read_parquet("kapitalbas_filer/capbase_compress_tail.parquet")
 
-    BASE_DIR = "runs_fardiga"   # Härifrån hämtas alla färdiga körningar
-    SAVE_DIR = "runs"           # Här ska nya justerade versioner sparas
-    os.makedirs(BASE_DIR, exist_ok=True)
-    os.makedirs(SAVE_DIR, exist_ok=True)
+        # === Nätkoder och namn (kan bytas ut mot labels)
+        nätkoder = sample_df["id_network"].unique().tolist()
+        nätkoder.sort()
+        nätnamn = {3035: "Stort nät", 160: "Medelstort nät", 7: "Kommunalt nät"}
 
-    # --- Hämta alla färdiga körningar ---
-    runs = sorted(os.listdir(BASE_DIR))
-    if not runs:
-        st.warning("Inga färdiga körningar hittades i 'runs_fardiga/'.")
-        st.stop()
+        # === Funktion: beräkna andelar
+        def beräkna_tail_andelar(df, nät_namn="Totalt"):
+            nuav_ord_cols = [c for c in df.columns if c.startswith("nuav_ord_")]
+            nuav_tail_cols = [c for c in df.columns if c.startswith("nuav_tail_")]
+            dep_ord_cols = [c for c in df.columns if c.startswith("dep_ord_")]
+            dep_tail_cols = [c for c in df.columns if c.startswith("dep_tail_")]
 
-    # --- Välj körning ---
-    run_id = st.selectbox("Välj en körning", runs)
+            nuav_ord_sum = df[nuav_ord_cols].sum().sum()
+            nuav_tail_sum = df[nuav_tail_cols].sum().sum()
+            dep_ord_sum = df[dep_ord_cols].sum().sum()
+            dep_tail_sum = df[dep_tail_cols].sum().sum()
 
-    # --- Läs in params.yaml och result.feather ---
-    params_path = os.path.join(BASE_DIR, run_id, "params.yaml")
-    result_path = os.path.join(BASE_DIR, run_id, "result.feather")
+            kapitalbas_andel = nuav_tail_sum / (nuav_ord_sum + nuav_tail_sum) if (nuav_ord_sum + nuav_tail_sum) > 0 else 0
+            dep_andel = dep_tail_sum / (dep_ord_sum + dep_tail_sum) if (dep_ord_sum + dep_tail_sum) > 0 else 0
 
-    with open(params_path) as f:
-        params = yaml.safe_load(f)
-    df = pd.read_feather(result_path)
+            return {
+                "Nät": nät_namn,
+                "Tailandel Kapitalbas": kapitalbas_andel * 100,
+                "Tailandel Avskrivning": dep_andel * 100,
+            }
 
-    if "Effektivitet" not in df.columns:
-        st.error("Ingen 'Effektivitet'-kolumn hittades i körningen.")
-        st.stop()
+        # === Samla resultat
+        resultat = []
 
-    # --- Visa modellspecifikation ---
-    st.subheader("Modellspecifikation")
-    p = params.get("parametrar", {})
+        # Per nät
+        for nät in nätkoder:
+            namn = nätnamn.get(nät, str(nät))
+            df_nät = sample_df[sample_df["id_network"] == nät]
+            resultat.append(beräkna_tail_andelar(df_nät, nät_namn=namn))
 
-    visade_keys = {
-        "input_cols": "Inputs",
-        "output_cols": "Outputs",
-        "outlier_filter": "Outlierfilter",
-        "rts": "RTS",
-        "cet": "Teknologi (CET)",
-        "fun": "Funktionstyp",
-        "ineff_dist": "Ineffektivitetens fördelning",
-        "est_method": "Skattningsmetod",
-        "truncation": "Trunkering",
-        "kde": "KDE-användning",
-    }
+        # Total
+        resultat.append(beräkna_tail_andelar(total_df, nät_namn="Alla nät"))
 
-    rows = []
-    for key, label in visade_keys.items():
-        val = p.get(key, "-")
-        if isinstance(val, list):
-            val = ", ".join(val)
-        rows.append((label, val))
+        result_df = pd.DataFrame(resultat)
 
-    df_spec = pd.DataFrame(rows, columns=["Parameter", "Värde"])
-    df_spec["Värde"] = df_spec["Värde"].astype(str)
-    st.table(df_spec)
+        # === Visa tabell
+        st.info("'Alla nät' avser alla 159 nät")
+        st.markdown("#### Sammanställning")
+        st.dataframe(result_df.set_index("Nät").style.format("{:.1f} %"))
 
-    # --- Visa outliers om de finns ---
-    if "is_outlier" in df.columns:
-        df_outliers = df[df["is_outlier"] == True][["Företag", "Effektivitet"]]
-        if not df_outliers.empty:
-            st.warning(f"{len(df_outliers)} företag har identifierats som outliers och exkluderats från fronten.")
-            st.dataframe(df_outliers)
+        # === Avkastning notis
+        st.info("Avkastningskolumner saknas för 'ordinarie' i datat. Därför visas ingen Tailandel för ränta. All ränta i samplet tillhör Tail.")
+
+        # === Tillägg: Tooltip till stapeldiagrammen ===
+        st.markdown("#### Tailandel av kapitalbas (med tooltip)")
+        chart1 = alt.Chart(result_df).mark_bar().encode(
+            x=alt.X("Nät:N", title="Nät"),
+            y=alt.Y("Tailandel Kapitalbas:Q", title="%", scale=alt.Scale(domain=[0, 100])),
+            tooltip=["Nät", alt.Tooltip("Tailandel Kapitalbas:Q", format=".1f")]
+        ).properties(width=600, height=300)
+        st.altair_chart(chart1, use_container_width=True)
+
+        st.markdown("#### Tailandel av avskrivning (med tooltip)")
+        chart2 = alt.Chart(result_df).mark_bar().encode(
+            x=alt.X("Nät:N", title="Nät"),
+            y=alt.Y("Tailandel Avskrivning:Q", title="%", scale=alt.Scale(domain=[0, 100])),
+            tooltip=["Nät", alt.Tooltip("Tailandel Avskrivning:Q", format=".1f")]
+        ).properties(width=600, height=300)
+        st.altair_chart(chart2, use_container_width=True)
+
+        
+        st.markdown("### Avvikelse från total Tailandel (kapitalbas)")
+
+        # === Ladda hela datasetet för valbara nät
+        full_df = pd.read_parquet("kapitalbas_filer/capbase_compress_tail.parquet")
+
+        # === Skapa lista över unika nät
+        alla_nät = sorted(full_df["id_network"].unique())
+        valda_nät = st.multiselect("Välj upp till 10 nät att jämföra mot totalen", alla_nät, max_selections=10)
+
+        if valda_nät:
+            # Filtrera på valda
+            jämförelse_df = full_df[full_df["id_network"].isin(valda_nät)].copy()
+
+            # === Summera tailandel kapitalbas per nät
+            rows = []
+            for nät in valda_nät:
+                sub = jämförelse_df[jämförelse_df["id_network"] == nät]
+                tail_cols = [c for c in sub.columns if c.startswith("nuav_tail_")]
+                ord_cols = [c for c in sub.columns if c.startswith("nuav_ord_")]
+                tail_sum = sub[tail_cols].sum().sum()
+                ord_sum = sub[ord_cols].sum().sum()
+                andel = tail_sum / (tail_sum + ord_sum) if (tail_sum + ord_sum) > 0 else 0
+                rows.append({"id_network": nät, "Tailandel Kapitalbas": andel * 100})
+
+            jämförelse_resultat = pd.DataFrame(rows)
+
+            # === Hämta totalandel
+            tail_cols = [c for c in full_df.columns if c.startswith("nuav_tail_")]
+            ord_cols = [c for c in full_df.columns if c.startswith("nuav_ord_")]
+            tail_total = full_df[tail_cols].sum().sum()
+            ord_total = full_df[ord_cols].sum().sum()
+            total_andel = tail_total / (tail_total + ord_total) if (tail_total + ord_total) > 0 else 0
+
+            jämförelse_resultat["Avvikelse från total"] = jämförelse_resultat["Tailandel Kapitalbas"] - (total_andel * 100)
+
+            # === Visa resultat
+            st.markdown(f"Totalt medelvärde (alla nät): **{total_andel*100:.1f} %**")
+
+            col_top, col_bot = st.columns(2)
+
+            with col_top:
+                st.markdown("#### Högre än total")
+                st.dataframe(
+                    jämförelse_resultat.sort_values("Avvikelse från total", ascending=False).style.format({
+                        "Tailandel Kapitalbas": "{:.1f} %",
+                        "Avvikelse från total": "{:+.1f} %"
+                    })
+                )
+
+            with col_bot:
+                st.markdown("#### Lägre än total")
+                st.dataframe(
+                    jämförelse_resultat.sort_values("Avvikelse från total", ascending=True).style.format({
+                        "Tailandel Kapitalbas": "{:.1f} %",
+                        "Avvikelse från total": "{:+.1f} %"
+                    })
+                )
         else:
-            st.info("Inga outliers identifierades i denna körning.")
-    else:
-        st.info("Ingen outlier-information finns sparad för denna körning.")
+            st.info("Välj minst ett nät för att visa avvikelse mot totalen.")
 
-    # Visa tabell och histogram
-    st.dataframe(df[["Företag", "Effektivitet"]])
-    plot_efficiency_histogram(df["Effektivitet"], title="Effektivitet") 
-
-    # --- Policyval ---
-    st.sidebar.subheader("Omberäkna effektivitetskrav")
-    kravmetod = st.sidebar.radio("Ny metod för krav", ["absolut", "percentilbaserad"], index=0)
-    trunk_min = st.sidebar.slider("Minsta trunkering", 0.0, 0.3, 0.162, step=0.005)
-    trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
-
-    # --- Beräkna nytt krav ---
-    if st.button("Beräkna nytt effektivitetskrav"):
-        import numpy as np
-        t = 1 - df["Effektivitet"].astype(float)
-
-        if kravmetod == "absolut":
-            revred_compress = np.clip(t, trunk_min, trunk_max)
-            krav = ((1 + revred_compress / 4) ** 0.25) - 1
-
-        elif kravmetod == "percentilbaserad":
-            if "is_outlier" in df.columns:
-                revred_all = t[df["is_outlier"] == False]
-            else:
-                revred_all = t
-
-            r10, r90 = np.percentile(revred_all.values, [10, 90])
-
-            krav_list = []
-            for ineff in t:
-                revred_scaled = (ineff - r10) / (r90 - r10)
-                revred_scaled = np.clip(revred_scaled, 0, 1)
-                revred_compress = revred_scaled * (trunk_max - trunk_min) + trunk_min
-                krav_val = ((1 + revred_compress / 4) ** 0.25) - 1
-                krav_list.append(krav_val)
-
-            krav = pd.Series(krav_list, index=df.index)
-
-        else:
-            st.error("Ogiltig kravmetod.")
-            st.stop()
-
-        # Uppdatera df i minnet
-        df = df.copy()
-        df["Effkrav_proc"] = krav
-        st.session_state["justerat_df"] = df.copy()
-        st.session_state["justerade_params"] = {
-            "kravmetod": kravmetod,
-            "trunkering_min": trunk_min,
-            "trunkering_max": trunk_max,
-        }
-
-        st.success("Nytt effektivitetskrav har beräknats.")
