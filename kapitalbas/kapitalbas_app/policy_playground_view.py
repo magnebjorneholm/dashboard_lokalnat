@@ -1,0 +1,153 @@
+# kapitalbas_app/policy_playground_view.py
+
+import streamlit as st
+import pandas as pd
+import altair as alt
+from kapitalbas.kapitalbas_app.data_loader import load_tail_sample, load_tail_full
+
+def show_policy_playground(capcost_df):
+    """Visar tre scenarier: WACC-ändring, KPI-indexering, och Tail-andelar."""
+    st.subheader("Policy Playground – simulera olika regleringsscenarier")
+    st.write("Testa olika kalkylräntor (WACC) och värderingsprinciper (KPI-baserad kapitalbas)")
+
+    networks = sorted(capcost_df["id_network"].unique())
+    network_choice = st.sidebar.selectbox("Välj nät", ["Alla"] + networks)
+
+    tab1, tab2, tab3 = st.tabs(["Kalkylränta (WACC)", "KPI-simulering", "Tail-andelar"])
+
+    # === TAB 1: Kalkylränta (WACC) ===
+    with tab1:
+        scenario_df = capcost_df.copy()
+        if network_choice != "Alla":
+            scenario_df = scenario_df[scenario_df["id_network"] == network_choice]
+
+        scenario_df = scenario_df.fillna(0)
+        wacc_change = st.slider("Ändra kalkylräntan (WACC) ± %", -3.0, 3.0, 0.0, step=0.25)
+        rate_factor = 1 + (wacc_change / 100)
+
+        return_ord = scenario_df[[c for c in scenario_df.columns if c.startswith("return_ord")]].sum().sum() * rate_factor
+        return_tail = scenario_df[[c for c in scenario_df.columns if c.startswith("return_tail")]].sum().sum() * rate_factor
+        dep_ord = scenario_df[[c for c in scenario_df.columns if c.startswith("dep_ord")]].sum().sum()
+        dep_tail = scenario_df[[c for c in scenario_df.columns if c.startswith("dep_tail")]].sum().sum()
+
+        cost_ord = return_ord + dep_ord
+        cost_tail = return_tail + dep_tail
+        cost_total = cost_ord + cost_tail
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total kapitalkostnad (MSEK)", f"{cost_total / 1_000_000:,.1f}")
+        col2.metric("Ordinarie kapitalkostnad (MSEK)", f"{cost_ord / 1_000_000:,.1f}")
+        col3.metric("Tail-kapitalkostnad (MSEK)", f"{cost_tail / 1_000_000:,.1f}")
+
+        year_map = {229: 2016, 230: 2017, 231: 2018, 232: 2019,
+                    233: 2020, 234: 2021, 235: 2022, 236: 2023}
+        scenario_df["year"] = scenario_df["time"].map(year_map).astype(int)
+
+        scenario_df["capcost_with_tail"] = (
+            scenario_df[[c for c in scenario_df.columns if c.startswith("return_")]].sum(axis=1) * rate_factor +
+            scenario_df[[c for c in scenario_df.columns if c.startswith("dep_")]].sum(axis=1)
+        )
+
+        scenario_df["capcost_without_tail"] = (
+            scenario_df[[c for c in scenario_df.columns if c.startswith("return_ord")]].sum(axis=1) * rate_factor +
+            scenario_df[[c for c in scenario_df.columns if c.startswith("dep_ord")]].sum(axis=1)
+        )
+
+        ts_summary = scenario_df.groupby("year")[["capcost_with_tail", "capcost_without_tail"]].sum().reset_index()
+        plot_df = ts_summary.melt(id_vars="year", var_name="Scenario", value_name="Kapitalkostnad")
+        plot_df["Scenario"] = plot_df["Scenario"].map({
+            "capcost_with_tail": "Med Tail",
+            "capcost_without_tail": "Utan Tail"
+        })
+
+        st.altair_chart(alt.Chart(plot_df).mark_line(point=True).encode(
+            x=alt.X("year:O", title="År"),
+            y=alt.Y("Kapitalkostnad:Q", title="SEK"),
+            color=alt.Color("Scenario:N", title="Scenario")
+        ).properties(width=700, height=400), use_container_width=True)
+
+    # === TAB 2: KPI-simulering ===
+    with tab2:
+        st.markdown("#### Simulera förmögenhetsbevarande värdering (KPI-indexering)")
+        st.warning("Datafel i nuläget, läs labbjournal")
+
+    # === TAB 3: Tail-andelar ===
+    with tab3:
+        sample_df = load_tail_sample()
+        full_df = load_tail_full()
+
+        nätkoder = sorted(sample_df["id_network"].unique())
+        nätnamn = {3035: "Stort nät (3035)", 160: "Medelstort nät (160)", 7: "Kommunalt nät (7)"}
+
+        def beräkna_tail_andelar(df, nät_namn="Totalt"):
+            nuav_ord_cols = [c for c in df.columns if c.startswith("nuav_ord_")]
+            nuav_tail_cols = [c for c in df.columns if c.startswith("nuav_tail_")]
+            dep_ord_cols = [c for c in df.columns if c.startswith("dep_ord_")]
+            dep_tail_cols = [c for c in df.columns if c.startswith("dep_tail_")]
+
+            nuav_ord_sum = df[nuav_ord_cols].sum().sum()
+            nuav_tail_sum = df[nuav_tail_cols].sum().sum()
+            dep_ord_sum = df[dep_ord_cols].sum().sum()
+            dep_tail_sum = df[dep_tail_cols].sum().sum()
+
+            return {
+                "Nät": nät_namn,
+                "Tailandel Kapitalbas": 100 * nuav_tail_sum / (nuav_tail_sum + nuav_ord_sum) if (nuav_tail_sum + nuav_ord_sum) > 0 else 0,
+                "Tailandel Avskrivning": 100 * dep_tail_sum / (dep_tail_sum + dep_ord_sum) if (dep_tail_sum + dep_ord_sum) > 0 else 0,
+            }
+
+        resultat = [beräkna_tail_andelar(sample_df[sample_df["id_network"] == n], nätnamn.get(n, str(n))) for n in nätkoder]
+        resultat.append(beräkna_tail_andelar(full_df, "Alla nät"))
+        result_df = pd.DataFrame(resultat)
+
+        st.info("'Alla nät' avser medelvärde för alla 159 nät.")
+        st.dataframe(result_df.set_index("Nät").style.format("{:.1f} %"))
+
+        st.markdown("#### Tailandel av kapitalbas (med tooltip)")
+        st.altair_chart(alt.Chart(result_df).mark_bar().encode(
+            x="Nät:N",
+            y=alt.Y("Tailandel Kapitalbas:Q", scale=alt.Scale(domain=[0, 100])),
+            tooltip=["Nät", alt.Tooltip("Tailandel Kapitalbas:Q", format=".1f")]
+        ).properties(width=600, height=300), use_container_width=True)
+
+        st.markdown("#### Tailandel av avskrivning (med tooltip)")
+        st.altair_chart(alt.Chart(result_df).mark_bar().encode(
+            x="Nät:N",
+            y=alt.Y("Tailandel Avskrivning:Q", scale=alt.Scale(domain=[0, 100])),
+            tooltip=["Nät", alt.Tooltip("Tailandel Avskrivning:Q", format=".1f")]
+        ).properties(width=600, height=300), use_container_width=True)
+
+        st.markdown("### Avvikelse från total Tailandel (kapitalbas)")
+        tail_cols = [c for c in full_df.columns if c.startswith("nuav_tail_")]
+        ord_cols = [c for c in full_df.columns if c.startswith("nuav_ord_")]
+        total_tail = full_df[tail_cols].sum().sum()
+        total_ord = full_df[ord_cols].sum().sum()
+        total_andel = total_tail / (total_tail + total_ord)
+
+        rows = []
+        for nät in full_df["id_network"].unique():
+            sub = full_df[full_df["id_network"] == nät]
+            t_sum = sub[tail_cols].sum().sum()
+            o_sum = sub[ord_cols].sum().sum()
+            andel = t_sum / (t_sum + o_sum) if (t_sum + o_sum) > 0 else 0
+            rows.append({
+                "id_network": nät,
+                "Tailandel Kapitalbas": andel * 100,
+                "Avvikelse från total": (andel - total_andel) * 100
+            })
+        avvikelse_df = pd.DataFrame(rows)
+
+        st.markdown(f"Totalt medelvärde (alla nät): **{total_andel * 100:.1f} %**")
+        col1, col2 = st.columns(2)
+
+        col1.markdown("#### Topp 10 högre än total")
+        st.dataframe(avvikelse_df.sort_values("Avvikelse från total", ascending=False).head(10).style.format({
+            "Tailandel Kapitalbas": "{:.1f} %",
+            "Avvikelse från total": "{:+.1f} %"
+        }))
+
+        col2.markdown("#### Topp 10 lägre än total")
+        st.dataframe(avvikelse_df.sort_values("Avvikelse från total", ascending=True).head(10).style.format({
+            "Tailandel Kapitalbas": "{:.1f} %",
+            "Avvikelse från total": "{:+.1f} %"
+        }))

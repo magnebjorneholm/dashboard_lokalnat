@@ -6,17 +6,16 @@ import io
 import numpy as np
 import geopandas as gpd
 
-from app.data_loader import load_data
-from app.dea_model import run_dea_model
-from Gammalt.sfa_model import run_sfa_model
-from app.pystoned_model import run_pystoned_model
-from app.plots import (
+from effektiviseringskrav.app.data_loader import load_data
+from effektiviseringskrav.app.dea_model import run_dea_model
+from effektiviseringskrav.app.pystoned_model import run_pystoned_model
+from effektiviseringskrav.app.plots import (
     plot_efficiency_histogram,
     plot_efficiency_boxplot,
     plot_efficiency_vs_size,
 )
-from app.run_logger import list_runs, load_run
-from spatial_analysis import lägg_till_grannsnitt
+from effektiviseringskrav.app.run_logger import list_runs, load_run
+from effektiviseringskrav.app.spatial_analysis import lägg_till_grannsnitt
 
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
     st.stop()
@@ -245,7 +244,7 @@ elif modellval == "Färdiga körningar":
     import yaml
     import pandas as pd
     from datetime import datetime
-    from app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
+    from effektiviseringskrav.app.plots import plot_efficiency_histogram, plot_efficiency_boxplot
 
     BASE_DIR = "runs_fardiga"   # Härifrån hämtas alla färdiga körningar
     SAVE_DIR = "runs"           # Här ska nya justerade versioner sparas
@@ -385,7 +384,7 @@ elif modellval == "Färdiga körningar":
 elif modellval == "Jämför körningar":
     st.header("Jämför två modellkörningar")
 
-    from app.run_logger import list_runs, load_run
+    from effektiviseringskrav.app.run_logger import list_runs, load_run
     import matplotlib.pyplot as plt
 
     runs = list_runs()
@@ -621,9 +620,9 @@ elif modellval == "Företagsanalys":
 
 
 elif modellval == "Geografisk karta":
-    from app.run_logger import list_runs, load_run
-    from heatmap_view import show_heatmap, load_shapes
-    from spatial_analysis import lägg_till_grannsnitt
+    from effektiviseringskrav.app.run_logger import list_runs, load_run
+    from effektiviseringskrav.app.heatmap_view import show_heatmap, load_shapes
+    from effektiviseringskrav.app.spatial_analysis import lägg_till_grannsnitt
 
     runs = list_runs()
     if not runs:

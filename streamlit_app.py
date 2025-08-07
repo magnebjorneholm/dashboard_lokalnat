@@ -37,8 +37,8 @@ components.html(
         </div>
 
         <map name="menu">
-            <area shape="rect" coords="180,150,330,210" href="/Effektiviseringskrav" alt="Effektiviseringskrav">
-            <area shape="rect" coords="590,87,906,138" href="/Kapitalbas" alt="Kapitalbas">
+            <area shape="rect" coords="180,150,330,210" href="/effektiviseringskrav" alt="effektiviseringskrav">
+            <area shape="rect" coords="590,87,906,138" href="/kapitalbas" alt="kapitalbas">
         </map>
     </div>
     """,

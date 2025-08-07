@@ -228,8 +228,7 @@ elif sektion == "Komponenter":
             st.markdown("""
             Denna vy visar komponenter som är **potentiellt inaktuella eller osäkra** i kapitalbasen. En komponent visas här om den är:
 
-            - **inte längre i drift** (`time_to < 2024`), eller
-            - **helt avskriven** (`maxdep == 1`), eller
+            - **helt avskriven** (`maxdep = 124`) eller
             - **har negativt nuanskaffningsvärde** (`nuav < 0`)
 
             Syftet är att ge Energimarknadsinspektionen stöd i tillsynsbedömningar genom att:
@@ -238,36 +237,37 @@ elif sektion == "Komponenter":
             2. Visa exempel på negativa `nuav`, som kan bero på rättelser, omklassificeringar eller fel
             3. Lyfta datakvalitetsfrågor utan att göra antaganden om fel eller regelbrott
 
-            ❗ Detta är inte ett rensningsverktyg. Informationen ska tolkas som indikatorer, inte bevis.
+            ❗ `time_to` visas i tabellen men används inte i filtreringen eftersom dess tolkning som datum inte är säkerställd.
+
+            ❗ Komponenter med positivt `nuav` visas också i summeringen, men endast negativa syns i detaljtabellen för att fokusera på potentiella avvikelser.
             """)
 
         # Begränsa till nät 160
         nätval = 160
         comp_df = comp_df[comp_df["id_network"] == nätval].copy()
 
-        # Klassificering
-        comp_df["ej_i_drift"] = pd.to_datetime(comp_df["time_to"], errors="coerce") < pd.Timestamp("2024-01-01")
-        comp_df["helt_avskriven"] = comp_df["maxdep"] == 1
+        # Ny tolkning: maxdep = 124 ⇒ avskriven
+        comp_df["avskriven"] = comp_df["maxdep"].apply(lambda x: "Ja" if x == 124 else "Nej")
+
+        # Flaggor
+        comp_df["helt_avskriven"] = comp_df["maxdep"] == 124
         comp_df["neg_nuav"] = comp_df["nuav"] < 0
-        comp_df["inaktiv"] = comp_df[["ej_i_drift", "helt_avskriven", "neg_nuav"]].any(axis=1)
+        comp_df["inaktiv"] = comp_df["helt_avskriven"] | comp_df["neg_nuav"]
 
         inaktiv_df = comp_df[comp_df["inaktiv"]].copy()
 
+        # Filtrering
         catval = st.multiselect("Filtrera kategori", sorted(inaktiv_df["cat"].dropna().unique()), default=None)
-        statusval = st.multiselect("Filtrera status", ["Ej i drift", "Helt avskriven", "Negativt nuav"], default=["Ej i drift", "Helt avskriven", "Negativt nuav"])
+        statusval = st.multiselect("Filtrera status", ["Helt avskriven", "Negativt nuav"], default=["Helt avskriven", "Negativt nuav"])
 
-        # Dynamiskt statusfilter
         status_mask = pd.Series([False] * len(inaktiv_df), index=inaktiv_df.index)
-        if "Ej i drift" in statusval:
-            status_mask |= inaktiv_df["ej_i_drift"]
         if "Helt avskriven" in statusval:
             status_mask |= inaktiv_df["helt_avskriven"]
         if "Negativt nuav" in statusval:
             status_mask |= inaktiv_df["neg_nuav"]
 
-        # Slutgiltigt filter
         filt_df = inaktiv_df[
-            status_mask & 
+            status_mask &
             (inaktiv_df["cat"].isin(catval) if catval else True)
         ]
 
@@ -275,24 +275,51 @@ elif sektion == "Komponenter":
             st.info("Inga inaktiva komponenter hittades för valt filter.")
         else:
             st.markdown("#### Summering per kategori")
-            summary = filt_df.groupby("cat")["nuav"].sum().reset_index().sort_values("nuav", ascending=False)
-            summary.columns = ["Kategori", "Nuanskaffningsvärde (SEK)"]
-            st.dataframe(summary.style.format({"Nuanskaffningsvärde (SEK)": "{:,.0f}"}))
+
+            summary_df = comp_df.copy()
+            summary_df["negativ_flagga"] = summary_df["nuav"] < 0
+            summary_df["positiv_flagga"] = summary_df["nuav"] > 0
+
+            kategori_summary = summary_df.groupby("cat").agg(
+                Antal_komponenter=("id_component", "count"),
+                Antal_negativa=("negativ_flagga", "sum"),
+                Positivt_nuav=("nuav", lambda x: x[x > 0].sum()),
+                Negativt_nuav=("nuav", lambda x: x[x < 0].sum()),
+                Totalt_nuav=("nuav", "sum")
+            ).reset_index()
+
+            kategori_summary["Andel negativa komponenter"] = kategori_summary["Antal_negativa"] / kategori_summary["Antal_komponenter"]
+
+            # Visa tabell
+            st.dataframe(
+                kategori_summary[[
+                    "cat",
+                    "Antal_komponenter",
+                    "Andel negativa komponenter",
+                    "Positivt_nuav",
+                    "Negativt_nuav",
+                    "Totalt_nuav"
+                ]]
+                .rename(columns={
+                    "cat": "Kategori",
+                    "Totalt_nuav": "Netto (SEK)",
+                    "Positivt_nuav": "Positivt nuanskaffningsvärde (SEK)",
+                    "Negativt_nuav": "Negativt nuanskaffningsvärde (SEK)"
+                })
+                .style.format({
+                    "Netto (SEK)": "{:,.0f}",
+                    "Positivt nuanskaffningsvärde (SEK)": "{:,.0f}",
+                    "Negativt nuanskaffningsvärde (SEK)": "{:,.0f}",
+                    "Andel negativa komponenter": "{:.0%}"
+                })
+            )
+
 
             st.markdown("#### Inaktiva komponenter")
-            st.dataframe(filt_df[["id_component", "cat", "subcat", "techspec", "time_to", "maxdep", "nuav"]])
-
-            st.markdown("#### Exportera till Excel")
-            export_cols = ["id_component", "cat", "subcat", "techspec", "time_to", "maxdep", "nuav"]
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-                filt_df[export_cols].to_excel(writer, sheet_name="Inaktivt kapital", index=False)
-            buffer.seek(0)
-            st.download_button(
-                label="📥 Ladda ner som Excel",
-                data=buffer,
-                file_name=f"inaktivt_kapital_nät_{nätval}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            st.dataframe(
+                filt_df[["id_component", "cat", "subcat", "time_to", "avskriven", "nuav"]]
+                .rename(columns={"avskriven": "Helt avskriven", "nuav": "Nuanskaffningsvärde (SEK)"})
+                .style.format({"Nuanskaffningsvärde (SEK)": "{:,.0f}"})
             )
 
 
