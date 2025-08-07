@@ -1,29 +1,10 @@
-"""
-Modellspecifikation:
-Visualiserar effektivitet eller effektiviseringskrav geografiskt per nätområde, baserat på DEA- eller PyStoned-modeller.
-Matchning sker på REId mellan modellresultat och shapefil från Ei över svenska nätområden.
-
-Motivering:
-Geografisk visualisering ger intuitiv översikt av var i landet elnätsföretag är mer eller mindre effektiva
-eller utsatta för höga effektiviseringskrav.
-
-Kräver:
-- geopandas
-- folium
-- streamlit_folium
-"""
-
 import geopandas as gpd
 import pandas as pd
 import streamlit as st
-import folium
-from streamlit_folium import st_folium
 
 @st.cache_data
 def load_shapes():
-    import geopandas as gpd
-
-    shp_path = "data/Samtliga nätföretags del- och verksamhetsområden.shp"
+    shp_path = "effektiviseringskrav/data/Samtliga nätföretags del- och verksamhetsområden.shp"
     gdf = gpd.read_file(shp_path)
 
     print("\n🗺️ SHAPEFILE LÄST IN")
@@ -46,7 +27,6 @@ def load_shapes():
     return gdf
 
 
-
 def debug_reid_matchning(gdf_shapes, df_resultat):
     shapefile_reid = set(gdf_shapes["REId"].dropna().unique())
     resultat_reid = set(df_resultat["REId"].dropna().unique())
@@ -64,27 +44,15 @@ def debug_reid_matchning(gdf_shapes, df_resultat):
 def show_heatmap(df_resultat, karttyp="Statisk", indikator="Effektivitet"):
     st.subheader("Geografisk heatmap")
 
-    # Ladda shapefilen
     gdf_shapes = load_shapes()
-
-    # Förbered modellresultat
     df = df_resultat[["REId", indikator]].copy()
     df["REId"] = df["REId"].str.strip()
 
-    # Mergning: koppla effektivitet till varje REId i geometrin
     gdf = gdf_shapes.merge(df, on="REId", how="left")
-
-    # Aggregera: medelvärde per unik polygon
-    gdf_agg = gdf.groupby("geom_id").agg({
-        "geometry": "first",
-        indikator: "mean"
-    }).reset_index()
-
+    gdf_agg = gdf.groupby("geom_id").agg({"geometry": "first", indikator: "mean"}).reset_index()
     gdf_agg = gpd.GeoDataFrame(gdf_agg, geometry="geometry", crs=gdf.crs)
 
-    statisk_vy = (karttyp == "Statisk")
-
-    if statisk_vy:
+    if karttyp == "Statisk":
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=(10, 12))
         gdf_agg.plot(
@@ -94,11 +62,7 @@ def show_heatmap(df_resultat, karttyp="Statisk", indikator="Effektivitet"):
             ax=ax,
             edgecolor="0.8",
             legend=True,
-            missing_kwds={
-                "color": "lightgray",
-                "edgecolor": "white",
-                "label": "Ingen data"
-            }
+            missing_kwds={"color": "lightgray", "edgecolor": "white", "label": "Ingen data"}
         )
         ax.set_title(f"{indikator} per geografiskt verksamhetsområde (medel om flera REId)", fontsize=13)
         ax.axis("off")

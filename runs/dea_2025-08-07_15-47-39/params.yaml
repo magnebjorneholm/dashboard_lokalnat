@@ -1,0 +1,15 @@
+modell: DEA
+parametrar:
+  input_cols:
+  - TOTEX
+  outlier_filter: false
+  output_cols:
+  - CU
+  - MW
+  - NS
+  - MWhl
+  - MWhh
+  rts: vrs
+  trunkering_max: 0.5
+  trunkering_min: 0.3
+timestamp: 2025-08-07_15-47-39

@@ -1,8 +1,8 @@
 import pandas as pd
 
 # === Parametrar ===
-input_path = "kapitalbas_filer/capbase_compress_tail.parquet"
-output_path = "kapitalbas_filer/capbase_compress_tail_sample.parquet"
+input_path = "kapitalbas/kapitalbas_filer/capbase_compress_tail.parquet"
+output_path = "kapitalbas/kapitalbas_filer/capbase_compress_tail_sample.parquet"
 
 
 valda_nät = [3035, 160, 7]  # Litet kommunalt, medelstort, stort

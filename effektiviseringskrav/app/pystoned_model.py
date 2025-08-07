@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from pystoned import CNLS, StoNED
-from app.run_logger import save_run
+from effektiviseringskrav.app.run_logger import save_run
 
 def run_pystoned_model(
     df: pd.DataFrame,

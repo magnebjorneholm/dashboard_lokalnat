@@ -3,8 +3,8 @@
 import pandas as pd
 
 # === Filvägar ===
-input_path = "kapitalbas_filer/final_capbase.parquet"
-output_path = "kapitalbas_filer/final_capbase_sample.parquet"
+input_path = "kapitalbas/kapitalbas_filer/final_capbase.parquet"
+output_path = "kapitalbas/kapitalbas_filer/final_capbase_sample.parquet"
 
 # === Valda nät ===
 valda_nät = [3035, 160, 7]

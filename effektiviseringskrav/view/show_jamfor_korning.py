@@ -1,0 +1,91 @@
+import streamlit as st
+from effektiviseringskrav.app.run_logger import list_runs, load_run
+import matplotlib.pyplot as plt
+import pandas as pd
+
+def show_jamfor_korningar_view():
+    st.header("Jämför två modellkörningar")
+
+    runs = list_runs()
+    if len(runs) < 2:
+        st.warning("Minst två körningar krävs för att göra en jämförelse.")
+        st.stop()
+
+    run_id_a = st.selectbox("Välj körning A", runs, index=0)
+    run_id_b = st.selectbox("Välj körning B", runs, index=1)
+
+    if run_id_a == run_id_b:
+        st.warning("Välj två olika körningar.")
+        st.stop()
+
+    params_a, df_a = load_run(run_id_a)
+    params_b, df_b = load_run(run_id_b)
+
+    st.subheader("Modellspecifikationer")
+    def utan_obs(params_dict):
+        if isinstance(params_dict, dict) and "obs" in params_dict:
+            return {k: v for k, v in params_dict.items() if k != "obs"}
+        return params_dict
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### Körning A")
+        st.json(utan_obs(params_a))
+
+    with col2:
+        st.markdown("### Körning B")
+        st.json(utan_obs(params_b))
+
+    # --- Sammanfoga gemensamma företag ---
+    merged = df_a[["Företag", "Effektivitet"]].rename(columns={"Effektivitet": "Eff_A"}).merge(
+        df_b[["Företag", "Effektivitet"]].rename(columns={"Effektivitet": "Eff_B"}),
+        on="Företag",
+        how="inner"
+    ).dropna()
+
+    if merged.empty:
+        st.info("Inga gemensamma företag att jämföra.")
+        st.stop()
+
+    merged["Diff"] = merged["Eff_B"] - merged["Eff_A"]
+    corr = merged["Eff_A"].corr(merged["Eff_B"])
+
+    st.subheader("Effektivitetsjämförelse")
+    st.markdown(f"**Pearson-korrelation mellan effektivitet A och B:** `{corr:.4f}`")
+    st.markdown("#### Största skillnader (Eff_B − Eff_A)")
+    st.dataframe(merged.sort_values("Diff", key=abs, ascending=False).head(10))
+    st.markdown("#### Samtliga gemensamma företag")
+    st.dataframe(merged.sort_values("Företag"))
+
+    # --- Lägg till effektivitetskrav för scatterplot ---
+    if "Effkrav_proc" in df_a.columns and "Effkrav_proc" in df_b.columns:
+        merged["Krav_A"] = df_a.set_index("Företag").loc[merged["Företag"], "Effkrav_proc"].values * 100
+        merged["Krav_B"] = df_b.set_index("Företag").loc[merged["Företag"], "Effkrav_proc"].values * 100
+    else:
+        st.warning("Effektivitetskrav saknas i en eller båda körningarna – scatterplot för krav kan inte visas.")
+        st.stop()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Scatterplot: Effektivitet – A vs B")
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.scatter(merged["Eff_A"], merged["Eff_B"], alpha=0.7)
+        ax.plot([0, 1], [0, 1], color="gray", linestyle="--")
+        ax.set_xlabel("Effektivitet – Körning A")
+        ax.set_ylabel("Effektivitet – Körning B")
+        ax.set_title("Effektivitet A vs B")
+        ax.grid(True)
+        st.pyplot(fig, use_container_width=False)
+
+    with col2:
+        st.subheader("Scatterplot: Effektivitetskrav (%) – A vs B")
+        fig_k, ax_k = plt.subplots(figsize=(5, 5))
+        ax_k.scatter(merged["Krav_A"], merged["Krav_B"], alpha=0.7)
+        ax_k.plot([1, 2], [1, 2], color="gray", linestyle="--")
+        ax_k.set_xlim(1.0, 2.0)
+        ax_k.set_ylim(1.0, 2.0)
+        ax_k.set_xlabel("Effektiviseringskrav (%) – Körning A")
+        ax_k.set_ylabel("Effektiviseringskrav (%) – Körning B")
+        ax_k.set_title("Effektiviseringskrav A vs B")
+        ax_k.grid(True)
+        st.pyplot(fig_k, use_container_width=False)

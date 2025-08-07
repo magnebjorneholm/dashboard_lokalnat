@@ -5,7 +5,7 @@ import yaml # type: ignore
 import pandas as pd
 from datetime import datetime
 
-RUNS_DIR = "runs"
+RUNS_DIR = "effektiviseringskrav/runs"
 
 def save_run(modellnamn: str, parametrar: dict, df_resultat: pd.DataFrame):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -31,11 +31,11 @@ import os
 import yaml # type: ignore
 
 def list_runs():
-    os.makedirs("runs", exist_ok=True)
-    return sorted(os.listdir("runs"))
+    os.makedirs("effektiviseringskrav/runs", exist_ok=True)
+    return sorted(os.listdir("effektiviseringskrav/runs"))
 
 def load_run(run_id):
-    path = os.path.join("runs", run_id)
+    path = os.path.join("effektiviseringskrav/runs", run_id)
     with open(os.path.join(path, "params.yaml")) as f:
         params = yaml.safe_load(f)
     df = pd.read_feather(os.path.join(path, "result.feather"))

@@ -8,9 +8,6 @@ from kapitalbas.kapitalbas_app.komponent_view import show_komponenter
 from kapitalbas.kapitalbas_app.policy_playground_view import show_policy_playground
 from kapitalbas.kapitalbas_app.qa_view import show_qa
 
-
-
-
 st.title("Kapitalbas")
 
 # === Ladda data ===
