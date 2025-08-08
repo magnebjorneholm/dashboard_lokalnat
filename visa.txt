@@ -1,0 +1,50 @@
+with tab4:
+            st.subheader("Livslängdssimulering")
+
+            st.markdown("""
+            Simulera hur kapitalbasen påverkas av justerade antaganden om ekonomisk och maximal livslängd.
+            """)
+
+            # Ladda komponentdata
+            df = st.session_state["final_capbase_sample"]
+
+            # Välj nät
+            nätval = st.selectbox("Välj nät", sorted(df["id_network"].unique()))
+
+            # Välj livslängder
+            eko = st.slider("Ekonomisk livslängd (år)", 10, 60, 30)
+            maxx = st.slider("Maximal livslängd (år)", 20, 100, 50)
+
+            # Filtrera på valt nät
+            df_nät = df[df["id_network"] == nätval]
+
+            # Simulera
+            df_sim, agg = simulera_livslangd(df_nät, eko_livslangd=eko, max_livslangd=maxx)
+
+            # Visa KPI
+            kpi1, kpi2, kpi3 = st.columns(3)
+            kpi1.metric("Faktisk NAV", f"{agg['nuav_faktisk'].iloc[0]:,.0f} kr")
+            kpi2.metric("Simulerad NAV", f"{agg['nuav_simulerad'].iloc[0]:,.0f} kr")
+            diff = agg['skillnad'].iloc[0]
+            kpi3.metric("Skillnad", f"{diff:,.0f} kr", delta=f"{diff/agg['nuav_faktisk'].iloc[0]*100:.1f}%")
+
+            # Stapeldiagram: topp 15 största positiva/negativa diff
+            df_plot = df_sim[["id_component", "cat", "subcat", "diff_nuav"]].copy()
+            df_plot["abs_diff"] = df_plot["diff_nuav"].abs()
+            topdiff = df_plot.sort_values("abs_diff", ascending=False).head(15)
+
+            chart = alt.Chart(topdiff).mark_bar().encode(
+                x=alt.X("diff_nuav:Q", title="Skillnad (kr)"),
+                y=alt.Y("id_component:N", sort="-x", title="Komponent-ID"),
+                color=alt.condition("datum.diff_nuav > 0", alt.value("#1f77b4"), alt.value("#d62728")),
+                tooltip=["cat", "subcat", "diff_nuav"]
+            ).properties(title="Största skillnader i NAV efter simulering", height=400)
+
+            st.altair_chart(chart, use_container_width=True)
+
+            # Visa tabell om användaren vill
+            with st.expander("Visa alla komponenter (simulerad vs faktisk NAV)"):
+                st.dataframe(df_sim[[
+                    "id_component", "cat", "subcat", "ålder", "anskaffningsvärde",
+                    "nuav", "nuav_simulerad", "diff_nuav"
+                ]].sort_values("diff_nuav", ascending=False))

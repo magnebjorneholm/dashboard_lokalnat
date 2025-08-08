@@ -7,10 +7,10 @@ parametrar:
   output_cols:
   - CU
   - MW
-  - NS
-  - MWhl
   - MWhh
+  - MWhl
+  - NS
   rts: crs
   trunkering_max: 0.3
   trunkering_min: 0.162416
-timestamp: 2025-08-07_15-52-34
+timestamp: 2025-08-08_09-02-05

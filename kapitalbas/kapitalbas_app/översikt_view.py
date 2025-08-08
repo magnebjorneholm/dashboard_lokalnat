@@ -7,7 +7,7 @@ def show_översikt(capbase_df):
     st.subheader("Översikt – Kapitalbas, Avskrivningar och Ränta (Ordinarie & Tail)")
 
     networks = sorted(capbase_df['id_network'].unique())
-    network_choice = st.sidebar.selectbox("Välj nät", ["Alla"] + networks)
+    network_choice = st.selectbox("Välj nät", ["Alla"] + networks)
 
     if network_choice != "Alla":
         view_df = capbase_df[capbase_df['id_network'] == network_choice]

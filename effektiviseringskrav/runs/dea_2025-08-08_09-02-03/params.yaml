@@ -1,0 +1,16 @@
+modell: DEA
+parametrar:
+  input_cols:
+  - CAPEX
+  - OPEXp
+  outlier_filter: true
+  output_cols:
+  - CU
+  - MW
+  - MWhh
+  - MWhl
+  - NS
+  rts: crs
+  trunkering_max: 0.3
+  trunkering_min: 0.162416
+timestamp: 2025-08-08_09-02-03

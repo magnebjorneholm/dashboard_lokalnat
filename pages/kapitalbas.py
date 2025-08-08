@@ -2,6 +2,7 @@
 
 import streamlit as st
 from kapitalbas.kapitalbas_app.data_loader import load_main_data
+from kapitalbas.kapitalbas_app.data_loader import load_component_sample
 from kapitalbas.kapitalbas_app.översikt_view import show_översikt
 from kapitalbas.kapitalbas_app.tidsserie_view import show_tidsserie
 from kapitalbas.kapitalbas_app.komponent_view import show_komponenter
@@ -12,6 +13,7 @@ st.title("Kapitalbas")
 
 # === Ladda data ===
 capbase, capcost = load_main_data()
+st.session_state["final_capbase_sample"] = load_component_sample()
 
 # === Välj sektion ===
 sektion = st.sidebar.selectbox(

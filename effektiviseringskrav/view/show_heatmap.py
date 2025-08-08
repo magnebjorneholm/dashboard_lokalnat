@@ -1,6 +1,6 @@
 import streamlit as st
 from effektiviseringskrav.app.run_logger import list_runs, load_run
-from effektiviseringskrav.app.heatmap_utils import show_heatmap, load_shapes
+from effektiviseringskrav.app.heatmap_utils import create_heatmap, load_shapes
 from effektiviseringskrav.app.spatial_analysis import lägg_till_grannsnitt
 import geopandas as gpd
 
@@ -15,7 +15,7 @@ def show_heatmap():
     run_id = st.selectbox("Välj körning", runs, index=0)
     _, df_resultat = load_run(run_id)
 
-    karttyp = st.selectbox("Välj karttyp", ["Statisk", "Dynamisk"])
+   
 
     möjliga_indikatorer = ["Effektivitet"]
     if "Supereffektivitet" in df_resultat.columns:
@@ -29,7 +29,7 @@ def show_heatmap():
         st.session_state.visa_karta = True
 
     if st.session_state.visa_karta:
-        show_heatmap(df_resultat, karttyp=karttyp, indikator=indikator)
+        create_heatmap(df_resultat, indikator=indikator)
 
         st.subheader("Jämför med grannar")
 

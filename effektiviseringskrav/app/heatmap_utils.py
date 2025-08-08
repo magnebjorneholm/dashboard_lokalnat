@@ -1,5 +1,4 @@
 import geopandas as gpd
-import pandas as pd
 import streamlit as st
 
 @st.cache_data
@@ -41,7 +40,7 @@ def debug_reid_matchning(gdf_shapes, df_resultat):
     print("Exempel:", list(saknas_i_shapefile)[:5])
 
 
-def show_heatmap(df_resultat, karttyp="Statisk", indikator="Effektivitet"):
+def create_heatmap(df_resultat, indikator="Effektivitet"):
     st.subheader("Geografisk heatmap")
 
     gdf_shapes = load_shapes()
@@ -52,10 +51,10 @@ def show_heatmap(df_resultat, karttyp="Statisk", indikator="Effektivitet"):
     gdf_agg = gdf.groupby("geom_id").agg({"geometry": "first", indikator: "mean"}).reset_index()
     gdf_agg = gpd.GeoDataFrame(gdf_agg, geometry="geometry", crs=gdf.crs)
 
-    if karttyp == "Statisk":
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(figsize=(10, 12))
-        gdf_agg.plot(
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(10, 12))
+    gdf_agg.plot(
             column=indikator,
             cmap="BuPu",
             linewidth=0.2,
@@ -64,28 +63,7 @@ def show_heatmap(df_resultat, karttyp="Statisk", indikator="Effektivitet"):
             legend=True,
             missing_kwds={"color": "lightgray", "edgecolor": "white", "label": "Ingen data"}
         )
-        ax.set_title(f"{indikator} per geografiskt verksamhetsområde (medel om flera REId)", fontsize=13)
-        ax.axis("off")
-        st.pyplot(fig)
+    ax.set_title(f"{indikator} per geografiskt verksamhetsområde (medel om flera REId)", fontsize=13)
+    ax.axis("off")
+    st.pyplot(fig)
 
-    else:
-        import folium
-        from streamlit_folium import st_folium
-
-        m = folium.Map(location=[62.0, 15.0], zoom_start=5, tiles="cartodb positron")
-
-        folium.Choropleth(
-            geo_data=gdf_agg,
-            name="Choropleth",
-            data=gdf_agg,
-            columns=["geom_id", indikator],
-            key_on="feature.properties.geom_id",
-            fill_color="BuPu",
-            fill_opacity=0.7,
-            line_opacity=0.2,
-            nan_fill_color="gray",
-            threshold_scale=[0.6, 0.7, 0.8, 0.9, 1.0],
-            legend_name=indikator
-        ).add_to(m)
-
-        st_folium(m, use_container_width=True)

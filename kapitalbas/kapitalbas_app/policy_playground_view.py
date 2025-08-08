@@ -4,19 +4,22 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from kapitalbas.kapitalbas_app.data_loader import load_tail_sample, load_tail_full
+from kapitalbas.kapitalbas_app.livslangd_simulering import simulera_livslangd
+
 
 def show_policy_playground(capcost_df):
     """Visar tre scenarier: WACC-ändring, KPI-indexering, och Tail-andelar."""
     st.subheader("Policy Playground – simulera olika regleringsscenarier")
     st.write("Testa olika kalkylräntor (WACC) och värderingsprinciper (KPI-baserad kapitalbas)")
 
-    networks = sorted(capcost_df["id_network"].unique())
-    network_choice = st.sidebar.selectbox("Välj nät", ["Alla"] + networks)
 
-    tab1, tab2, tab3 = st.tabs(["Kalkylränta (WACC)", "KPI-simulering", "Tail-andelar"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Kalkylränta (WACC)", "KPI-simulering", "Tail-andelar", "Livslängdssimulering"])
 
     # === TAB 1: Kalkylränta (WACC) ===
     with tab1:
+        networks = sorted(capcost_df["id_network"].unique())
+        network_choice = st.selectbox("Välj nät", ["Alla"] + networks)
+
         scenario_df = capcost_df.copy()
         if network_choice != "Alla":
             scenario_df = scenario_df[scenario_df["id_network"] == network_choice]
@@ -151,3 +154,76 @@ def show_policy_playground(capcost_df):
             "Tailandel Kapitalbas": "{:.1f} %",
             "Avvikelse från total": "{:+.1f} %"
         }))
+
+        with tab4:
+            st.subheader("Livslängdssimulering")
+            st.markdown("""
+            Simulera hur kapitalbasen, avskrivningar och kapitalkostnad påverkas av ändrade antaganden om ekonomisk och maximal livslängd. 
+            Metoden utgår från anläggningens ålder och nedskrivning sker successivt tills maximal livslängd.
+            """)
+            st.markdown("**Alla monetära värden visas i miljoner kronor (MSEK)**")
+
+            df = st.session_state["final_capbase_sample"]
+
+            # Välj nät
+            nätval = st.selectbox("Välj nät", sorted(df["id_network"].unique()))
+            df_nät = df[df["id_network"] == nätval]
+
+            # Parametrar
+            eko = st.slider("Ekonomisk livslängd (år)", 10, 60, 30)
+            maxx = st.slider("Maximal livslängd (år)", 20, 100, 50)
+            ranta = st.slider("Kalkylränta (%)", 0.0, 10.0, 3.0, step=0.1) / 100
+
+            # Simulera
+            df_sim, agg = simulera_livslangd(df_nät, eko_livslangd=eko, max_livslangd=maxx, ranta=ranta)
+
+            if agg.empty:
+                st.warning("Inga komponenter matchade urvalet. Kontrollera datan eller välj ett annat nät.")
+                return
+
+            total = agg.iloc[0]
+
+            # KPI
+            kpi1, kpi2, kpi3 = st.columns(3)
+            kpi1.metric("Faktisk NAV (MSEK)", f"{total['nuav_faktisk'] / 1_000_000:,.1f}")
+            kpi2.metric("Simulerad NAV (MSEK)", f"{total['nuav_sim'] / 1_000_000:,.1f}", delta=f"{total['diff_nav'] / 1_000_000:,.1f}")
+            kpi3.metric("Totalkostnad (sim, MSEK)", f"{total['kapkost_sim'] / 1_000_000:,.1f}")
+
+            # Diagram: största differenser (rättad version)
+            df_plot = df_sim.copy()
+            df_plot["diff_nuav"] = (df_plot["nuav_sim"] - df_plot["nuav_faktisk"]) / 1_000_000
+            df_plot["nuav_faktisk"] = df_plot["nuav_faktisk"] / 1_000_000
+            df_plot["nuav_sim"] = df_plot["nuav_sim"] / 1_000_000
+            df_plot["abs_diff"] = df_plot["diff_nuav"].abs()
+            df_plot["positiv"] = df_plot["diff_nuav"] > 0
+            topdiff = df_plot.nlargest(15, "abs_diff")
+
+            chart = alt.Chart(topdiff).mark_bar().encode(
+                x=alt.X("diff_nuav:Q", title="Skillnad i NAV (MSEK)", axis=alt.Axis(format=",.1f", labelAngle=0)),
+                y=alt.Y("id_component:N", sort="-x", title="Komponent-ID"),
+                color=alt.Color("positiv:N", 
+                                scale=alt.Scale(domain=[True, False], range=["#1f77b4", "#d62728"]),
+                                legend=alt.Legend(title="Ökning")),
+                tooltip=[
+                    "id_component", "cat", "subcat",
+                    alt.Tooltip("nuav_faktisk:Q", title="Faktisk NAV (MSEK)", format=".2f"),
+                    alt.Tooltip("nuav_sim:Q", title="Simulerad NAV (MSEK)", format=".2f"),
+                    alt.Tooltip("diff_nuav:Q", title="Differens (MSEK)", format=".2f")
+                ]
+            ).properties(
+                title="Största skillnader i NAV efter simulering",
+                height=400
+            )
+
+            st.altair_chart(chart, use_container_width=True)
+
+            # Tabell: visa som MSEK
+            df_sim["nuav_faktisk_msek"] = df_sim["nuav_faktisk"] / 1_000_000
+            df_sim["nuav_sim_msek"] = df_sim["nuav_sim"] / 1_000_000
+            df_sim["kapkost_sim_msek"] = df_sim["kapkost_sim"] / 1_000_000
+
+            with st.expander("Visa komponenter (detaljer)"):
+                st.dataframe(df_sim[[
+                    "id_component", "cat", "subcat", "alder", "anskaffningsvärde", 
+                    "nuav_faktisk_msek", "nuav_sim_msek", "dep_ar_sim", "ranta_sim", "kapkost_sim_msek"
+                ]].sort_values("kapkost_sim_msek", ascending=False), use_container_width=True)

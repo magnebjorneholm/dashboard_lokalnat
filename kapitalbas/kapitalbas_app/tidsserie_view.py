@@ -9,7 +9,7 @@ def show_tidsserie(capcost_df):
     st.subheader("Kapitalkostnad över tid – uppdelning i ränta och avskrivning")
 
     networks = sorted(capcost_df['id_network'].unique())
-    network_choice = st.sidebar.selectbox("Välj nät", ["Alla"] + networks)
+    network_choice = st.selectbox("Välj nät", ["Alla"] + networks)
 
     # Karta för att översätta "time" till riktiga år
     year_map = {

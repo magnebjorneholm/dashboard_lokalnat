@@ -89,7 +89,7 @@ def show_komponenter():
     # === TAB 2 ===
     with tab2:
         st.markdown("### Inaktivt kapital – indikatorer på överskattning eller dataproblem")
-        st.info("⚠️ Denna flik visar endast nät 160 som exempelnät i prototypen.")
+        st.info("⚠️ Denna flik visar endast nät 160 som exempelnät i prototypen. Bortse från valen i sidopanelen.")
 
         st.expander("ℹ️ Vad visar denna flik?").markdown("""
         Denna vy visar komponenter som är **potentiellt inaktuella eller osäkra** i kapitalbasen. En komponent visas här om den är:
