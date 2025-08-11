@@ -1,73 +1,98 @@
-# livslangd_simulering.py
-# (1) Modellspecifikation: Simulerar kapitalbas, årlig avskrivning och räntedel med flexibla antaganden om ekonomisk och maximal livslängd.
-# (2) Motivation: Skapa korrekt och policyrelevant bild av hur reglerade kapitalkostnader påverkas av livslängdsantaganden.
+# kapitalbas_app/livslangd_simulering.py
+# (1) Modellspecifikation:
+# Simulerar kapitalbas (NAV), årlig avskrivning och räntedel enligt EIFS 2023:5.
+# Linjär avskrivning fram till ekonomisk livslängd, därefter konstant svansavskrivning fram till maximal livslängd.
+# (2) Motivation:
+# Säkerställa metodkorrekt beräkning av NAV, avskrivningar och kapitalkostnader i enlighet med föreskrift,
+# men med förenklad ålderslogik för prototyp (ej exakt halvårsskifte).
 
 import pandas as pd
+from kapitalbas.kapitalbas_app.utils import YEAR_MAP
 
 def simulera_livslangd(df, eko_livslangd=30, max_livslangd=50, ranta=0.03, ar=236):
     """
     Parametrar:
     - df: DataFrame med komponentdata
-    - eko_livslangd: ekonomisk livslängd i år (default 30)
-    - max_livslangd: maximal livslängd i år (default 50)
-    - ranta: kalkylränta som andel (default 3%)
-    - ar: tillsynsår (default 236 = 2024)
-
-    Returnerar:
-    - df: DataFrame med NAV, dep, ränta och kapitalkostnad före och efter simulering
-    - agg: summerad skillnad per nät
+    - eko_livslangd: ekonomisk livslängd (år)
+    - max_livslangd: maximal livslängd (år)
+    - ranta: kalkylränta (andel)
+    - ar: intern årskod (enligt YEAR_MAP)
     """
 
     df = df.copy()
-    age_col = f"age_component_{ar}"
-    df["alder"] = df[age_col]
+
+    # === 1. Korrigera ålder enligt §4 (förenklad för prototyp) ===
+    if "time_invest" in df.columns:
+        invest_year = pd.to_datetime(df["time_invest"]).dt.year
+        pre2011_mask = invest_year < 2011
+        invest_year_adj = invest_year.copy()
+
+        # Före 2011: ålder från 1 jan året efter
+        invest_year_adj[pre2011_mask] += 1
+
+        # Från 2011: förenklad regel (+0,5 år)
+        post2011_mask = ~pre2011_mask
+        invest_year_adj[post2011_mask] += 0.5
+
+        current_year = YEAR_MAP.get(ar, ar)
+        df["alder"] = (current_year - invest_year_adj).astype(float)
+    else:
+        age_col = f"age_component_{ar}"
+        df["alder"] = df[age_col]
 
     df = df.dropna(subset=["anskaffningsvärde", "alder"])
     df = df[df["alder"] > 0]
-
-    # Begränsa ålder till max livslängd
     df["alder_sim"] = df["alder"].clip(upper=max_livslangd)
 
-    # Ackumulerad avskrivning enl. trappa
-    def ackumulerad_dep(row):
-        a = row["alder_sim"]
-        AV = row["anskaffningsvärde"]
+    # === 2. Beräkna ackumulerad och årlig avskrivning ===
+    def beräkna_avskrivningar(a, AV):
+        ack_dep = 0.0
+        dep_year = 0.0
+        for år in range(1, int(a) + 1):
+            if år <= eko_livslangd:
+                avskr = AV / eko_livslangd
+            elif år <= max_livslangd:
+                avskr = AV / (max_livslangd - eko_livslangd)  # konstant svans
+            else:
+                avskr = 0.0
+            if ack_dep + avskr > AV:
+                avskr = AV - ack_dep
+            ack_dep += avskr
+            if år == int(a):
+                dep_year = avskr
+        return ack_dep, dep_year
 
-        if a <= eko_livslangd:
-            return AV * a / eko_livslangd
-        elif a <= max_livslangd:
-            # Linjär avskrivning över svansperioden
-            rest = AV * (1 - 1)  # fullt avskriven efter eko i Ei:s metod
-            
-            # Alternativ pragmatisk trappa för kontroll
-            return AV * (1 - (max_livslangd - a)/(max_livslangd - eko_livslangd))
-        else:
-            return AV  # helt avskriven
+    ack_list = []
+    year_list = []
+    for a, AV in zip(df["alder_sim"], df["anskaffningsvärde"]):
+        ack, dep_y = beräkna_avskrivningar(a, AV)
+        ack_list.append(ack)
+        year_list.append(dep_y)
 
-    df["dep_ack_sim"] = df.apply(ackumulerad_dep, axis=1)
-    df["nuav_sim"] = df["anskaffningsvärde"] - df["dep_ack_sim"]
-    df["nuav_sim"] = df["nuav_sim"].clip(lower=0)
+    df["dep_ack_sim"] = ack_list
+    df["dep_ar_sim"] = year_list
 
-    # Faktisk NAV är enligt Ei:
+    # === 3. NAV och räntedel ===
+    df["nuav_sim"] = (df["anskaffningsvärde"] - df["dep_ack_sim"]).clip(lower=0)
     df["nuav_faktisk"] = df["nuav"]
 
-    # Årlig avskrivning (approx): 
-    df["dep_ar_sim"] = df["dep_ack_sim"] / df["alder_sim"]
-
-    # Ränta: medelvärde NAV över perioden
-    df["nav_start"] = df["anskaffningsvärde"]
+    # Medelvärde NAV för året (ingående + utgående) / 2
+    df["nav_start"] = df["nuav_sim"] + df["dep_ar_sim"]
     df["nav_slut"] = df["nuav_sim"]
     df["nav_medel"] = (df["nav_start"] + df["nav_slut"]) / 2
     df["ranta_sim"] = ranta * df["nav_medel"]
 
-    # Totalkostnad
+    # === 4. Sätt alltid simulerat år ===
+    current_year = YEAR_MAP.get(ar, ar)
+    df["year"] = current_year
+
+    # === 5. Totalkostnad ===
     df["kapkost_sim"] = df["dep_ar_sim"] + df["ranta_sim"]
 
-    # Aggregat per nät
-    agg = df.groupby("id_network")[[
+    # === 6. Aggregera per nät och år ===
+    agg = df.groupby(["id_network", "year"])[
         "nuav_faktisk", "nuav_sim", "dep_ar_sim", "ranta_sim", "kapkost_sim"
-    ]].sum().reset_index()
-
+    ].sum().reset_index()
     agg["diff_nav"] = agg["nuav_sim"] - agg["nuav_faktisk"]
 
     return df, agg

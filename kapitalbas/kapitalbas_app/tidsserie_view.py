@@ -3,6 +3,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+from kapitalbas.kapitalbas_app.utils import map_year
 
 def show_tidsserie(capcost_df):
     """Visar kapitalkostnad över tid, uppdelat i ränta och avskrivning."""
@@ -12,11 +13,7 @@ def show_tidsserie(capcost_df):
     network_choice = st.selectbox("Välj nät", ["Alla"] + networks)
 
     # Karta för att översätta "time" till riktiga år
-    year_map = {
-        229: 2016, 230: 2017, 231: 2018, 232: 2019,
-        233: 2020, 234: 2021, 235: 2022, 236: 2023
-    }
-    capcost_df['year'] = capcost_df['time'].map(year_map).astype(int)
+    capcost_df = map_year(capcost_df, time_col="time", year_col="year")
 
     # Filtrera per nät
     ts_df = capcost_df.copy()
@@ -36,6 +33,8 @@ def show_tidsserie(capcost_df):
         'Ränta': ret_ts[ret_cols].sum(axis=1)
     })
     ts_plot['Total'] = ts_plot['Avskrivning'] + ts_plot['Ränta']
+    ts_plot[['Avskrivning','Ränta','Total']] = ts_plot[['Avskrivning','Ränta','Total']] / 1_000_000
+
 
     # Altair-graf
     chart_data = ts_plot.melt(
