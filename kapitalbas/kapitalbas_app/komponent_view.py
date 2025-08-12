@@ -12,7 +12,11 @@ def show_komponenter():
 
     comp_df = load_component_sample()
 
-    comp_df["year"] = pd.to_datetime(comp_df["time_invest"], errors="coerce").dt.year
+    year_map = {
+        229: 2016, 230: 2017, 231: 2018, 232: 2019,
+        233: 2020, 234: 2021, 235: 2022, 236: 2023
+    }
+    comp_df["year"] = comp_df["time_invest"].map(year_map)
     comp_df = comp_df.dropna(subset=["year"])
     comp_df["age"] = 2024 - comp_df["year"]
 

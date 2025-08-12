@@ -39,4 +39,3 @@ df.to_parquet(output_path, index=False)
 print("\n✅ Prototypfil sparad som:", output_path)
 
 
-

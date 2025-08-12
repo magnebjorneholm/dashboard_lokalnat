@@ -5,7 +5,6 @@ import pandas as pd
 import altair as alt
 from kapitalbas.kapitalbas_app.data_loader import load_tail_sample, load_tail_full
 from kapitalbas.kapitalbas_app.livslangd_simulering import simulera_livslangd
-from kapitalbas.kapitalbas_app.utils import YEAR_MAP
 
 
 def show_policy_playground(capcost_df):
@@ -43,7 +42,9 @@ def show_policy_playground(capcost_df):
         col2.metric("Ordinarie kapitalkostnad (MSEK)", f"{cost_ord / 1_000_000:,.1f}")
         col3.metric("Tail-kapitalkostnad (MSEK)", f"{cost_tail / 1_000_000:,.1f}")
 
-        scenario_df["year"] = scenario_df["time"].map(YEAR_MAP).astype(int)
+        year_map = {229: 2016, 230: 2017, 231: 2018, 232: 2019,
+                    233: 2020, 234: 2021, 235: 2022, 236: 2023}
+        scenario_df["year"] = scenario_df["time"].map(year_map).astype(int)
 
         scenario_df["capcost_with_tail"] = (
             scenario_df[[c for c in scenario_df.columns if c.startswith("return_")]].sum(axis=1) * rate_factor +
@@ -99,20 +100,7 @@ def show_policy_playground(capcost_df):
             }
 
         resultat = [beräkna_tail_andelar(sample_df[sample_df["id_network"] == n], nätnamn.get(n, str(n))) for n in nätkoder]
-        # Beräkna medel över nät
-        mean_kap = []
-        mean_dep = []
-        for n in full_df["id_network"].unique():
-            sub = beräkna_tail_andelar(full_df[full_df["id_network"] == n])
-            mean_kap.append(sub["Tailandel Kapitalbas"])
-            mean_dep.append(sub["Tailandel Avskrivning"])
-
-        resultat.append({
-            "Nät": "Alla nät",
-            "Tailandel Kapitalbas": sum(mean_kap) / len(mean_kap),
-            "Tailandel Avskrivning": sum(mean_dep) / len(mean_dep)
-        })
-
+        resultat.append(beräkna_tail_andelar(full_df, "Alla nät"))
         result_df = pd.DataFrame(resultat)
 
         st.info("'Alla nät' avser medelvärde för alla 159 nät.")
@@ -135,14 +123,9 @@ def show_policy_playground(capcost_df):
         st.markdown("### Avvikelse från total Tailandel (kapitalbas)")
         tail_cols = [c for c in full_df.columns if c.startswith("nuav_tail_")]
         ord_cols = [c for c in full_df.columns if c.startswith("nuav_ord_")]
-        andels_lista = []
-        for nät in full_df["id_network"].unique():
-            t_sum = full_df.loc[full_df["id_network"] == nät, tail_cols].sum().sum()
-            o_sum = full_df.loc[full_df["id_network"] == nät, ord_cols].sum().sum()
-            if (t_sum + o_sum) > 0:
-                andels_lista.append(t_sum / (t_sum + o_sum))
-        total_andel = sum(andels_lista) / len(andels_lista) if andels_lista else 0
-
+        total_tail = full_df[tail_cols].sum().sum()
+        total_ord = full_df[ord_cols].sum().sum()
+        total_andel = total_tail / (total_tail + total_ord)
 
         rows = []
         for nät in full_df["id_network"].unique():
@@ -159,84 +142,58 @@ def show_policy_playground(capcost_df):
 
         st.markdown(f"Totalt medelvärde (alla nät): **{total_andel * 100:.1f} %**")
         col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### Topp 10 högre än total")
-            st.dataframe( avvikelse_df.sort_values("Avvikelse från total", ascending=False).head(10).style.format({
-            "Tailandel Kapitalbas": "{:.1f} %",
-            "Avvikelse från total": "{:+.1f} %"
-        }))
-        with col2:
-            st.markdown("#### Topp 10 lägre än total")
-            st.dataframe( avvikelse_df.sort_values("Avvikelse från total", ascending=True).head(10).style.format({
+
+        col1.markdown("#### Topp 10 högre än total")
+        st.dataframe(avvikelse_df.sort_values("Avvikelse från total", ascending=False).head(10).style.format({
             "Tailandel Kapitalbas": "{:.1f} %",
             "Avvikelse från total": "{:+.1f} %"
         }))
 
-    # === TAB 4: Livslängdssimulering ===
-    with tab4:
-        st.subheader("Livslängdssimulering")
+        col2.markdown("#### Topp 10 lägre än total")
+        st.dataframe(avvikelse_df.sort_values("Avvikelse från total", ascending=True).head(10).style.format({
+            "Tailandel Kapitalbas": "{:.1f} %",
+            "Avvikelse från total": "{:+.1f} %"
+        }))
 
-        st.info("""
-        **Vad gör funktionen?**  
-        Simulerar kapitalbas (NAV), årlig avskrivning och räntedel för varje komponent i ett valt nät,
-        utifrån antaganden om ekonomisk och maximal livslängd.  
-        Avskrivning beräknas enligt EIFS 2023:5 §5: linjär fram till ekonomisk livslängd, därefter konstant svansavskrivning.  
-        Räntan beräknas som årsmedel av ingående och utgående NAV.
+        with tab4:
+            st.subheader("Livslängdssimulering")
+            st.markdown("""
+            Simulera hur kapitalbasen, avskrivningar och kapitalkostnad påverkas av ändrade antaganden om ekonomisk och maximal livslängd. 
+            Metoden utgår från anläggningens ålder och nedskrivning sker successivt tills maximal livslängd.
+            """)
+            st.markdown("**Alla monetära värden visas i miljoner kronor (MSEK)**")
 
-        **Kända brister i prototypen**  
-        - Halvårsskiftet enligt §4 är förenklat (ej exakt datum).  
-        - Sista året vid maxliv beräknas på årsbas, vilket kan ge något hög räntedel.  
-        - Åldern antas korrekt i indata.  
-        - `nuav` antas vara faktisk NAV för jämförelseåret.
-        """)
+            df = st.session_state["final_capbase_sample"]
 
-        df = st.session_state["final_capbase_sample"]
+            # Välj nät
+            nätval = st.selectbox("Välj nät", sorted(df["id_network"].unique()))
+            df_nät = df[df["id_network"] == nätval]
 
-        # --- Välj nät ---
-        nätval = st.selectbox("Välj nät", sorted(df["id_network"].unique()))
-        df_nät = df[df["id_network"] == nätval]
+            # Parametrar
+            eko = st.slider("Ekonomisk livslängd (år)", 10, 60, 30)
+            maxx = st.slider("Maximal livslängd (år)", 20, 100, 50)
+            ranta = st.slider("Kalkylränta (%)", 0.0, 10.0, 3.0, step=0.1) / 100
 
-        # --- Välj simulerat år ---
-        årval = st.selectbox("Välj simulerat år", list(YEAR_MAP.values()))
-        ar_kod = [k for k, v in YEAR_MAP.items() if v == årval][0]
+            # Simulera
+            df_sim, agg = simulera_livslangd(df_nät, eko_livslangd=eko, max_livslangd=maxx, ranta=ranta)
 
-        # --- Parametrar ---
-        eko = st.slider("Ekonomisk livslängd (år)", 10, 60, 30)
-        maxx = st.slider("Maximal livslängd (år)", 20, 100, 50)
+            if agg.empty:
+                st.warning("Inga komponenter matchade urvalet. Kontrollera datan eller välj ett annat nät.")
+                return
 
-        # Säkerställ att maxliv > ekoliv
-        if maxx <= eko:
-            maxx = eko + 1
-            st.warning(f"Maximal livslängd justerades automatiskt till {maxx} år för att vara större än ekonomisk livslängd.")
+            total = agg.iloc[0]
 
-        ranta = st.slider("Kalkylränta (%)", 0.0, 10.0, 3.0, step=0.1) / 100
-
-        # --- Simulera ---
-        df_sim, agg = simulera_livslangd(
-            df_nät,
-            eko_livslangd=eko,
-            max_livslangd=maxx,
-            ranta=ranta,
-            ar=ar_kod
-        )
-
-        # --- Filtrera KPI:er till valt år ---
-        total = agg.loc[agg["year"] == årval].sum(numeric_only=True)
-
-        if total.empty:
-            st.warning("Inga komponenter matchade urvalet.")
-        else:
+            # KPI
             kpi1, kpi2, kpi3 = st.columns(3)
             kpi1.metric("Faktisk NAV (MSEK)", f"{total['nuav_faktisk'] / 1_000_000:,.1f}")
-            kpi2.metric("Simulerad NAV (MSEK)", f"{total['nuav_sim'] / 1_000_000:,.1f}",
-                        delta=f"{total['diff_nav'] / 1_000_000:,.1f}")
+            kpi2.metric("Simulerad NAV (MSEK)", f"{total['nuav_sim'] / 1_000_000:,.1f}", delta=f"{total['diff_nav'] / 1_000_000:,.1f}")
             kpi3.metric("Totalkostnad (sim, MSEK)", f"{total['kapkost_sim'] / 1_000_000:,.1f}")
 
-            # --- Diagram ---
+            # Diagram: största differenser (rättad version)
             df_plot = df_sim.copy()
             df_plot["diff_nuav"] = (df_plot["nuav_sim"] - df_plot["nuav_faktisk"]) / 1_000_000
-            df_plot["nuav_faktisk"] /= 1_000_000
-            df_plot["nuav_sim"] /= 1_000_000
+            df_plot["nuav_faktisk"] = df_plot["nuav_faktisk"] / 1_000_000
+            df_plot["nuav_sim"] = df_plot["nuav_sim"] / 1_000_000
             df_plot["abs_diff"] = df_plot["diff_nuav"].abs()
             df_plot["positiv"] = df_plot["diff_nuav"] > 0
             topdiff = df_plot.nlargest(15, "abs_diff")
@@ -244,7 +201,8 @@ def show_policy_playground(capcost_df):
             chart = alt.Chart(topdiff).mark_bar().encode(
                 x=alt.X("diff_nuav:Q", title="Skillnad i NAV (MSEK)", axis=alt.Axis(format=",.1f", labelAngle=0)),
                 y=alt.Y("id_component:N", sort="-x", title="Komponent-ID"),
-                color=alt.Color("positiv:N", scale=alt.Scale(domain=[True, False], range=["#1f77b4", "#d62728"]),
+                color=alt.Color("positiv:N", 
+                                scale=alt.Scale(domain=[True, False], range=["#1f77b4", "#d62728"]),
                                 legend=alt.Legend(title="Ökning")),
                 tooltip=[
                     "id_component", "cat", "subcat",
@@ -259,16 +217,13 @@ def show_policy_playground(capcost_df):
 
             st.altair_chart(chart, use_container_width=True)
 
-            # --- Alla monetära värden i MSEK ---
+            # Tabell: visa som MSEK
             df_sim["nuav_faktisk_msek"] = df_sim["nuav_faktisk"] / 1_000_000
             df_sim["nuav_sim_msek"] = df_sim["nuav_sim"] / 1_000_000
-            df_sim["dep_ar_sim_msek"] = df_sim["dep_ar_sim"] / 1_000_000
-            df_sim["ranta_sim_msek"] = df_sim["ranta_sim"] / 1_000_000
             df_sim["kapkost_sim_msek"] = df_sim["kapkost_sim"] / 1_000_000
 
             with st.expander("Visa komponenter (detaljer)"):
                 st.dataframe(df_sim[[
-                    "id_component", "cat", "subcat", "alder", "anskaffningsvärde",
-                    "nuav_faktisk_msek", "nuav_sim_msek",
-                    "dep_ar_sim_msek", "ranta_sim_msek", "kapkost_sim_msek"
+                    "id_component", "cat", "subcat", "alder", "anskaffningsvärde", 
+                    "nuav_faktisk_msek", "nuav_sim_msek", "dep_ar_sim", "ranta_sim", "kapkost_sim_msek"
                 ]].sort_values("kapkost_sim_msek", ascending=False), use_container_width=True)

@@ -23,7 +23,7 @@ sektion = st.sidebar.selectbox(
 
 # === Visa vald sektion ===
 if sektion == "Översikt":
-    show_översikt(capbase, capcost)
+    show_översikt(capbase)
 
 
 elif sektion == "Tidsserie":
