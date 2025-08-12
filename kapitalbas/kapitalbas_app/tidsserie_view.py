@@ -4,6 +4,12 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
+YEAR_MAP = {
+    229: 2016, 230: 2017, 231: 2018, 232: 2019,
+    233: 2020, 234: 2021, 235: 2022, 236: 2023
+}
+
+
 def show_tidsserie(capcost_df):
     """Visar kapitalkostnad över tid, uppdelat i ränta och avskrivning."""
     st.subheader("Kapitalkostnad över tid – uppdelning i ränta och avskrivning")
@@ -11,15 +17,10 @@ def show_tidsserie(capcost_df):
     networks = sorted(capcost_df['id_network'].unique())
     network_choice = st.selectbox("Välj nät", ["Alla"] + networks)
 
-    # Karta för att översätta "time" till riktiga år
-    year_map = {
-        229: 2016, 230: 2017, 231: 2018, 232: 2019,
-        233: 2020, 234: 2021, 235: 2022, 236: 2023
-    }
-    capcost_df['year'] = capcost_df['time'].map(year_map).astype(int)
-
-    # Filtrera per nät
+    # Arbeta på kopia och mappa år
     ts_df = capcost_df.copy()
+    ts_df['year'] = ts_df['time'].map(YEAR_MAP).astype(int)
+
     if network_choice != "Alla":
         ts_df = ts_df[ts_df['id_network'] == network_choice]
 
@@ -29,15 +30,13 @@ def show_tidsserie(capcost_df):
     dep_ts = ts_df.groupby('year')[dep_cols].sum().reset_index()
     ret_ts = ts_df.groupby('year')[ret_cols].sum().reset_index()
 
-    # Skapa ny dataframe för tidsserie
     ts_plot = pd.DataFrame({
         'year': dep_ts['year'],
-        'Avskrivning': dep_ts[dep_cols].sum(axis=1),
-        'Ränta': ret_ts[ret_cols].sum(axis=1)
+        'Avskrivning': dep_ts[dep_cols].sum(axis=1) / 1_000_000,  # till MSEK
+        'Ränta': ret_ts[ret_cols].sum(axis=1) / 1_000_000
     })
     ts_plot['Total'] = ts_plot['Avskrivning'] + ts_plot['Ränta']
 
-    # Altair-graf
     chart_data = ts_plot.melt(
         id_vars='year',
         value_vars=['Avskrivning', 'Ränta', 'Total'],

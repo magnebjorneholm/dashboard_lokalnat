@@ -5,7 +5,7 @@ from kapitalbas.kapitalbas_app.data_loader import load_main_data
 from kapitalbas.kapitalbas_app.data_loader import load_component_sample
 from kapitalbas.kapitalbas_app.översikt_view import show_översikt
 from kapitalbas.kapitalbas_app.tidsserie_view import show_tidsserie
-from kapitalbas.kapitalbas_app.komponent_view import show_komponenter
+from kapitalbas.kapitalbas_app.komponent_view import show_komponent_view
 from kapitalbas.kapitalbas_app.policy_playground_view import show_policy_playground
 from kapitalbas.kapitalbas_app.qa_view import show_qa
 
@@ -31,7 +31,7 @@ elif sektion == "Tidsserie":
 
 
 elif sektion == "Komponenter":
-    show_komponenter()
+    show_komponent_view(st.session_state["final_capbase_sample"])
 
 
 elif sektion == "Policy Playground":

@@ -1,10 +1,21 @@
-# kapitalbas_app/översikt_view.py
-
 import streamlit as st
 
+YEAR_CODE = 236  # 2023
+
+def pick_year_columns(df, year_code=YEAR_CODE):
+    """Returnerar bara kolumner för valt år och standardiserar namnen (utan suffix)."""
+    suffix = f"_{year_code}"
+    cols_map = {}
+    for base in ["nuav_ord", "nuav_tail", "dep_ord", "dep_tail", "return_ord", "return_tail"]:
+        col_name = f"{base}{suffix}"
+        if col_name in df.columns:
+            cols_map[col_name] = base
+    df_year = df[list(cols_map.keys())].rename(columns=cols_map)
+    return df_year
+
 def show_översikt(capbase_df):
-    """Visar KPI-kort för kapitalbas, avskrivningar och räntor, uppdelat i ordinarie och tail."""
-    st.subheader("Översikt – Kapitalbas, Avskrivningar och Ränta (Ordinarie & Tail)")
+    """Visar KPI-kort för kapitalbas, avskrivningar och räntor för 2023."""
+    st.subheader(f"Översikt – Kapitalbas, Avskrivningar och Ränta (Ordinarie & Tail), år {YEAR_CODE} → 2023")
 
     networks = sorted(capbase_df['id_network'].unique())
     network_choice = st.selectbox("Välj nät", ["Alla"] + networks)
@@ -14,33 +25,28 @@ def show_översikt(capbase_df):
     else:
         view_df = capbase_df.copy()
 
-    # Kolumngrupper
-    nuav_ord_cols = [c for c in view_df.columns if c.startswith("nuav_ord")]
-    nuav_tail_cols = [c for c in view_df.columns if c.startswith("nuav_tail")]
-    dep_ord_cols = [c for c in view_df.columns if c.startswith("dep_ord")]
-    dep_tail_cols = [c for c in view_df.columns if c.startswith("dep_tail")]
-    ret_ord_cols = [c for c in view_df.columns if c.startswith("return_ord")]
-    ret_tail_cols = [c for c in view_df.columns if c.startswith("return_tail")]
+    # Hämta årskolumner (utan suffix)
+    year_df = pick_year_columns(view_df, YEAR_CODE)
 
-    # Summeringar
-    nuav_ord_sum = view_df[nuav_ord_cols].sum().sum()
-    nuav_tail_sum = view_df[nuav_tail_cols].sum().sum()
-    dep_ord_sum = view_df[dep_ord_cols].sum().sum()
-    dep_tail_sum = view_df[dep_tail_cols].sum().sum()
-    ret_ord_sum = view_df[ret_ord_cols].sum().sum()
-    ret_tail_sum = view_df[ret_tail_cols].sum().sum()
+    # Summera per kategori (i SEK)
+    sums = year_df.sum().to_dict()
 
     # KPI-kort
     col1, col2, col3 = st.columns(3)
     col4, col5, col6 = st.columns(3)
 
-    col1.metric("Kapitalbas Ordinarie (MSEK)", f"{nuav_ord_sum/1_000_000:,.1f}")
-    col2.metric("Avskrivning Ordinarie (MSEK)", f"{dep_ord_sum/1_000_000:,.1f}")
-    col3.metric("Ränta Ordinarie (MSEK)", f"{ret_ord_sum/1_000_000:,.1f}")
+    col1.metric("Kapitalbas Ordinarie (SEK)", f"{sums.get('nuav_ord', 0):,.0f}")
+    col2.metric("Avskrivning Ordinarie (SEK)", f"{sums.get('dep_ord', 0):,.0f}")
+    col3.metric("Ränta Ordinarie (SEK)", f"{sums.get('return_ord', 0):,.0f}")
 
-    col4.metric("Kapitalbas Tail (MSEK)", f"{nuav_tail_sum/1_000_000:,.1f}")
-    col5.metric("Avskrivning Tail (MSEK)", f"{dep_tail_sum/1_000_000:,.1f}")
-    col6.metric("Ränta Tail (MSEK)", f"{ret_tail_sum/1_000_000:,.1f}")
+    col4.metric("Kapitalbas Tail (SEK)", f"{sums.get('nuav_tail', 0):,.0f}")
+    col5.metric("Avskrivning Tail (SEK)", f"{sums.get('dep_tail', 0):,.0f}")
+    col6.metric("Ränta Tail (SEK)", f"{sums.get('return_tail', 0):,.0f}")
 
-    st.caption("*Alla sex värden visas alltid – oavsett periodinställningar i andra sektioner.*")
-    st.dataframe(view_df.head(20))
+    st.caption("*Värden visas endast för 2023.*")
+
+    # Bygg tabellen från year_df + id_network och cat_encode
+    table_df = view_df[["id_network", "cat_encode"]].reset_index(drop=True)
+    table_df = table_df.join(year_df.reset_index(drop=True))
+
+    st.dataframe(table_df.head(20))
