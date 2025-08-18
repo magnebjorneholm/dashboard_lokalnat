@@ -1,160 +1,112 @@
-# kapitalbas_app/komponent_view.py
-
 import streamlit as st
 import pandas as pd
-import io
-from kapitalbas.kapitalbas_app.data_loader import load_component_sample
 
-def show_komponenter():
-    """Visar komponentfliken inklusive inaktivt kapital."""
-    st.subheader("Komponenter – Analys på anläggningsnivå och inaktivt kapital")
-    st.warning("Negativa värden förekommer (även i metafil), se över varför det är så och om man kan separera? (om det är önskat).")
+YEAR_LABEL = 2023
+NUAV_COL = "nuav_236"
+DEP_COL = "dep_236_ordinary"
+TOLERANS = 1  # SEK
 
-    comp_df = load_component_sample()
+def prepare_component_data(df):
+    """Förbereder komponentdatan för analys utifrån sample-strukturen."""
+    df = df.copy()
 
-    year_map = {
-        229: 2016, 230: 2017, 231: 2018, 232: 2019,
-        233: 2020, 234: 2021, 235: 2022, 236: 2023
-    }
-    comp_df["year"] = comp_df["time_invest"].map(year_map)
-    comp_df = comp_df.dropna(subset=["year"])
-    comp_df["age"] = 2024 - comp_df["year"]
+    # Beräkningar
+    df["nuav_total"] = df[NUAV_COL]  # Endast total nuav i samplet
+    df["helt_avskriven"] = (df[DEP_COL] - df["nuav_total"]).abs() <= TOLERANS
+    df["negativt_nuav"] = df["nuav_total"] < 0
 
-    tab1, tab2 = st.tabs(["Komponentanalys", "Inaktivt kapital"])
+    return df
 
-    # === TAB 1 ===
+def summering_per_kategori(df):
+    """Summerar per kategori."""
+    return df.groupby("cat_encode", observed=False).agg(
+        antal_komponenter=("id_component", "count"),
+        antal_helt_avskrivna=("helt_avskriven", "sum"),
+        antal_negativt_nuav=("negativt_nuav", "sum"),
+        positivt_nuav=("nuav_total", lambda x: x[x > 0].sum()),
+        negativt_nuav=("nuav_total", lambda x: x[x < 0].sum()),
+        netto_nuav=("nuav_total", "sum")
+    ).reset_index()
+
+def show_komponent_view(final_capbase_sample):
+    # --- Företagsval i sidopanelen ---
+    företag_val = st.sidebar.selectbox(
+        "Välj företag (id_network)",
+        options=[7, 160, 3035],
+        format_func=lambda x: f"Nät {x}"
+    )
+
+    tab1, tab2 = st.tabs(["Alla komponenter", "Inaktivt kapital"])
+
+    # ===== TAB 1 =====
     with tab1:
-        networks = sorted(comp_df["id_network"].unique())
-        categories = sorted(comp_df["cat"].dropna().unique())
-        subcategories = sorted(comp_df["subcat"].dropna().unique())
+        st.subheader(f"Alla komponenter – år {YEAR_LABEL} – Nät {företag_val}")
 
-        selected_network = st.sidebar.selectbox("Välj nät", networks)
-        min_age = int(comp_df["age"].min())
-        max_age = int(comp_df["age"].max())
-        age_range = st.sidebar.slider("Filtrera ålder (år)", min_age, max_age, (min_age, max_age))
-        selected_cats = st.sidebar.multiselect("Filtrera kategori (cat)", options=categories, default=categories)
-        selected_subcats = st.sidebar.multiselect("Filtrera subkategori (subcat)", options=subcategories, default=subcategories)
+        df_all = prepare_component_data(final_capbase_sample)
+        df_all = df_all[df_all["id_network"] == företag_val]
 
-        filtered_df = comp_df[
-            (comp_df["id_network"] == selected_network) &
-            (comp_df["age"].between(age_range[0], age_range[1])) &
-            (comp_df["cat"].isin(selected_cats)) &
-            (comp_df["subcat"].isin(selected_subcats))
-        ]
+        filter_helt = st.checkbox("Visa endast helt avskrivna", key="tab1_helt")
+        filter_neg = st.checkbox("Visa endast negativt nuav", key="tab1_neg")
 
-        with st.expander("🔎 Felsök filtrering"):
-            st.write(f"Antal rader totalt i nät {selected_network}: {len(comp_df[comp_df['id_network'] == selected_network])}")
-            st.write(f"Efter åldersfilter: {len(filtered_df)}")
-            st.write(f"Efter kategori-filter: {len(filtered_df[filtered_df['cat'].isin(selected_cats)])}")
-            st.write(f"Efter subkategori-filter: {len(filtered_df[filtered_df['subcat'].isin(selected_subcats)])}")
-            st.write(f"🔴 Slutlig filtrerad tabell: {len(filtered_df)} rader")
+        mask = pd.Series(True, index=df_all.index)
+        if filter_helt:
+            mask &= df_all["helt_avskriven"]
+        if filter_neg:
+            mask &= df_all["negativt_nuav"]
 
-        st.markdown(f"### Komponenter i nät {selected_network}")
-        st.dataframe(
-            filtered_df[["id_component", "cat", "subcat", "techspec", "volt", "time_invest", "age", "nuav"]]
-            .sort_values("age", ascending=False)
-            .reset_index(drop=True),
-            use_container_width=True
+        df_filtered = df_all[mask]
+        st.info(f"Nät {företag_val} har {len(df_filtered)} komponenter efter filter.")
+
+        st.markdown("### Summering per kategori")
+        st.dataframe(summering_per_kategori(df_filtered))
+
+        st.markdown("#### Netto nuav per kategori (SEK)")
+        st.bar_chart(df_filtered.groupby("cat_encode", observed=False)["nuav_total"].sum())
+
+        st.markdown("#### Antal helt avskrivna per kategori")
+        st.bar_chart(df_filtered.groupby("cat_encode", observed=False)["helt_avskriven"].sum())
+
+        st.markdown("### Komponenter (detaljvy)")
+        st.dataframe(df_filtered[[
+            "id_network", "id_component", "cat_encode", "subcat",
+            NUAV_COL, DEP_COL, "helt_avskriven", "negativt_nuav"
+        ]])
+
+    # ===== TAB 2 =====
+    with tab2:
+        st.subheader(f"Inaktivt kapital – år {YEAR_LABEL} – Nät {företag_val}")
+
+        df_selected = prepare_component_data(final_capbase_sample)
+        df_selected = df_selected[df_selected["id_network"] == företag_val]
+
+        df_selected["inaktivt_kapital"] = (
+            df_selected["helt_avskriven"] & (df_selected["nuav_total"] > 0)
         )
 
-        cat_count = filtered_df["cat"].value_counts().reset_index()
-        cat_count.columns = ["Kategori", "Antal"]
-        st.markdown("### Antal komponenter per kategori")
-        st.bar_chart(cat_count.set_index("Kategori"))
+        inaktivt_df = df_selected[df_selected["inaktivt_kapital"]].copy()
+        st.info(f"Antal inaktiva komponenter i nät {företag_val}: {len(inaktivt_df)}")
 
-        st.markdown("### Åldersfördelning")
-        age_bins = pd.cut(filtered_df["age"], bins=range(0, 81, 5))
-        age_dist = age_bins.value_counts().sort_index()
-        labels = [f"{int(i.left)}–{int(i.right)} år" for i in age_dist.index]
-        age_dist.index = pd.CategoricalIndex(labels, ordered=True, categories=labels)
-        st.bar_chart(age_dist)
-
-        st.markdown("### Exportera till Excel")
-        if not filtered_df.empty:
-            export_cols = ["id_component", "cat", "subcat", "techspec", "volt", "time_invest", "age", "nuav"]
-            to_export = filtered_df[export_cols].sort_values("age", ascending=False)
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-                to_export.to_excel(writer, sheet_name="Komponenter", index=False)
-            buffer.seek(0)
-            st.download_button(
-                label="📥 Ladda ner som Excel",
-                data=buffer,
-                file_name=f"komponenter_nät_{selected_network}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        if inaktivt_df.empty:
+            st.warning("Inga komponenter uppfyller villkoren för inaktivt kapital i valt nät och år.")
         else:
-            st.info("Ingen data att exportera – kontrollera filtren.")
-
-    # === TAB 2 ===
-    with tab2:
-        st.markdown("### Inaktivt kapital – indikatorer på överskattning eller dataproblem")
-        st.info("⚠️ Denna flik visar endast nät 160 som exempelnät i prototypen. Bortse från valen i sidopanelen.")
-
-        st.expander("ℹ️ Vad visar denna flik?").markdown("""
-        Denna vy visar komponenter som är **potentiellt inaktuella eller osäkra** i kapitalbasen. En komponent visas här om den är:
-
-        - **helt avskriven** (`maxdep = 124`) eller
-        - **har negativt nuanskaffningsvärde** (`nuav < 0`)
-        """)
-
-        df160 = comp_df[comp_df["id_network"] == 160].copy()
-        df160["avskriven"] = df160["maxdep"].apply(lambda x: "Ja" if x == 124 else "Nej")
-        df160["helt_avskriven"] = df160["maxdep"] == 124
-        df160["neg_nuav"] = df160["nuav"] < 0
-        df160["inaktiv"] = df160["helt_avskriven"] | df160["neg_nuav"]
-        inaktiv_df = df160[df160["inaktiv"]].copy()
-
-        catval = st.multiselect("Filtrera kategori", sorted(inaktiv_df["cat"].dropna().unique()), default=None)
-        statusval = st.multiselect("Filtrera status", ["Helt avskriven", "Negativt nuav"], default=["Helt avskriven", "Negativt nuav"])
-
-        status_mask = pd.Series([False] * len(inaktiv_df), index=inaktiv_df.index)
-        if "Helt avskriven" in statusval:
-            status_mask |= inaktiv_df["helt_avskriven"]
-        if "Negativt nuav" in statusval:
-            status_mask |= inaktiv_df["neg_nuav"]
-
-        filt_df = inaktiv_df[status_mask & (inaktiv_df["cat"].isin(catval) if catval else True)]
-
-        if filt_df.empty:
-            st.info("Inga inaktiva komponenter hittades för valt filter.")
-        else:
-            st.markdown("#### Summering per kategori")
-            summary_df = df160.copy()
-            summary_df["negativ_flagga"] = summary_df["nuav"] < 0
-            summary_df["positiv_flagga"] = summary_df["nuav"] > 0
-
-            kategori_summary = summary_df.groupby("cat").agg(
-                Antal_komponenter=("id_component", "count"),
-                Antal_negativa=("negativ_flagga", "sum"),
-                Positivt_nuav=("nuav", lambda x: x[x > 0].sum()),
-                Negativt_nuav=("nuav", lambda x: x[x < 0].sum()),
-                Totalt_nuav=("nuav", "sum")
-            ).reset_index()
-            kategori_summary["Andel negativa komponenter"] = kategori_summary["Antal_negativa"] / kategori_summary["Antal_komponenter"]
-
-            st.dataframe(
-                kategori_summary[[
-                    "cat", "Antal_komponenter", "Andel negativa komponenter",
-                    "Positivt_nuav", "Negativt_nuav", "Totalt_nuav"
-                ]]
-                .rename(columns={
-                    "cat": "Kategori",
-                    "Totalt_nuav": "Netto (SEK)",
-                    "Positivt_nuav": "Positivt nuanskaffningsvärde (SEK)",
-                    "Negativt_nuav": "Negativt nuanskaffningsvärde (SEK)"
-                })
-                .style.format({
-                    "Netto (SEK)": "{:,.0f}",
-                    "Positivt nuanskaffningsvärde (SEK)": "{:,.0f}",
-                    "Negativt nuanskaffningsvärde (SEK)": "{:,.0f}",
-                    "Andel negativa komponenter": "{:.0%}"
-                })
+            st.metric(
+                "Totalt värde inaktivt kapital (SEK)",
+                f"{inaktivt_df['nuav_total'].sum():,.0f}"
             )
 
-            st.markdown("#### Inaktiva komponenter")
-            st.dataframe(
-                filt_df[["id_component", "cat", "subcat", "time_to", "avskriven", "nuav"]]
-                .rename(columns={"avskriven": "Helt avskriven", "nuav": "Nuanskaffningsvärde (SEK)"})
-                .style.format({"Nuanskaffningsvärde (SEK)": "{:,.0f}"})
-            )
+            st.markdown("#### Lista över inaktiva komponenter")
+            st.dataframe(inaktivt_df[[
+                "id_component", "cat_encode", "subcat",
+                NUAV_COL, DEP_COL, "helt_avskriven"
+            ]])
+
+            st.markdown("#### Summering per kategori (inaktivt kapital)")
+            st.dataframe(summering_per_kategori(inaktivt_df))
+
+            st.markdown("#### Netto nuav per kategori (SEK) – Inaktivt kapital")
+            st.bar_chart(inaktivt_df.groupby("cat_encode", observed=False)["nuav_total"].sum())
+
+            st.markdown("#### Antal helt avskrivna per kategori – Inaktivt kapital")
+            st.bar_chart(inaktivt_df.groupby("cat_encode", observed=False)["helt_avskriven"].sum())
+
+        st.caption("*Inaktivt kapital = Helt avskriven komponent med positivt nuanskaffningsvärde (EIFS 2023:5, KENT-handboken)*")
