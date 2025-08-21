@@ -463,13 +463,40 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
         if filt_scn.empty:
             st.warning("Ingen rad matchar valt nät/halvår.")
         else:
-            # Summera nya KPI:er
-            new_cols = [
-                "capcost_sum_new", "capcost_network_new",
-                "return_ord_new", "return_tail_new",
-            ]
+            # Summera nya KPI:er (2×2-kort med tydliga etiketter + delta även för capcost_network)
+            SCENARIO_LABEL = {
+                "return_ord_new":      "Avkastning – ordinarie (return_ord) (SEK)",
+                "return_tail_new":     "Avkastning – svans (return_tail) (SEK)",
+                "capcost_sum_new":     "Kapitalkostnad – summa (capcost_sum) (SEK)",
+                "capcost_network_new": "Kapitalkostnad – totalt nät (capcost_network) (SEK)",
+            }
+            BASE_MAP = {  # mapping till facit-kolumn för delta-beräkning
+                "return_ord_new":  "return_ord",
+                "return_tail_new": "return_tail",
+                "capcost_sum_new": "capcost_sum",
+            }
+
+            # Nya värden (summor)
+            new_cols = ["return_ord_new", "return_tail_new", "capcost_sum_new", "capcost_network_new"]
             new_vals = filt_scn[new_cols].sum(numeric_only=True)
-            base_vals = filt_base[["capcost_sum", "return_ord", "return_tail"]].sum(numeric_only=True)
+
+            # Bas/facit (summor för jämförelse)
+            base_cols = ["return_ord", "return_tail", "capcost_sum"]
+            base_vals = filt_base[base_cols].sum(numeric_only=True)
+
+            # Använd drop_duplicates per nät så vi inte dubbelräknar när vi summerar.
+            base_net = (
+                filt_base[["id_network", "capcost_network"]]
+                .drop_duplicates(subset=["id_network"])
+                ["capcost_network"]
+                .sum()
+            )
+            new_net = (
+                filt_scn[["id_network", "capcost_network_new"]]
+                .drop_duplicates(subset=["id_network"])
+                ["capcost_network_new"]
+                .sum()
+            )
 
             st.caption(
                 "Korten visas i SEK (inga ören). Vi skalar returdelarna med r_new/r_old och avrundar igen (Ei-logik). "
@@ -477,13 +504,30 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
             )
 
             st.markdown(f"**Scenario-KPI för {time_label} · Nät: {network_choice}**")
-            n1, n2, n3, n4 = st.columns(4)
-            n1.metric("return_ord NEW (SEK)", fmt_sek(new_vals["return_ord_new"]), delta=fmt_sek_delta(new_vals["return_ord_new"] - base_vals["return_ord"]))
-            n2.metric("return_tail NEW (SEK)", fmt_sek(new_vals["return_tail_new"]), delta=fmt_sek_delta(new_vals["return_tail_new"] - base_vals["return_tail"]))
-            n3.metric("capcost_sum NEW (SEK)", fmt_sek(new_vals["capcost_sum_new"]), delta=fmt_sek_delta(new_vals["capcost_sum_new"] - base_vals["capcost_sum"]))
-            n4.metric("capcost_network NEW (SEK, sum)", fmt_sek(new_vals["capcost_network_new"]))
 
-            with st.expander("Visa underlag (scenario)"):
-                tmp = filt_scn.copy()
-                tmp["time_label"] = tmp["time"].map(CODE_TO_TIME_LABEL)
-                st.dataframe(tmp, use_container_width=True, hide_index=True)
+            # --- 2×2 layout ---
+            rows = [
+                ["return_ord_new", "return_tail_new"],
+                ["capcost_sum_new", "capcost_network_new"],
+            ]
+
+            for left_key, right_key in rows:
+                c1, c2 = st.columns(2)
+
+                # Vänster kort
+                if left_key == "capcost_network_new":
+                    left_value = new_net
+                    left_delta = new_net - base_net
+                else:
+                    left_value = new_vals[left_key]
+                    left_delta = left_value - base_vals[BASE_MAP[left_key]]
+                c1.metric(SCENARIO_LABEL[left_key], fmt_sek(left_value), delta=fmt_sek_delta(left_delta))
+
+                # Höger kort
+                if right_key == "capcost_network_new":
+                    right_value = new_net
+                    right_delta = new_net - base_net
+                else:
+                    right_value = new_vals[right_key]
+                    right_delta = right_value - base_vals[BASE_MAP[right_key]]
+                c2.metric(SCENARIO_LABEL[right_key], fmt_sek(right_value), delta=fmt_sek_delta(right_delta))
