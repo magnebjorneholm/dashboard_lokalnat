@@ -27,7 +27,7 @@ def show_dea_view(df):
         capex_wacc_col = scen_info["capex_col"]  # t.ex. CAPEX_2024_wacc_0p0475_tkr
         totex_wacc_col = scen_info["totex_col"]  # t.ex. TOTEX_wacc_0p0475
         all_inputs.extend([capex_wacc_col, totex_wacc_col])
-        st.sidebar.info(f"Scenario upptäckt: WACC = {scen_info['tag'].replace('p','.')}")
+        st.sidebar.info(f"Scenario\nupptäckt: WACC = {scen_info['tag'].replace('p','.')}")
     else:
         capex_wacc_col = None
         totex_wacc_col = None
@@ -42,16 +42,23 @@ def show_dea_view(df):
     # Default: CAPEX + OPEXp (som tidigare)
     input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=["CAPEX", "OPEXp"])
 
-    # Exklusivitetsregler
-    has_totex_std  = "TOTEX" in input_cols
-    has_capex_opex = ("CAPEX" in input_cols) or ("OPEXp" in input_cols)
-    has_totex_scen = any(col.startswith("TOTEX_wacc_") for col in input_cols)
+    # Exklusivitetsregler (uppdaterad logik för att undvika dubbelräkning)
+    has_capex_std  = "CAPEX" in input_cols
     has_capex_scen = any(col.startswith("CAPEX_2024_wacc_") for col in input_cols)
+    has_opexp      = "OPEXp" in input_cols
+    has_totex_std  = "TOTEX" in input_cols
+    has_totex_scen = any(col.startswith("TOTEX_wacc_") for col in input_cols)
 
-    if (has_totex_std and has_capex_opex) \
-       or (has_totex_scen and (has_capex_opex or has_totex_std)) \
-       or (has_capex_scen and has_capex_opex):
-        st.warning("Välj antingen TOTEX **eller** CAPEX+OPEXp. Scenario-kolumner räknas som antingen TOTEX eller CAPEX.")
+    capex_any = has_capex_std or has_capex_scen
+    totex_any = has_totex_std or has_totex_scen
+
+    # Ogiltiga kombinationer (mer tillåtande UX):
+    # (1) TOTEX i kombination med något annat (CAPEX eller OPEXp)
+    # (2) Både standard- och scenariokolumn inom samma familj samtidigt
+    # (3) Inga inputs valda
+    if (totex_any and (capex_any or has_opexp)) \
+       or ((has_capex_std and has_capex_scen) or (has_totex_std and has_totex_scen)):
+        st.warning("Välj antingen enbart TOTEX, eller valfritt ur CAPEX (standard/scenario) och/eller OPEXp — men inte båda CAPEX-varianterna samtidigt, och kombinera aldrig TOTEX med andra.")
         st.stop()
 
     # Om scenario-input valts, säkerställ full täckning (inga NaN i valda scenariokolumner)

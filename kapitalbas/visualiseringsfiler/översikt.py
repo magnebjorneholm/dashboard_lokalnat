@@ -193,13 +193,57 @@ def _write_dea_export(df_export: pd.DataFrame, tag: str) -> tuple[str,str]:
 # ========= Metodikruta =========
 def _render_methodology_info():
     with st.expander("Metodik, information och definitioner (Ei)", expanded=False):
+        # Översikt
         st.markdown(
-            "Slutmått: **real, före skatt**. Beräkningen börjar **nominellt och efter skatt**, "
-            "räknas om till **före skatt** och därefter till **real** via Fisher."
+            """
+            **Vad är kalkylräntan (WACC)?** Vägt genomsnitt av kapitalkostnaden för eget kapital och skuld.
+            I regleringen används **real, före skatt** som slutmått.
+            Beräkningen startar **nominellt och efter skatt**, räknas om till **före skatt** och därefter till **real** via Fisher.
+            """
         )
-        st.latex(r"1 + r_{\text{real}} = \frac{1 + r_{\text{nom}}}{1 + \pi}")
-        st.latex(r"\beta_E = \beta_A \left(1 + (1-T)\frac{D}{E}\right),\quad \frac{D}{E}=\frac{S}{1-S}")
-        st.caption("Skalning görs per halvår och avrundas i tkr innan H1+H2 summeras till år. Visning sker i MSEK.")
+
+        # Kedjan (visa formler med LaTeX för att undvika visuella fel)
+        st.markdown("**Beräkningskedja (överblick)**")
+        st.markdown("1. **CAPM (nominell, efter skatt)** – kostnad för eget kapital")
+        st.latex(r"R_E = R_f + \beta_E \cdot MRP")
+
+        st.markdown("2. **Skuldränta (nominell, före skatt)** – kostnad för skuld")
+        st.latex(r"R_D = R_f + CR")
+
+        st.markdown("3. **WACC (nominell)** – blanda E och D, sedan omräkning till före skatt")
+        st.latex(r"\text{WACC}_{\text{nom,after}} = (1-S)\,R_E + S\,R_D\,(1-T)")
+        st.latex(r"\text{WACC}_{\text{nom,pre}} = \frac{\text{WACC}_{\text{nom,after}}}{1-T}")
+
+        st.markdown("4. **Fisher-omräkning (nominell → real)**")
+        st.latex(r"r_{\text{real}} = \frac{1 + r_{\text{nom}}}{1 + \pi} - 1")
+        st.markdown("Här används \( \pi \) = KPIF (flerårsantagande).")
+
+        # Hävstång och definitioner
+        st.markdown("**Hamada-hävstång (från tillgångsbeta till aktiebeta):**")
+        st.latex(r"\beta_E = \beta_A \left(1 + (1-T)\frac{D}{E}\right)")
+        st.latex(r"\frac{D}{E} = \frac{S}{1-S}, \quad S = \frac{D}{D+E}")
+
+        # Viktiga praktiska punkter för denna vy/app
+        st.markdown(
+            """
+            **Hur siffrorna i denna vy beräknas och visas**  
+            • **Årssiffror = H1 + H2.** Beräkning och avrundning sker per halvår; därefter summeras H1+H2 till år.  
+            • **Visning i MSEK.** Underliggande data och export till DEA sker i **tkr** (prisår **nominell 2022**).  
+            • **Scenario (Tab 3):** endast **returdelarna** skalas med \( r_{\text{new}}/r_{\text{old}} \); **avskrivningar (dep\_*)** lämnas oförändrade.  
+            • **Rundning:** räntor visas med fyra decimaler; små differenser (±1 tkr) kan uppstå i kontrollsummor.
+            """
+        )
+
+        # Vanliga fallgropar
+        st.markdown(
+            """
+            **Vanliga misstag att undvika**  
+            – Ange **nominella, efter skatt**-värden i CAPM (inte reala).  
+            – Blanda inte ihop **S** med **D/E** (använd \( D/E = S/(1-S) \)).  
+            – Lägg **kreditriskpremien (CR)** endast på skuldräntan \( R_D \).
+            """
+        )
+
 
 # ========= Huvudvy =========
 def show_capcost(df_facit: pd.DataFrame) -> None:
@@ -255,21 +299,61 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
         for k,v in defaults.items(): st.session_state.setdefault(k,v)
         st.session_state.setdefault("r_new", R_OLD)
 
-        c1,c2,c3 = st.columns(3)
+        # --- Små inforutor (help=...) för varje parameter i Tab 2 ---
+        c1, c2, c3 = st.columns(3)
         with c1:
-            st.number_input("Riskfri ränta (nominell) Rf", key="rf_nom", step=0.0001, format="%.4f")
-            st.number_input("Marknadsriskpremie (nominell) MRP", key="mrp", step=0.0001, format="%.4f")
-            st.number_input("Inflation π (KPIF)", key="infl", step=0.0001, format="%.4f")
+            st.number_input(
+                "Riskfri ränta (nominell) Rf",
+                key="rf_nom", step=0.0001, format="%.4f",
+                help="KI:s 9-årsprognos för 10-årig svensk statsobligation (nominell). Ingår i både R_E och R_D. CAPM: R_E = R_f + β_E·MRP."
+            )
+            st.number_input(
+                "Marknadsriskpremie (nominell) MRP",
+                key="mrp", step=0.0001, format="%.4f",
+                help="Långsiktig aktiemarknadspremie (nominell), baserad på PwC:s riskpremiestudier (aritmetiskt medel). CAPM: R_E = R_f + β_E·MRP."
+            )
+            st.number_input(
+                "Inflation π (KPIF)",
+                key="infl", step=0.0001, format="%.4f",
+                help="KPIF enligt KI:s 9-årsprognos. Fisher-omräkning till real nivå: 1+r_real = (1+r_nom)/(1+π) − 1."
+            )
+
         with c2:
-            st.number_input("Kreditriskpremie (nominell)", key="credit", step=0.0001, format="%.4f")
-            st.number_input("Skuldsättningsgrad S = D/(D+E)", key="debt_share", min_value=0.0, max_value=0.95, step=0.01, format="%.2f")
-            st.number_input("Bolagsskatt T", key="tax_rate", min_value=0.0, max_value=0.99, step=0.001, format="%.3f")
+            st.number_input(
+                "Kreditriskpremie (nominell)",
+                key="credit", step=0.0001, format="%.4f",
+                help="Spread för lånat kapital (typiskt europeiska utilities BBB vs 10-årig Bund): R_D = R_f + CR."
+            )
+            st.number_input(
+                "Skuldsättningsgrad S = D/(D+E)",
+                key="debt_share", min_value=0.0, max_value=0.95, step=0.01, format="%.2f",
+                help="Vikt för skuld i WACC. Relation: D/E = S/(1−S). Vikter: E-vikt = 1−S, D-vikt = S. (Ei-standard ≈ 0,36.)"
+            )
+            st.number_input(
+                "Bolagsskatt T",
+                key="tax_rate", min_value=0.0, max_value=0.99, step=0.001, format="%.3f",
+                help="Omräkning från efter skatt till före skatt: WACC_nom,pre = WACC_nom,after/(1−T)."
+            )
+
         with c3:
-            st.radio("Beta-inmatning", ["β_A","β_E"], index=0, key="beta_mode")
-            if st.session_state["beta_mode"]=="β_A":
-                st.number_input("β_A", key="beta_a", step=0.01, format="%.2f")
+            st.radio(
+                "Beta-inmatning",
+                ["β_A", "β_E"], index=0, key="beta_mode",
+                help="Välj att ange tillgångsbeta (β_A) och räkna fram aktiebeta via Hamada, eller ange aktiebeta (β_E) direkt. Hamada: β_E = β_A·(1+(1−T)·D/E)."
+            )
+            if st.session_state["beta_mode"] == "β_A":
+                st.number_input(
+                    "β_A",
+                    key="beta_a", step=0.01, format="%.2f",
+                    help="Tillgångsbeta (obelånad). Omvandlas till aktiebeta med Hamada: β_E = β_A·(1+(1−T)·D/E)."
+                )
             else:
-                st.number_input("β_E", key="beta_e", step=0.01, format="%.2f")
+                st.number_input(
+                    "β_E",
+                    key="beta_e", step=0.01, format="%.2f",
+                    help="Aktiebeta (belånad). Används direkt i CAPM för R_E."
+                )
+
 
         beta_a = st.session_state["beta_a"] if st.session_state["beta_mode"]=="β_A" else None
         beta_e = st.session_state["beta_e"] if st.session_state["beta_mode"]=="β_E" else None

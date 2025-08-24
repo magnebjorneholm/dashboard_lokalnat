@@ -6,48 +6,123 @@ from effektiviseringskrav.app.dea_model import run_dea_model
 from effektiviseringskrav.app.plots import (
     plot_efficiency_histogram,
 )
+# NYTT: scenariomerge från data_loader
+from effektiviseringskrav.app.data_loader import merge_capex_scenario
+
 
 def show_dea_view(df):
     st.header("DEA-modell")
     st.sidebar.subheader("DEA-parametrar")
 
+    # --- Försök merga CAPEX-scenario från dea_exports/ (om fil finns) ---
+    df_merged, scen_info = merge_capex_scenario(df)
+    df = df_merged
+
     # --- Kolumnval ---
     all_inputs = ["CAPEX", "OPEXp", "TOTEX"]
     all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
 
-    st.sidebar.caption("**Inputs**\n"
-                       "- `CAPEX + OPEXp`: Separata poster för investeringar och drift – visar om ineffektivitet ligger i kapital eller drift.\n"
-                       "- `TOTEX`: Summerar kostnaderna – ger en totalbedömning och bortser från kostnadsstruktur.")
+    # Lägg till scenariokolumner (om upptäckta)
+    if scen_info is not None:
+        capex_wacc_col = scen_info["capex_col"]  # t.ex. CAPEX_2024_wacc_0p0475_tkr
+        totex_wacc_col = scen_info["totex_col"]  # t.ex. TOTEX_wacc_0p0475
+        all_inputs.extend([capex_wacc_col, totex_wacc_col])
+        st.sidebar.info(f"Scenario\nupptäckt: WACC = {scen_info['tag'].replace('p','.')}")
+    else:
+        capex_wacc_col = None
+        totex_wacc_col = None
 
+    st.sidebar.caption(
+        "**Inputs**\n"
+        "- `CAPEX + OPEXp`: separata poster – kan visa om ineffektivitet ligger i kapital eller drift.\n"
+        "- `TOTEX`: summerar kostnader – totalbedömning, bortser från kostnadsstruktur.\n"
+        "- `…_wacc_…`: scenario exporterat från kapitalbasens Tab 3 (2024, tkr)."
+    )
+
+    # Default: CAPEX + OPEXp (som tidigare)
     input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=["CAPEX", "OPEXp"])
 
-    if "TOTEX" in input_cols and ("CAPEX" in input_cols or "OPEXp" in input_cols):
-        st.warning("Välj antingen TOTEX eller CAPEX+OPEXp, inte båda samtidigt.")
+    # Exklusivitetsregler (uppdaterad logik för att undvika dubbelräkning)
+    has_capex_std  = "CAPEX" in input_cols
+    has_capex_scen = any(col.startswith("CAPEX_2024_wacc_") for col in input_cols)
+    has_opexp      = "OPEXp" in input_cols
+    has_totex_std  = "TOTEX" in input_cols
+    has_totex_scen = any(col.startswith("TOTEX_wacc_") for col in input_cols)
+
+    capex_any = has_capex_std or has_capex_scen
+    totex_any = has_totex_std or has_totex_scen
+
+    # Ogiltiga kombinationer:
+    # (1) TOTEX kombinerat med något annat (CAPEX eller OPEXp)
+    # (2) Endast CAPEX eller endast OPEXp vald (måste väljas tillsammans)
+    # (3) Både standard- och scenariokolumn inom samma familj samtidigt
+    if (totex_any and (capex_any or has_opexp)) \
+       or (capex_any ^ has_opexp) \
+       or ((has_capex_std and has_capex_scen) or (has_totex_std and has_totex_scen)):
+        st.warning("Välj antingen TOTEX **eller** CAPEX + OPEXp. Scenario-kolumner räknas som fullvärdiga alternativ inom sin familj.")
         st.stop()
 
-    output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=all_outputs)
-    use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers före beräkning", value=True)
+    # Om scenario-input valts, säkerställ full täckning (inga NaN i valda scenariokolumner)
+    if scen_info is not None and (
+        (capex_wacc_col is not None and capex_wacc_col in input_cols) or
+        (totex_wacc_col is not None and totex_wacc_col in input_cols)
+        ):
+        missing_cols = []
+        for col in input_cols:
+            if col in df.columns and df[col].isna().any():
+                missing_cols.append(col)
+        if missing_cols:
+            st.error(
+                "Scenario-kolumn saknar värden för alla DMU och kan inte användas:\n"
+                f"- {', '.join(missing_cols)}\n\n"
+                "Kontrollera exporten från kapitalbasen (nät utan DMU-match exkluderas)."
+            )
+            st.stop()
 
-    if not input_cols or not output_cols:
-        st.warning("Välj minst en input och en output för att köra modellen.")
+    # Säkerställ att valda input/output finns i data
+    missing_inputs = [c for c in input_cols if c not in df.columns]
+    missing_outputs = [c for c in all_outputs if c not in df.columns]
+    if missing_inputs:
+        st.error(f"Saknade inputkolumner i data: {', '.join(missing_inputs)}")
+        st.stop()
+    if missing_outputs:
+        st.error(f"Saknade outputkolumner i data: {', '.join(missing_outputs)}")
         st.stop()
 
-    # --- RTS och trunkering ---
-    st.sidebar.caption("**Skalavkastning (RTS)**\n"
-                       "- `crs`: Konstant skalavkastning – output ökar proportionellt med input.\n"
-                       "- `vrs`: Variabel skalavkastning – tillåter t.ex. stordriftsfördelar.")
-    dea_rts = st.sidebar.selectbox("Skalavkastning (RTS)", ["crs", "vrs"], index=0)
+    output_cols = st.sidebar.multiselect(
+        "Välj outputvariabler",
+        all_outputs,
+        default=["CU", "MW", "NS", "MWhl", "MWhh"],
+        help="Standard är alla fem outputar."
+    )
 
-    st.sidebar.caption("**Trunkering av intäktsreduktion**\n"
-                       "Anger hur mycket ineffektivitet (1 − effektivitet) får påverka kraven.\n"
-                       "- Högre max → större möjliga krav\n"
-                       "- Lägre min → fler företag får krav även vid låg ineffektivitet")
-    dea_trunk_min = st.sidebar.slider("Minsta trunkering", 0.0, 0.3, 0.162416, step=0.005)
-    dea_trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
+    dea_rts = st.sidebar.selectbox("Skalavkastning (RTS)", ["CRS", "VRS"], index=0)
 
-    dea_outlier_krav = st.sidebar.slider(
-        "Årligt krav för outliers (%)",
-         1.0, 1.82, 1.0, 0.01,
+    use_outlier_filter = st.sidebar.checkbox("Identifiera och trunkera outliers (Ei-logik)", value=True)
+
+    dea_trunk_min = st.sidebar.number_input(
+        "Lägsta årliga krav (%)",
+        min_value=0.0,
+        max_value=5.0,
+        value=0.5,
+        step=0.1,
+        help="Minimalt årligt effektiviseringskrav (i procent)."
+    )
+    dea_trunk_max = st.sidebar.number_input(
+        "Högsta årliga krav (%)",
+        min_value=0.0,
+        max_value=10.0,
+        value=1.5,
+        step=0.1,
+        help="Maximalt årligt effektiviseringskrav (i procent)."
+    )
+
+    dea_outlier_krav = st.sidebar.number_input(
+        "Fast årligt krav för outliers (%)",
+        min_value=0.0,
+        max_value=10.0,
+        value=1.0,
+        step=0.1,
         help="Vilket fast krav (i procent) ska ges till företag som klassas som outliers?"
     )
 
@@ -71,15 +146,13 @@ def show_dea_view(df):
 
         n_outliers = len(df_outliers)
         if n_outliers > 0:
-            st.warning(f"{n_outliers} företag har identifierats som outliers, exkluderats från fronten och tilldelats ett fast årligt effektiviseringskrav på {dea_outlier_krav:.1f} %.")
+            st.warning(f"{n_outliers} företag har identifierats ... fast årligt effektiviseringskrav på {dea_outlier_krav:.1f} %.")
             st.dataframe(df_outliers)
         else:
             st.info("Inga outliers identifierades i denna körning.")
 
         st.dataframe(result[["Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc"]])
         df_plot = result[result["is_outlier"] == False]
-        plot_efficiency_histogram(df_plot["Effektivitet"], title="DEA: Effektivitet (utan outliers)")
-        plot_efficiency_histogram(df_plot["Supereffektivitet"], title="DEA: Supereffektivitet (utan outliers)")
         plot_efficiency_histogram(df_plot["Effkrav_proc"] * 100, title="DEA: Årligt effektiviseringskrav (%) (utan outliers)")
 
         buffer = io.BytesIO()
