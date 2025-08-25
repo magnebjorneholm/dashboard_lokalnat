@@ -15,8 +15,7 @@ from kapitalbas.datafiler.data_loader import (
     load_capbase_a_sample, load_capbase_a,
     load_capcost_a_sample, load_capcost_a
 )
-from kapitalbas.kapitalbas_app.översikt_view import show_översikt
-from kapitalbas.kapitalbas_app.tidsserie_view import show_tidsserie
+from kapitalbas.visualiseringsfiler.tidsserie_view import show_tidsserie
 from kapitalbas.kapitalbas_app.komponent_view import show_komponent_view
 from kapitalbas.kapitalbas_app.policy_playground_view import show_policy_playground
 from kapitalbas.kapitalbas_app.qa_view import show_qa
@@ -51,15 +50,15 @@ st.session_state["capcost_python"] = capcost
 
 # === Välj sektion ===
 sektion = st.sidebar.selectbox(
-    "Välj del av kapitalbasen", ["Översikt", "Tidsserie", "QA", "Komponenter", "Policy Playground", "Livslängdssimulering", "Ny översikt"]
+    "Välj del av kapitalbasen", ["Översikt", "Tidsserie", "QA", "Komponenter", "Policy Playground", "Livslängdssimulering"]
 )
 
 # === Visa vald sektion ===
 if sektion == "Översikt":
-    show_översikt(capbase)
+    show_capcost(st.session_state["capcost_a"])
 
 elif sektion == "Tidsserie":
-    show_tidsserie(capcost)
+    show_tidsserie(st.session_state["capcost_a"])
 
 elif sektion == "Komponenter":
     show_komponent_view(st.session_state["final_capbase_sample"])
@@ -72,6 +71,3 @@ elif sektion == "QA":
 
 elif sektion == "Livslängdssimulering":
     show_livslangd_view()
-
-elif sektion == "Ny översikt":
-    show_capcost(st.session_state["capcost_a"])

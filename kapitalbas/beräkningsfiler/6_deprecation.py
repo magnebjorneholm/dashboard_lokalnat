@@ -21,7 +21,7 @@ def compute_depreciation(input_file, output_file):
 
         denom = df[f'age_reg_{t}'].astype(float)
         numer = pd.to_numeric(df[f'nuav_tail_{t}'], errors='coerce')
-        dep_tail = np.divide(numer, denom, out=np.zeros_like(denom, ype=float), where=(denom != 0))
+        dep_tail = np.divide(numer, denom, out=np.zeros_like(denom, dtype=float), where=(denom != 0))
         df[f'dep_tail_{t}'] = dep_tail
 
     # Summera per nät×kategori och skala/avrunda i tusental – som i Stata
