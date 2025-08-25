@@ -64,8 +64,8 @@ def _year_selector() -> int:
 def _intensity_metric_selector() -> str:
     """Väljare för intensitetsmått."""
     options = {
-        "kr_per_mwh": "kr/MWh (Kapitalkostnad per energivolym)",
-        "kr_per_kund": "kr/kund (Kapitalkostnad per anslutningskund)"
+        "sek_per_mwh": "SEK/MWh (Kapitalkostnad per energivolym)",
+        "sek_per_kund": "SEK/kund (Kapitalkostnad per anslutningskund)"
     }
     
     return st.radio(
@@ -139,23 +139,17 @@ def _render_statistics_overview(stats, intensity_col: str, unit: str) -> None:
     
     st.subheader("Statistisk översikt")
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
     
     with col1:
         st.metric("Medelvärde", _fmt_number(stats.mean, unit=unit))
         st.metric("Median", _fmt_number(stats.median, unit=unit))
+        st.metric("Standardavvikelse", _fmt_number(stats.std, unit=unit))
     
     with col2:
-        st.metric("Standardavvikelse", _fmt_number(stats.std, unit=unit))
-        st.metric("Antal nät", f"{stats.count}")
-    
-    with col3:
         st.metric("25:e percentil", _fmt_number(stats.q25, unit=unit))
         st.metric("75:e percentil", _fmt_number(stats.q75, unit=unit))
-    
-    with col4:
-        st.metric("Minimum", _fmt_number(stats.min_val, unit=unit))
-        st.metric("Maximum", _fmt_number(stats.max_val, unit=unit))
+        st.metric("Antal DMU", f"{stats.count}")
 
 def _render_distribution_chart(df: pd.DataFrame, intensity_col: str, unit: str) -> None:
     """Visa fördelningshistogram."""
@@ -168,17 +162,21 @@ def _render_distribution_chart(df: pd.DataFrame, intensity_col: str, unit: str) 
         st.warning("Ingen data för fördelningsanalys.")
         return
     
-    # Skapa histogram med Altair
-    chart = alt.Chart(hist_data).mark_bar(opacity=0.7).encode(
-        x=alt.X("bin_start:Q", 
+    # Skapa histogram med Altair - tjocka staplar
+    chart = alt.Chart(hist_data).mark_bar(
+        opacity=0.8, 
+        color="#1f77b4",  # Mörkblå färg
+        stroke="white",   # Vit kant mellan staplar
+        strokeWidth=1
+    ).encode(
+        x=alt.X("bin_center:Q", 
                 title=f"Intensitet ({unit})",
                 scale=alt.Scale(nice=True)),
-        x2=alt.X2("bin_end:Q"),
-        y=alt.Y("count:Q", title="Antal nät"),
+        y=alt.Y("count:Q", title="Antal DMU"),
         tooltip=[
-            alt.Tooltip("bin_start:Q", title="Från", format=".2f"),
-            alt.Tooltip("bin_end:Q", title="Till", format=".2f"),
-            alt.Tooltip("count:Q", title="Antal nät")
+            alt.Tooltip("bin_start:Q", title="Från", format=".1f"),
+            alt.Tooltip("bin_end:Q", title="Till", format=".1f"),
+            alt.Tooltip("count:Q", title="Antal DMU")
         ]
     ).properties(
         width=600,
@@ -195,7 +193,7 @@ def _render_ranking_tables(
     unit: str
 ) -> None:
     """Visa ranking-tabeller."""
-    st.subheader("Ranking av nät")
+    st.subheader("Ranking av DMU")
     
     if len(top_networks) == 0 and len(bottom_networks) == 0:
         st.warning("Ingen data för ranking.")
@@ -206,21 +204,18 @@ def _render_ranking_tables(
     with col1:
         st.markdown("#### 🔴 Högsta intensitet")
         if len(top_networks) > 0:
-            display_cols = ["ranking", "id_network", intensity_col]
-            if "id_network_string" in top_networks.columns:
-                display_cols.insert(2, "id_network_string")
+            display_cols = ["ranking", "DMU", intensity_col]
             
             top_display = top_networks[display_cols].copy()
             top_display[intensity_col] = top_display[intensity_col].apply(
-                lambda x: _fmt_number(x, unit=unit)
+                lambda x: _fmt_number(x, decimals=1, unit=unit)
             )
             
             st.dataframe(
                 top_display,
                 column_config={
                     "ranking": st.column_config.NumberColumn("#", width="small"),
-                    "id_network": st.column_config.NumberColumn("Nät-ID", width="small"),
-                    "id_network_string": st.column_config.TextColumn("Namn", width="medium"),
+                    "DMU": st.column_config.NumberColumn("DMU", width="small"),
                     intensity_col: st.column_config.TextColumn(f"Intensitet ({unit})", width="medium")
                 },
                 hide_index=True,
@@ -232,21 +227,18 @@ def _render_ranking_tables(
     with col2:
         st.markdown("#### 🟢 Lägsta intensitet")
         if len(bottom_networks) > 0:
-            display_cols = ["ranking", "id_network", intensity_col]
-            if "id_network_string" in bottom_networks.columns:
-                display_cols.insert(2, "id_network_string")
+            display_cols = ["ranking", "DMU", intensity_col]
             
             bottom_display = bottom_networks[display_cols].copy()
             bottom_display[intensity_col] = bottom_display[intensity_col].apply(
-                lambda x: _fmt_number(x, unit=unit)
+                lambda x: _fmt_number(x, decimals=1, unit=unit)
             )
             
             st.dataframe(
                 bottom_display,
                 column_config={
                     "ranking": st.column_config.NumberColumn("#", width="small"),
-                    "id_network": st.column_config.NumberColumn("Nät-ID", width="small"),
-                    "id_network_string": st.column_config.TextColumn("Namn", width="medium"),
+                    "DMU": st.column_config.NumberColumn("DMU", width="small"),
                     intensity_col: st.column_config.TextColumn(f"Intensitet ({unit})", width="medium")
                 },
                 hide_index=True,
@@ -257,8 +249,45 @@ def _render_ranking_tables(
 
 def _render_outlier_analysis(df: pd.DataFrame, intensity_col: str, unit: str) -> None:
     """Visa outlier-analys."""
-    with st.expander("🔍 Outlier-analys (extremvärden)"):
+    with st.expander("Outlier-analys (extremvärden)"):
         outlier_method = st.selectbox(
+            "Outlier-metod",
+            options=["iqr", "zscore"],
+            format_func=lambda x: {
+                "iqr": "IQR-metod (Interkvartil-avstånd)",
+                "zscore": "Z-score metod (Standardavvikelser)"
+            }[x],
+            help="Metod för att identifiera extremvärden"
+        )
+        
+        try:
+            outliers_high, outliers_low = identify_outliers(df, intensity_col, method=outlier_method)
+            
+            total_outliers = len(outliers_high) + len(outliers_low)
+            if total_outliers == 0:
+                st.info("Inga extremvärden identifierade med vald metod.")
+                return
+            
+            st.write(f"**Identifierade {total_outliers} extremvärden:**")
+            
+            if len(outliers_high) > 0:
+                st.write(f"**Höga värden ({len(outliers_high)}):**")
+                high_display = outliers_high[["DMU", intensity_col]].copy()
+                high_display[intensity_col] = high_display[intensity_col].apply(
+                    lambda x: _fmt_number(x, decimals=1, unit=unit)
+                )
+                st.dataframe(high_display, use_container_width=True, hide_index=True)
+            
+            if len(outliers_low) > 0:
+                st.write(f"**Låga värden ({len(outliers_low)}):**")
+                low_display = outliers_low[["DMU", intensity_col]].copy()
+                low_display[intensity_col] = low_display[intensity_col].apply(
+                    lambda x: _fmt_number(x, decimals=1, unit=unit)
+                )
+                st.dataframe(low_display, use_container_width=True, hide_index=True)
+                
+        except Exception as e:
+            st.error(f"Fel vid outlier-analys: {e}").selectbox(
             "Outlier-metod",
             options=["iqr", "zscore"],
             format_func=lambda x: {
@@ -362,7 +391,7 @@ def _render_scenario_comparison(
     
     with col1:
         st.write("**Störst förbättring (lägre intensitet):**")
-        winners = valid_data.nsmallest(5, delta_col)[["id_network", delta_col]]
+        winners = valid_data.nsmallest(5, delta_col)[["DMU", delta_col]]
         winners_display = winners.copy()
         winners_display[delta_col] = winners_display[delta_col].apply(
             lambda x: _fmt_delta(x, unit=unit)
@@ -458,7 +487,7 @@ def show_intensity_analysis(
     _render_merge_quality(quality_report)
     
     # Bestäm enhet baserat på vald metrik
-    unit = "tkr/MWh" if intensity_metric == "kr_per_mwh" else "tkr/kund"
+    unit = "SEK/MWh" if intensity_metric == "sek_per_mwh" else "SEK/kund"
     
     # Statistisk översikt
     stats = compute_intensity_statistics(df_with_intensities, intensity_metric)
@@ -488,15 +517,11 @@ def show_intensity_analysis(
             st.error(f"Fel vid scenario-beräkning: {e}")
     
     # Detaljdata (expanderbar)
-    with st.expander("🗃️ Detaljdata (alla nät)"):
+    with st.expander("🗃️ Detaljdata (alla DMU)"):
         display_cols = [
-            "id_network", "DMU", "MWh_total", "CU", 
+            "DMU", "MWh_total", "CU", 
             "capcost_sum", intensity_metric
         ]
-        
-        # Lägg till nätnamn om tillgängligt
-        if "id_network_string" in df_with_intensities.columns:
-            display_cols.insert(1, "id_network_string")
         
         # Lägg till scenario-kolumner om aktiverat
         if show_scenario and r_new is not None:
@@ -508,13 +533,11 @@ def show_intensity_analysis(
         st.dataframe(
             detail_df,
             column_config={
-                "id_network": "Nät-ID",
-                "id_network_string": "Nätnamn",
                 "DMU": "DMU",
                 "MWh_total": st.column_config.NumberColumn("MWh", format="%.0f"),
                 "CU": st.column_config.NumberColumn("Kunder", format="%.0f"),
                 "capcost_sum": st.column_config.NumberColumn("Kapkostnad (tkr)", format="%.0f"),
-                intensity_metric: st.column_config.NumberColumn(f"Intensitet ({unit})", format="%.3f")
+                intensity_metric: st.column_config.NumberColumn(f"Intensitet ({unit})", format="%.1f")
             },
             use_container_width=True,
             hide_index=True

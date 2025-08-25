@@ -108,7 +108,7 @@ def merge_capcost_with_volumes(
         year: År att filtrera på (default 2024)
         
     Returns:
-        Tuple[merged_data, merge_quality_report]
+        Tuple[merged_data_aggregated_to_DMU, merge_quality_report]
     """
     _require_columns(capcost_df, ["id_network", "time", "capcost_sum"], "capcost_df")
     
@@ -131,17 +131,32 @@ def merge_capcost_with_volumes(
         "return_tail": "sum"
     }).reset_index()
     
-    # Merge-kedja: capcost -> reconciliation -> volumes
-    step1 = capcost_agg.merge(recon_clean, on="id_network", how="left")
-    merged = step1.merge(dmu_clean, on="DMU", how="left")
+    # Merge capcost med reconciliation för att få DMU
+    capcost_with_dmu = capcost_agg.merge(recon_clean, on="id_network", how="left")
     
-    # Beräkna kvalitetsstatistik
+    # KRITISK FIX: Aggregera till DMU-nivå före merge med volymer
+    capcost_by_dmu = capcost_with_dmu.groupby("DMU").agg({
+        "capcost_sum": "sum",
+        "dep_ord": "sum",
+        "dep_tail": "sum", 
+        "return_ord": "sum",
+        "return_tail": "sum"
+    }).reset_index()
+    
+    # Merge DMU-aggregerad kapitalkostnad med volymer
+    merged = capcost_by_dmu.merge(dmu_clean, on="DMU", how="left")
+    
+    # Beräkna kvalitetsstatistik (på nät-nivå för transparens)
     total_networks = len(capcost_agg)
-    networks_with_volumes = merged["MWh_total"].notna().sum()
-    merge_coverage = (networks_with_volumes / total_networks * 100) if total_networks > 0 else 0
+    networks_with_dmu = capcost_with_dmu["DMU"].notna().sum()
+    networks_with_volumes = capcost_with_dmu[capcost_with_dmu["DMU"].notna()].merge(
+        dmu_clean, on="DMU", how="inner"
+    )["DMU"].nunique()
     
-    missing_volumes = merged[merged["MWh_total"].isna()]["id_network"].tolist()
-    zero_volumes = merged[(merged["MWh_total"] == 0) | (merged["CU"] == 0)]["id_network"].tolist()
+    merge_coverage = (networks_with_dmu / total_networks * 100) if total_networks > 0 else 0
+    
+    missing_volumes = capcost_with_dmu[capcost_with_dmu["DMU"].isna()]["id_network"].tolist()
+    zero_volumes = []  # På DMU-nivå behöver vi inte flagga noll-volymer på samma sätt
     
     quality = MergeQuality(
         total_networks=total_networks,
@@ -156,27 +171,27 @@ def merge_capcost_with_volumes(
 
 def calculate_intensities(merged_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Beräkna intensitetsmått (kr/MWh, kr/kund) baserat på merged data.
+    Beräkna intensitetsmått (SEK/MWh, SEK/kund) baserat på merged DMU-data.
     
     Args:
-        merged_df: Sammanslagen data från merge_capcost_with_volumes
+        merged_df: Sammanslagen DMU-aggregerad data från merge_capcost_with_volumes
         
     Returns:
         DataFrame med intensitetsmått tillagda
     """
     result = merged_df.copy()
     
-    # Beräkna intensiteter (tkr-basis)
+    # Beräkna intensiteter (tkr → SEK genom att multiplicera med 1000)
     # Undvik division med noll genom att sätta till NaN
-    result["kr_per_mwh"] = np.where(
+    result["sek_per_mwh"] = np.where(
         (result["MWh_total"] > 0) & result["MWh_total"].notna(),
-        result["capcost_sum"] / result["MWh_total"],
+        (result["capcost_sum"] * 1000) / result["MWh_total"],
         np.nan
     )
     
-    result["kr_per_kund"] = np.where(
+    result["sek_per_kund"] = np.where(
         (result["CU"] > 0) & result["CU"].notna(),
-        result["capcost_sum"] / result["CU"],
+        (result["capcost_sum"] * 1000) / result["CU"],
         np.nan
     )
     
@@ -184,13 +199,13 @@ def calculate_intensities(merged_df: pd.DataFrame) -> pd.DataFrame:
     for component in ["dep_ord", "dep_tail", "return_ord", "return_tail"]:
         result[f"{component}_per_mwh"] = np.where(
             (result["MWh_total"] > 0) & result["MWh_total"].notna(),
-            result[component] / result["MWh_total"],
+            (result[component] * 1000) / result["MWh_total"],
             np.nan
         )
         
         result[f"{component}_per_kund"] = np.where(
             (result["CU"] > 0) & result["CU"].notna(),
-            result[component] / result["CU"],
+            (result[component] * 1000) / result["CU"],
             np.nan
         )
     
@@ -335,7 +350,7 @@ def apply_intensity_scenario(
     Tillämpa WACC-scenario på intensitetsdata genom att skala endast return-komponenter.
     
     Args:
-        df: DataFrame med intensitetsdata
+        df: DataFrame med intensitetsdata (DMU-aggregerad)
         r_old: Gammal WACC (default 4.53%)
         r_new: Ny WACC för scenario
         
@@ -360,22 +375,22 @@ def apply_intensity_scenario(
         result["return_ord_new"] + result["return_tail_new"]
     )
     
-    # Beräkna nya intensiteter
-    result["kr_per_mwh_new"] = np.where(
+    # Beräkna nya intensiteter i SEK
+    result["sek_per_mwh_new"] = np.where(
         (result["MWh_total"] > 0) & result["MWh_total"].notna(),
-        result["capcost_sum_new"] / result["MWh_total"],
+        (result["capcost_sum_new"] * 1000) / result["MWh_total"],
         np.nan
     )
     
-    result["kr_per_kund_new"] = np.where(
+    result["sek_per_kund_new"] = np.where(
         (result["CU"] > 0) & result["CU"].notna(),
-        result["capcost_sum_new"] / result["CU"],
+        (result["capcost_sum_new"] * 1000) / result["CU"],
         np.nan
     )
     
     # Beräkna deltan
-    result["delta_kr_per_mwh"] = result["kr_per_mwh_new"] - result["kr_per_mwh"]
-    result["delta_kr_per_kund"] = result["kr_per_kund_new"] - result["kr_per_kund"]
+    result["delta_sek_per_mwh"] = result["sek_per_mwh_new"] - result["sek_per_mwh"]
+    result["delta_sek_per_kund"] = result["sek_per_kund_new"] - result["sek_per_kund"]
     
     return result
 
