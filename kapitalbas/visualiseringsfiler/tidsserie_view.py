@@ -126,35 +126,52 @@ def _kpi_row(year_tbl: pd.DataFrame, years: Sequence[int]):
 
 
 def _main_chart(year_tbl: pd.DataFrame, show_split: bool, scenario_year: Optional[pd.DataFrame]):
-    # Summera över valda nät per år
+    """Linjegraf med tydlig legend.
+    - Default: två linjer (Dep total, Ränta total)
+    - Uppdelat läge: fyra linjer (Dep ord/tail, Ränta ord/tail)
+    - Scenario: läggs som 'Scenario: Total' (streckad) och hamnar i legend.
+    """
+    # 1) Årsvis totals (MSEK)
     annual = year_tbl.groupby("year", dropna=False)[ALL_COLS].sum(min_count=1).reset_index()
-    # Gör visningskolumner i MSEK
     annual = to_msek(annual, ALL_COLS)
     annual["dep_total"] = annual["dep_ord"] + annual["dep_tail"]
     annual["return_total"] = annual["return_ord"] + annual["return_tail"]
 
-    base = alt.Chart(annual).encode(x=alt.X("year:O", title="År"))
-
+    # 2) Välj serier + long-format för legend
     if show_split:
-        dep = base.mark_area(opacity=0.7).encode(y=alt.Y("dep_ord:Q", title="MSEK"), color=alt.value("#a6cee3"))
-        dep_tail = base.mark_area(opacity=0.7).encode(y="dep_tail:Q", color=alt.value("#1f78b4"))
-        ret = base.mark_area(opacity=0.7).encode(y="return_ord:Q", color=alt.value("#b2df8a"))
-        ret_tail = base.mark_area(opacity=0.7).encode(y="return_tail:Q", color=alt.value("#33a02c"))
-        layers = dep + dep_tail + ret + ret_tail
+        plot_cols = ["dep_ord", "dep_tail", "return_ord", "return_tail"]
+        labels = {"dep_ord":"Dep ord","dep_tail":"Dep tail","return_ord":"Ränta ord","return_tail":"Ränta tail"}
     else:
-        dep = base.mark_area(opacity=0.7).encode(y=alt.Y("dep_total:Q", title="MSEK"))
-        ret = base.mark_area(opacity=0.7).encode(y="return_total:Q")
-        layers = dep + ret
+        plot_cols = ["dep_total", "return_total"]
+        labels = {"dep_total":"Dep total","return_total":"Ränta total"}
 
+    base_long = annual.melt(id_vars=["year"], value_vars=plot_cols, var_name="serie", value_name="msek")
+    base_long["serie_label"] = base_long["serie"].map(labels)
+
+    # 3) Scenario som egen serie i samma long-Df (för att få legend)
     if scenario_year is not None and len(scenario_year):
         scen = scenario_year.groupby("year", dropna=False)["capcost_sum_new"].sum(min_count=1).reset_index()
-        scen["capcost_sum_new_msek"] = scen["capcost_sum_new"] / 1000.0
-        scen_layer = alt.Chart(scen).mark_line(point=True).encode(
-            x="year:O", y=alt.Y("capcost_sum_new_msek:Q", title="MSEK"), tooltip=["year", "capcost_sum_new_msek"],
-        )
-        layers = layers + scen_layer
+        scen = scen.assign(msek=scen["capcost_sum_new"] / 1000.0,
+                           serie_label="Scenario: Total")[["year","msek","serie_label"]]
+        long = pd.concat([base_long[["year","msek","serie_label"]], scen], ignore_index=True)
+    else:
+        long = base_long[["year","msek","serie_label"]]
 
-    st.altair_chart(layers.interactive().properties(height=340), use_container_width=True)
+    # 4) Linjegraf + legend till höger + starkare kontrast
+    base = alt.Chart(long).encode(x=alt.X("year:O", title="År"))
+    chart = base.mark_line(point=True).encode(
+        y=alt.Y("msek:Q", title="MSEK"),
+        color=alt.Color("serie_label:N", title="", legend=alt.Legend(orient="right"),
+                        scale=alt.Scale(scheme="tableau10")),
+        # Gör scenariolinjen streckad/tjockare
+        strokeDash=alt.condition(alt.FieldEqualPredicate(field="serie_label", equal="Scenario: Total"),
+                                 alt.value([6,3]), alt.value([1,0])),
+        size=alt.condition(alt.FieldEqualPredicate(field="serie_label", equal="Scenario: Total"),
+                           alt.value(3), alt.value(2)),
+        tooltip=["year","serie_label", alt.Tooltip("msek:Q", format=".1f")],
+    )
+    st.altair_chart(chart.interactive().properties(height=340), use_container_width=True)
+
 
 
 def _delta_panel(year_tbl: pd.DataFrame):
