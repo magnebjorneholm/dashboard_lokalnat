@@ -1,6 +1,15 @@
 import streamlit as st
 import pandas as pd
 
+
+@st.cache_data
+def load_dmu_volymer():
+    return pd.read_csv("effektiviseringskrav/data/dmu_volymer.csv")
+
+@st.cache_data  
+def load_reconciliation():
+    return pd.read_csv("effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv")
+
 # === MELLANDATA ===
 
 @st.cache_data

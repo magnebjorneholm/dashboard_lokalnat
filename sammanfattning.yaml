@@ -1,0 +1,152 @@
+meta:
+  scope: "Kapitalbas → beräkningskedja för kapitalkostnader (dep+ränta) i intäktsramsmodellen"
+  price_level: "Alla monetära variabler är i 2022 års prisnivå"
+  time:
+    codes: [229, 230, 231, 232, 233, 234, 235, 236]
+    map_label_to_code:
+      "2024h1": 229
+      "2024h2": 230
+      "2025h1": 231
+      "2025h2": 232
+      "2026h1": 233
+      "2026h2": 234
+      "2027h1": 235
+      "2027h2": 236
+    map_year_to_codes:
+      2024: [229, 230]
+      2025: [231, 232]
+      2026: [233, 234]
+      2027: [235, 236]
+  regulation_context:
+    return_is_wacc: "Reglerad avkastning baseras på real WACC; CAPM används för eget kapital."
+
+pipeline:
+  # Stegnumreringen följer skripten 5–8 (både .do och .py).
+  - step: 5
+    name: "ages_and_nuav → capbase_b"
+    input: "capbase_a"
+    output: "capbase_b"
+    operations:
+      - "Skapa åldersmått per period."
+      - "Flagga ordinarie bas (age ≤ ekdep) och tail (ekdep < age ≤ maxdep)."
+      - "Härled NUAV per period: nuav_ord_t och nuav_tail_t (från nuav_2022 * basflaggor)."
+      - "Aggregera per (cat_encode, id_network) och generera sum_nuav_*."
+    wide_columns_examples:
+      - "nuav_ord_229..236, nuav_tail_229..236"
+      - "sum_nuav_ord_229..236, sum_nuav_tail_229..236"
+    keys: ["id_component", "cat_encode", "id_network"]
+    format: "WIDE (en kolumn per tidskod)"
+    role_for_capital_base: "Definierar kapitalbasens ingående värden (NUAV) i ordinarie och tail per period."
+
+  - step: 6
+    name: "depreciation"
+    input: "capbase_b"
+    output: "depreciation_computed / depreciation_compress"
+    operations:
+      - "dep_ord_t = nuav_ord_t / ekdep."
+      - "dep_tail_t = nuav_tail_t / age_reg_t (säker division, justerad halvårslogik)."
+      - "Aggregera per (cat_encode, id_network); skala/avrunda till tusen (tkr) efter aggregation."
+    produced_columns: ["dep_ord_229..236", "dep_tail_229..236"]
+    keys: ["cat_encode", "id_network"]
+    format: "WIDE"
+    role_for_capital_base: "Avskrivningskomponent i kapitalkostnader (dep)."
+
+  - step: 7
+    name: "returns (ränta)"
+    input: "capbase_b"
+    output: "returns_compress / returns_compress_p"
+    parameters:
+      r_old: 0.0453
+    operations:
+      - "Periodiserat åldersmått för ränta (halvårslogik)."
+      - "Return ord: r * (kvarvarande ordinarie kapital) / 2."
+      - "Return tail: r * (1/(ret_age+1) * nuav_tail) / 2."
+      - "Aggregera per (cat_encode, id_network); skala/avrunda till tusen (tkr)."
+    produced_columns: ["return_ord_229..236", "return_tail_229..236"]
+    keys: ["cat_encode", "id_network"]
+    format: "WIDE"
+    role_for_capital_base: "Avkastningskomponent i kapitalkostnader (ränta via WACC)."
+
+  - step: 8
+    name: "capcost_compile"
+    input: ["depreciation_*", "returns_*"]
+    output: "capcost_a (parquet/dta)"
+    operations:
+      - "Merge dep & return per (cat_encode, id_network)."
+      - "Reshape WIDE → LONG över t (time-kod 229–236, int16)."
+      - "capcost_sum = dep_ord + dep_tail + return_ord + return_tail."
+      - "capcost_network = sum per id_network (valfritt för nätvy)."
+    columns_long_core: ["id_network","cat_encode","time","dep_ord","dep_tail","return_ord","return_tail","capcost_sum","capcost_network"]
+    keys_long: ["id_network","cat_encode","time"]
+    format: "LONG (halvår); aggregeras till år i vyer"
+    role_for_capital_base: "Slutlig kapitalkostnadstabell som dashboardet använder."
+
+datasets:
+  capbase_a:
+    description: "Ingångstabell på komponentnivå med nuav_2022, livslängdsparametrar och tidsflaggor."
+    important_fields: ["nuav_2022","ekdep","maxdep","capbase_existing","time_from","time_invest","invest"]
+    grain: "Komponent (id_component) × nät (id_network) × kategori (cat_encode)"
+    format: "Breddas till capbase_b i steg 5."
+    role: "Grund för att härleda kapitalbas per period."
+
+  capbase_b:
+    description: "Derivat av capbase_a med tidsindexerade kolumner (ålder, basflaggor, NUAV)."
+    fields_example: ["age_component_229..236","base_ord_229..236","base_tail_229..236","nuav_ord_229..236","nuav_tail_229..236","sum_nuav_*_t"]
+    grain: "Komponent × nät × kategori; WIDE per period"
+    role: "Mellanlager för dep- och räntesteg."
+
+  depreciation_compress:
+    description: "Avskrivningar per (cat_encode, id_network) för varje t."
+    fields_example: ["dep_ord_229..236","dep_tail_229..236"]
+    units: "Efter aggregation: tusen (tkr)."
+    role: "Dep-del av kapitalkostnaden."
+
+  returns_compress(_p):
+    description: "Räntekomponenter per (cat_encode, id_network) för varje t, beräknade med r_old."
+    fields_example: ["return_ord_229..236","return_tail_229..236"]
+    units: "Efter aggregation: tusen (tkr)."
+    role: "Ränta-del av kapitalkostnaden (WACC)."
+
+  capcost_a:
+    description: "Slutlig LONG-panel (halvår) med dep, ränta och totaler; används av dashboard."
+    fields_core: ["id_network","cat_encode","time","dep_ord","dep_tail","return_ord","return_tail","capcost_sum","capcost_network"]
+    grain: "Nät × kategori × halvår (time-code)"
+    role: "Primär källa för grafer/KPI:er; aggregeras till år i vy."
+
+linkage_and_labels:
+  reconciliation_csv:
+    path: "effektiviseringskrav/datafiler/reconciliation_id_network_firm_dmu.csv"
+    purpose: "Mappa id_network → företagsnamn/DMU för etiketter i vyer."
+    note: "Ha robust fallback om filen saknas eller kolumnnamn avviker."
+
+formats_and_units:
+  wide_vs_long:
+    wide: "Steg 5–7 producerar WIDE kolumnblock per period (_229..236)."
+    long: "Steg 8 reshapar till LONG (time som int16) för filtrering/agg i dashboard."
+  units:
+    storage: "Dep/return lagras i tkr efter aggregation i steg 6–7."
+    display: "Dashboard visar i MSEK (ytterligare /1000 i vy)."
+  tails:
+    definition: "ord: age ≤ ekdep; tail: ekdep < age ≤ maxdep."
+
+quality_and_controls:
+  integrity_checks:
+    - "capcost_sum = dep_ord + dep_tail + return_ord + return_tail (per rad)."
+    - "Årsvis vy = H1+H2 (aggregering från halvår)."
+    - "Tolerans i kontrollsumma (t.ex. 0,5 MSEK) p.g.a. avrundning/skalning i steg 6–7."
+  known_pitfalls:
+    - "Rundningar: steg 6–7 skalar/avrundar till tkr → små differenser kan uppstå vid årssummering."
+    - "Gränsvärden för tail/ord kräver korrekt ålders- och livslängdslogik."
+    - "‘time’ är kod (229–236); mappa alltid till (år, halvår) i UI."
+
+dash_usage:
+  primary_table: "capcost_a"
+  filters: ["id_network (med recon)","year (aggregering från halvår)","cat_encode (valfritt)"]
+  scenario_overlay:
+    concept: "Skala räntedel med r_new; dep oförändrad."
+    baseline_reference: "r_old i baseline = 0.0453."
+    display_rule: "Vid scenario: jämför Bas vs Scenario för Total & Ränta (linjer, tydlig legend)."
+
+regulatory_context_notes:
+  - "WACC/avkastning bestäms med CAPM m.fl. antaganden; kapitalbasens värde + tillåten kalkylränta driver intäktsramen."
+  - "Dashboard visar prisnivå 2022 och använder halvårskoder 229–236 som aggregeras till år."
