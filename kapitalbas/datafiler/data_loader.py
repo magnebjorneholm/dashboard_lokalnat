@@ -34,7 +34,7 @@ def load_capbase_compress():
 
 @st.cache_data
 def load_depreciation_compress_sample():
-    return pd.read_parquet("kapitalbas/datafiler/mellandata/depreciation_compress_sample.parquet")
+    return pd.read_parquet("kapitalbas/datafiler/mellandata/depreciation_compress_sample_1_and_3035.parquet")
 
 @st.cache_data
 def load_depreciation_compress():
@@ -68,7 +68,7 @@ def load_capbase_a():
 
 @st.cache_data
 def load_capcost_a_sample():
-    return pd.read_parquet("kapitalbas/datafiler/slutdata/capcost_a_sample.parquet")
+    return pd.read_parquet("kapitalbas/datafiler/slutdata/capcost_a_sample_1_and_3035.parquet")
 
 @st.cache_data
 def load_capcost_a():

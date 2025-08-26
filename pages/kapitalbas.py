@@ -1,4 +1,4 @@
-# kapitalbas.py
+# kapitalbas.py - UPPDATERAD med age_reg sektion
 
 import streamlit as st
 from kapitalbas.kapitalbas_app.data_loader import (
@@ -21,6 +21,8 @@ from kapitalbas.kapitalbas_app.komponent_view import show_komponent_view
 from kapitalbas.kapitalbas_app.policy_playground_view import show_policy_playground
 from kapitalbas.kapitalbas_app.qa_view import show_qa
 from kapitalbas.kapitalbas_app.livslangd_view import show_livslangd_view
+# KORRIGERAD IMPORT för age_reg sektion
+from kapitalbas.visualiseringsfiler.age_reg_view import show_age_reg_view
 
 from kapitalbas.visualiseringsfiler.intensitet_view import show_intensity_analysis
 from kapitalbas.visualiseringsfiler.översikt import show_capcost
@@ -47,7 +49,6 @@ st.session_state["capcost_a"] = load_capcost_a()
 st.session_state["dmu_volymer"] = load_dmu_volymer()
 st.session_state["reconciliation"] = load_reconciliation()
 
-
 capbase, capcost = load_main_data()
 st.session_state["final_capbase_sample"] = load_component_sample()
 st.session_state["capbase_compress_tail"] = load_tail_full()
@@ -57,7 +58,16 @@ st.session_state["capcost_python"] = capcost
 # === Välj sektion ===
 sektion = st.sidebar.selectbox(
     "Välj del av kapitalbasen", 
-    ["Översikt", "Tidsserie", "Intensitetsanalys", "QA", "Komponenter", "Policy Playground", "Livslängdssimulering"]
+    [
+        "Översikt", 
+        "Tidsserie", 
+        "Intensitetsanalys", 
+        "QA", 
+        "Komponenter", 
+        "Policy Playground", 
+        "Livslängdssimulering",
+        "Age_reg Parametrisering"  # NY SEKTION
+    ]
 )
 
 # === Visa vald sektion ===
@@ -85,3 +95,7 @@ elif sektion == "QA":
 
 elif sektion == "Livslängdssimulering":
     show_livslangd_view()
+
+# NY SEKTION för age_reg parametrisering
+elif sektion == "Age_reg Parametrisering":
+    show_age_reg_view()
