@@ -109,10 +109,10 @@ def _render_merge_quality(quality_report) -> None:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("Totalt antal nät", quality_report.total_networks)
+        st.metric("Totalt antal DMU", quality_report.total_networks)
     
     with col2:
-        st.metric("Nät med volymdata", quality_report.networks_with_volumes)
+        st.metric("DMU med volymdata", quality_report.networks_with_volumes)
     
     with col3:
         st.metric("Täckningsgrad", f"{quality_report.merge_coverage_pct:.1f}%")
@@ -120,14 +120,14 @@ def _render_merge_quality(quality_report) -> None:
     if quality_report.networks_missing_volumes:
         with st.expander(f"Nät utan volymdata ({len(quality_report.networks_missing_volumes)})"):
             missing_df = pd.DataFrame({
-                "id_network": quality_report.networks_missing_volumes
+                "DMU": quality_report.networks_missing_volumes
             })
             st.dataframe(missing_df, use_container_width=True)
     
     if quality_report.networks_with_zero_volumes:
-        with st.expander(f"Nät med noll-volym ({len(quality_report.networks_with_zero_volumes)})"):
+        with st.expander(f"DMU med noll-volym ({len(quality_report.networks_with_zero_volumes)})"):
             zero_df = pd.DataFrame({
-                "id_network": quality_report.networks_with_zero_volumes
+                "DMU": quality_report.networks_with_zero_volumes
             })
             st.dataframe(zero_df, use_container_width=True)
 
@@ -362,7 +362,7 @@ def _render_scenario_comparison(
         st.metric("Förändring (medel)", _fmt_delta(mean_delta, unit=unit))
     
     # Fördelning av scenario-påverkan
-    st.write("**Fördelning av påverkan per nät:**")
+    st.write("**Fördelning av påverkan per DMU:**")
     
     delta_data = prepare_distribution_data(valid_data, delta_col, bins=15)
     
@@ -372,11 +372,11 @@ def _render_scenario_comparison(
                     title=f"Förändring i intensitet ({unit})",
                     scale=alt.Scale(nice=True)),
             x2=alt.X2("bin_end:Q"),
-            y=alt.Y("count:Q", title="Antal nät"),
+            y=alt.Y("count:Q", title="Antal DMU"),
             tooltip=[
                 alt.Tooltip("bin_start:Q", title="Från", format=".3f"),
                 alt.Tooltip("bin_end:Q", title="Till", format=".3f"),
-                alt.Tooltip("count:Q", title="Antal nät")
+                alt.Tooltip("count:Q", title="Antal DMU")
             ]
         ).properties(
             width=600,
@@ -400,7 +400,7 @@ def _render_scenario_comparison(
     
     with col2:
         st.write("**Störst försämring (högre intensitet):**")
-        losers = valid_data.nlargest(5, delta_col)[["id_network", delta_col]]
+        losers = valid_data.nlargest(5, delta_col)[["DMU", delta_col]]
         losers_display = losers.copy()
         losers_display[delta_col] = losers_display[delta_col].apply(
             lambda x: _fmt_delta(x, unit=unit)

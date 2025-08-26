@@ -147,23 +147,23 @@ def merge_capcost_with_volumes(
     merged = capcost_by_dmu.merge(dmu_clean, on="DMU", how="left")
     
     # Beräkna kvalitetsstatistik (på nät-nivå för transparens)
-    total_networks = len(capcost_agg)
-    networks_with_dmu = capcost_with_dmu["DMU"].notna().sum()
-    networks_with_volumes = capcost_with_dmu[capcost_with_dmu["DMU"].notna()].merge(
-        dmu_clean, on="DMU", how="inner"
-    )["DMU"].nunique()
-    
-    merge_coverage = (networks_with_dmu / total_networks * 100) if total_networks > 0 else 0
-    
-    missing_volumes = capcost_with_dmu[capcost_with_dmu["DMU"].isna()]["id_network"].tolist()
-    zero_volumes = []  # På DMU-nivå behöver vi inte flagga noll-volymer på samma sätt
-    
+    # Kvalitetsstatistik på DMU-nivå
+    total_units = len(capcost_by_dmu)
+    units_with_vol = merged["DMU"].notna() & merged["MWh_total"].notna()
+    merge_coverage = (units_with_vol.sum() / total_units * 100.0) if total_units > 0 else 0.0
+
+    missing_volumes = merged.loc[~merged["DMU"].notna() | ~merged["MWh_total"].notna(), "DMU"] \
+        .astype("Int64").dropna().astype(int).tolist()
+
+    zero_volumes = merged.loc[(merged["MWh_total"].fillna(0) <= 0) | (merged["CU"].fillna(0) <= 0), "DMU"] \
+        .astype("Int64").dropna().astype(int).tolist()
+
     quality = MergeQuality(
-        total_networks=total_networks,
-        networks_with_volumes=networks_with_volumes,
-        merge_coverage_pct=merge_coverage,
+        total_networks=total_units,
+        networks_with_volumes=int(units_with_vol.sum()),
+        merge_coverage_pct=float(merge_coverage),
         networks_missing_volumes=missing_volumes,
-        networks_with_zero_volumes=zero_volumes
+        networks_with_zero_volumes=zero_volumes,
     )
     
     return merged, quality
