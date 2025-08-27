@@ -5,10 +5,10 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import io
 from datetime import datetime
-from typing import Dict, List, Optional
 from pathlib import Path
+from typing import Dict, List, Optional
 
-from intaktsram.app.ir_data_loader import (
+from intaktsram.app.data_loader import (
     load_dmu_mapping, 
     detect_scenario_updates,
     load_scenario_data,
@@ -31,13 +31,20 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
         placeholder="t.ex. 'WACC 5.2% + Strängare DEA'"
     )
     
-    col1, col2 = st.sidebar.columns(2)
+    col1, col2, col3 = st.sidebar.columns(3)
     with col1:
         if st.button("🆕 Nytt scenario"):
             create_new_scenario(scenario_name, df_baseline)
     with col2:
+        if st.button("📁 Ladda scenario"):
+            st.session_state.show_scenario_loader = True
+    with col3:
         if st.button("🔄 Återställ allt"):
             reset_all_components()
+    
+    # Visa scenario-loader om aktiverad
+    if st.session_state.show_scenario_loader:
+        show_scenario_loader()
     
     # Visa aktuellt scenario
     if st.session_state.current_scenario_name:
@@ -99,6 +106,9 @@ def initialize_session_state():
     
     if 'scenario_data' not in st.session_state:
         st.session_state.scenario_data = {}
+    
+    if 'show_scenario_loader' not in st.session_state:
+        st.session_state.show_scenario_loader = False
 
 
 def create_new_scenario(name: str, baseline_df: pd.DataFrame):
@@ -363,6 +373,104 @@ def reset_component(component: str):
     
     st.sidebar.success(f"{component.title()} återställd till baseline")
     st.rerun()
+
+
+def show_scenario_loader():
+    """Visar dialog för att ladda tidigare sparade scenarier."""
+    scenario_dir = Path("scenario/saved")
+    
+    if not scenario_dir.exists():
+        st.sidebar.error("Inga sparade scenarier finns ännu")
+        if st.sidebar.button("Stäng", key="close_empty_loader"):
+            st.session_state.show_scenario_loader = False
+            st.rerun()
+        return
+    
+    # Leta efter sparade scenario-filer
+    scenario_files = list(scenario_dir.glob("ir_scenario_*.parquet"))
+    
+    if not scenario_files:
+        st.sidebar.error("Inga sparade scenarier hittades")
+        if st.sidebar.button("Stäng", key="close_no_files"):
+            st.session_state.show_scenario_loader = False
+            st.rerun()
+        return
+    
+    # Sortera efter modifierad tid (nyast först)
+    scenario_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    
+    # Visa scenario-loader persistent i sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📁 Ladda tidigare scenario")
+    
+    # Skapa dropdown med scenario-filer
+    file_names = [f.name.replace("ir_scenario_", "").replace(".parquet", "").replace("_", " ") 
+                  for f in scenario_files]
+    
+    selected_index = st.sidebar.selectbox(
+        "Välj scenario att ladda:",
+        options=range(len(scenario_files)),
+        format_func=lambda i: file_names[i],
+        key="scenario_selection"
+    )
+    
+    selected_file = scenario_files[selected_index]
+    
+    # Info om valt scenario
+    file_info = selected_file.stat()
+    st.sidebar.caption(f"Skapad: {datetime.fromtimestamp(file_info.st_mtime).strftime('%Y-%m-%d %H:%M')}")
+    
+    # Knappar för att ladda eller avbryta
+    col_load, col_cancel = st.sidebar.columns(2)
+    
+    with col_load:
+        if st.button("✅ Ladda scenario", key="load_scenario_btn"):
+            load_scenario_from_file(selected_file)
+            st.session_state.show_scenario_loader = False
+            st.rerun()
+    
+    with col_cancel:
+        if st.button("❌ Avbryt", key="cancel_load_btn"):
+            st.session_state.show_scenario_loader = False
+            st.rerun()
+    
+    st.sidebar.markdown("---")
+
+
+def load_scenario_from_file(filepath: Path):
+    """Laddar scenario från fil."""
+    try:
+        # Läs scenario-data
+        df_scenario = pd.read_parquet(filepath)
+        
+        # Försök hämta metadata från fil-attribut
+        try:
+            metadata = df_scenario.attrs.get('scenario_metadata', {})
+        except:
+            metadata = {}
+        
+        scenario_name = metadata.get('name', filepath.stem.replace('ir_scenario_', ''))
+        
+        # Skapa nytt scenario med laddad data
+        st.session_state.current_scenario_name = scenario_name
+        st.session_state.scenario_data = {
+            'baseline': df_scenario.copy(),
+            'modifications': metadata.get('modifications', {}),
+            'created': datetime.now(),
+            'loaded_from': str(filepath),
+            'component_sources': metadata.get('component_sources', {
+                'paverkbara': 'baseline',
+                'kapitalkostnad': 'baseline'
+            })
+        }
+        
+        # Stäng scenario-loader INNAN success-meddelande
+        st.session_state.show_scenario_loader = False
+        
+        st.sidebar.success(f"Scenario '{scenario_name}' laddat från fil!")
+        
+    except Exception as e:
+        st.sidebar.error(f"Kunde inte ladda scenario: {e}")
 
 
 def show_export_section(df_working: pd.DataFrame):

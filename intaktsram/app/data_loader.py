@@ -168,27 +168,30 @@ def detect_scenario_updates() -> Dict[str, Optional[str]]:
         Dict med information om tillgängliga scenarier:
         {
             'effektiviseringskrav': 'scenario/effkrav_2024_v1.parquet' eller None,
-            'kapitalbas': 'scenario/capex_wacc_0p0475_2024.parquet' eller None
+            'kapitalbas': 'dea_exports/capex_wacc_0p0475_y2024_tkr.parquet' eller None
         }
     """
-    scenario_dir = Path("scenario")
     updates = {
         'effektiviseringskrav': None,
         'kapitalbas': None
     }
     
-    if not scenario_dir.exists():
-        return updates
+    # Leta efter effektiviseringskrav-filer i scenario/
+    scenario_dir = Path("scenario")
+    if scenario_dir.exists():
+        for file in scenario_dir.glob("effkrav_*.parquet"):
+            updates['effektiviseringskrav'] = str(file)
+            break
     
-    # Leta efter effektiviseringskrav-filer
-    for file in scenario_dir.glob("effkrav_*.parquet"):
-        updates['effektiviseringskrav'] = str(file)
-        break
-    
-    # Leta efter kapitalbas-filer
-    for file in scenario_dir.glob("capex_wacc_*.parquet"):
-        updates['kapitalbas'] = str(file)
-        break
+    # Leta efter kapitalbas-filer i dea_exports/ (enligt översikt.py)
+    dea_dir = Path("dea_exports")
+    if dea_dir.exists():
+        # Hitta senaste WACC-scenario från kapitalbas
+        capex_files = list(dea_dir.glob("capex_wacc_*_y2024_tkr.parquet"))
+        if capex_files:
+            # Välj senaste fil baserat på modifierad tid
+            latest_capex = max(capex_files, key=lambda f: f.stat().st_mtime)
+            updates['kapitalbas'] = str(latest_capex)
     
     return updates
 
@@ -224,18 +227,39 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
                 result_df = result_df.drop('Paverkbara_Nya', axis=1)
         
         elif scenario_type == 'kapitalbas':
-            # Förvänta kolumner för ny kapitalkostnad
-            if 'REId' in scenario_df.columns and 'Kapitalkostnad_Ny' in scenario_df.columns:
-                merge_df = scenario_df[['REId', 'Kapitalkostnad_Ny']]
-                result_df = result_df.merge(merge_df, on='REId', how='left')
+            # Läs kapitalbas-export enligt översikt.py format
+            # Kolumner: id_network, CAPEX_2024_wacc_0pXXXX_tkr, DMU, Företag
+            
+            # Hitta scenario-kolumn (CAPEX_2024_wacc_*)
+            capex_cols = [col for col in scenario_df.columns 
+                         if col.startswith('CAPEX_2024_wacc_') and col.endswith('_tkr')]
+            
+            if capex_cols:
+                capex_col = capex_cols[0]  # Ta första matchande kolumn
                 
-                # Uppdatera där scenario-data finns
-                mask = result_df['Kapitalkostnad_Ny'].notna()
-                result_df.loc[mask, 'Kapitalkostnad_Total'] = result_df.loc[mask, 'Kapitalkostnad_Ny']
-                result_df.loc[mask, 'Källa_Kapitalkostnad'] = 'Scenario'  
-                result_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
-                
-                result_df = result_df.drop('Kapitalkostnad_Ny', axis=1)
+                # Ladda DMU-mapping för att konvertera id_network -> REId
+                dmu_mapping = load_dmu_mapping()
+                if not dmu_mapping.empty and 'DMU' in scenario_df.columns:
+                    # Mappa DMU -> REId
+                    scenario_with_reid = scenario_df.merge(
+                        dmu_mapping.rename(columns={'DMU': 'DMU'}), 
+                        on='DMU', 
+                        how='left'
+                    )
+                    
+                    if 'REId' in scenario_with_reid.columns:
+                        merge_df = scenario_with_reid[['REId', capex_col]].dropna()
+                        merge_df = merge_df.rename(columns={capex_col: 'Kapitalkostnad_Ny'})
+                        
+                        result_df = result_df.merge(merge_df, on='REId', how='left')
+                        
+                        # Uppdatera där scenario-data finns
+                        mask = result_df['Kapitalkostnad_Ny'].notna()
+                        result_df.loc[mask, 'Kapitalkostnad_Total'] = result_df.loc[mask, 'Kapitalkostnad_Ny']
+                        result_df.loc[mask, 'Källa_Kapitalkostnad'] = f'Scenario ({capex_col})'  
+                        result_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
+                        
+                        result_df = result_df.drop('Kapitalkostnad_Ny', axis=1)
         
         return result_df
         
