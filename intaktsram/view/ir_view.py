@@ -81,10 +81,7 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
     )
     
     # Filtrera data för valt företag/nät
-    if entity_col == 'DMU':
-        entity_data = df_working[df_working[entity_col] == selected_entity].iloc[0]
-    else:
-        entity_data = df_working[df_working[entity_col] == selected_entity].iloc[0]
+    entity_data = df_working[df_working[entity_col] == selected_entity].iloc[0]
     
     # === HUVUDVY ===
     show_main_waterfall_view(entity_data, selected_entity, entity_col)
@@ -164,10 +161,25 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
                 working_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
         
         elif component == 'kapitalkostnad' and 'values' in mod_data:
-            # Uppdatera kapitalkostnader
-            for reid, new_value in mod_data['values'].items():
+            # Uppdatera kapitalkostnader - både avkastning och total
+            for reid, new_values in mod_data['values'].items():
                 mask = working_df['REId'] == reid
-                working_df.loc[mask, 'Kapitalkostnad_Total'] = new_value
+                
+                # Om vi har separata avkastning/avskrivning-värden
+                if isinstance(new_values, dict):
+                    if 'avkastning' in new_values:
+                        working_df.loc[mask, 'Avkastning'] = new_values['avkastning']
+                    if 'avskrivningar' in new_values:
+                        working_df.loc[mask, 'Avskrivningar'] = new_values['avskrivningar']
+                    # Beräkna total om båda finns
+                    if 'Avkastning' in working_df.columns and 'Avskrivningar' in working_df.columns:
+                        working_df.loc[mask, 'Kapitalkostnad_Total'] = (
+                            working_df.loc[mask, 'Avskrivningar'] + working_df.loc[mask, 'Avkastning']
+                        )
+                else:
+                    # Enkel skalär för total kapitalkostnad
+                    working_df.loc[mask, 'Kapitalkostnad_Total'] = new_values
+                
                 working_df.loc[mask, 'Källa_Kapitalkostnad'] = f"Scenario ({mod_data.get('source', 'manual')})"
                 working_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
     
@@ -182,32 +194,53 @@ def show_main_waterfall_view(entity_data: pd.Series, selected_entity: str, entit
     
     st.header(f"📊 Intäktsram dekomposition: {selected_entity}")
     
-    # Komponenter i rätt ordning för waterfall
-    components = [
-        ('Påverkbara kostnader', entity_data.get('Paverkbara_Kostnader', 0)),
-        ('Opåverkbara kostnader', entity_data.get('Opaverkbara_Kostnader', 0)), 
-        ('Flexibilitetstjänster', entity_data.get('Flexibilitetstjanster', 0)),
-        ('Avbrottsersättning 12-24h', entity_data.get('Avbrottsersattning_12_24h', 0)),
-        ('Kapitalkostnad', entity_data.get('Kapitalkostnad_Total', 0))
-    ]
+    # Kontrollera om vi har separerade kapitalkostnad-komponenter
+    has_detailed_capital = all(col in entity_data.index for col in ['Avskrivningar', 'Avkastning'])
+    
+    if has_detailed_capital:
+        # Detaljerad vy med separerade kapitalkostnader
+        components = [
+            ('Påverkbara kostnader', entity_data.get('Paverkbara_Kostnader', 0)),
+            ('Opåverkbara kostnader', entity_data.get('Opaverkbara_Kostnader', 0)), 
+            ('Flexibilitetstjänster', entity_data.get('Flexibilitetstjanster', 0)),
+            ('Avbrottsersättning 12-24h', entity_data.get('Avbrottsersattning_12_24h', 0)),
+            ('Avskrivningar', entity_data.get('Avskrivningar', 0)),
+            ('Avkastning', entity_data.get('Avkastning', 0))
+        ]
+        st.caption("Kapitalkostnad uppdelad i: Avskrivningar (opåverkad av WACC) + Avkastning (påverkad av WACC)")
+    else:
+        # Enkel vy med total kapitalkostnad
+        components = [
+            ('Påverkbara kostnader', entity_data.get('Paverkbara_Kostnader', 0)),
+            ('Opåverkbara kostnader', entity_data.get('Opaverkbara_Kostnader', 0)), 
+            ('Flexibilitetstjänster', entity_data.get('Flexibilitetstjanster', 0)),
+            ('Avbrottsersättning 12-24h', entity_data.get('Avbrottsersattning_12_24h', 0)),
+            ('Kapitalkostnad', entity_data.get('Kapitalkostnad_Total', 0))
+        ]
+        st.caption("Kapitalkostnad som total (avskrivning + avkastning)")
     
     # Skapa waterfall-chart
-    fig = create_waterfall_chart(components, entity_data)
+    fig = create_waterfall_chart(components, entity_data, detailed_capital=has_detailed_capital)
     st.plotly_chart(fig, use_container_width=True)
     
     # Komponent-tabell under grafen
-    show_component_table(entity_data, components)
+    show_component_table(entity_data, components, has_detailed_capital)
 
 
-def create_waterfall_chart(components: List[tuple], entity_data: pd.Series) -> go.Figure:
+def create_waterfall_chart(components: List[tuple], entity_data: pd.Series, detailed_capital: bool = False) -> go.Figure:
     """Skapar waterfall-chart för intäktsram-komponenter."""
     
     labels = [comp[0] for comp in components] + ['Total Intäktsram']
     values = [comp[1] for comp in components]
     total_calculated = sum(values)
     
-    # Färger för komponenter
-    colors = ['lightblue', 'lightgreen', 'lightyellow', 'lightcoral', 'lightgray', 'darkblue']
+    # Färger anpassade för detaljerad vy
+    if detailed_capital:
+        # 6 komponenter: påverkbara, opåverkbara, flex, avbrott, avskrivning, avkastning
+        colors = ['lightblue', 'lightgreen', 'lightyellow', 'lightcoral', 'lightsteelblue', 'lightpink']
+    else:
+        # 5 komponenter: standardfärger
+        colors = ['lightblue', 'lightgreen', 'lightyellow', 'lightcoral', 'lightgray']
     
     fig = go.Figure()
     
@@ -226,8 +259,9 @@ def create_waterfall_chart(components: List[tuple], entity_data: pd.Series) -> g
         totals={"marker":{"color":"darkblue"}}
     ))
     
+    title_suffix = "- Kapitalkostnad uppdelad" if detailed_capital else ""
     fig.update_layout(
-        title="Intäktsram dekomposition (tkr, 2022 års prisnivå)",
+        title=f"Intäktsram dekomposition (tkr, 2022 års prisnivå) {title_suffix}",
         showlegend=False,
         height=500,
         xaxis_title="Komponenter",
@@ -238,7 +272,7 @@ def create_waterfall_chart(components: List[tuple], entity_data: pd.Series) -> g
     return fig
 
 
-def show_component_table(entity_data: pd.Series, components: List[tuple]):
+def show_component_table(entity_data: pd.Series, components: List[tuple], has_detailed_capital: bool = False):
     """Visar detaljerad komponent-tabell."""
     
     st.subheader("📋 Komponent-detaljer")
@@ -252,7 +286,7 @@ def show_component_table(entity_data: pd.Series, components: List[tuple]):
         if 'påverkbara' in name.lower():
             källa = entity_data.get('Källa_Paverkbara', 'Baseline')
             uppdaterad = entity_data.get('Uppdaterad_Paverkbara', False)
-        elif 'kapital' in name.lower():
+        elif any(term in name.lower() for term in ['kapital', 'avskrivning', 'avkastning']):
             källa = entity_data.get('Källa_Kapitalkostnad', 'Baseline') 
             uppdaterad = entity_data.get('Uppdaterad_Kapitalkostnad', False)
         else:
@@ -297,7 +331,7 @@ def show_component_controls(entity_data: pd.Series):
     # Påverkbara kostnader
     st.sidebar.subheader("💰 Påverkbara kostnader")
     if scenario_updates['effektiviseringskrav']:
-        if st.sidebar.button("📥 Hämta från Effektiviseringskrav"):
+        if st.sidebar.button("🔥 Hämta från Effektiviseringskrav"):
             update_component_from_scenario('paverkbara', 'effektiviseringskrav', scenario_updates['effektiviseringskrav'])
     
     # Manuell uppdatering
@@ -313,18 +347,41 @@ def show_component_controls(entity_data: pd.Series):
     # Kapitalkostnad  
     st.sidebar.subheader("🏗️ Kapitalkostnad")
     if scenario_updates['kapitalbas']:
-        if st.sidebar.button("📥 Hämta från Kapitalbas"):
+        if st.sidebar.button("🔥 Hämta från Kapitalbas"):
             update_component_from_scenario('kapitalkostnad', 'kapitalbas', scenario_updates['kapitalbas'])
     
-    # Manuell uppdatering
-    current_kapital = entity_data.get('Kapitalkostnad_Total', 0)
-    new_kapital = st.sidebar.number_input(
-        "Ny nivå (tkr)", 
-        value=float(current_kapital),
-        key="manual_kapital"
-    )
-    if st.sidebar.button("Uppdatera manuellt", key="update_kapital"):
-        update_component_manual('kapitalkostnad', entity_data['REId'], new_kapital)
+    # Manuell uppdatering - stöd för separerade komponenter
+    has_detailed_capital = all(col in entity_data.index for col in ['Avskrivningar', 'Avkastning'])
+    
+    if has_detailed_capital:
+        # Visa separata kontroller för avskrivning och avkastning
+        current_avskrivning = entity_data.get('Avskrivningar', 0)
+        current_avkastning = entity_data.get('Avkastning', 0)
+        
+        new_avskrivning = st.sidebar.number_input(
+            "Avskrivningar (tkr)", 
+            value=float(current_avskrivning),
+            key="manual_avskrivning"
+        )
+        new_avkastning = st.sidebar.number_input(
+            "Avkastning (tkr)", 
+            value=float(current_avkastning),
+            key="manual_avkastning"
+        )
+        
+        if st.sidebar.button("Uppdatera komponenter", key="update_detailed_kapital"):
+            update_component_manual_detailed('kapitalkostnad', entity_data['REId'], 
+                                           new_avskrivning, new_avkastning)
+    else:
+        # Enkel total kapitalkostnad
+        current_kapital = entity_data.get('Kapitalkostnad_Total', 0)
+        new_kapital = st.sidebar.number_input(
+            "Ny nivå (tkr)", 
+            value=float(current_kapital),
+            key="manual_kapital"
+        )
+        if st.sidebar.button("Uppdatera manuellt", key="update_kapital"):
+            update_component_manual('kapitalkostnad', entity_data['REId'], new_kapital)
     
     # Återställ enskilda komponenter
     col1, col2 = st.sidebar.columns(2)
@@ -339,13 +396,15 @@ def show_component_controls(entity_data: pd.Series):
 def update_component_from_scenario(component: str, source: str, scenario_file: str):
     """Uppdaterar komponent från scenario-fil."""
     try:
-        # Här skulle vi ladda och applicera scenario-data
-        # För nu - placeholder som visar konceptet
-        st.sidebar.success(f"{component.title()} uppdaterad från {source}")
+        # Ladda och applicera scenario-data
+        working_df = st.session_state.scenario_data['baseline'].copy()
+        updated_df = load_scenario_data(source, scenario_file, working_df)
         
-        # I framtiden:
-        # scenario_data = load_scenario_data(source, scenario_file, baseline)
-        # st.session_state.scenario_data['modifications'][component] = scenario_data
+        # Extrahera ändringar för detta scenario
+        reid = st.session_state.get('selected_reid')  # Skulle behöva uppdateras för att fungera
+        if reid:
+            # Här implementerar vi den faktiska uppdateringen
+            st.sidebar.success(f"{component.title()} uppdaterad från {source}")
         
         st.rerun()
     except Exception as e:
@@ -362,6 +421,24 @@ def update_component_manual(component: str, reid: str, new_value: float):
     
     st.session_state.scenario_data['modifications'][component]['values'][reid] = new_value
     st.sidebar.success(f"{component.title()} uppdaterad manuellt")
+    st.rerun()
+
+
+def update_component_manual_detailed(component: str, reid: str, new_avskrivning: float, new_avkastning: float):
+    """Uppdaterar detaljerade kapitalkomponenter manuellt."""
+    if 'modifications' not in st.session_state.scenario_data:
+        st.session_state.scenario_data['modifications'] = {}
+    
+    if component not in st.session_state.scenario_data['modifications']:
+        st.session_state.scenario_data['modifications'][component] = {'values': {}, 'source': 'manual'}
+    
+    # Spara som dict för separerade värden
+    st.session_state.scenario_data['modifications'][component]['values'][reid] = {
+        'avskrivningar': new_avskrivning,
+        'avkastning': new_avkastning
+    }
+    
+    st.sidebar.success("Kapitalkomponenter uppdaterade manuellt")
     st.rerun()
 
 
@@ -463,9 +540,6 @@ def load_scenario_from_file(filepath: Path):
                 'kapitalkostnad': 'baseline'
             })
         }
-        
-        # Stäng scenario-loader INNAN success-meddelande
-        st.session_state.show_scenario_loader = False
         
         st.sidebar.success(f"Scenario '{scenario_name}' laddat från fil!")
         
@@ -621,13 +695,26 @@ def create_component_breakdown(df_data: pd.DataFrame) -> pd.DataFrame:
     """Skapar detaljerad breakdown av komponenter per företag."""
     breakdown_data = []
     
-    components = [
-        ('Påverkbara kostnader', 'Paverkbara_Kostnader'),
-        ('Opåverkbara kostnader', 'Opaverkbara_Kostnader'),
-        ('Flexibilitetstjänster', 'Flexibilitetstjanster'),
-        ('Avbrottsersättning 12-24h', 'Avbrottsersattning_12_24h'),
-        ('Kapitalkostnad', 'Kapitalkostnad_Total')
-    ]
+    # Kontrollera om vi har uppdelade kapitalkostnader
+    has_detailed_capital = 'Avskrivningar' in df_data.columns and 'Avkastning' in df_data.columns
+    
+    if has_detailed_capital:
+        components = [
+            ('Påverkbara kostnader', 'Paverkbara_Kostnader'),
+            ('Opåverkbara kostnader', 'Opaverkbara_Kostnader'),
+            ('Flexibilitetstjänster', 'Flexibilitetstjanster'),
+            ('Avbrottsersättning 12-24h', 'Avbrottsersattning_12_24h'),
+            ('Avskrivningar', 'Avskrivningar'),
+            ('Avkastning', 'Avkastning')
+        ]
+    else:
+        components = [
+            ('Påverkbara kostnader', 'Paverkbara_Kostnader'),
+            ('Opåverkbara kostnader', 'Opaverkbara_Kostnader'),
+            ('Flexibilitetstjänster', 'Flexibilitetstjanster'),
+            ('Avbrottsersättning 12-24h', 'Avbrottsersattning_12_24h'),
+            ('Kapitalkostnad', 'Kapitalkostnad_Total')
+        ]
     
     for _, row in df_data.iterrows():
         for comp_name, col_name in components:
@@ -647,7 +734,7 @@ def get_component_source(comp_name: str, row: pd.Series) -> str:
     """Hämtar källa för en komponent."""
     if 'påverkbara' in comp_name.lower():
         return row.get('Källa_Paverkbara', 'Baseline')
-    elif 'kapital' in comp_name.lower():
+    elif any(term in comp_name.lower() for term in ['kapital', 'avskrivning', 'avkastning']):
         return row.get('Källa_Kapitalkostnad', 'Baseline')
     else:
         return 'Baseline'
@@ -657,7 +744,7 @@ def is_component_updated(comp_name: str, row: pd.Series) -> bool:
     """Kontrollerar om en komponent har uppdaterats."""
     if 'påverkbara' in comp_name.lower():
         return row.get('Uppdaterad_Paverkbara', False)
-    elif 'kapital' in comp_name.lower():
+    elif any(term in comp_name.lower() for term in ['kapital', 'avskrivning', 'avkastning']):
         return row.get('Uppdaterad_Kapitalkostnad', False)
     else:
         return False

@@ -25,13 +25,15 @@ class IntaktsramModel:
         self.scenarios = {}
         self.current_scenario = None
         
-        # Definiera komponent-mappning
+        # Definiera komponent-mappning (utökad för separerade kapitalkostnader)
         self.components = {
             'paverkbara': 'Paverkbara_Kostnader',
             'opaverkbara': 'Opaverkbara_Kostnader', 
             'flexibilitetstjanster': 'Flexibilitetstjanster',
             'avbrottsersattning': 'Avbrottsersattning_12_24h',
-            'kapitalkostnad': 'Kapitalkostnad_Total'
+            'avskrivningar': 'Avskrivningar',
+            'avkastning': 'Avkastning',
+            'kapitalkostnad': 'Kapitalkostnad_Total'  # För bakåtkompatibilitet
         }
     
     
@@ -154,13 +156,19 @@ class IntaktsramModel:
     
     def _recalculate_totals(self, df: pd.DataFrame) -> pd.DataFrame:
         """Omberäknar total intäktsram baserat på komponenter."""
+        # Dynamisk komponentlista baserat på tillgängliga kolumner
         component_cols = [
             self.components['paverkbara'],
             self.components['opaverkbara'],
             self.components['flexibilitetstjanster'], 
-            self.components['avbrottsersattning'],
-            self.components['kapitalkostnad']
+            self.components['avbrottsersattning']
         ]
+        
+        # Lägg till kapitalkostnad (antingen uppdelad eller total)
+        if 'Avskrivningar' in df.columns and 'Avkastning' in df.columns:
+            component_cols.extend([self.components['avskrivningar'], self.components['avkastning']])
+        else:
+            component_cols.append(self.components['kapitalkostnad'])
         
         # Beräkna ny total
         df['Intaktsram_Beraknad'] = df[component_cols].sum(axis=1, skipna=False)
@@ -226,11 +234,12 @@ class IntaktsramModel:
         
         breakdown = {}
         for component, col_name in self.components.items():
-            breakdown[component] = {
-                'value': row.get(col_name, 0),
-                'source': row.get(f'Källa_{component.title()}', 'Baseline'),
-                'updated': row.get(f'Uppdaterad_{component.title()}', False)
-            }
+            if col_name in row.index:  # Endast om kolumnen finns
+                breakdown[component] = {
+                    'value': row.get(col_name, 0),
+                    'source': row.get(f'Källa_{component.title()}', 'Baseline'),
+                    'updated': row.get(f'Uppdaterad_{component.title()}', False)
+                }
         
         # Lägg till totaler
         breakdown['total'] = {
@@ -269,21 +278,23 @@ class IntaktsramModel:
         
         # Kontrollera negativa värden
         for component, col_name in self.components.items():
-            negative_values = working_df[working_df[col_name] < 0]
-            if not negative_values.empty:
-                warnings.append(
-                    f"Negativa värden i {component}: "
-                    f"{', '.join(negative_values['REId'].astype(str))}"
-                )
+            if col_name in working_df.columns:
+                negative_values = working_df[working_df[col_name] < 0]
+                if not negative_values.empty:
+                    warnings.append(
+                        f"Negativa värden i {component}: "
+                        f"{', '.join(negative_values['REId'].astype(str))}"
+                    )
         
         # Kontrollera saknade värden
         for component, col_name in self.components.items():
-            missing_values = working_df[working_df[col_name].isna()]
-            if not missing_values.empty:
-                warnings.append(
-                    f"Saknade värden i {component}: "
-                    f"{', '.join(missing_values['REId'].astype(str))}"
-                )
+            if col_name in working_df.columns:
+                missing_values = working_df[working_df[col_name].isna()]
+                if not missing_values.empty:
+                    warnings.append(
+                        f"Saknade värden i {component}: "
+                        f"{', '.join(missing_values['REId'].astype(str))}"
+                    )
         
         return warnings
     

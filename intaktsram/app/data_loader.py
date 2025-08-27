@@ -42,15 +42,6 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
     # Rensa kolumnnamn
     df.columns = df.columns.str.strip()
     
-    # Flexibel kolumn-mapping som letar efter nyckelord
-    def find_column_by_keywords(df_columns: List[str], keywords: List[str]) -> Optional[str]:
-        """Hitta kolumn baserat på nyckelord (case-insensitive)"""
-        for col in df_columns:
-            col_lower = col.lower()
-            if any(keyword.lower() in col_lower for keyword in keywords):
-                return col
-        return None
-    
     # Definiera söktermer för varje komponent
     column_searches = {
         'REId': ['reid'],
@@ -60,8 +51,8 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
         'Flexibilitetstjanster': ['flexibilitetstjänster', 'flexibilitetstjanster'],
         'Avbrottsersattning_12_24h': ['avbrottsersättning 12-24', 'avbrottsersattning 12-24'],
         'Kapitalkostnad_Total': ['kapitalkostnad'],
-        'Avskrivningar': ['kapital-förslitning', 'kapital-forslitning'],
-        'Avkastning': ['kapital-bindning']
+        'Avskrivningar': ['kapital-förslitning', 'kapital-forslitning', '-varav kapital-förslitning', 'varav kapital-förslitning'],
+        'Avkastning': ['kapital-bindning', 'varav kapital-bindning']
     }
     
     # Hitta matchande kolumner (exakt match först för att undvika dubbletter)
@@ -122,11 +113,28 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
     df_mapped = df_mapped.dropna(how='all')
     df_mapped = df_mapped.dropna(subset=['REId']).reset_index(drop=True)
     
+    # Säkerställ att vi har både Avskrivningar och Avkastning, eller beräkna från total
+    if 'Avskrivningar' in df_mapped.columns and 'Avkastning' in df_mapped.columns:
+        # Vi har separata komponenter - beräkna total om den saknas
+        if 'Kapitalkostnad_Total' not in df_mapped.columns:
+            df_mapped['Kapitalkostnad_Total'] = df_mapped['Avskrivningar'] + df_mapped['Avkastning']
+    elif 'Kapitalkostnad_Total' in df_mapped.columns:
+        # Vi har bara total - för nu lämna som den är
+        # I framtiden kan vi försöka uppskatta uppdelningen
+        pass
+    
     # Om vi inte har Intaktsram_Total, försök beräkna den från komponenter
     if 'Intaktsram_Total' not in df_mapped.columns:
-        component_cols = ['Paverkbara_Kostnader', 'Opaverkbara_Kostnader', 
-                         'Flexibilitetstjanster', 'Avbrottsersattning_12_24h', 
-                         'Kapitalkostnad_Total']
+        # Försök med uppdelade komponenter först
+        if 'Avskrivningar' in df_mapped.columns and 'Avkastning' in df_mapped.columns:
+            component_cols = ['Paverkbara_Kostnader', 'Opaverkbara_Kostnader', 
+                             'Flexibilitetstjanster', 'Avbrottsersattning_12_24h', 
+                             'Avskrivningar', 'Avkastning']
+        else:
+            component_cols = ['Paverkbara_Kostnader', 'Opaverkbara_Kostnader', 
+                             'Flexibilitetstjanster', 'Avbrottsersattning_12_24h', 
+                             'Kapitalkostnad_Total']
+        
         available_components = [col for col in component_cols if col in df_mapped.columns]
         
         if available_components:
@@ -242,7 +250,7 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
                 if not dmu_mapping.empty and 'DMU' in scenario_df.columns:
                     # Mappa DMU -> REId
                     scenario_with_reid = scenario_df.merge(
-                        dmu_mapping.rename(columns={'DMU': 'DMU'}), 
+                        dmu_mapping, 
                         on='DMU', 
                         how='left'
                     )
@@ -255,7 +263,20 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
                         
                         # Uppdatera där scenario-data finns
                         mask = result_df['Kapitalkostnad_Ny'].notna()
-                        result_df.loc[mask, 'Kapitalkostnad_Total'] = result_df.loc[mask, 'Kapitalkostnad_Ny']
+                        
+                        # Om vi har separerade komponenter, uppdatera bara avkastning
+                        if 'Avkastning' in result_df.columns and 'Avskrivningar' in result_df.columns:
+                            # Beräkna ny avkastning (total - avskrivning)
+                            result_df.loc[mask, 'Avkastning'] = (
+                                result_df.loc[mask, 'Kapitalkostnad_Ny'] - 
+                                result_df.loc[mask, 'Avskrivningar']
+                            )
+                            # Uppdatera också total
+                            result_df.loc[mask, 'Kapitalkostnad_Total'] = result_df.loc[mask, 'Kapitalkostnad_Ny']
+                        else:
+                            # Enkel uppdatering av total kapitalkostnad
+                            result_df.loc[mask, 'Kapitalkostnad_Total'] = result_df.loc[mask, 'Kapitalkostnad_Ny']
+                        
                         result_df.loc[mask, 'Källa_Kapitalkostnad'] = f'Scenario ({capex_col})'  
                         result_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
                         
@@ -280,9 +301,16 @@ def calculate_intaktsram(df: pd.DataFrame) -> pd.DataFrame:
         'Paverkbara_Kostnader',
         'Opaverkbara_Kostnader', 
         'Flexibilitetstjanster',
-        'Avbrottsersattning_12_24h',
-        'Kapitalkostnad_Total'
+        'Avbrottsersattning_12_24h'
     ]
+    
+    # Lägg till kapitalkostnad (antingen uppdelad eller total)
+    if 'Avskrivningar' in result_df.columns and 'Avkastning' in result_df.columns:
+        # Använd uppdelade komponenter
+        components.extend(['Avskrivningar', 'Avkastning'])
+    else:
+        # Fallback till total kapitalkostnad
+        components.append('Kapitalkostnad_Total')
     
     # Beräkna ny total (endast för rader där alla komponenter finns)
     component_sum = result_df[components].sum(axis=1, skipna=False)
