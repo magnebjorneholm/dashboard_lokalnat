@@ -246,7 +246,7 @@ def _build_dea_export_table(df_year: pd.DataFrame, r_new: float) -> tuple[pd.Dat
     dmu = _read_dmu_from_dea_base(DEA_BASE_XLSX)
     excluded = pd.DataFrame()
     if dmu is not None:
-        out = out.merge(dmu.assign(in_dea=1), on=["DMU","Företag"], how="left")
+        out = out.merge(dmu[["DMU"]].assign(in_dea=1), on="DMU", how="left")
         excluded = out[out["in_dea"].isna()][["DMU","Företag"]].copy()
         out = out[out["in_dea"].eq(1)].drop(columns=["in_dea"])
 

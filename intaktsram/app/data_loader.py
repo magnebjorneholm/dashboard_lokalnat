@@ -1,6 +1,6 @@
 # data_loader.py
 # Laddar baseline-data från "Löpande kostnader från SDF 202427.xlsx"
-# och hanterar framtida scenario-integration
+# och hanterar framtida scenario-integration med ny DMU-mappning
 
 from __future__ import annotations
 from pathlib import Path
@@ -13,8 +13,9 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
     """
     Laddar baseline-data från Excel-filen med löpande kostnader.
     Robust inläsning som hanterar olika kolumnformat och -namn.
+    Lägger automatiskt till DMU-mappning från new_recon.csv.
     
-    Returnerar DataFrame med standardiserade kolumnnamn.
+    Returnerar DataFrame med standardiserade kolumnnamn inklusive DMU.
     """
     try:
         # Försök läsa från första sheet först
@@ -141,6 +142,26 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
             df_mapped['Intaktsram_Total'] = df_mapped[available_components].sum(axis=1, skipna=True)
             print(f"Beräknade Intaktsram_Total från komponenter: {available_components}")
     
+    # NYTT: Lägg automatiskt till DMU-mappning
+    dmu_mapping = load_dmu_mapping()
+    if not dmu_mapping.empty:
+        original_count = len(df_mapped)
+        df_mapped = df_mapped.merge(dmu_mapping[['REId', 'DMU']], on='REId', how='left')
+        mapped_count = df_mapped['DMU'].notna().sum()
+        
+        # Filtrera bort omappade REId (regionnät) - behåll bara lokalnät
+        unmapped_reids = df_mapped[df_mapped['DMU'].isna()]['REId'].tolist()
+        df_mapped = df_mapped[df_mapped['DMU'].notna()].reset_index(drop=True)
+        
+        print(f"DMU-mappning tillagd: {mapped_count}/{original_count} REId mappade till DMU")
+        print(f"Filtrerade bort {len(unmapped_reids)} regionnät (RER*): behåller bara lokalnät")
+        
+        if len(unmapped_reids) > 0:
+            sample_unmapped = unmapped_reids[:3]  # Visa första 3
+            print(f"Exempel på filtrerade regionnät: {sample_unmapped}")
+    else:
+        print("Varning: Kunde inte ladda DMU-mappning - scenario-integration kommer inte fungera")
+    
     # Lägg till metadata-kolumner
     df_mapped['Källa_Paverkbara'] = 'Baseline'
     df_mapped['Källa_Kapitalkostnad'] = 'Baseline'
@@ -151,32 +172,49 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
     return df_mapped
 
 
-def load_dmu_mapping(filepath: str = "intaktsram/data/reconciliation_id_network_firm_dmu.csv") -> pd.DataFrame:
+def load_dmu_mapping(filepath: str = "new_recon.csv") -> pd.DataFrame:
     """
-    Laddar mappning mellan REId och DMU för att kunna växla mellan vyerna.
+    Laddar mappning mellan REId och DMU från nya reconciliation-filen.
+    Används för scenario-integration med kapitalbas.
     """
-    try:
-        df = pd.read_csv(filepath)
-        # Normalisera kolumnnamn
-        if 'id_firm' in df.columns and 'DMU' in df.columns:
-            return df[['id_firm', 'DMU']].rename(columns={'id_firm': 'REId'}).dropna()
-        else:
-            print("Varning: DMU-mapping-fil saknar förväntade kolumner")
-            return pd.DataFrame(columns=['REId', 'DMU'])
-    except Exception as e:
-        print(f"Kunde inte ladda DMU-mapping: {e}")
-        return pd.DataFrame(columns=['REId', 'DMU'])
+    # Försök olika sökvägar för new_recon.csv
+    possible_paths = [
+        filepath,
+        f"intaktsram/data/{filepath}",
+        f"effektiviseringskrav/data/{filepath}",
+        f"data/{filepath}"
+    ]
+    
+    for path in possible_paths:
+        try:
+            df = pd.read_csv(path)
+            # Kontrollera att vi har förväntade kolumner
+            if 'REId' in df.columns and 'DMU' in df.columns:
+                # Rensa bort rader utan DMU eller REId
+                df_clean = df.dropna(subset=['REId', 'DMU'])
+                print(f"Laddade DMU-mappning från {path}: {len(df_clean)} mappningar")
+                return df_clean[['REId', 'DMU', 'Företag']].drop_duplicates()
+            else:
+                print(f"Fil {path} saknar REId eller DMU kolumner: {df.columns.tolist()}")
+        except FileNotFoundError:
+            continue
+        except Exception as e:
+            print(f"Fel vid läsning av {path}: {e}")
+            continue
+    
+    print("Varning: Kunde inte hitta eller läsa DMU-mappning från new_recon.csv")
+    return pd.DataFrame(columns=['REId', 'DMU', 'Företag'])
 
 
 def detect_scenario_updates() -> Dict[str, Optional[str]]:
     """
-    Letar efter scenario-filer från andra sektioner i 'scenario/' mappen.
+    Letar efter scenario-filer från andra sektioner i nya 'scenario/ir/' mappstrukturen.
     
     Returns:
         Dict med information om tillgängliga scenarier:
         {
-            'effektiviseringskrav': 'scenario/effkrav_2024_v1.parquet' eller None,
-            'kapitalbas': 'dea_exports/capex_wacc_0p0475_y2024_tkr.parquet' eller None
+            'effektiviseringskrav': 'scenario/ir/effektiviseringskrav/ir_paverkbara_*.parquet' eller None,
+            'kapitalbas': 'scenario/ir/kapitalkostnader/ir_kapkost_wacc_*.parquet' eller None
         }
     """
     updates = {
@@ -184,29 +222,30 @@ def detect_scenario_updates() -> Dict[str, Optional[str]]:
         'kapitalbas': None
     }
     
-    # Leta efter effektiviseringskrav-filer i scenario/
-    scenario_dir = Path("scenario")
-    if scenario_dir.exists():
-        for file in scenario_dir.glob("effkrav_*.parquet"):
-            updates['effektiviseringskrav'] = str(file)
-            break
+    # Leta efter effektiviseringskrav-filer i scenario/ir/effektiviseringskrav/
+    effkrav_dir = Path("scenario/ir/effektiviseringskrav")
+    if effkrav_dir.exists():
+        effkrav_files = list(effkrav_dir.glob("ir_paverkbara_*.parquet"))
+        if effkrav_files:
+            # Ta senaste fil baserat på modifierad tid
+            latest_effkrav = max(effkrav_files, key=lambda f: f.stat().st_mtime)
+            updates['effektiviseringskrav'] = str(latest_effkrav)
     
-    # Leta efter kapitalbas-filer i dea_exports/ (enligt översikt.py)
-    dea_dir = Path("dea_exports")
-    if dea_dir.exists():
-        # Hitta senaste WACC-scenario från kapitalbas
-        capex_files = list(dea_dir.glob("capex_wacc_*_y2024_tkr.parquet"))
-        if capex_files:
-            # Välj senaste fil baserat på modifierad tid
-            latest_capex = max(capex_files, key=lambda f: f.stat().st_mtime)
-            updates['kapitalbas'] = str(latest_capex)
+    # Leta efter kapitalbas-filer i scenario/ir/kapitalkostnader/
+    kapital_dir = Path("scenario/ir/kapitalkostnader")
+    if kapital_dir.exists():
+        kapital_files = list(kapital_dir.glob("ir_kapkost_wacc_*.parquet"))
+        if kapital_files:
+            # Ta senaste fil baserat på modifierad tid
+            latest_kapital = max(kapital_files, key=lambda f: f.stat().st_mtime)
+            updates['kapitalbas'] = str(latest_kapital)
     
     return updates
 
 
 def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Laddar och integrerar scenario-data från andra sektioner.
+    Laddar och integrerar scenario-data från andra sektioner med ny DMU-baserad merge.
     
     Args:
         scenario_type: 'effektiviseringskrav' eller 'kapitalbas'
@@ -229,58 +268,64 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
                 # Uppdatera där scenario-data finns
                 mask = result_df['Paverkbara_Nya'].notna()
                 result_df.loc[mask, 'Paverkbara_Kostnader'] = result_df.loc[mask, 'Paverkbara_Nya']
-                result_df.loc[mask, 'Källa_Paverkbara'] = 'Scenario'
+                result_df.loc[mask, 'Källa_Paverkbara'] = 'Scenario (effektiviseringskrav)'
                 result_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
                 
                 result_df = result_df.drop('Paverkbara_Nya', axis=1)
+                print(f"Effektiviseringskrav: {mask.sum()} REId uppdaterade")
         
         elif scenario_type == 'kapitalbas':
-            # Läs kapitalbas-export enligt översikt.py format
-            # Kolumner: id_network, CAPEX_2024_wacc_0pXXXX_tkr, DMU, Företag
+            # Ny logik för kapitalbas med DMU-merge
+            required_cols = ['DMU', 'Kapitalkostnad_Ny']
+            missing_cols = [col for col in required_cols if col not in scenario_df.columns]
+            if missing_cols:
+                print(f"Saknade kolumner i kapitalbas-scenario: {missing_cols}")
+                return baseline_df
             
-            # Hitta scenario-kolumn (CAPEX_2024_wacc_*)
-            capex_cols = [col for col in scenario_df.columns 
-                         if col.startswith('CAPEX_2024_wacc_') and col.endswith('_tkr')]
+            # Kontrollera att baseline har DMU-kolumn
+            if 'DMU' not in baseline_df.columns:
+                print("Varning: Baseline saknar DMU-kolumn - kan inte merga kapitalbas-scenario")
+                return baseline_df
             
-            if capex_cols:
-                capex_col = capex_cols[0]  # Ta första matchande kolumn
+            # Förbered merge-data
+            merge_cols = ['DMU', 'Kapitalkostnad_Ny']
+            optional_cols = ['Avskrivningar_Ny', 'Avkastning_Ny', 'scenario_tag']
+            
+            # Lägg till tillgängliga optional kolumner
+            for col in optional_cols:
+                if col in scenario_df.columns:
+                    merge_cols.append(col)
+            
+            merge_df = scenario_df[merge_cols].copy()
+            result_df = baseline_df.merge(merge_df, on='DMU', how='left')
+            
+            # Uppdatera där scenario-data finns
+            mask = result_df['Kapitalkostnad_Ny'].notna()
+            updated_count = mask.sum()
+            
+            if updated_count > 0:
+                # Uppdatera separerade komponenter om de finns
+                if 'Avskrivningar_Ny' in result_df.columns and 'Avskrivningar' in result_df.columns:
+                    result_df.loc[mask, 'Avskrivningar'] = result_df.loc[mask, 'Avskrivningar_Ny']
                 
-                # Ladda DMU-mapping för att konvertera id_network -> REId
-                dmu_mapping = load_dmu_mapping()
-                if not dmu_mapping.empty and 'DMU' in scenario_df.columns:
-                    # Mappa DMU -> REId
-                    scenario_with_reid = scenario_df.merge(
-                        dmu_mapping, 
-                        on='DMU', 
-                        how='left'
-                    )
-                    
-                    if 'REId' in scenario_with_reid.columns:
-                        merge_df = scenario_with_reid[['REId', capex_col]].dropna()
-                        merge_df = merge_df.rename(columns={capex_col: 'Kapitalkostnad_Ny'})
-                        
-                        result_df = result_df.merge(merge_df, on='REId', how='left')
-                        
-                        # Uppdatera där scenario-data finns
-                        mask = result_df['Kapitalkostnad_Ny'].notna()
-                        
-                        # Om vi har separerade komponenter, uppdatera bara avkastning
-                        if 'Avkastning' in result_df.columns and 'Avskrivningar' in result_df.columns:
-                            # Beräkna ny avkastning (total - avskrivning)
-                            result_df.loc[mask, 'Avkastning'] = (
-                                result_df.loc[mask, 'Kapitalkostnad_Ny'] - 
-                                result_df.loc[mask, 'Avskrivningar']
-                            )
-                            # Uppdatera också total
-                            result_df.loc[mask, 'Kapitalkostnad_Total'] = result_df.loc[mask, 'Kapitalkostnad_Ny']
-                        else:
-                            # Enkel uppdatering av total kapitalkostnad
-                            result_df.loc[mask, 'Kapitalkostnad_Total'] = result_df.loc[mask, 'Kapitalkostnad_Ny']
-                        
-                        result_df.loc[mask, 'Källa_Kapitalkostnad'] = f'Scenario ({capex_col})'  
-                        result_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
-                        
-                        result_df = result_df.drop('Kapitalkostnad_Ny', axis=1)
+                if 'Avkastning_Ny' in result_df.columns and 'Avkastning' in result_df.columns:
+                    result_df.loc[mask, 'Avkastning'] = result_df.loc[mask, 'Avkastning_Ny']
+                
+                # Uppdatera total kapitalkostnad
+                result_df.loc[mask, 'Kapitalkostnad_Total'] = result_df.loc[mask, 'Kapitalkostnad_Ny']
+                
+                # Sätt metadata
+                scenario_tag = scenario_df.get('scenario_tag', 'okänd') if 'scenario_tag' in scenario_df.columns else 'kapitalbas'
+                result_df.loc[mask, 'Källa_Kapitalkostnad'] = f'Scenario ({scenario_tag})'
+                result_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
+                
+                print(f"Kapitalbas: {updated_count} DMU uppdaterade med nya kapitalkostnader")
+            else:
+                print("Kapitalbas: Ingen DMU matchade för scenario-uppdatering")
+            
+            # Rensa temporära kolumner
+            temp_cols = ['Kapitalkostnad_Ny', 'Avskrivningar_Ny', 'Avkastning_Ny', 'scenario_tag']
+            result_df = result_df.drop(columns=[col for col in temp_cols if col in result_df.columns])
         
         return result_df
         
@@ -293,6 +338,7 @@ def calculate_intaktsram(df: pd.DataFrame) -> pd.DataFrame:
     """
     Beräknar total intäktsram baserat på komponenter.
     Används när komponenter har uppdaterats via scenarier.
+    Stödjer både uppdelad och total kapitalkostnad.
     """
     result_df = df.copy()
     

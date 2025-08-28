@@ -13,36 +13,62 @@ from effektiviseringskrav.app.data_loader import merge_capex_scenario
 def show_dea_view(df):
     st.header("DEA-modell")
     st.sidebar.subheader("DEA-parametrar")
+  
+    # --- Försök merga CAPEX-scenario från Kapitalbas (DMU) -------------------
+    df, scen_info = merge_capex_scenario(df)
 
-    # --- Försök merga CAPEX-scenario från dea_exports/ (om fil finns) ---
-    df_merged, scen_info = merge_capex_scenario(df)
-    df = df_merged
+    if scen_info.get("found"):
+        capex_col = scen_info.get("capex_col")
+        missing_scenario = df[df[capex_col].isna()]
+        
+        if not missing_scenario.empty:
+            st.warning(f"CAPEX-scenario saknas för {len(missing_scenario)} DMU:")
+            st.dataframe(missing_scenario[['DMU', 'Företag']])
+            
+            # Visa vilka DMU som finns i kapitalbas-exporten
+            with st.expander("Debug: Jämför DMU mellan DEA och Kapitalbas"):
+                # Läs kapitalbas-export direkt
+                from effektiviseringskrav.app.data_loader import _latest_capex_scenario_path
+                latest_path, _ = _latest_capex_scenario_path()
+                if latest_path:
+                    kapbas_df = pd.read_parquet(latest_path)
+                    
+                    dea_dmus = set(df['DMU'].unique())
+                    kapbas_dmus = set(kapbas_df['DMU'].unique())
+                    
+                    st.write(f"DEA har {len(dea_dmus)} DMU")
+                    st.write(f"Kapitalbas-export har {len(kapbas_dmus)} DMU")
+                    st.write(f"Endast i DEA: {sorted(dea_dmus - kapbas_dmus)}")
+                    st.write(f"Endast i Kapitalbas: {sorted(kapbas_dmus - dea_dmus)}")
 
-    # --- Kolumnval ---
-    all_inputs = ["CAPEX", "OPEXp", "TOTEX"]
+    # --- Kolumnval (bas) ----------------------------------------------------
+    base_inputs = ["CAPEX", "OPEXp", "TOTEX"]
+    all_inputs = [c for c in base_inputs if c in df.columns]
     all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
 
-    # Lägg till scenariokolumner (om upptäckta)
-    if scen_info is not None:
-        capex_wacc_col = scen_info["capex_col"]  # t.ex. CAPEX_2024_wacc_0p0475_tkr
-        totex_wacc_col = scen_info["totex_col"]  # t.ex. TOTEX_wacc_0p0475
-        all_inputs.extend([capex_wacc_col, totex_wacc_col])
-        st.sidebar.info(f"Scenario\nupptäckt: WACC = {scen_info['tag'].replace('p','.')}")
+    # --- Scenariokolumner in i listan (endast om hittat) --------------------
+    capex_wacc_col = None
+    totex_wacc_col = None
+    if scen_info.get("found"):
+        capex_wacc_col = scen_info.get("capex_col")
+        totex_wacc_col = scen_info.get("totex_col")
+        # Lägg bara in de kolumner som faktiskt finns i df
+        all_inputs += [c for c in [capex_wacc_col, totex_wacc_col] if c and c in df.columns]
+        st.sidebar.info(f"WACC-scenario hittat: {scen_info['tag'].replace('p','.')}  •  täckning {scen_info['coverage']:.0%}")
     else:
-        capex_wacc_col = None
-        totex_wacc_col = None
+        st.sidebar.caption("Ingen CAPEX-scenariofil hittad under scenario/kapitalbas/exports_to_dea/ ännu.")
 
     st.sidebar.caption(
         "**Inputs**\n"
         "- `CAPEX + OPEXp`: separata poster – kan visa om ineffektivitet ligger i kapital eller drift.\n"
-        "- `TOTEX`: summerar kostnader – totalbedömning, bortser från kostnadsstruktur.\n"
-        "- `…_wacc_…`: scenario exporterat från kapitalbasens Tab 3 (2024, tkr)."
+        "- `TOTEX`: summererar kostnader – totalbedömning, bortser från kostnadsstruktur.\n"
+        "- `…_wacc_…`: scenario exporterat från Kapitalbas (2024, tkr, prisår 2022)."
     )
 
-    # Default: CAPEX + OPEXp (som tidigare)
-    input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=["CAPEX", "OPEXp"])
+    # Default: CAPEX + OPEXp
+    input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs])
 
-    # Exklusivitetsregler (uppdaterad logik för att undvika dubbelräkning)
+    # --- Exklusivitetsregler ------------------------------------------------
     has_capex_std  = "CAPEX" in input_cols
     has_capex_scen = any(col.startswith("CAPEX_2024_wacc_") for col in input_cols)
     has_opexp      = "OPEXp" in input_cols
@@ -52,31 +78,29 @@ def show_dea_view(df):
     capex_any = has_capex_std or has_capex_scen
     totex_any = has_totex_std or has_totex_scen
 
-    # Ogiltiga kombinationer (mer tillåtande UX):
-    # (1) TOTEX i kombination med något annat (CAPEX eller OPEXp)
-    # (2) Både standard- och scenariokolumn inom samma familj samtidigt
-    # (3) Inga inputs valda
-    if (totex_any and (capex_any or has_opexp)) \
-       or ((has_capex_std and has_capex_scen) or (has_totex_std and has_totex_scen)):
-        st.warning("Välj antingen enbart TOTEX, eller valfritt ur CAPEX (standard/scenario) och/eller OPEXp — men inte båda CAPEX-varianterna samtidigt, och kombinera aldrig TOTEX med andra.")
+    # (1) TOTEX får inte kombineras med OPEXp/CAPEX eller scenario
+    if (totex_any and (capex_any or has_opexp)):
+        st.error("Välj antingen bara TOTEX (baseline/scenario) ELLER CAPEX (baseline/scenario) och/eller OPEXp.")
         st.stop()
 
-    # Om scenario-input valts, säkerställ full täckning (inga NaN i valda scenariokolumner)
-    if scen_info is not None and (
-        (capex_wacc_col is not None and capex_wacc_col in input_cols) or
-        (totex_wacc_col is not None and totex_wacc_col in input_cols)
-        ):
-        missing_cols = []
-        for col in input_cols:
-            if col in df.columns and df[col].isna().any():
-                missing_cols.append(col)
-        if missing_cols:
-            st.error(
-                "Scenario-kolumn saknar värden för alla DMU och kan inte användas:\n"
-                f"- {', '.join(missing_cols)}\n\n"
-                "Kontrollera exporten från kapitalbasen (nät utan DMU-match exkluderas)."
-            )
-            st.stop()
+    # (2) Samma familj: baseline & scenario samtidigt är inte tillåtet
+    if (has_capex_std and has_capex_scen) or (has_totex_std and has_totex_scen):
+        st.error("Välj antingen baseline- ELLER scenario-variant inom samma familj (CAPEX/TOTEX).")
+        st.stop()
+
+    # (3) Om scenario-kolumn valts, kontrollera att kolumnen är komplett (inga NaN)
+    if scen_info.get("found"):
+        chosen_scen_cols = [c for c in [capex_wacc_col, totex_wacc_col] if c and c in input_cols]
+        if chosen_scen_cols:
+            missing = [c for c in chosen_scen_cols if df[c].isna().any()]
+            if missing:
+                st.error(
+                    "Scenario-kolumn saknar värden för alla DMU och kan inte användas:\n"
+                    f"- {', '.join(missing)}\n\n"
+                    "Kontrollera exporten från Kapitalbas (nät utan DMU-match exkluderas)."
+                )
+                st.stop()
+
 
     output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=all_outputs)
     use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers före beräkning", value=True)

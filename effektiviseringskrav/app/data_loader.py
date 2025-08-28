@@ -6,7 +6,9 @@ from __future__ import annotations
 from pathlib import Path   
 import re
 import pandas as pd
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Dict
+
+SCENARIO_DIR_DEA = Path("scenario/kapitalbas/exports_to_dea")
 
 
 # ======= Basinläsning av DEA-data (Excel) ====================================
@@ -38,116 +40,79 @@ def load_data(filepath: str) -> pd.DataFrame:
 # Scenariomerge: aggregera per DMU innan merge för att undvika 1→N-dubbletter
 # ------------------------------------------------------------
 
-def _find_latest_capex_export(folder: str = "dea_exports") -> Optional[Path]:
-    """Hitta senaste capex-scenariofil (parquet) i mappen.
-    Mönster: capex_wacc_0pXXXX_y2024_tkr.parquet
+def _latest_capex_scenario_path(dir_path: Path = SCENARIO_DIR_DEA) -> Tuple[Path | None, str | None]:
     """
-    p = Path(folder)
-    if not p.exists():
-        return None
-    files = list(p.glob("capex_wacc_0p*_y2024_tkr.parquet"))
-    if not files:
-        return None
-    return max(files, key=lambda fp: fp.stat().st_mtime)
-
-def merge_capex_scenario(
-    df_base: pd.DataFrame,
-    export_dir: str = "dea_exports",
-    recon_path: str = "effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv",
-) -> Tuple[pd.DataFrame, Optional[Dict]]:
+    Hitta senaste Parquet som följer vårt namnmönster:
+    capex_wacc_0p<tag>_y2024_dmu.parquet  (ex: capex_wacc_0p0453_y2024_dmu.parquet)
+    Returnerar (path, tag) eller (None, None) om inget hittas.
     """
-    Slår samman CAPEX-scenario (2024, tkr) till DEA-datat via **id_network → DMU**-mappning.
-    - Letar upp senaste scenariofil i `export_dir` (capex_wacc_0p*_y2024_tkr.parquet)
-    - Om scenariot saknar DMU, mappa via `recon_path` (id_network → DMU)
-    - **Aggregera per DMU** (summa över nät) innan merge
-    - Merge: one-to-one på DMU
-    - Härled `TOTEX_wacc_<tag>` = `OPEXp` + aggregerad `CAPEX_2024_wacc_<tag>_tkr`
-    """
-    base = df_base.copy()
+    if not dir_path.exists():
+        return None, None
 
-    # Grundkrav
-    for col in ("DMU", "OPEXp"):
-        if col not in base.columns:
-            raise KeyError(f"merge_capex_scenario: Saknar obligatorisk kolumn '{col}' i bas-DF.")
-    if not base["DMU"].is_unique:
-        raise ValueError("merge_capex_scenario: Bas-DF har inte unika DMU – kontrollera indatan.")
+    cand = sorted(
+        dir_path.glob("capex_wacc_0p*_y2024_dmu.parquet"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not cand:
+        return None, None
 
-    latest = _find_latest_capex_export(export_dir)
-    if latest is None:
-        return base, None
-
-    # Tagg ur filnamn
-    m = re.search(r"capex_wacc_(0p[0-9]+)_y2024_tkr\.parquet$", latest.name)
+    latest = cand[0]
+    m = re.search(r"capex_wacc_(0p[0-9]+)_y2024_dmu\.parquet$", latest.name)
     tag = m.group(1) if m else None
+    return latest, tag
+
+def merge_capex_scenario(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
+    """
+    Vänstermerga in senaste CAPEX-scenariot (DMU-nivå) i DEA-basen.
+    - Beräknar även TOTEX_wacc_<tag> = OPEXp + CAPEX_2024_wacc_… (om OPEXp finns).
+    - Returnerar (df_merged, scen_info).
+    - Om inget scenario hittas returneras input-df och scen_info['found']=False.
+    Förväntar att df har kolumner: ['DMU','Företag','OPEXp','CAPEX'] (TOTEX byggs i show_dea).
+    """
+    scen_info: Dict = {"found": False}
+
+    latest, tag = _latest_capex_scenario_path()
+    if latest is None:
+        return df, scen_info  # inget scenario ännu
 
     scen = pd.read_parquet(latest)
+    # Hitta scenariokolumnen dynamiskt: CAPEX_2024_wacc_0p<tag>_tkr
+    scen_cols = [c for c in scen.columns if c.startswith("CAPEX_2024_wacc_0p") and c.endswith("_tkr")]
+    if not scen_cols:
+        # Bakåtkomp eller fel export – låt bli att förstöra basen
+        scen_info.update({"found": False, "source_file": str(latest), "reason": "no CAPEX_2024_wacc_* column"})
+        return df, scen_info
 
-    # Hitta scenariokolumn (CAPEX_2024_wacc_<tag>_tkr)
-    capex_cols = [c for c in scen.columns if c.startswith("CAPEX_2024_wacc_") and c.endswith("_tkr")]
-    if not capex_cols:
-        print(f"[merge_capex_scenario] Ingen scenariokolumn hittades i {latest}")
-        return base, None
-    # Försök välj den som matchar taggen
-    if tag:
-        capex_col = next((c for c in capex_cols if c == f"CAPEX_2024_wacc_{tag}_tkr"), None)
-    else:
-        capex_col = None
-    if capex_col is None:
-        capex_col = sorted(capex_cols)[-1]
-        m2 = re.match(r"CAPEX_2024_wacc_(0p[0-9]+)_tkr$", capex_col)
-        tag = m2.group(1) if m2 else (tag or "unknown")
+    capex_col = scen_cols[0]
+    if tag is None:
+        # härled tag från kolumnnamnet
+        m = re.search(r"CAPEX_2024_wacc_(0p[0-9]+)_tkr", capex_col)
+        tag = m.group(1) if m else "unknown"
 
-    # Säkerställ DMU i scenariot – mappa via recon vid behov
-    scen = scen.copy()
-    if "DMU" not in scen.columns:
-        rec = pd.read_csv(recon_path)
-        # Normalisera kolumnnamn
-        lower = {c.lower(): c for c in rec.columns}
-        idcol = lower.get("id_network") or next((c for c in rec.columns if "id_net" in c.lower() or "network" in c.lower()), None)
-        dmucol = lower.get("dmu") or next((c for c in rec.columns if c.lower().startswith("dmu")), None)
-        if not idcol or not dmucol:
-            raise KeyError("Reconciliation-CSV saknar 'id_network' eller 'DMU'.")
-        rec = rec.rename(columns={idcol: "id_network", dmucol: "DMU"})
-        rec = rec[["id_network", "DMU"]].dropna().drop_duplicates()
-        # join per nät
-        if "id_network" not in scen.columns:
-            raise KeyError("Scenariofilen saknar 'id_network' – kan inte mappa till DMU.")
-        scen = scen.merge(rec, on="id_network", how="left")
+    # Säkerställ nycklar
+    required = {"DMU", "Företag", capex_col}
+    if not required.issubset(set(scen.columns)):
+        scen_info.update({"found": False, "source_file": str(latest), "reason": f"missing columns in scenario: {required - set(scen.columns)}"})
+        return df, scen_info
 
-    # --- Aggregera till DMU ---
-    agg_dict = {capex_col: "sum"}
-    if "CAPEX_2024_tkr" in scen.columns:
-        agg_dict["CAPEX_2024_tkr"] = "sum"
+    # Vänsterjoin på DMU
+    merged = df.merge(scen[["DMU", capex_col]], on="DMU", how="left", suffixes=("", "_scen"))
 
-    scen_agg = (
-        scen.dropna(subset=["DMU"])  # kasta rader utan DMU
-            .groupby("DMU", as_index=False)
-            .agg(agg_dict)
-    )
-
-    # --- Merge tillbaka one-to-one ---
-    rows_before = len(base)
-    try:
-        merged = base.merge(scen_agg, on="DMU", how="left", validate="one_to_one")
-    except Exception:
-        merged = base.merge(scen_agg, on="DMU", how="left")
-
-    if len(merged) != rows_before:
-        print(f"[merge_capex_scenario] VARNING: Radantal ändrades {rows_before}→{len(merged)} – detta ska inte ske efter DMU-agg.")
-
-    # --- Härled TOTEX-scenario ---
+    # Bygg TOTEX_wacc_<tag> om OPEXp finns
     totex_col = f"TOTEX_wacc_{tag}"
-    merged[totex_col] = pd.to_numeric(merged.get("OPEXp"), errors="coerce") + pd.to_numeric(merged.get(capex_col), errors="coerce")
+    if "OPEXp" in merged.columns:
+        merged[totex_col] = pd.to_numeric(merged["OPEXp"], errors="coerce") + pd.to_numeric(merged[capex_col], errors="coerce")
 
-    # Täckningsinfo
-    coverage = float(merged[capex_col].notna().mean()) if capex_col in merged.columns else 0.0
+    # Täckningsgrad över DMU
+    coverage = float(merged[capex_col].notna().mean())
 
-    scen_info = {
+    scen_info.update({
+        "found": True,
+        "tag": tag,
         "capex_col": capex_col,
-        "totex_col": totex_col,
-        "tag": tag or "unknown",
+        "totex_col": totex_col if totex_col in merged.columns else None,
         "source_file": str(latest),
         "coverage": coverage,
-    }
-
+    })
     return merged, scen_info
