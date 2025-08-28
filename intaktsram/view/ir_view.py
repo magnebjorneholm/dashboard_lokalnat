@@ -159,6 +159,7 @@ def reset_all_components():
         st.rerun()
 
 
+# Uppdatera get_working_dataframe() i ir_view.py för att hantera DMU-baserade modifikationer
 def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
     """Hämtar aktuell arbetsdataframe (baseline eller scenario)."""
     if not st.session_state.current_scenario_name or 'scenario_data' not in st.session_state:
@@ -169,38 +170,63 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
     
     # Applicera scenario-modifikationer
     modifications = st.session_state.scenario_data.get('modifications', {})
+    print(f"DEBUG: get_working_dataframe - {len(modifications)} komponenter med modifikationer")
     
     for component, mod_data in modifications.items():
-        if component == 'paverkbara' and 'values' in mod_data:
-            # Uppdatera påverkbara kostnader
+        if 'values' not in mod_data:
+            continue
+            
+        print(f"DEBUG: Applicerar {component} modifikationer: {len(mod_data['values'])} enheter")
+        
+        if component == 'paverkbara':
+            # REId-baserade modifikationer (som tidigare)
             for reid, new_value in mod_data['values'].items():
                 mask = working_df['REId'] == reid
                 working_df.loc[mask, 'Paverkbara_Kostnader'] = new_value
                 working_df.loc[mask, 'Källa_Paverkbara'] = f"Scenario ({mod_data.get('source', 'manual')})"
                 working_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
         
-        elif component == 'kapitalkostnad' and 'values' in mod_data:
-            # Uppdatera kapitalkostnader - både avkastning och total
-            for reid, new_values in mod_data['values'].items():
-                mask = working_df['REId'] == reid
-                
-                # Om vi har separata avkastning/avskrivning-värden
-                if isinstance(new_values, dict):
-                    if 'avkastning' in new_values:
-                        working_df.loc[mask, 'Avkastning'] = new_values['avkastning']
-                    if 'avskrivningar' in new_values:
-                        working_df.loc[mask, 'Avskrivningar'] = new_values['avskrivningar']
-                    # Beräkna total om båda finns
-                    if 'Avkastning' in working_df.columns and 'Avskrivningar' in working_df.columns:
-                        working_df.loc[mask, 'Kapitalkostnad_Total'] = (
-                            working_df.loc[mask, 'Avskrivningar'] + working_df.loc[mask, 'Avkastning']
-                        )
+        elif component == 'kapitalkostnad':
+            # Kolla om det är DMU-baserat eller REId-baserat
+            merge_on = mod_data.get('merge_on', 'REId')
+            print(f"DEBUG: Kapitalkostnad merge_on: {merge_on}")
+            
+            for entity_key, new_values in mod_data['values'].items():
+                if merge_on == 'DMU':
+                    # DMU-baserade modifikationer från kapitalbas
+                    mask = working_df['DMU'] == float(entity_key)
+                    print(f"DEBUG: DMU {entity_key}, mask träffar: {mask.sum()} rader")
                 else:
-                    # Enkel skalär för total kapitalkostnad
-                    working_df.loc[mask, 'Kapitalkostnad_Total'] = new_values
+                    # REId-baserade modifikationer (manuella)
+                    mask = working_df['REId'] == entity_key
+                    print(f"DEBUG: REId {entity_key}, mask träffar: {mask.sum()} rader")
                 
-                working_df.loc[mask, 'Källa_Kapitalkostnad'] = f"Scenario ({mod_data.get('source', 'manual')})"
-                working_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
+                if mask.any():
+                    # Uppdatera värden
+                    if isinstance(new_values, dict):
+                        # Detaljerade komponenter
+                        if 'avskrivningar' in new_values:
+                            working_df.loc[mask, 'Avskrivningar'] = new_values['avskrivningar']
+                        if 'avkastning' in new_values:
+                            working_df.loc[mask, 'Avkastning'] = new_values['avkastning']
+                        if 'total' in new_values:
+                            working_df.loc[mask, 'Kapitalkostnad_Total'] = new_values['total']
+                        # Om vi har både avskrivning och avkastning, beräkna total
+                        elif 'avkastning' in new_values and 'avskrivningar' in new_values:
+                            working_df.loc[mask, 'Kapitalkostnad_Total'] = (
+                                new_values['avskrivningar'] + new_values['avkastning']
+                            )
+                    else:
+                        # Enkel skalär för total kapitalkostnad
+                        working_df.loc[mask, 'Kapitalkostnad_Total'] = new_values
+                    
+                    # Uppdatera metadata
+                    working_df.loc[mask, 'Källa_Kapitalkostnad'] = f"Scenario ({mod_data.get('source', 'manual')})"
+                    working_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
+                    
+                    print(f"DEBUG: Uppdaterade kapitalkostnad för {mask.sum()} rader")
+                else:
+                    print(f"DEBUG: Ingen match för {entity_key} på {merge_on}")
     
     # Omberäkna total intäktsram
     working_df = calculate_intaktsram(working_df)
@@ -347,6 +373,14 @@ def show_component_controls(entity_data: pd.Series):
     # Detect scenario updates från andra sektioner  
     scenario_updates = detect_scenario_updates()
     
+    # Debug: visa vad som hittades
+    st.sidebar.write("**Debug - Tillgängliga scenarier:**")
+    for key, value in scenario_updates.items():
+        status = "✅ Tillgänglig" if value else "❌ Saknas"
+        st.sidebar.caption(f"{key}: {status}")
+        if value:
+            st.sidebar.caption(f"Fil: {Path(value).name}")
+    
     # Påverkbara kostnader
     st.sidebar.subheader("💰 Påverkbara kostnader")
     if scenario_updates['effektiviseringskrav']:
@@ -364,10 +398,12 @@ def show_component_controls(entity_data: pd.Series):
         update_component_manual('paverkbara', entity_data['REId'], new_paverkbara)
     
     # Kapitalkostnad  
-    st.sidebar.subheader("🏗️ Kapitalkostnad")
+    st.sidebar.subheader("🗂️ Kapitalkostnad")
     if scenario_updates['kapitalbas']:
         if st.sidebar.button("🔥 Hämta från Kapitalbas"):
             update_component_from_scenario('kapitalkostnad', 'kapitalbas', scenario_updates['kapitalbas'])
+    else:
+        st.sidebar.info("Ingen kapitalbas-export hittades")
     
     # Manuell uppdatering - stöd för separerade komponenter
     has_detailed_capital = all(col in entity_data.index for col in ['Avskrivningar', 'Avkastning'])
@@ -412,22 +448,86 @@ def show_component_controls(entity_data: pd.Series):
             reset_component('kapitalkostnad')
 
 
+# Uppdatera update_component_from_scenario() i ir_view.py
 def update_component_from_scenario(component: str, source: str, scenario_file: str):
     """Uppdaterar komponent från scenario-fil."""
+    print(f"DEBUG: update_component_from_scenario kallad - component: {component}, source: {source}, file: {scenario_file}")
+    
     try:
-        # Ladda och applicera scenario-data
-        working_df = st.session_state.scenario_data['baseline'].copy()
-        updated_df = load_scenario_data(source, scenario_file, working_df)
+        # Ladda scenario-data från parquet-fil
+        print(f"DEBUG: Försöker läsa parquet-fil: {scenario_file}")
+        scenario_df = pd.read_parquet(scenario_file)
+        print(f"DEBUG: Parquet-fil laddad. Shape: {scenario_df.shape}")
+        print(f"DEBUG: Kolumner i scenario-fil: {scenario_df.columns.tolist()}")
         
-        # Extrahera ändringar för detta scenario
-        reid = st.session_state.get('selected_reid')  # Skulle behöva uppdateras för att fungera
-        if reid:
-            # Här implementerar vi den faktiska uppdateringen
-            st.sidebar.success(f"{component.title()} uppdaterad från {source}")
+        # Kontrollera att vi har aktivt scenario
+        if not st.session_state.current_scenario_name:
+            st.sidebar.error("Inget aktivt scenario - skapa ett scenario först")
+            return
         
+        # Förbered modifikationer baserat på komponent-typ
+        if component == 'kapitalkostnad' and source == 'kapitalbas':
+            # Hantera kapitalkostnad från översikt.py export
+            required_cols = ['DMU', 'Kapitalkostnad_Ny']
+            missing_cols = [col for col in required_cols if col not in scenario_df.columns]
+            
+            if missing_cols:
+                st.sidebar.error(f"Scenario-fil saknar kolumner: {missing_cols}")
+                print(f"DEBUG: Saknade kolumner: {missing_cols}")
+                return
+            
+            # Skapa modifikationer per DMU (inte REId)
+            modifications = {}
+            for _, row in scenario_df.iterrows():
+                dmu = str(row['DMU'])  # Konvertera till string som key
+                modification = {
+                    'total': row['Kapitalkostnad_Ny']
+                }
+                
+                # Lägg till separerade komponenter om de finns
+                if 'Avskrivningar_Ny' in row and pd.notna(row['Avskrivningar_Ny']):
+                    modification['avskrivningar'] = row['Avskrivningar_Ny']
+                if 'Avkastning_Ny' in row and pd.notna(row['Avkastning_Ny']):
+                    modification['avkastning'] = row['Avkastning_Ny']
+                
+                modifications[dmu] = modification
+            
+            print(f"DEBUG: Skapade {len(modifications)} kapital-modifikationer")
+            
+            # Applicera på session state - använd DMU som key
+            if 'modifications' not in st.session_state.scenario_data:
+                st.session_state.scenario_data['modifications'] = {}
+            
+            st.session_state.scenario_data['modifications'][component] = {
+                'values': modifications,
+                'source': 'kapitalbas',
+                'merge_on': 'DMU'  # Indikera att vi mergar på DMU, inte REId
+            }
+            
+            # Uppdatera komponent-källor
+            st.session_state.scenario_data['component_sources'][component] = 'kapitalbas'
+            
+            st.sidebar.success(f"Kapitalkostnad uppdaterad från kapitalbas ({len(modifications)} DMU)")
+            print(f"DEBUG: Session state uppdaterat med {len(modifications)} modifikationer")
+            
+        elif component == 'paverkbara' and source == 'effektiviseringskrav':
+            # Placeholder för DEA-integration (implementeras senare)
+            st.sidebar.info("DEA-integration kommer snart")
+            return
+        
+        else:
+            st.sidebar.error(f"Okänd kombination: {component} + {source}")
+            return
+        
+        # Tvinga uppdatering av UI
         st.rerun()
+        
     except Exception as e:
-        st.sidebar.error(f"Fel vid uppdatering: {e}")
+        error_msg = f"Fel vid uppdatering från {source}: {str(e)}"
+        st.sidebar.error(error_msg)
+        print(f"DEBUG: {error_msg}")
+        import traceback
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
 
 
 def update_component_manual(component: str, reid: str, new_value: float):

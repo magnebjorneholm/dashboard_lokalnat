@@ -211,15 +211,16 @@ def load_dmu_mapping(filepath: str = "new_recon.csv") -> pd.DataFrame:
     return pd.DataFrame(columns=['REId', 'DMU', 'Företag'])
 
 
+# Uppdatera detect_scenario_updates() i data_loader.py
 def detect_scenario_updates() -> Dict[str, Optional[str]]:
     """
-    Letar efter scenario-filer från andra sektioner i nya 'scenario/ir/' mappstrukturen.
+    Letar efter scenario-filer från andra sektioner i nya mappstrukturen.
     
     Returns:
         Dict med information om tillgängliga scenarier:
         {
-            'effektiviseringskrav': 'scenario/ir/effektiviseringskrav/ir_paverkbara_*.parquet' eller None,
-            'kapitalbas': 'scenario/ir/kapitalkostnader/ir_kapkost_wacc_*.parquet' eller None
+            'effektiviseringskrav': 'scenario/effektiviseringskrav/exports_to_ir/ir_paverkbara_*.parquet' eller None,
+            'kapitalbas': 'scenario/kapitalbas/exports_to_ir/ir_kapkost_wacc_*.parquet' eller None
         }
     """
     updates = {
@@ -227,24 +228,38 @@ def detect_scenario_updates() -> Dict[str, Optional[str]]:
         'kapitalbas': None
     }
     
-    # Leta efter effektiviseringskrav-filer i scenario/ir/effektiviseringskrav/
-    effkrav_dir = Path("scenario/ir/effektiviseringskrav")
+    # Debug: visa vilka kataloger som kollas
+    print("DEBUG: Letar efter scenario-filer...")
+
+    # Leta efter effektiviseringskrav-filer i scenario/effektiviseringskrav/exports_to_ir/
+    effkrav_dir = Path("scenario/effektiviseringskrav/exports_to_ir/")
+    print(f"DEBUG: Kollar {effkrav_dir}, exists: {effkrav_dir.exists()}")
     if effkrav_dir.exists():
         effkrav_files = list(effkrav_dir.glob("ir_paverkbara_*.parquet"))
+        print(f"DEBUG: Hittade {len(effkrav_files)} effektiviseringskrav-filer")
         if effkrav_files:
             # Ta senaste fil baserat på modifierad tid
             latest_effkrav = max(effkrav_files, key=lambda f: f.stat().st_mtime)
             updates['effektiviseringskrav'] = str(latest_effkrav)
-    
-    # Leta efter kapitalbas-filer i scenario/ir/kapitalkostnader/
-    kapital_dir = Path("scenario/ir/kapitalkostnader")
+            print(f"DEBUG: Senaste effektiviseringskrav-fil: {latest_effkrav}")
+
+    # Leta efter kapitalbas-filer i scenario/kapitalbas/exports_to_ir/
+    kapital_dir = Path("scenario/kapitalbas/exports_to_ir/")
+    print(f"DEBUG: Kollar {kapital_dir}, exists: {kapital_dir.exists()}")
     if kapital_dir.exists():
         kapital_files = list(kapital_dir.glob("ir_kapkost_wacc_*.parquet"))
+        print(f"DEBUG: Hittade {len(kapital_files)} kapitalkostnad-filer")
+        for f in kapital_files:
+            print(f"DEBUG: Kapitalkostnad-fil: {f}")
         if kapital_files:
             # Ta senaste fil baserat på modifierad tid
             latest_kapital = max(kapital_files, key=lambda f: f.stat().st_mtime)
             updates['kapitalbas'] = str(latest_kapital)
+            print(f"DEBUG: Senaste kapitalkostnad-fil: {latest_kapital}")
+    else:
+        print(f"DEBUG: Kapitalkostnad-katalog finns inte: {kapital_dir}")
     
+    print(f"DEBUG: Slutresultat - updates: {updates}")
     return updates
 
 
