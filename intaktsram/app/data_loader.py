@@ -280,19 +280,33 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
         result_df = baseline_df.copy()
         
         if scenario_type == 'effektiviseringskrav':
-            # Förvänta kolumner som REId/DMU och nya påverkbara kostnader
-            if 'REId' in scenario_df.columns and 'Paverkbara_Nya' in scenario_df.columns:
-                merge_df = scenario_df[['REId', 'Paverkbara_Nya']]
-                result_df = result_df.merge(merge_df, on='REId', how='left')
-                
-                # Uppdatera där scenario-data finns
-                mask = result_df['Paverkbara_Nya'].notna()
-                result_df.loc[mask, 'Paverkbara_Kostnader'] = result_df.loc[mask, 'Paverkbara_Nya']
+            # Stöd både äldre och nya kolumnnamn
+            # Ny export från DEA: 'Paverkbara_Target' (periodsumma 2024–2027)
+            # Äldre fallback: 'Paverkbara_Nya'
+            candidate_cols = [c for c in ['Paverkbara_Target', 'Paverkbara_Nya'] if c in scenario_df.columns]
+            if not candidate_cols:
+                print("Effektiviseringskrav: Ingen av kolumnerna 'Paverkbara_Target'/'Paverkbara_Nya' hittades")
+                return baseline_df
+
+            value_col = candidate_cols[0]
+
+            # Merge-nyckel: använd REId (exporten innehåller både DMU och REId)
+            if 'REId' not in scenario_df.columns:
+                print("Effektiviseringskrav: Scenario saknar REId -> kan inte merga")
+                return baseline_df
+
+            merge_df = scenario_df[['REId', value_col]].rename(columns={value_col: 'Paverkbara_Scenario'})
+            result_df = result_df.merge(merge_df, on='REId', how='left')
+
+            mask = result_df['Paverkbara_Scenario'].notna()
+            if mask.any():
+                result_df.loc[mask, 'Paverkbara_Kostnader'] = result_df.loc[mask, 'Paverkbara_Scenario']
                 result_df.loc[mask, 'Källa_Paverkbara'] = 'Scenario (effektiviseringskrav)'
                 result_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
-                
-                result_df = result_df.drop('Paverkbara_Nya', axis=1)
-                print(f"Effektiviseringskrav: {mask.sum()} REId uppdaterade")
+                print(f"Effektiviseringskrav: {mask.sum()} REId uppdaterade från {value_col}")
+
+            result_df = result_df.drop(columns=['Paverkbara_Scenario'])
+
         
         elif scenario_type == 'kapitalbas':
             # Ny logik för kapitalbas med DMU-merge

@@ -511,9 +511,42 @@ def update_component_from_scenario(component: str, source: str, scenario_file: s
             print(f"DEBUG: Session state uppdaterat med {len(modifications)} modifikationer")
             
         elif component == 'paverkbara' and source == 'effektiviseringskrav':
-            # Placeholder för DEA-integration (implementeras senare)
-            st.sidebar.info("DEA-integration kommer snart")
-            return
+            # Läs DEA-export: förväntar 'REId' och 'Paverkbara_Target' (eller fallback)
+            required_id = 'REId'
+            if required_id not in scenario_df.columns:
+                st.sidebar.error("Scenario-fil saknar REId")
+                return
+
+            candidate_cols = [c for c in ['Paverkbara_Target', 'Paverkbara_Nya'] if c in scenario_df.columns]
+            if not candidate_cols:
+                st.sidebar.error("Scenario-fil saknar kolumnerna 'Paverkbara_Target'/'Paverkbara_Nya'")
+                return
+            value_col = candidate_cols[0]
+
+            # Bygg modifikationer per REId (IR arbetar per REId i vyn)
+            modifications = {}
+            for _, row in scenario_df[[required_id, value_col]].dropna().iterrows():
+                reid = row[required_id]
+                new_val = float(row[value_col])
+                modifications[str(reid)] = new_val
+
+            if not modifications:
+                st.sidebar.warning("Ingen rad att applicera (saknar värden i exporten)")
+                return
+
+            # Spara i session state
+            if 'modifications' not in st.session_state.scenario_data:
+                st.session_state.scenario_data['modifications'] = {}
+
+            st.session_state.scenario_data['modifications'][component] = {
+                'values': modifications,
+                'source': 'effektiviseringskrav'
+            }
+            st.session_state.scenario_data['component_sources']['paverkbara'] = 'effektiviseringskrav'
+
+            st.sidebar.success(f"Påverkbara uppdaterade från Effektiviseringskrav ({len(modifications)} REId)")
+            st.rerun()
+
         
         else:
             st.sidebar.error(f"Okänd kombination: {component} + {source}")
