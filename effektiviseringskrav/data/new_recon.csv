@@ -1,0 +1,160 @@
+id_network,REId,Företag,DMU,in_reference,in_data_modeller
+1,REL00001,Ale El ek. för.,1,True,True
+3,REL00003,Almnäs Bruk AB,2,True,True
+4,REL00004,Alvesta Elnät AB,3,True,True
+5,REL00005,Arvika Teknik AB,4,True,True
+7,REL00007,Bengtsfors Energi Nät AB,5,True,True
+8,REL00008,Bergs Tingslags Elektriska AB,6,True,True
+10,REL00010,Bjäre Kraft ek. för.,7,True,True
+11,REL00011,Bjärke Energi ek. för.,8,True,True
+12,REL00012,Upplands Energi ek. för.,9,True,True
+14,REL00014,Blåsjön Nät AB,10,True,True
+15,REL00015,Bodens Energi Nät AB,11,True,True
+16,REL00016,Boo Energi ek. för.,12,True,True
+17,REL00017,Borgholm Energi Elnät AB,13,True,True
+18,REL00018,AB Borlänge Energi Elnät,14,True,True
+19,REL00019,Borås Elnät AB,15,True,True
+21,REL00021,Bromölla Energi och Vatten AB,16,True,True
+23,REL00023,C4 Elnät AB,17,True,True
+24,REL00024,Carlfors Bruk E Björklund & Co KB,18,True,True
+25,REL00025,Degerfors Energi AB,19,True,True
+29,REL00029,Övertorneå Energi AB,20,True,True
+30,REL00030,Eksjö Elnät AB,21,True,True
+31,REL00031,Emmaboda Elnät AB,22,True,True
+33,REL00033,Halmstads Energi och Miljö Nät AB,23,True,True
+35,REL00035,Eskilstuna Energi och Miljö Elnät AB,24,True,True
+37,REL00037,Falbygdens Energi Nät AB,25,True,True
+38,REL00038,Falkenberg Energi AB,26,True,True
+40,REL00040,Filipstad Energinät AB,27,True,True
+43,REL00043,Gislaved Energi Elnät AB,28,True,True
+49,REL00049,Grästorps Energi ek. för.,29,True,True
+62,REL00062,Göteborg Energi Nät AB,30,True,True
+64,REL00064,Habo Kraft AB,31,True,True
+67,REL00067,Hallstaviks Elverk ek. för.,32,True,True
+72,REL00072,Herrljunga Elektriska AB,33,True,True
+74,REL00074,Hjärtums Elförening ek. för.,34,True,True
+75,REL00075,Hofors Elverk AB,35,True,True
+77,REL00077,Härnösand Elnät AB,36,True,True
+78,REL00078,Härryda Energi AB,37,True,True
+80,REL00080,Höganäs Energi AB,38,True,True
+83,REL00083,Jukkasjärvi Sockens Belysningsförening u.p.a.,39,True,True
+85,REL00085,Jämtkraft Elnät AB,40,True,True
+86,REL00086,Jönköping Energinät AB,41,True,True
+87,REL00087,Kalmar Energi Elnät AB,42,True,True
+90,REL00090,Karlskoga Elnät AB,43,True,True
+91,REL00091,Affärsverken Elnät i Karlskrona AB,44,True,True
+92,REL00092,Karlstads El- och Stadsnät AB,45,True,True
+93,REL00093,Tekniska verken Katrineholm Nät AB,46,True,True
+98,REL00098,Kristinehamns Elnät AB,47,True,True
+100,REL00100,Kungälv Energi AB,48,True,True
+103,REL00103,Landskrona Energi AB,49,True,True
+106,REL00106,Lerum Energi AB,50,True,True
+111,REL00111,Tekniska verken Linköping Nät AB,51,True,True
+112,REL00112,Ljungby Energinät AB,52,True,True
+113,REL00113,Ljusdal Elnät AB,53,True,True
+118,REL00118,Luleå Energi Elnät AB,54,True,True
+121,REL00121,LEVA i Lysekil AB,55,True,True
+123,REL00123,Malung-Sälens Elnät AB,56,True,True
+126,REL00126,Mellersta Skånes Kraft ek. för.,57,True,True
+127,REL00127,Mjölby Kraftnät AB,58,True,True
+128,REL00128,Mölndal Energi Nät AB,59,True,True
+130,REL00130,Nacka Energi AB,60,True,True
+133,REL00133,Norrtälje Energi AB,61,True,True
+135,REL00135,Nossebroortens Energi ek. för.,62,True,True
+137,REL00137,Nybro Elnät AB,63,True,True
+139,REL00139,Näckåns Elnät AB,64,True,True
+141,REL00141,Nässjö Affärsverk Elnät AB,65,True,True
+143,REL00143,Olofströms Kraft Nät AB,66,True,True
+144,REL00144,Olseröds Elektriska Distributionsförening u.p.a.,67,True,True
+146,REL00146,Oskarshamn Energi Nät AB,68,True,True
+147,REL00147,Oxelö Energi AB,69,True,True
+148,REL00148,Partille Energi Nät AB,70,True,True
+149,REL00149,AB PiteEnergi,71,True,True
+152,REL00152,Ronneby Miljö och Teknik AB,72,True,True
+156,REL00156,Rödeby Elverk ek. för.,73,True,True
+157,REL00157,Sala-Heby Energi Elnät AB,74,True,True
+158,REL00158,Sandhult-Sandared Elektriska ek. för.,75,True,True
+160,REL00160,SEVAB Nät AB,76,True,True
+163,REL00163,Sjogerstads Elektriska Distributionsförening ek. för.,77,True,True
+164,REL00164,Sjöbo Elnät AB,78,True,True
+167,REL00167,Skurups Elverk AB,79,True,True
+168,REL00168,Skyllbergs Bruks AB,80,True,True
+169,REL00169,Skånska Energi Nät AB,81,True,True
+170,REL00170,Skövde Energi Elnät AB,82,True,True
+171,REL00171,Smedjebacken Energi Nät AB,83,True,True
+173,REL00173,Sollentuna Energi och Miljö AB,84,True,True
+175,REL00175,Staffanstorps Energi AB,85,True,True
+177,REL00177,Sturefors Eldistribution AB,86,True,True
+178,REL00178,Sundsvall Elnät AB,87,True,True
+182,REL00182,Njudung Energi Sävsjö AB,88,True,True
+183,REL00183,Söderhamn Elnät AB,89,True,True
+184,REL00184,Södra Hallands Kraft ek. för.,90,True,True
+185,REL00185,Sölvesborgs Energi & Vatten AB,91,True,True
+186,REL00186,Telge Nät AB,92,True,True
+187,REL00187,Tibro Elnät AB,93,True,True
+191,REL00191,Trollhättan Energi Elnät AB,94,True,True
+193,REL00193,Töre Energi ek. för.,95,True,True
+195,REL00195,Uddevalla Energi Elnät AB,96,True,True
+201,REL00201,Vallebygdens Energi ek. för.,97,True,True
+203,REL00203,Vara Energi ek. för.,98,True,True
+204,REL00204,Varberg Energi AB,99,True,True
+205,REL00205,Varbergsortens Elkraft ek. för.,100,True,True
+235,REL00235,Värnamo Elnät AB,101,True,True
+239,REL00239,Västerviks Kraft-Elnät AB,102,True,True
+242,REL00242,Västra Orusts Energitjänst ek. för.,103,True,True
+243,REL00243,Växjö Energi Elnät AB,104,True,True
+244,REL00244,Ystad Energi AB,105,True,True
+246,REL00246,Ålem Energi AB,106,True,True
+249,REL00249,Årsunda Kraft & Belysningsförening ek. för.,107,True,True
+255,REL00255,Östra Kinds Elkraft ek. för.,108,True,True
+257,REL00257,Övik Energi Nät AB,109,True,True
+267,REL00267,Mälarenergi Elnät AB,110,True,True
+318,RER00318,Skellefteå Kraft Elnät AB,119,True,True
+332,REL00332,Tidaholms Elnät AB,111,True,True
+364,REL00364,Österlens Kraft AB,112,True,True
+570,REL00570,Västerbergslagens Elnät AB,113,True,True
+576,REL00576,Härjeåns Nät AB,114,True,True
+584,REL00584,Umeå Energi Elnät AB,115,True,True
+585,REL00585,Götene Elförening ek. för.,116,True,True
+590,REL00590,LKAB Nät AB,117,True,True
+594,REL00594,VänerEnergi AB,118,True,True
+824,REL00824,Skellefteå Kraft Elnät AB,119,True,True
+855,RER00855,E.ON Energidistribution AB,138,True,True
+878,RER00878,Bliekevare Nät AB,,True,False
+885,REL00885,Gävle Energi AB,120,True,True
+886,REL00886,Kraftringen Nät AB,121,True,True
+899,REL00899,Kvänumbygdens Energi ek. för.,122,True,True
+903,RER00903,Öresundskraft AB,123,True,True
+904,REL00904,Öresundskraft AB,123,True,True
+936,REL00936,Njudung Vetlanda Elnät AB,124,True,True
+937,REL00937,Tranås Energi Elnät AB,125,True,True
+938,REL00938,Hedemora Elnät AB,126,True,True
+944,REL00944,Linde Energi AB,127,True,True
+945,REL00945,Gotlands Elnät AB,128,True,True
+958,REL00958,Vimmerby Energi Nät AB,129,True,True
+959,REL00959,Åsele Elnät AB,130,True,True
+963,RER00963,Markbygden Net Väst AB,,True,False
+965,REL00965,Sörbylunds Elnät HB,131,True,True
+996,RER00996,Markbygden Net AB,,True,False
+1010,REL01010,Sandviken Energi Elnät AB,132,True,True
+1011,RER01011,Vattenfall Eldistribution AB,139,True,True
+1012,REL01012,Brittedals Elnät ek. för.,133,True,True
+3003,RER03003,Karskruv Nät AB,,True,False
+3009,REL03009,Dala Energi Elnät AB,134,True,True
+3010,RER03010,Ellevio AB,140,True,True
+3015,REL03015,Falu Elnät AB,135,True,True
+3016,REL03016,Vaggeryds Elverk AB,136,True,True
+3019,REL03019,Trelleborgs Elnät AB,137,True,True
+3022,RER03022,Marhult Nät AB,,True,False
+3028,REL03028,E.ON Energidistribution AB,138,True,True
+3030,REL03030,Vattenfall Eldistribution AB,139,True,True
+3035,REL03035,Ellevio AB,140,True,True
+3036,RET03036,Affärsverket svenska kraftnät,,True,False
+3038,REL03038,Lidköping Elnät AB,141,True,True
+3041,REL03041,Hjo Elnät AB,142,True,True
+3042,REL03042,Skara Elnät AB,143,True,True
+3043,REL03043,Karlsborgs Elnät AB,144,True,True
+3044,REL03044,Ulricehamn Energi Elnät AB,145,True,True
+3047,REL03047,Karlshamn Elnät AB,146,True,True
+3049,REL03049,Alingsås Energi Elnät AB,147,True,True
+3050,REL03050,Näckåns Elnät AB (gamla Viggafors),148,True,True

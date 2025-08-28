@@ -182,8 +182,13 @@ def load_dmu_mapping(filepath: str = "new_recon.csv") -> pd.DataFrame:
         filepath,
         f"intaktsram/data/{filepath}",
         f"effektiviseringskrav/data/{filepath}",
-        f"data/{filepath}"
+        f"data/{filepath}",
+        f"../intaktsram/data/{filepath}"
     ]
+    
+    print(f"DEBUG: Söker efter {filepath}")
+    for path in possible_paths:
+        print(f"DEBUG: Testar sökväg: {path}")
     
     for path in possible_paths:
         try:

@@ -17,12 +17,12 @@ from intaktsram.app.data_loader import (
 
 
 def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
-    """Huvudvy för intäktsram-dekomposition med waterfall och scenario-hantering."""
+    """Huvudvy fÃ¶r intÃ¤ktsram-dekomposition med waterfall och scenario-hantering."""
     
     # === SCENARIO-HANTERING ===
     initialize_session_state()
     
-    # Sidebar för scenario-kontroller
+    # Sidebar fÃ¶r scenario-kontroller
     st.sidebar.header("🔧 Scenario-hantering")
     
     scenario_name = st.sidebar.text_input(
@@ -58,20 +58,39 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
     # REId vs DMU toggle
     view_mode = st.sidebar.radio("Visa per:", ["REId", "DMU"], index=0)
     
+    # Hämta working dataframe och lägg till DMU-mappning ALLTID
     df_working = get_working_dataframe(df_baseline)
+
+    # DEBUG: Kontrollera vilka kolumner som finns
+    print(f"DEBUG: df_working kolumner: {df_working.columns.tolist()}")
+    print(f"DEBUG: df_working har DMU: {'DMU' in df_working.columns}")
+    if 'DMU' in df_working.columns:
+        print(f"DEBUG: Antal icke-null DMU: {df_working['DMU'].notna().sum()}")
+
+    # Applicera DMU-mappning på working dataframe
+    dmu_mapping = load_dmu_mapping()
+    if not dmu_mapping.empty:
+        print(f"DEBUG: Före merge - df_working rader: {len(df_working)}")
+        df_working = df_working.merge(dmu_mapping, on='REId', how='left')
+        print(f"DEBUG: Efter merge - df_working rader: {len(df_working)}")
+        print(f"DEBUG: DMU-kolumn finns efter merge: {'DMU' in df_working.columns}")
+        if 'DMU' in df_working.columns:
+            print(f"DEBUG: Antal icke-null DMU efter merge: {df_working['DMU'].notna().sum()}")
+
+    if not dmu_mapping.empty:
+        df_working = df_working.merge(dmu_mapping, on='REId', how='left')
     
+    # Hantera view mode baserat på tillgängliga kolumner
     if view_mode == "REId":
         available_entities = df_working['REId'].unique()
         entity_col = 'REId'
     else:
-        # Ladda DMU-mapping och visa DMU-vy
-        dmu_mapping = load_dmu_mapping()
-        if not dmu_mapping.empty:
-            df_working = df_working.merge(dmu_mapping, on='REId', how='left')
+        # DMU-vy - kontrollera att DMU-kolumnen finns
+        if 'DMU' in df_working.columns and not df_working['DMU'].isna().all():
             available_entities = df_working['DMU'].dropna().unique()
             entity_col = 'DMU'
         else:
-            st.sidebar.warning("DMU-mapping saknas, visar REId istället")
+            st.sidebar.warning("DMU-mapping saknas eller misslyckades, visar REId istället")
             available_entities = df_working['REId'].unique()
             entity_col = 'REId'
     

@@ -32,7 +32,7 @@ MINUS = "\u2212"
 # Sökvägar - uppdaterade för ny mappstruktur
 SCENARIO_DIR = "scenario"
 DEA_EXPORT_DIR = os.path.join(SCENARIO_DIR, "kapitalbas", "exports_to_dea")
-IR_EXPORT_DIR = os.path.join(SCENARIO_DIR, "ir", "kapitalkostnader")
+IR_EXPORT_DIR = os.path.join(SCENARIO_DIR, "kapitalbas", "exports_to_ir")
 DEA_BASE_XLSX = "effektiviseringskrav/data/Data_modeller.xlsx"
 RECON_CSV = "effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv"
 
@@ -682,7 +682,7 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
                 - Syfte: Mata DEA-pipen med WACC-scenariot
                 
                 **IR-export:**
-                - Fil: `scenario/ir/kapitalkostnader/ir_kapkost_wacc_{ir_tag}_y2024_dmu.parquet`
+                - Fil: `scenario/kapitalbas/exports_to_ir/ir_kapkost_wacc_{ir_tag}_y2024_dmu.parquet`
                 - Innehåll: Detaljerad kapitalkostnad (total + avskrivning/avkastning) per DMU
                 - Syfte: Mata IR-dekompositionen med uppdaterade kapitalkostnader
                 
