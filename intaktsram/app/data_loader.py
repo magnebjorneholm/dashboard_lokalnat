@@ -35,11 +35,6 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
         except Exception:
             raise RuntimeError(f"Fel vid inläsning av fil: {e}")
     
-    # Debug: Visa tillgängliga kolumner
-    print(f"Tillgängliga kolumner i Excel-filen:")
-    for i, col in enumerate(df.columns):
-        print(f"  {i}: '{col}'")
-    
     # Rensa kolumnnamn
     df.columns = df.columns.str.strip()
     
@@ -86,9 +81,8 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
         if found_col:
             column_mapping[found_col] = std_name
             used_cols.add(found_col)
-            print(f"Mappar '{found_col}' -> '{std_name}'")
         else:
-            print(f"Varning: Ingen kolumn hittad för {std_name} (söktermer: {keywords})")
+            pass  # Tyst om saknade kolumner
     
     # Applicera mapping
     df_mapped = df.rename(columns=column_mapping)
@@ -100,7 +94,6 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
                            if any(term in col.lower() for term in ['id', 'företag', 'foretag', 'name'])]
         if potential_id_cols:
             df_mapped = df_mapped.rename(columns={potential_id_cols[0]: 'REId'})
-            print(f"Använder '{potential_id_cols[0]}' som REId")
         else:
             raise ValueError("Kunde inte hitta kolumn för företags-ID. Tillgängliga kolumner: " + str(df.columns.tolist()))
     
@@ -140,27 +133,18 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
         
         if available_components:
             df_mapped['Intaktsram_Total'] = df_mapped[available_components].sum(axis=1, skipna=True)
-            print(f"Beräknade Intaktsram_Total från komponenter: {available_components}")
     
     # NYTT: Lägg automatiskt till DMU-mappning
     dmu_mapping = load_dmu_mapping()
     if not dmu_mapping.empty:
         original_count = len(df_mapped)
-        df_mapped = df_mapped.merge(dmu_mapping[['REId', 'DMU']], on='REId', how='left')
+        # Inkludera alla kolumner från DMU-mappning (REId, DMU, Företag)
+        df_mapped = df_mapped.merge(dmu_mapping, on='REId', how='left')
         mapped_count = df_mapped['DMU'].notna().sum()
         
         # Filtrera bort omappade REId (regionnät) - behåll bara lokalnät
         unmapped_reids = df_mapped[df_mapped['DMU'].isna()]['REId'].tolist()
         df_mapped = df_mapped[df_mapped['DMU'].notna()].reset_index(drop=True)
-        
-        print(f"DMU-mappning tillagd: {mapped_count}/{original_count} REId mappade till DMU")
-        print(f"Filtrerade bort {len(unmapped_reids)} regionnät (RER*): behåller bara lokalnät")
-        
-        if len(unmapped_reids) > 0:
-            sample_unmapped = unmapped_reids[:3]  # Visa första 3
-            print(f"Exempel på filtrerade regionnät: {sample_unmapped}")
-    else:
-        print("Varning: Kunde inte ladda DMU-mappning - scenario-integration kommer inte fungera")
     
     # Lägg till metadata-kolumner
     df_mapped['Källa_Paverkbara'] = 'Baseline'
@@ -168,7 +152,6 @@ def load_baseline_data(filepath: str) -> pd.DataFrame:
     df_mapped['Uppdaterad_Paverkbara'] = False
     df_mapped['Uppdaterad_Kapitalkostnad'] = False
     
-    print(f"Slutlig dataframe: {len(df_mapped)} rader, {len(df_mapped.columns)} kolumner")
     return df_mapped
 
 
@@ -186,10 +169,6 @@ def load_dmu_mapping(filepath: str = "new_recon.csv") -> pd.DataFrame:
         f"../intaktsram/data/{filepath}"
     ]
     
-    print(f"DEBUG: Söker efter {filepath}")
-    for path in possible_paths:
-        print(f"DEBUG: Testar sökväg: {path}")
-    
     for path in possible_paths:
         try:
             df = pd.read_csv(path)
@@ -197,17 +176,14 @@ def load_dmu_mapping(filepath: str = "new_recon.csv") -> pd.DataFrame:
             if 'REId' in df.columns and 'DMU' in df.columns:
                 # Rensa bort rader utan DMU eller REId
                 df_clean = df.dropna(subset=['REId', 'DMU'])
-                print(f"Laddade DMU-mappning från {path}: {len(df_clean)} mappningar")
                 return df_clean[['REId', 'DMU', 'Företag']].drop_duplicates()
             else:
-                print(f"Fil {path} saknar REId eller DMU kolumner: {df.columns.tolist()}")
+                continue
         except FileNotFoundError:
             continue
         except Exception as e:
-            print(f"Fel vid läsning av {path}: {e}")
             continue
     
-    print("Varning: Kunde inte hitta eller läsa DMU-mappning från new_recon.csv")
     return pd.DataFrame(columns=['REId', 'DMU', 'Företag'])
 
 
@@ -227,39 +203,25 @@ def detect_scenario_updates() -> Dict[str, Optional[str]]:
         'effektiviseringskrav': None,
         'kapitalbas': None
     }
-    
-    # Debug: visa vilka kataloger som kollas
-    print("DEBUG: Letar efter scenario-filer...")
 
     # Leta efter effektiviseringskrav-filer i scenario/effektiviseringskrav/exports_to_ir/
     effkrav_dir = Path("scenario/effektiviseringskrav/exports_to_ir/")
-    print(f"DEBUG: Kollar {effkrav_dir}, exists: {effkrav_dir.exists()}")
     if effkrav_dir.exists():
         effkrav_files = list(effkrav_dir.glob("ir_paverkbara_*.parquet"))
-        print(f"DEBUG: Hittade {len(effkrav_files)} effektiviseringskrav-filer")
         if effkrav_files:
             # Ta senaste fil baserat på modifierad tid
             latest_effkrav = max(effkrav_files, key=lambda f: f.stat().st_mtime)
             updates['effektiviseringskrav'] = str(latest_effkrav)
-            print(f"DEBUG: Senaste effektiviseringskrav-fil: {latest_effkrav}")
 
     # Leta efter kapitalbas-filer i scenario/kapitalbas/exports_to_ir/
     kapital_dir = Path("scenario/kapitalbas/exports_to_ir/")
-    print(f"DEBUG: Kollar {kapital_dir}, exists: {kapital_dir.exists()}")
     if kapital_dir.exists():
         kapital_files = list(kapital_dir.glob("ir_kapkost_wacc_*.parquet"))
-        print(f"DEBUG: Hittade {len(kapital_files)} kapitalkostnad-filer")
-        for f in kapital_files:
-            print(f"DEBUG: Kapitalkostnad-fil: {f}")
         if kapital_files:
             # Ta senaste fil baserat på modifierad tid
             latest_kapital = max(kapital_files, key=lambda f: f.stat().st_mtime)
             updates['kapitalbas'] = str(latest_kapital)
-            print(f"DEBUG: Senaste kapitalkostnad-fil: {latest_kapital}")
-    else:
-        print(f"DEBUG: Kapitalkostnad-katalog finns inte: {kapital_dir}")
     
-    print(f"DEBUG: Slutresultat - updates: {updates}")
     return updates
 
 
@@ -281,18 +243,14 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
         
         if scenario_type == 'effektiviseringskrav':
             # Stöd både äldre och nya kolumnnamn
-            # Ny export från DEA: 'Paverkbara_Target' (periodsumma 2024–2027)
-            # Äldre fallback: 'Paverkbara_Nya'
             candidate_cols = [c for c in ['Paverkbara_Target', 'Paverkbara_Nya'] if c in scenario_df.columns]
             if not candidate_cols:
-                print("Effektiviseringskrav: Ingen av kolumnerna 'Paverkbara_Target'/'Paverkbara_Nya' hittades")
                 return baseline_df
 
             value_col = candidate_cols[0]
 
             # Merge-nyckel: använd REId (exporten innehåller både DMU och REId)
             if 'REId' not in scenario_df.columns:
-                print("Effektiviseringskrav: Scenario saknar REId -> kan inte merga")
                 return baseline_df
 
             merge_df = scenario_df[['REId', value_col]].rename(columns={value_col: 'Paverkbara_Scenario'})
@@ -303,7 +261,6 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
                 result_df.loc[mask, 'Paverkbara_Kostnader'] = result_df.loc[mask, 'Paverkbara_Scenario']
                 result_df.loc[mask, 'Källa_Paverkbara'] = 'Scenario (effektiviseringskrav)'
                 result_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
-                print(f"Effektiviseringskrav: {mask.sum()} REId uppdaterade från {value_col}")
 
             result_df = result_df.drop(columns=['Paverkbara_Scenario'])
 
@@ -318,7 +275,6 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
             
             # Kontrollera att baseline har DMU-kolumn
             if 'DMU' not in baseline_df.columns:
-                print("Varning: Baseline saknar DMU-kolumn - kan inte merga kapitalbas-scenario")
                 return baseline_df
             
             # Förbered merge-data
@@ -352,10 +308,6 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
                 scenario_tag = scenario_df.get('scenario_tag', 'okänd') if 'scenario_tag' in scenario_df.columns else 'kapitalbas'
                 result_df.loc[mask, 'Källa_Kapitalkostnad'] = f'Scenario ({scenario_tag})'
                 result_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
-                
-                print(f"Kapitalbas: {updated_count} DMU uppdaterade med nya kapitalkostnader")
-            else:
-                print("Kapitalbas: Ingen DMU matchade för scenario-uppdatering")
             
             # Rensa temporära kolumner
             temp_cols = ['Kapitalkostnad_Ny', 'Avskrivningar_Ny', 'Avkastning_Ny', 'scenario_tag']

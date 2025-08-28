@@ -7,6 +7,7 @@ import io
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+import json
 
 from intaktsram.app.data_loader import (
     load_dmu_mapping, 
@@ -17,12 +18,12 @@ from intaktsram.app.data_loader import (
 
 
 def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
-    """Huvudvy fÃ¶r intÃ¤ktsram-dekomposition med waterfall och scenario-hantering."""
+    """Huvudvy för intäktsram-dekomposition med waterfall och scenario-hantering."""
     
     # === SCENARIO-HANTERING ===
     initialize_session_state()
     
-    # Sidebar fÃ¶r scenario-kontroller
+    # Sidebar för scenario-kontroller
     st.sidebar.header("🔧 Scenario-hantering")
     
     scenario_name = st.sidebar.text_input(
@@ -31,16 +32,15 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
         placeholder="t.ex. 'WACC 5.2% + Strängare DEA'"
     )
     
-    col1, col2, col3 = st.sidebar.columns(3)
-    with col1:
-        if st.button("🆕 Nytt scenario"):
-            create_new_scenario(scenario_name, df_baseline)
-    with col2:
-        if st.button("📁 Ladda scenario"):
-            st.session_state.show_scenario_loader = True
-    with col3:
-        if st.button("🔄 Återställ allt"):
-            reset_all_components()
+    # Vertikala knappar (3×1 layout)
+    if st.sidebar.button("🆕 Nytt scenario", use_container_width=True):
+        create_new_scenario(scenario_name, df_baseline)
+    
+    if st.sidebar.button("📁 Ladda scenario", use_container_width=True):
+        st.session_state.show_scenario_loader = True
+    
+    if st.sidebar.button("🔄 Återställ allt", use_container_width=True):
+        reset_all_components()
     
     # Visa scenario-loader om aktiverad
     if st.session_state.show_scenario_loader:
@@ -55,49 +55,36 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
     # === FÖRETAGS-/NÄTVAL ===
     st.sidebar.header("🏢 Val av företag/nät")
     
-    # REId vs DMU toggle
-    view_mode = st.sidebar.radio("Visa per:", ["REId", "DMU"], index=0)
-    
-    # Hämta working dataframe och lägg till DMU-mappning ALLTID
+    # Hämta working dataframe (kommer redan med DMU-mappning från baseline)
     df_working = get_working_dataframe(df_baseline)
-
-    # DEBUG: Kontrollera vilka kolumner som finns
-    print(f"DEBUG: df_working kolumner: {df_working.columns.tolist()}")
-    print(f"DEBUG: df_working har DMU: {'DMU' in df_working.columns}")
-    if 'DMU' in df_working.columns:
-        print(f"DEBUG: Antal icke-null DMU: {df_working['DMU'].notna().sum()}")
-
-    # Applicera DMU-mappning på working dataframe
-    dmu_mapping = load_dmu_mapping()
-    if not dmu_mapping.empty:
-        print(f"DEBUG: Före merge - df_working rader: {len(df_working)}")
-        df_working = df_working.merge(dmu_mapping, on='REId', how='left')
-        print(f"DEBUG: Efter merge - df_working rader: {len(df_working)}")
-        print(f"DEBUG: DMU-kolumn finns efter merge: {'DMU' in df_working.columns}")
-        if 'DMU' in df_working.columns:
-            print(f"DEBUG: Antal icke-null DMU efter merge: {df_working['DMU'].notna().sum()}")
-
-    if not dmu_mapping.empty:
-        df_working = df_working.merge(dmu_mapping, on='REId', how='left')
     
-    # Hantera view mode baserat på tillgängliga kolumner
-    if view_mode == "REId":
-        available_entities = df_working['REId'].unique()
-        entity_col = 'REId'
-    else:
-        # DMU-vy - kontrollera att DMU-kolumnen finns
-        if 'DMU' in df_working.columns and not df_working['DMU'].isna().all():
-            available_entities = df_working['DMU'].dropna().unique()
-            entity_col = 'DMU'
+    # Skapa dropdown-alternativ med företagsnamn (DMU)
+    entity_options = []
+    entity_mapping = {}
+    
+    # Använd alltid REId som primär nyckel (internt)
+    for reid in sorted(df_working['REId'].unique()):
+        row = df_working[df_working['REId'] == reid].iloc[0]
+        företag = row.get('Företag', 'Okänt företag')
+        dmu = row.get('DMU')
+        
+        # Format: "Företagsnamn (DMU)"
+        if pd.notna(dmu):
+            display_name = f"{företag} ({int(dmu)})"
         else:
-            st.sidebar.warning("DMU-mapping saknas eller misslyckades, visar REId istället")
-            available_entities = df_working['REId'].unique()
-            entity_col = 'REId'
+            display_name = f"{företag} (REId: {reid})"
+        
+        entity_options.append(display_name)
+        entity_mapping[display_name] = reid
     
-    selected_entity = st.sidebar.selectbox(
-        f"Välj {entity_col}",
-        sorted(available_entities)
+    selected_display = st.sidebar.selectbox(
+        "Välj företag/nät",
+        entity_options
     )
+    
+    # Hämta REId från mapping
+    selected_entity = entity_mapping[selected_display]
+    entity_col = 'REId'
     
     # Filtrera data för valt företag/nät
     entity_data = df_working[df_working[entity_col] == selected_entity].iloc[0]
@@ -159,7 +146,6 @@ def reset_all_components():
         st.rerun()
 
 
-# Uppdatera get_working_dataframe() i ir_view.py för att hantera DMU-baserade modifikationer
 def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
     """Hämtar aktuell arbetsdataframe (baseline eller scenario)."""
     if not st.session_state.current_scenario_name or 'scenario_data' not in st.session_state:
@@ -170,13 +156,10 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
     
     # Applicera scenario-modifikationer
     modifications = st.session_state.scenario_data.get('modifications', {})
-    print(f"DEBUG: get_working_dataframe - {len(modifications)} komponenter med modifikationer")
     
     for component, mod_data in modifications.items():
         if 'values' not in mod_data:
             continue
-            
-        print(f"DEBUG: Applicerar {component} modifikationer: {len(mod_data['values'])} enheter")
         
         if component == 'paverkbara':
             # REId-baserade modifikationer (som tidigare)
@@ -189,17 +172,14 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
         elif component == 'kapitalkostnad':
             # Kolla om det är DMU-baserat eller REId-baserat
             merge_on = mod_data.get('merge_on', 'REId')
-            print(f"DEBUG: Kapitalkostnad merge_on: {merge_on}")
             
             for entity_key, new_values in mod_data['values'].items():
                 if merge_on == 'DMU':
                     # DMU-baserade modifikationer från kapitalbas
                     mask = working_df['DMU'] == float(entity_key)
-                    print(f"DEBUG: DMU {entity_key}, mask träffar: {mask.sum()} rader")
                 else:
                     # REId-baserade modifikationer (manuella)
                     mask = working_df['REId'] == entity_key
-                    print(f"DEBUG: REId {entity_key}, mask träffar: {mask.sum()} rader")
                 
                 if mask.any():
                     # Uppdatera värden
@@ -223,10 +203,6 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
                     # Uppdatera metadata
                     working_df.loc[mask, 'Källa_Kapitalkostnad'] = f"Scenario ({mod_data.get('source', 'manual')})"
                     working_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
-                    
-                    print(f"DEBUG: Uppdaterade kapitalkostnad för {mask.sum()} rader")
-                else:
-                    print(f"DEBUG: Ingen match för {entity_key} på {merge_on}")
     
     # Omberäkna total intäktsram
     working_df = calculate_intaktsram(working_df)
@@ -331,18 +307,38 @@ def show_component_table(entity_data: pd.Series, components: List[tuple], has_de
         if 'påverkbara' in name.lower():
             källa = entity_data.get('Källa_Paverkbara', 'Baseline')
             uppdaterad = entity_data.get('Uppdaterad_Paverkbara', False)
+            # Hämta baseline-värde för delta-beräkning
+            baseline_key = 'Paverkbara_Kostnader_Baseline'
+            baseline_value = entity_data.get(baseline_key, value)  # Fallback till current om baseline saknas
         elif any(term in name.lower() for term in ['kapital', 'avskrivning', 'avkastning']):
             källa = entity_data.get('Källa_Kapitalkostnad', 'Baseline') 
             uppdaterad = entity_data.get('Uppdaterad_Kapitalkostnad', False)
+            # Bestäm baseline-key baserat på komponent
+            if 'avskrivning' in name.lower():
+                baseline_key = 'Avskrivningar_Baseline'
+            elif 'avkastning' in name.lower():
+                baseline_key = 'Avkastning_Baseline'
+            else:
+                baseline_key = 'Kapitalkostnad_Total_Baseline'
+            baseline_value = entity_data.get(baseline_key, value)
         else:
             källa = 'Baseline'
             uppdaterad = False
+            baseline_value = value
+        
+        # Beräkna delta och formatera uppdaterad-kolumn
+        if uppdaterad and baseline_value != value:
+            delta = value - baseline_value
+            delta_pct = (delta / baseline_value * 100) if baseline_value != 0 else 0
+            uppdaterad_text = f"✅ Δ {delta:+,.0f} ({delta_pct:+.1f}%)"
+        else:
+            uppdaterad_text = '✅' if uppdaterad else '➖'
         
         table_data.append({
             'Komponent': name,
             'Belopp (tkr)': f"{value:,.0f}",
             'Källa': källa,
-            'Uppdaterad': '✅' if uppdaterad else '➖'
+            'Uppdaterad': uppdaterad_text
         })
     
     # Total-rad
@@ -373,13 +369,11 @@ def show_component_controls(entity_data: pd.Series):
     # Detect scenario updates från andra sektioner  
     scenario_updates = detect_scenario_updates()
     
-    # Debug: visa vad som hittades
-    st.sidebar.write("**Debug - Tillgängliga scenarier:**")
+    # Visa tillgängliga scenarier kompakt
+    st.sidebar.write("**Tillgängliga scenarier:**")
     for key, value in scenario_updates.items():
-        status = "✅ Tillgänglig" if value else "❌ Saknas"
-        st.sidebar.caption(f"{key}: {status}")
-        if value:
-            st.sidebar.caption(f"Fil: {Path(value).name}")
+        status = "✅" if value else "❌"
+        st.sidebar.caption(f"{status} {key}")
     
     # Påverkbara kostnader
     st.sidebar.subheader("💰 Påverkbara kostnader")
@@ -448,17 +442,22 @@ def show_component_controls(entity_data: pd.Series):
             reset_component('kapitalkostnad')
 
 
-# Uppdatera update_component_from_scenario() i ir_view.py
 def update_component_from_scenario(component: str, source: str, scenario_file: str):
     """Uppdaterar komponent från scenario-fil."""
-    print(f"DEBUG: update_component_from_scenario kallad - component: {component}, source: {source}, file: {scenario_file}")
     
     try:
         # Ladda scenario-data från parquet-fil
-        print(f"DEBUG: Försöker läsa parquet-fil: {scenario_file}")
         scenario_df = pd.read_parquet(scenario_file)
-        print(f"DEBUG: Parquet-fil laddad. Shape: {scenario_df.shape}")
-        print(f"DEBUG: Kolumner i scenario-fil: {scenario_df.columns.tolist()}")
+        
+        # Försök ladda metadata från JSON-fil (samma namn som parquet men .json)
+        json_metadata = {}
+        json_file = scenario_file.replace('.parquet', '.json')
+        if Path(json_file).exists():
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    json_metadata = json.load(f)
+            except Exception as e:
+                print(f"Kunde inte läsa JSON-metadata från {json_file}: {e}")
         
         # Kontrollera att vi har aktivt scenario
         if not st.session_state.current_scenario_name:
@@ -473,7 +472,6 @@ def update_component_from_scenario(component: str, source: str, scenario_file: s
             
             if missing_cols:
                 st.sidebar.error(f"Scenario-fil saknar kolumner: {missing_cols}")
-                print(f"DEBUG: Saknade kolumner: {missing_cols}")
                 return
             
             # Skapa modifikationer per DMU (inte REId)
@@ -492,8 +490,6 @@ def update_component_from_scenario(component: str, source: str, scenario_file: s
                 
                 modifications[dmu] = modification
             
-            print(f"DEBUG: Skapade {len(modifications)} kapital-modifikationer")
-            
             # Applicera på session state - använd DMU som key
             if 'modifications' not in st.session_state.scenario_data:
                 st.session_state.scenario_data['modifications'] = {}
@@ -501,14 +497,14 @@ def update_component_from_scenario(component: str, source: str, scenario_file: s
             st.session_state.scenario_data['modifications'][component] = {
                 'values': modifications,
                 'source': 'kapitalbas',
-                'merge_on': 'DMU'  # Indikera att vi mergar på DMU, inte REId
+                'merge_on': 'DMU',
+                'metadata': json_metadata  # Lägg till JSON-metadata
             }
             
             # Uppdatera komponent-källor
             st.session_state.scenario_data['component_sources'][component] = 'kapitalbas'
             
             st.sidebar.success(f"Kapitalkostnad uppdaterad från kapitalbas ({len(modifications)} DMU)")
-            print(f"DEBUG: Session state uppdaterat med {len(modifications)} modifikationer")
             
         elif component == 'paverkbara' and source == 'effektiviseringskrav':
             # Läs DEA-export: förväntar 'REId' och 'Paverkbara_Target' (eller fallback)
@@ -540,7 +536,8 @@ def update_component_from_scenario(component: str, source: str, scenario_file: s
 
             st.session_state.scenario_data['modifications'][component] = {
                 'values': modifications,
-                'source': 'effektiviseringskrav'
+                'source': 'effektiviseringskrav',
+                'metadata': json_metadata  # Lägg till JSON-metadata
             }
             st.session_state.scenario_data['component_sources']['paverkbara'] = 'effektiviseringskrav'
 
@@ -556,11 +553,9 @@ def update_component_from_scenario(component: str, source: str, scenario_file: s
         st.rerun()
         
     except Exception as e:
-        error_msg = f"Fel vid uppdatering från {source}: {str(e)}"
-        st.sidebar.error(error_msg)
-        print(f"DEBUG: {error_msg}")
+        st.sidebar.error(f"Fel vid uppdatering från {source}: {str(e)}")
         import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        print(f"ERROR: {traceback.format_exc()}")
 
 
 def update_component_manual(component: str, reid: str, new_value: float):
@@ -757,13 +752,32 @@ def show_export_section(df_working: pd.DataFrame):
             st.write(f"**Namn:** {st.session_state.current_scenario_name}")
             st.write(f"**Skapat:** {scenario_info.get('created', 'Okänt')}")
             
+            # Visa komponent-källor och deras metadata
+            component_sources = scenario_info.get('component_sources', {})
+            st.write("**Komponent-källor:**")
+            
             modifications = scenario_info.get('modifications', {})
             if modifications:
-                st.write("**Modifikationer:**")
                 for comp, mod_data in modifications.items():
-                    num_changes = len(mod_data.get('values', {}))
                     source = mod_data.get('source', 'okänd')
-                    st.write(f"- {comp}: {num_changes} företag ändrade (källa: {source})")
+                    num_changes = len(mod_data.get('values', {}))
+                    st.write(f"- **{comp}**: {num_changes} enheter ändrade (källa: {source})")
+                    
+                    # Visa detaljerad metadata från JSON-filer om tillgänglig
+                    metadata = mod_data.get('metadata', {})
+                    if metadata:
+                        if source == 'effektiviseringskrav':
+                            st.write(f"  - Metod: {metadata.get('analysis_method', 'N/A')}")
+                            st.write(f"  - Period: {metadata.get('period', 'N/A')}")
+                            st.write(f"  - Total reduktion: {metadata.get('total_reduction_tkr', 'N/A'):,} tkr")
+                        elif source == 'kapitalbas':
+                            wacc_old = metadata.get('wacc_old', 'N/A')
+                            wacc_new = metadata.get('wacc_new', 'N/A')
+                            st.write(f"  - WACC gammal: {wacc_old}")
+                            st.write(f"  - WACC ny: {wacc_new}")
+                            period = metadata.get('period', {})
+                            if isinstance(period, dict):
+                                st.write(f"  - Period: {period.get('start', '')}-{period.get('end', '')}")
             else:
                 st.write("**Inga modifikationer gjorda**")
 
