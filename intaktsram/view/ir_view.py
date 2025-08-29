@@ -294,67 +294,128 @@ def create_waterfall_chart(components: List[tuple], entity_data: pd.Series, deta
 
 
 def show_component_table(entity_data: pd.Series, components: List[tuple], has_detailed_capital: bool = False):
-    """Visar detaljerad komponent-tabell."""
-    
+    """Visar detaljerad komponent-tabell med Δ mot baseline. Opåverkbara tvingas alltid till baseline (Δ=0)."""
     st.subheader("📋 Komponent-detaljer")
-    
-    # Skapa tabell-data
+
+    # --- Hämta baseline-df (från scenariostart) ---
+    baseline_df = None
+    try:
+        if 'scenario_data' in st.session_state and 'baseline' in st.session_state.scenario_data:
+            baseline_df = st.session_state.scenario_data['baseline']
+    except Exception:
+        baseline_df = None
+
+    def _baseline_value_for_current(key: str):
+        if baseline_df is None or key not in getattr(baseline_df, 'columns', []):
+            return None
+        reid = entity_data.get('REId', None)
+        if reid is None:
+            return None
+        base_row = baseline_df.loc[baseline_df['REId'] == reid]
+        if base_row.empty:
+            return None
+        return base_row.iloc[0].get(key, None)
+
+    # Hjälpare: normalisera å/ä/ö för robust substring-matchning
+    def _norm(s: str) -> str:
+        return (
+            s.lower()
+             .replace('å', 'a')
+             .replace('ä', 'a')
+             .replace('ö', 'o')
+        )
+
     table_data = []
     baseline_total = entity_data.get('Intaktsram_Total', 0)
-    
+
     for name, value in components:
-        # Bestäm källa och uppdaterad-status
-        if 'påverkbara' in name.lower():
-            källa = entity_data.get('Källa_Paverkbara', 'Baseline')
-            uppdaterad = entity_data.get('Uppdaterad_Paverkbara', False)
-            # Hämta baseline-värde för delta-beräkning
-            baseline_key = 'Paverkbara_Kostnader_Baseline'
-            baseline_value = entity_data.get(baseline_key, value)  # Fallback till current om baseline saknas
-        elif any(term in name.lower() for term in ['kapital', 'avskrivning', 'avkastning']):
-            källa = entity_data.get('Källa_Kapitalkostnad', 'Baseline') 
-            uppdaterad = entity_data.get('Uppdaterad_Kapitalkostnad', False)
-            # Bestäm baseline-key baserat på komponent
-            if 'avskrivning' in name.lower():
-                baseline_key = 'Avskrivningar_Baseline'
-            elif 'avkastning' in name.lower():
-                baseline_key = 'Avkastning_Baseline'
-            else:
-                baseline_key = 'Kapitalkostnad_Total_Baseline'
-            baseline_value = entity_data.get(baseline_key, value)
-        else:
-            källa = 'Baseline'
+        name_l = name.lower()
+        name_n = _norm(name_l)
+
+        # --- Klassificering av komponent ---
+        force_baseline = False
+        key_for_baseline = None
+        uppdaterad = False
+        källa = 'Baseline'
+
+        if ('opåverkbara' in name_l) or ('opaverkbara' in name_n):
+            # Opåverkbara: tvinga alltid baseline, Δ=0
+            force_baseline = True
+            key_for_baseline = 'Opaverkbara_Kostnader'
+            # Sätt beloppet till baseline om tillgängligt (säkrar exakt Δ=0)
+            bv = _baseline_value_for_current(key_for_baseline)
+            if bv is not None:
+                value = float(bv)
             uppdaterad = False
-            baseline_value = value
-        
-        # Beräkna delta och formatera uppdaterad-kolumn
-        if uppdaterad and baseline_value != value:
-            delta = value - baseline_value
-            delta_pct = (delta / baseline_value * 100) if baseline_value != 0 else 0
-            uppdaterad_text = f"✅ Δ {delta:+,.0f} ({delta_pct:+.1f}%)"
+            källa = 'Baseline'
+
+        elif ('påverkbara' in name_l) or ('paverkbara' in name_n):
+            # Påverkbara: kan komma från scenario (DEA)
+            källa = entity_data.get('Källa_Paverkbara', 'Baseline')
+            uppdaterad = bool(entity_data.get('Uppdaterad_Paverkbara', False))
+            key_for_baseline = 'Paverkbara_Kostnader'
+
+        elif any(term in name_n for term in ['kapital', 'avskrivning', 'avkastning']):
+            # Kapitalkomponenter: kan komma från scenario (kapitalbas)
+            källa = entity_data.get('Källa_Kapitalkostnad', 'Baseline')
+            uppdaterad = bool(entity_data.get('Uppdaterad_Kapitalkostnad', False))
+            if 'avskrivning' in name_n:
+                key_for_baseline = 'Avskrivningar'
+            elif 'avkastning' in name_n:
+                key_for_baseline = 'Avkastning' if has_detailed_capital else 'Kapitalkostnad_Total'
+            else:
+                key_for_baseline = 'Kapitalkostnad_Total'
+
         else:
-            uppdaterad_text = '✅' if uppdaterad else '➖'
-        
+            # Övriga (Flex, Avbrottsersättning m.m.): baseline
+            force_baseline = True
+            key_for_baseline = None  # inget Δ visas
+
+        # --- Δ-beräkning ---
+        if force_baseline:
+            uppdaterad_text = '➖'
+        else:
+            baseline_val = None
+            if key_for_baseline:
+                baseline_val = _baseline_value_for_current(key_for_baseline)
+            if baseline_val is None:
+                baseline_val = value  # gör Δ=0 om baseline saknas
+
+            try:
+                delta = float(value) - float(baseline_val)
+            except Exception:
+                delta = 0.0
+            delta_pct = (delta / baseline_val * 100.0) if (baseline_val not in (None, 0, 0.0)) else 0.0
+
+            if abs(delta) > 0:
+                prefix = "✅ " if uppdaterad else ""
+                uppdaterad_text = f"{prefix}Δ {delta:+,.0f} ({delta_pct:+.1f}%)"
+            else:
+                uppdaterad_text = '✅' if uppdaterad else '➖'
+
         table_data.append({
             'Komponent': name,
             'Belopp (tkr)': f"{value:,.0f}",
             'Källa': källa,
             'Uppdaterad': uppdaterad_text
         })
-    
-    # Total-rad
+
+    # --- Total-rad ---
     total_calculated = sum([comp[1] for comp in components])
-    delta = total_calculated - baseline_total if baseline_total > 0 else 0
-    delta_pct = (delta / baseline_total * 100) if baseline_total > 0 else 0
-    
+    delta_total = total_calculated - baseline_total if baseline_total else 0
+    delta_total_pct = (delta_total / baseline_total * 100.0) if baseline_total else 0.0
+
     table_data.append({
         'Komponent': '**TOTAL INTÄKTSRAM**',
         'Belopp (tkr)': f"**{total_calculated:,.0f}**",
         'Källa': 'Beräknad',
-        'Uppdaterad': f"Δ {delta:+,.0f} ({delta_pct:+.1f}%)" if abs(delta) > 0 else '➖'
+        'Uppdaterad': f"Δ {delta_total:+,.0f} ({delta_total_pct:+.1f}%)" if abs(delta_total) > 0 else '➖'
     })
-    
+
     df_table = pd.DataFrame(table_data)
     st.dataframe(df_table, use_container_width=True)
+
+
 
 
 def show_component_controls(entity_data: pd.Series):
