@@ -1,0 +1,21 @@
+{
+  "description": "Påverkbara kostnader baserat på DEA-effektiviseringskrav för IR-dekomposition (Ei-korrekt metod)",
+  "scenario_name": "DEA",
+  "analysis_method": "DEA_corrected_exact_columns",
+  "export_timestamp": "2025-08-30T07:32:56.404952",
+  "price_year": 2022,
+  "unit": "tkr",
+  "level": "REId",
+  "period": "2024-2027",
+  "formula": "Ei-korrekt: B_eff återställd från baseline, μ-faktor från 2024/2025-förhållande",
+  "reid_count": 148,
+  "total_baseline_tkr": 44926377,
+  "total_target_tkr": 43719253,
+  "total_reduction_tkr": 1207124,
+  "method_details": {
+    "step1": "B_eff = y2024_base / (1 - e_base)",
+    "step2": "μ = 1 - e_base - (y2025_base / y2024_base)",
+    "step3": "y_t_scn = y_{t-1}_scn * (1 - e_scn - μ) for t > 2024",
+    "step4": "Totalsumma_scn = sum(y2024_scn + y2025_scn + y2026_scn + y2027_scn)"
+  }
+}
