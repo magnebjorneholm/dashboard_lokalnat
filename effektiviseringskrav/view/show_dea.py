@@ -10,7 +10,6 @@ from effektiviseringskrav.app.dea_model import run_dea_model
 from effektiviseringskrav.app.plots import (
     plot_efficiency_histogram,
 )
-# NYTT: scenariomerge från data_loader
 from effektiviseringskrav.app.data_loader import merge_capex_scenario
 
 
@@ -28,22 +27,6 @@ def show_dea_view(df):
         if not missing_scenario.empty:
             st.warning(f"CAPEX-scenario saknas för {len(missing_scenario)} DMU:")
             st.dataframe(missing_scenario[['DMU', 'Företag']])
-            
-            # Visa vilka DMU som finns i kapitalbas-exporten
-            with st.expander("Debug: Jämför DMU mellan DEA och Kapitalbas"):
-                # Läs kapitalbas-export direkt
-                from effektiviseringskrav.app.data_loader import _latest_capex_scenario_path
-                latest_path, _ = _latest_capex_scenario_path()
-                if latest_path:
-                    kapbas_df = pd.read_parquet(latest_path)
-                    
-                    dea_dmus = set(df['DMU'].unique())
-                    kapbas_dmus = set(kapbas_df['DMU'].unique())
-                    
-                    st.write(f"DEA har {len(dea_dmus)} DMU")
-                    st.write(f"Kapitalbas-export har {len(kapbas_dmus)} DMU")
-                    st.write(f"Endast i DEA: {sorted(dea_dmus - kapbas_dmus)}")
-                    st.write(f"Endast i Kapitalbas: {sorted(kapbas_dmus - dea_dmus)}")
 
     # --- Kolumnval (bas) ----------------------------------------------------
     base_inputs = ["CAPEX", "OPEXp", "TOTEX"]
@@ -209,16 +192,90 @@ def show_dea_view(df):
         st.subheader("Export till Intäktsram-dekomposition")
         st.caption("Beräknar påverkbara kostnader för 2024-2027 perioden baserat på Ei:s verkliga beräkningsmetod")
         
+        with st.expander("Beräkningslogik för påverkbara kostnader (generella formler)"):
+            st.markdown("### 1) Prisomräkning av historik och medelvärde")
+            st.markdown(
+                "Låt $C_y^{\\text{nom}}$ vara företagets påverkbara kostnader år "
+                "$y\\in\\{2018,2019,2020,2021\\}$ i löpande priser och $I_y$ ett prisindex "
+                "med basår $P$ ($I_P\\equiv 1$). Prisjustera och ta medel:"
+            )
+            st.latex(r"\tilde C_y \;=\; C_y^{\text{nom}}\;\frac{I_P}{I_y},\qquad"
+                    r"\overline C \;=\; \frac{1}{4}\sum_{y=2018}^{2021}\tilde C_y")
+            st.markdown("Här är $\\overline C$ ”Medelvärde 2018–2021 påverkbara kostnader”.")
+
+            st.markdown("### 2) NeonÄndringar (engångsjustering)")
+            st.markdown(
+                "Låt $N$ vara den totala justeringsposten (”NeonÄndringar”). "
+                "Fördela lika per år i tillsynsperioden:"
+            )
+            st.latex(r"\Delta \;=\; \frac{N}{4}")
+            st.markdown("(positivt $N$ höjer nivån, negativt sänker).")
+
+            st.markdown("### 3) Årligt effektiviseringskrav och **avdrag från medelvärdet**")
+            st.markdown(
+                "Låt $e$ vara årligt krav (decimal). Vi tar procent **på en årlig bas**"
+            )
+            st.latex(r"B \;=\; \overline C \;+\; \Delta")
+            st.markdown(
+                "och låter avdragen växa geometriskt med $(1+e)^{t-1}$. "
+                "Excel-logiken avrundar **årsvis** (”half-up”):"
+            )
+            st.latex(
+                r"\text{inc}_t \;=\; \operatorname{round}_{0.5\uparrow}\!\big(e\cdot B\cdot (1+e)^{\,t-1}\big),\qquad t=1,2,3,4"
+            )
+            st.markdown(
+                "Kumulativt avdrag som visas i kolumnerna 2024–2027 "
+                "(”Avdrag för effektiviseringskrav (beräknat som avdrag från medelvärdet)”):"
+            )
+            st.latex(r"A_t \;=\; \sum_{k=1}^{t}\text{inc}_k")
+            st.markdown(
+                "> Utan årsvis avrundning skulle "
+                "$A_t^{\\text{theo}} = B\\big((1+e)^{t}-1\\big)$. "
+                "Excel använder dock $\\text{inc}_t$ och summerar dem årsvis."
+            )
+            st.markdown("**”Totalt avdrag 2024–2027”** i arket motsvarar:")
+            st.latex(r"A_{\text{sum}} \;=\; \sum_{t=1}^{4} A_t")
+            st.markdown("(obs. kan skilja 1–2 tkr från en teoretisk totalsats p.g.a. avrundning)")
+
+            st.markdown("### 4) Årsnivå efter avdrag (2024–2027)")
+            st.markdown("För varje år $t$ (2024–2027):")
+            st.latex(r"Y_t \;=\; \operatorname{round}_{0.5\uparrow}\!\big(\overline C \;-\; A_t \;+\; \Delta\big)")
+
+            st.markdown("### 5) Totalsumma påverkbara kostnader för perioden")
+            st.latex(r"T \;=\; \sum_{t=1}^{4} Y_t")
+            st.markdown("Utan att ta hänsyn till årsvis avrundning kan man se identiteten")
+            st.latex(
+                r"T \;\approx\; 4\,\overline C \;-\; \sum_{t=1}^{4}A_t \;+\; N \quad\text{(exakt om }Y_t\text{ ej avrundas årsvis).}"
+            )
+
+            st.markdown("### 6) Baseline vs. scenario")
+            st.markdown(
+                "* **Baseline**: sätt $e=e_{\\text{base}}$ (Ei:s årliga krav) och beräkna "
+                "$\\{\\text{inc}_t^{\\text{base}}, A_t^{\\text{base}}, Y_t^{\\text{base}}, T_{\\text{base}}\\}$.\n"
+                "* **Scenario (DEA)**: sätt $e=e_{\\text{scn}}$ (t.ex. från DEA-exporten) och beräkna "
+                "$\\{\\text{inc}_t^{\\text{scn}}, A_t^{\\text{scn}}, Y_t^{\\text{scn}}, T_{\\text{scn}}\\}$."
+            )
+            st.markdown(
+                "Rapporterade exportkolumner motsvarar vanligtvis:\n\n"
+                "$\\text{Paverkbara\\_Baseline\\_4yr}=T_{\\text{base}},\\quad "
+                "\\text{Paverkbara\\_Target}=T_{\\text{scn}},\\quad "
+                "\\text{Total\\_Reduction\\_tkr}=T_{\\text{base}}-T_{\\text{scn}}$."
+            )
+
+            st.markdown("### 7) Avrundningsdefinition (Excel “half-up”)")
+            st.latex(r"\operatorname{round}_{0.5\uparrow}(x)\;=\;\big\lfloor x+0.5\big\rfloor")
+            st.markdown(
+                "Används för varje $\\text{inc}_t$ och varje $Y_t$. Det är denna årsvisa avrundning som gör att "
+                "$A_{\\text{sum}}$ respektive totalsumman $T$ exakt matchar Excel, medan en ren, oavrundad "
+                "”slutformel” kan ge ±1–2 tkr avvikelse."
+            )
+        
         # Kontrollera att vi har nödvändiga kolumner
         if 'Effkrav_proc' not in result.columns:
             st.error("Export kräver Effkrav_proc. Kontrollera DEA-modellens output.")
         else:
             # Ladda IR-baseline data för korrekt beräkning
-            ir_baseline_file = st.text_input(
-                "Sökväg till IR baseline Excel-fil",
-                value="intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx",
-                help="Excel-fil med 'Påverkbara' ark som innehåller baseline-data per REId"
-            )
+            ir_baseline_file = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
             
             if Path(ir_baseline_file).exists():
                 try:
@@ -238,32 +295,6 @@ def show_dea_view(df):
                             total_reduction = export_data['Total_Reduction_tkr'].sum() / 1000  # MSEK
                             reduction_pct = (total_reduction / total_baseline) * 100 if total_baseline > 0 else 0
                             st.metric("Total reduktion", f"{total_reduction:.1f} MSEK ({reduction_pct:.1f}%)")
-                        
-                        # Test: jämför mot Ei:s baseline för sanity check
-                        with st.expander("🔍 Sanity check - Ei baseline vs vårt scenario"):
-                            # Beräkna vad som händer om vi applicerar Ei:s egna krav
-                            ei_test = export_data.copy()
-                            ei_test['Test_Target'] = (
-                                ei_test['Y2024_baseline'] + 
-                                ei_test['Y2025_baseline'] + 
-                                ei_test['Y2026_baseline'] + 
-                                ei_test['Y2027_baseline']
-                            )
-                            ei_test['Test_Delta'] = ei_test['Test_Target'] - ei_test['Paverkbara_Baseline_4yr']
-                            
-                            test_delta_total = ei_test['Test_Delta'].sum()
-                            test_delta_pct = (test_delta_total / ei_test['Paverkbara_Baseline_4yr'].sum() * 100) if ei_test['Paverkbara_Baseline_4yr'].sum() > 0 else 0
-                            
-                            col_a, col_b = st.columns(2)
-                            with col_a:
-                                st.metric("Ei baseline total", f"{ei_test['Test_Target'].sum()/1000:.1f} MSEK")
-                            with col_b:
-                                st.metric("Delta mot IR baseline", f"{test_delta_total/1000:+.1f} MSEK ({test_delta_pct:+.2f}%)")
-                            
-                            if abs(test_delta_pct) < 0.1:
-                                st.success("✅ Sanity check OK - mindre än 0,1% skillnad mellan Ei baseline och IR baseline")
-                            else:
-                                st.warning(f"⚠️ Sanity check: {test_delta_pct:.2f}% skillnad - kontrollera baseline-mappning")
                         
                         # Visa preview av export-data
                         with st.expander("Förhandsvisning av export-data"):
@@ -323,6 +354,7 @@ def show_dea_view(df):
                     del st.session_state['dea_params']
                 st.rerun()
 
+
 def calculate_ir_paverkbara_export_correct(dea_result: pd.DataFrame, ir_baseline_file: str) -> Optional[pd.DataFrame]:
     """
     Korrekt beräkning av påverkbara kostnader enligt Ei:s exakta metod.
@@ -345,7 +377,7 @@ def calculate_ir_paverkbara_export_correct(dea_result: pd.DataFrame, ir_baseline
     # Leta efter företagskolumn med olika möjliga namn
     foretag_col = None
     for col in available_cols:
-        if any(variant in col.lower() for variant in ['företag', 'foretag', 'företag', 'fÃ¶retag']):
+        if any(variant in col.lower() for variant in ['företag', 'foretag', 'företag', 'fÃƒÂ¶retag']):
             foretag_col = col
             break
     
@@ -375,13 +407,12 @@ def calculate_ir_paverkbara_export_correct(dea_result: pd.DataFrame, ir_baseline
     export_data = export_data.merge(ir_baseline, on='REId', how='left')
     
     # Filtrera till endast rader där vi har komplett baseline-data
-    required_cols = ['B_raw', 'e_base']  # Vi behöver inte y2024_base längre för återställning
+    required_cols = ['B_raw', 'e_base']
     complete_mask = export_data[required_cols].notna().all(axis=1)
     incomplete_count = (~complete_mask).sum()
     
     if incomplete_count > 0:
         st.warning(f"{incomplete_count} REId saknar komplett baseline-data och exkluderas från export")
-        # Visa vilka REId som saknas för debugging - hantera om Företag-kolumn saknas
         display_cols = ['REId'] + required_cols
         if 'Företag' in export_data.columns:
             display_cols.insert(1, 'Företag')
@@ -398,7 +429,7 @@ def calculate_ir_paverkbara_export_correct(dea_result: pd.DataFrame, ir_baseline
     # Hämta värden enligt korrekt logik
     DT = export_data['B_raw'].astype(float)           # Medelvärde 2018-2021 (ren bas)
     DU = export_data.get('Adj', 0).astype(float).fillna(0)  # NeonAndringar (total justering)
-    e_base = export_data['e_base'].astype(float)      # Ei:s originalkriterier för sanity check
+    e_base = export_data['e_base'].astype(float)      # Ei:s originalkriterier
     e_scn = export_data['Effkrav_proc'].astype(float)  # Era DEA-krav (scenario)
     
     # Årlig fördelning av NeonAndringar
@@ -453,13 +484,6 @@ def calculate_ir_paverkbara_export_correct(dea_result: pd.DataFrame, ir_baseline
     # Totalsumma scenario
     total_4yr_scn = y2024_scn + y2025_scn + y2026_scn + y2027_scn
     
-    # Spara inkrement för debug
-    inc_2024_scn = np.array([r['inc'][0] for r in scn_results])
-    inc_2025_scn = np.array([r['inc'][1] for r in scn_results])
-    inc_2026_scn = np.array([r['inc'][2] for r in scn_results])
-    inc_2027_scn = np.array([r['inc'][3] for r in scn_results])
-    B_scn = np.array([r['B'] for r in scn_results])
-    
     # === BASELINE-BERÄKNING med Excel-korrekt tillväxtfaktor ===
     base_results = avdrag_kumulativ_vectorized(DT, DU, e_base)
     
@@ -478,26 +502,6 @@ def calculate_ir_paverkbara_export_correct(dea_result: pd.DataFrame, ir_baseline
     # Totalsumma baseline
     total_4yr_base = y2024_base_calc + y2025_base_calc + y2026_base_calc + y2027_base_calc
     
-    # Spara inkrement för baseline (för debug)
-    inc_2024_base = np.array([r['inc'][0] for r in base_results])
-    inc_2025_base = np.array([r['inc'][1] for r in base_results])
-    inc_2026_base = np.array([r['inc'][2] for r in base_results])
-    inc_2027_base = np.array([r['inc'][3] for r in base_results])
-    B_base = np.array([r['B'] for r in base_results])
-    
-    # === SANITY CHECK ===
-    # Kontrollera mot verkliga Excel-värden om de finns
-    sanity_check_data = {}
-    if 'y2024_base' in export_data.columns:
-        y2024_excel = export_data['y2024_base'].astype(float)
-        diff_2024 = np.abs(y2024_base_calc - y2024_excel)
-        sanity_check_data['2024_diff'] = diff_2024
-    
-    if 'ir_totalsumma' in export_data.columns:
-        total_excel = export_data['ir_totalsumma'].astype(float)
-        diff_total = np.abs(total_4yr_base - total_excel)
-        sanity_check_data['total_diff'] = diff_total
-    
     # Avrunda resultat till heltal (tkr)
     y2024_scn = np.round(y2024_scn).astype(int)
     y2025_scn = np.round(y2025_scn).astype(int)
@@ -506,127 +510,14 @@ def calculate_ir_paverkbara_export_correct(dea_result: pd.DataFrame, ir_baseline
     total_4yr_scn = np.round(total_4yr_scn).astype(int)
     total_4yr_base = np.round(total_4yr_base).astype(int)
     
-    y2024_base_calc = np.round(y2024_base_calc).astype(int)
-    y2025_base_calc = np.round(y2025_base_calc).astype(int)
-    y2026_base_calc = np.round(y2026_base_calc).astype(int)
-    y2027_base_calc = np.round(y2027_base_calc).astype(int)
-    
     # === SKAPA EXPORT-DATAFRAME ===
     export_data['Paverkbara_Baseline_4yr'] = total_4yr_base
     export_data['Paverkbara_Target'] = total_4yr_scn
     export_data['Total_Reduction_tkr'] = (total_4yr_base - total_4yr_scn).astype(int)
     export_data['Effektiviseringskrav'] = e_scn  # Behåll som decimal för referens
     
-    # Lägg till årsvisa komponenter för debugging/validering
-    export_data['Y2024_scenario'] = y2024_scn
-    export_data['Y2025_scenario'] = y2025_scn
-    export_data['Y2026_scenario'] = y2026_scn
-    export_data['Y2027_scenario'] = y2027_scn
-    
-    export_data['Y2024_baseline'] = y2024_base_calc
-    export_data['Y2025_baseline'] = y2025_base_calc
-    export_data['Y2026_baseline'] = y2026_base_calc
-    export_data['Y2027_baseline'] = y2027_base_calc
-    
-    # Lägg till beräkningsparametrar för transparens
-    export_data['DT_medelvarde'] = np.round(DT).astype(int)
-    export_data['DU_neonandringar'] = np.round(DU).astype(int)
-    export_data['Delta_per_ar'] = np.round(Delta).astype(int)
-    export_data['B_bas_scn'] = np.round(B_scn).astype(int)
-    export_data['Ei_arligt_krav'] = np.round(e_base, 6)
-    export_data['DEA_arligt_krav'] = np.round(e_scn, 6)
-    
-    # Lägg till Excel-korrekta inkrement och avdrag
-    export_data['Inc_2024_scn'] = inc_2024_scn
-    export_data['Inc_2025_scn'] = inc_2025_scn  
-    export_data['Inc_2026_scn'] = inc_2026_scn
-    export_data['Inc_2027_scn'] = inc_2027_scn
-    export_data['Avdrag_2024_scn'] = avdrag_2024_scn
-    export_data['Avdrag_2025_scn'] = avdrag_2025_scn  
-    export_data['Avdrag_2026_scn'] = avdrag_2026_scn
-    export_data['Avdrag_2027_scn'] = avdrag_2027_scn
-    
-    # Sanity check-resultat mot Excel-värden
-    if 'y2024_excel' in export_data.columns:
-        export_data['Sanity_2024_diff'] = np.abs(y2024_base_calc - export_data['y2024_excel'].astype(float))
-    if 'total_excel' in export_data.columns:
-        export_data['Sanity_total_diff'] = np.abs(total_4yr_base - export_data['total_excel'].astype(float))
-    
     export_data['Analysis_Method'] = 'DEA_corrected_DT_excel_growth_factor'
     export_data['Export_Timestamp'] = datetime.now().isoformat()
-    
-    # === DEBUG-SEKTION med tillväxtfaktor-analys ===
-    # Visa detaljerad beräkning för en utvald REId
-    debug_reids = ['REL00015', 'REL00001']  # Prova företag med NeonAndringar först
-    debug_reid = None
-    debug_mask = None
-    
-    for reid in debug_reids:
-        mask = export_data['REId'] == reid
-        if mask.any():
-            debug_reid = reid
-            debug_mask = mask
-            break
-    
-    if debug_reid and debug_mask.any():
-        debug_row = export_data[debug_mask].iloc[0]
-        
-        with st.expander(f"Debug: Excel-korrekt tillväxtfaktor för {debug_reid}"):
-            st.write("**Input-värden:**")
-            st.write(f"- DT (medelvärde 2018-2021): {debug_row['DT_medelvarde']:,} tkr")
-            st.write(f"- DU (NeonAndringar): {debug_row['DU_neonandringar']:,} tkr") 
-            st.write(f"- Δ (per år): {debug_row['Delta_per_ar']:,} tkr")
-            st.write(f"- **B (bas för procent)**: DT + Δ = {debug_row['DT_medelvarde']:,} + {debug_row['Delta_per_ar']:,} = {debug_row['B_bas_scn']:,} tkr")
-            st.write(f"- e_base (Ei:s krav): {debug_row['Ei_arligt_krav']:.6f} ({debug_row['Ei_arligt_krav']*100:.3f}%)")
-            st.write(f"- e_scn (DEA-krav): {debug_row['DEA_arligt_krav']:.6f} ({debug_row['DEA_arligt_krav']*100:.2f}%)")
-            
-            st.write("**KORREKT Excel-formel med tillväxtfaktor:**")
-            st.code("inc_t = round_half_up(e × B × (1+e)^(t-1))")
-            st.code("Avdrag_t = Σ(inc_1 till inc_t)")
-            st.code("Y_t = DT - Avdrag_t + Δ")
-            
-            st.write("**Scenario-beräkning (årliga inkrement):**")
-            B_val = debug_row['B_bas_scn']
-            e_scn_val = debug_row['DEA_arligt_krav']
-            
-            for t, year in enumerate([2024, 2025, 2026, 2027], 1):
-                growth_factor = (1.0 + e_scn_val) ** (t-1)
-                teoretisk_inc = e_scn_val * B_val * growth_factor
-                faktisk_inc = debug_row[f'Inc_{year}_scn']
-                avdrag_kum = debug_row[f'Avdrag_{year}_scn']
-                
-                st.write(f"- **{year} (t={t})**: inc = {e_scn_val:.6f} × {B_val:,} × {growth_factor:.6f} = {teoretisk_inc:.1f} → {faktisk_inc} tkr")
-                st.caption(f"  Kumulativt avdrag: {avdrag_kum:,} tkr")
-            
-            st.write("**Årsnivåer efter avdrag:**")
-            DT_val = debug_row['DT_medelvarde']
-            Delta_val = debug_row['Delta_per_ar']
-            
-            for year in [2024, 2025, 2026, 2027]:
-                avdrag_val = debug_row[f'Avdrag_{year}_scn']
-                resultat_val = debug_row[f'Y{year}_scenario']
-                beraknad = DT_val - avdrag_val + Delta_val
-                
-                st.write(f"- **{year}**: {DT_val:,} - {avdrag_val:,} + {Delta_val:,} = {beraknad:,} → {resultat_val:,} tkr")
-            
-            st.write(f"**Total scenario:** {debug_row['Paverkbara_Target']:,} tkr")
-            st.write(f"**Total baseline:** {debug_row['Paverkbara_Baseline_4yr']:,} tkr")
-            st.write(f"**Total reduktion:** {debug_row['Total_Reduction_tkr']:,} tkr")
-            
-            # Sanity check mot Excel-värden om de finns
-            sanity_cols = [col for col in debug_row.index if col.startswith('Sanity_')]
-            if sanity_cols:
-                st.write("**Sanity check mot Excel:**")
-                for col in sanity_cols:
-                    diff_val = debug_row[col]
-                    if abs(diff_val) < 0.5:
-                        st.write(f"✅ {col.replace('Sanity_', '').replace('_', ' ')}: skillnad {diff_val:.1f} tkr (PERFEKT)")
-                    elif abs(diff_val) < 2:
-                        st.write(f"✅ {col.replace('Sanity_', '').replace('_', ' ')}: skillnad {diff_val:.1f} tkr (OK)")
-                    else:
-                        st.write(f"⚠️ {col.replace('Sanity_', '').replace('_', ' ')}: skillnad {diff_val:.1f} tkr")
-            
-            st.write("**Metod:** Excel-exakt med tillväxtfaktor (1+e)^(t-1) och half-up avrundning")
     
     return export_data
 
@@ -664,15 +555,8 @@ def load_ir_paverkbara_baseline(filepath: str) -> Optional[pd.DataFrame]:
         col_positions = {
             'REId': 'A',           # REid
             'B_raw': 'DT',         # Medelvärde 2018-2021 (REN BAS)
-            'Adj': 'DU',           # NeonAndringar (total justering, inte DD)
+            'Adj': 'DU',           # NeonAndringar (total justering)
             'e_base': 'EG',        # Ei:s årliga effektiviseringskrav
-            'mu_factor': 'EF',     # Omvandlingsränta (används ej i nya metoden)
-            # Dessa används endast för sanity check:
-            'y2024_excel': 'EA',   # Excel-beräknat 2024-värde
-            'y2025_excel': 'EB',   # Excel-beräknat 2025-värde
-            'y2026_excel': 'EC',   # Excel-beräknat 2026-värde 
-            'y2027_excel': 'ED',   # Excel-beräknat 2027-värde
-            'total_excel': 'EE'    # Excel-beräknad totalsumma
         }
         
         # Konvertera till kolumnindex
@@ -702,8 +586,7 @@ def load_ir_paverkbara_baseline(filepath: str) -> Optional[pd.DataFrame]:
             return None
 
         # Typning och rensning för numeriska kolumner
-        numeric_cols = ['B_raw', 'Adj', 'e_base', 'y2024_excel', 'y2025_excel', 
-                       'y2026_excel', 'y2027_excel', 'total_excel', 'mu_factor']
+        numeric_cols = ['B_raw', 'Adj', 'e_base']
         
         for col in numeric_cols:
             if col in df_out.columns:
@@ -724,32 +607,7 @@ def load_ir_paverkbara_baseline(filepath: str) -> Optional[pd.DataFrame]:
         critical_missing = df_out[['B_raw', 'e_base']].isna().any(axis=1).sum()
         if critical_missing > 0:
             st.warning(f"{critical_missing} REId saknar kritiska baseline-värden (B_raw eller e_base)")
-
-        # Debug-info
-        found_cols = [col for col in numeric_cols + ['REId'] if col in df_out.columns]
-        missing_cols = [col for col in numeric_cols if col not in df_out.columns]
         
-        st.success(f"Läste {len(df_out)} REId från Påverkbara-arket (korrigerad metod - DT som bas)")
-        
-        with st.expander("Debug: Kolumnmapping och sampel-data"):
-            st.write("**Kolumnpositioner som användes:**")
-            for field, pos in col_positions.items():
-                index = col_indices[field]
-                status = "✓" if field in found_cols else "✗"
-                importance = "🔥" if field in ['B_raw', 'Adj', 'e_base'] else "📊" if 'excel' in field else ""
-                st.write(f"{status} {importance} {field}: {pos} (index {index})")
-            
-            if missing_cols:
-                st.write(f"**Saknade kolumner:** {missing_cols}")
-            
-            st.write("**KRITISK FÖRÄNDRING:** Använder nu DT (B_raw) som ren bas istället för att återställa från EA (y2024_base)")
-            
-            # Visa sampel av inläst data
-            st.write("**Sampel av inlästa data:**")
-            sample_cols = ['REId', 'B_raw', 'Adj', 'e_base', 'y2024_excel', 'total_excel']
-            available_sample_cols = [c for c in sample_cols if c in df_out.columns]
-            st.dataframe(df_out[available_sample_cols].head(3))
-
         return df_out
 
     except Exception as e:
@@ -758,10 +616,11 @@ def load_ir_paverkbara_baseline(filepath: str) -> Optional[pd.DataFrame]:
         st.code(traceback.format_exc())
         return None
 
+
 def export_ir_paverkbara_scenario(export_data: pd.DataFrame, scenario_name: str) -> Tuple[str, str]:
     """Exporterar påverkbara kostnader till IR-dekompositionen. Returnerar (data_path, meta_path)."""
     
-    # Skapa export-katalog - rätt sökväg enligt din specifikation
+    # Skapa export-katalog
     export_dir = Path("scenario/effektiviseringskrav/exports_to_ir")
     export_dir.mkdir(parents=True, exist_ok=True)
     
@@ -784,7 +643,7 @@ def export_ir_paverkbara_scenario(export_data: pd.DataFrame, scenario_name: str)
     
     # Skapa metadata-fil
     metadata = {
-        "description": "Påverkbara kostnader baserat på DEA-effektiviseringskrav för IR-dekomposition (Ei-korrekt metod)",
+        "description": "Påverkbara kostnader baserat på DEA-effektiviseringskrav för IR-dekomposition",
         "scenario_name": scenario_name,
         "analysis_method": "DEA_corrected_exact_columns",
         "export_timestamp": datetime.now().isoformat(),
@@ -792,17 +651,10 @@ def export_ir_paverkbara_scenario(export_data: pd.DataFrame, scenario_name: str)
         "unit": "tkr",
         "level": "REId",
         "period": "2024-2027",
-        "formula": "Ei-korrekt: B_eff återställd från baseline, μ-faktor från 2024/2025-förhållande",
         "reid_count": len(final_export),
         "total_baseline_tkr": int(final_export['Paverkbara_Baseline_4yr'].sum()),
         "total_target_tkr": int(final_export['Paverkbara_Target'].sum()),
         "total_reduction_tkr": int(final_export['Total_Reduction_tkr'].sum()),
-        "method_details": {
-            "step1": "B_eff = y2024_base / (1 - e_base)",
-            "step2": "μ = 1 - e_base - (y2025_base / y2024_base)",
-            "step3": "y_t_scn = y_{t-1}_scn * (1 - e_scn - μ) for t > 2024",
-            "step4": "Totalsumma_scn = sum(y2024_scn + y2025_scn + y2026_scn + y2027_scn)"
-        }
     }
     
     metadata_path = filepath.with_suffix('.json')
