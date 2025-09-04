@@ -11,18 +11,10 @@ def load_reconciliation():
     return pd.read_csv("effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv")
 
 # === MELLANDATA ===
-
-@st.cache_data
-def load_capbase_b_sample():
-    return pd.read_parquet("kapitalbas/datafiler/mellandata/capbase_b_sample.parquet")
-
 @st.cache_data
 def load_capbase_b():
     return pd.read_parquet("kapitalbas/datafiler/mellandata/capbase_b.parquet")
 
-@st.cache_data
-def load_capbase_compress_tail_sample():
-    return pd.read_parquet("kapitalbas/datafiler/mellandata/capbase_compress_tail_sample.parquet")
 
 @st.cache_data
 def load_capbase_compress_tail():
@@ -72,7 +64,7 @@ def load_capcost_a_sample():
 
 @st.cache_data
 def load_capcost_a():
-   return pd.read_parquet("kapitalbas/datafiler/slutdata/capcost_a.parquet")
+   return pd.read_parquet("kapitalbas/datafiler/slutdata/capcost_a_3_Sheet1.parquet")
 
 @st.cache_data
 def load_capcost_python():

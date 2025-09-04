@@ -7,8 +7,8 @@ from kapitalbas.kapitalbas_app.data_loader import (
     load_tail_full,
 )
 from kapitalbas.datafiler.data_loader import (
-    load_capbase_b_sample,
-    load_capbase_compress_tail_sample, load_capbase_compress_tail,
+    ##load_capbase_b_sample,
+    ##load_capbase_compress_tail_sample, load_capbase_compress_tail,
     load_capbase_compress, load_depreciation_compress_sample,
     load_depreciation_compress, load_depreciation,
     load_returns_compress_sample, load_returns_compress,
@@ -31,17 +31,11 @@ from kapitalbas.visualiseringsfiler.översikt import show_capcost
 st.title("Kapitalbas")
 
 # === Ladda data ===
-### st.session_state["capbase_b_sample"] = load_capbase_b_sample()
-st.session_state["capbase_compress_tail_sample"] = load_capbase_compress_tail_sample()
-st.session_state["capbase_compress_tail"] = load_capbase_compress_tail()
 st.session_state["capbase_compress"] = load_capbase_compress()
 st.session_state["depreciation_compress_sample"] = load_depreciation_compress_sample()
 st.session_state["depreciation_compress"] = load_depreciation_compress()
-### st.session_state["depreciation"] = load_depreciation()
-st.session_state["returns_compress_sample"] = load_returns_compress_sample()
 st.session_state["returns_compress"] = load_returns_compress()
 st.session_state["capbase_a_sample"] = load_capbase_a_sample()
-### st.session_state["capbase_a"] = load_capbase_a()
 st.session_state["capcost_a_sample"] = load_capcost_a_sample()
 st.session_state["capcost_a"] = load_capcost_a()
 

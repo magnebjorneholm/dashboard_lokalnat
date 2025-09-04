@@ -27,7 +27,7 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
     initialize_session_state()
     
     # Sidebar för scenario-kontroller
-    st.sidebar.header("🔧 Scenario-hantering")
+    st.sidebar.header("Scenario-hantering")
     
     scenario_name = st.sidebar.text_input(
         "Scenario-namn", 
@@ -36,13 +36,13 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
     )
     
     # Vertikala knappar (3×1 layout)
-    if st.sidebar.button("🆕 Nytt scenario", use_container_width=True):
+    if st.sidebar.button("Nytt scenario", use_container_width=True):
         create_new_scenario(scenario_name, df_baseline_filtered)
     
-    if st.sidebar.button("📁 Ladda scenario", use_container_width=True):
+    if st.sidebar.button("Ladda scenario", use_container_width=True):
         st.session_state.show_scenario_loader = True
     
-    if st.sidebar.button("🔄 Återställ allt", use_container_width=True):
+    if st.sidebar.button("Återställ allt", use_container_width=True):
         reset_all_components()
     
     # Visa scenario-loader om aktiverad
@@ -56,7 +56,7 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
         st.sidebar.info("Inget scenario aktivt - arbetar med baseline")
     
     # === FÖRETAGS-/NÄTVAL ===
-    st.sidebar.header("🏢 Val av företag/nät")
+    st.sidebar.header("Val av företag/nät")
     
     # Hämta working dataframe (kommer redan med DMU-mappning från baseline)
     df_working = get_working_dataframe(df_baseline_filtered)
@@ -253,7 +253,7 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
 def show_main_waterfall_view(entity_data: pd.Series, selected_entity: str, entity_col: str):
     """Visar huvudvyn med waterfall-chart för valt företag."""
     
-    st.header(f"📊 Intäktsram dekomposition: {selected_entity}")
+    st.header(f"Intäktsram dekomposition: {selected_entity}")
     
     # Kontrollera om vi har separerade kapitalkostnad-komponenter
     has_detailed_capital = all(col in entity_data.index for col in ['Avskrivningar', 'Avkastning'])
@@ -335,7 +335,7 @@ def create_waterfall_chart(components: List[tuple], entity_data: pd.Series, deta
 
 def show_component_table(entity_data: pd.Series, components: List[tuple], has_detailed_capital: bool = False):
     """Visar detaljerad komponent-tabell med Δ mot baseline."""
-    st.subheader("📋 Komponent-detaljer")
+    st.subheader("Komponent-detaljer")
 
     def get_baseline_value(component_name: str) -> Optional[float]:
         """Hämtar baseline-värde för komponent med korrekt klassificering."""
@@ -450,7 +450,7 @@ def show_comparison_views(df_working: pd.DataFrame):
     if not st.session_state.current_scenario_name:
         return  # Ingen jämförelse utan aktivt scenario
     
-    st.header("📈 Scenario-jämförelser")
+    st.header("Scenario-jämförelser")
     
     # Kontrollera att vi har baseline-kolumner
     baseline_cols = [col for col in df_working.columns if col.endswith('_Baseline')]
@@ -458,7 +458,7 @@ def show_comparison_views(df_working: pd.DataFrame):
         st.warning("Inga baseline-kolumner hittades - skapa ett nytt scenario för att se jämförelser")
         return
     
-    tabs = st.tabs(["📊 Aggregerad jämförelse", "📈 Fördelning (histogram)", "🏆 Top 10 förändringar"])
+    tabs = st.tabs(["Aggregerad jämförelse", "Fördelning (histogram)", "Top 10 förändringar"])
     
     with tabs[0]:
         show_aggregated_comparison(df_working)
@@ -468,182 +468,6 @@ def show_comparison_views(df_working: pd.DataFrame):
     
     with tabs[2]:
         show_top_changes_table(df_working)
-
-
-def show_aggregated_comparison(df_working: pd.DataFrame):
-    """Visar aggregerad jämförelse mellan baseline och scenario."""
-    st.subheader("Aggregerad jämförelse: Baseline vs Scenario")
-    
-    # Beräkna aggregerade skillnader för relevanta komponenter
-    comparisons = {}
-    
-    # Total intäktsram
-    baseline_total = df_working['Intaktsram_Total_Baseline'].sum()
-    scenario_total = df_working['Intaktsram_Beraknad'].sum()
-    comparisons['Total Intäktsram'] = {
-        'baseline': baseline_total,
-        'scenario': scenario_total,
-        'delta': scenario_total - baseline_total
-    }
-    
-    # Påverkbara kostnader
-    if 'Paverkbara_Kostnader_Baseline' in df_working.columns:
-        baseline_pav = df_working['Paverkbara_Kostnader_Baseline'].sum()
-        scenario_pav = df_working['Paverkbara_Kostnader'].sum()
-        comparisons['Påverkbara kostnader'] = {
-            'baseline': baseline_pav,
-            'scenario': scenario_pav,
-            'delta': scenario_pav - baseline_pav
-        }
-    
-    # Kapitalkostnad (total)
-    if 'Kapitalkostnad_Total_Baseline' in df_working.columns:
-        baseline_kap = df_working['Kapitalkostnad_Total_Baseline'].sum()
-        scenario_kap = df_working['Kapitalkostnad_Total'].sum()
-        comparisons['Kapitalkostnad Total'] = {
-            'baseline': baseline_kap,
-            'scenario': scenario_kap,
-            'delta': scenario_kap - baseline_kap
-        }
-    
-    # Avskrivningar (om uppdelat)
-    if 'Avskrivningar_Baseline' in df_working.columns:
-        baseline_avs = df_working['Avskrivningar_Baseline'].sum()
-        scenario_avs = df_working['Avskrivningar'].sum()
-        comparisons['Avskrivningar'] = {
-            'baseline': baseline_avs,
-            'scenario': scenario_avs,
-            'delta': scenario_avs - baseline_avs
-        }
-    
-    # Avkastning (om uppdelat)
-    if 'Avkastning_Baseline' in df_working.columns:
-        baseline_avk = df_working['Avkastning_Baseline'].sum()
-        scenario_avk = df_working['Avkastning'].sum()
-        comparisons['Avkastning'] = {
-            'baseline': baseline_avk,
-            'scenario': scenario_avk,
-            'delta': scenario_avk - baseline_avk
-        }
-    
-    # Visa som metrics
-    st.write("**Jämförelse för alla lokalnät (MSEK)**")
-    cols = st.columns(len(comparisons))
-    
-    for i, (comp_name, values) in enumerate(comparisons.items()):
-        with cols[i]:
-            baseline_msek = values['baseline'] / 1000
-            scenario_msek = values['scenario'] / 1000
-            delta_msek = values['delta'] / 1000
-            delta_pct = (values['delta'] / values['baseline'] * 100) if values['baseline'] != 0 else 0
-            
-            st.metric(
-                comp_name,
-                f"{scenario_msek:,.1f} MSEK",
-                delta=f"{delta_msek:+,.1f} MSEK ({delta_pct:+.1f}%)"
-            )
-    
-    # Detaljerad tabell
-    with st.expander("Detaljerad aggregering (tkr)"):
-        agg_data = []
-        for comp_name, values in comparisons.items():
-            agg_data.append({
-                'Komponent': comp_name,
-                'Baseline (tkr)': f"{values['baseline']:,.0f}",
-                'Scenario (tkr)': f"{values['scenario']:,.0f}",
-                'Delta (tkr)': f"{values['delta']:+,.0f}",
-                'Delta (%)': f"{(values['delta'] / values['baseline'] * 100):+.2f}%" if values['baseline'] != 0 else "N/A"
-            })
-        
-        st.dataframe(pd.DataFrame(agg_data), use_container_width=True)
-
-
-def show_delta_histograms(df_working: pd.DataFrame):
-    """Visar histogram över delta % för IR-komponenter."""
-    st.subheader("Fördelning av förändringar (%)")
-    
-    # Beräkna delta % för relevanta komponenter
-    delta_data = {}
-    
-    # Påverkbara kostnader
-    if 'Paverkbara_Kostnader_Baseline' in df_working.columns:
-        baseline_pav = df_working['Paverkbara_Kostnader_Baseline']
-        scenario_pav = df_working['Paverkbara_Kostnader']
-        delta_pct_pav = ((scenario_pav - baseline_pav) / baseline_pav * 100).dropna()
-        if not delta_pct_pav.empty:
-            delta_data['Påverkbara kostnader'] = delta_pct_pav
-    
-    # Avskrivningar
-    if 'Avskrivningar_Baseline' in df_working.columns:
-        baseline_avs = df_working['Avskrivningar_Baseline']
-        scenario_avs = df_working['Avskrivningar']
-        delta_pct_avs = ((scenario_avs - baseline_avs) / baseline_avs * 100).dropna()
-        if not delta_pct_avs.empty:
-            delta_data['Avskrivningar'] = delta_pct_avs
-    
-    # Avkastning
-    if 'Avkastning_Baseline' in df_working.columns:
-        baseline_avk = df_working['Avkastning_Baseline']
-        scenario_avk = df_working['Avkastning']
-        delta_pct_avk = ((scenario_avk - baseline_avk) / baseline_avk * 100).dropna()
-        if not delta_pct_avk.empty:
-            delta_data['Avkastning'] = delta_pct_avk
-    
-    # Kapitalkostnad total (om ej uppdelat)
-    if ('Kapitalkostnad_Total_Baseline' in df_working.columns and 
-        'Avskrivningar_Baseline' not in df_working.columns):
-        baseline_kap = df_working['Kapitalkostnad_Total_Baseline']
-        scenario_kap = df_working['Kapitalkostnad_Total']
-        delta_pct_kap = ((scenario_kap - baseline_kap) / baseline_kap * 100).dropna()
-        if not delta_pct_kap.empty:
-            delta_data['Kapitalkostnad'] = delta_pct_kap
-    
-    if not delta_data:
-        st.info("Inga förändringar att visa histogram för")
-        return
-    
-    # Skapa kombinerat histogram med olika färger per komponent
-    fig = go.Figure()
-    colors = ['blue', 'green', 'red', 'orange', 'purple']
-    
-    for i, (comp_name, delta_series) in enumerate(delta_data.items()):
-        # Filtrera bort extrema outliers för bättre visning (>100% förändring)
-        delta_filtered = delta_series[abs(delta_series) <= 100]
-        
-        if not delta_filtered.empty:
-            fig.add_trace(go.Histogram(
-                x=delta_filtered,
-                name=comp_name,
-                opacity=0.7,
-                marker_color=colors[i % len(colors)],
-                nbinsx=30
-            ))
-    
-    fig.update_layout(
-        title="Fördelning av förändringar per komponent (%)",
-        xaxis_title="Förändring (%)",
-        yaxis_title="Antal företag",
-        barmode='overlay',
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Visa statistik för varje komponent
-    with st.expander("Statistik per komponent"):
-        stats_data = []
-        for comp_name, delta_series in delta_data.items():
-            stats_data.append({
-                'Komponent': comp_name,
-                'Antal': len(delta_series),
-                'Medel (%)': f"{delta_series.mean():.2f}",
-                'Median (%)': f"{delta_series.median():.2f}",
-                'Min (%)': f"{delta_series.min():.2f}",
-                'Max (%)': f"{delta_series.max():.2f}",
-                'Std (%)': f"{delta_series.std():.2f}"
-            })
-        
-        st.dataframe(pd.DataFrame(stats_data), use_container_width=True)
 
 
 def show_aggregated_comparison(df_working: pd.DataFrame):
@@ -905,7 +729,7 @@ def show_top_changes_table(df_working: pd.DataFrame):
 def show_component_controls(entity_data: pd.Series):
     """Visar kontroller för att uppdatera komponenter."""
     
-    st.sidebar.header("🔧 Uppdatera komponenter")
+    st.sidebar.header("Uppdatera komponenter")
     
     if not st.session_state.current_scenario_name:
         st.sidebar.info("Skapa ett scenario för att kunna uppdatera komponenter")
@@ -914,17 +738,31 @@ def show_component_controls(entity_data: pd.Series):
     # Detect scenario updates från andra sektioner  
     scenario_updates = detect_scenario_updates()
     
-    # Visa tillgängliga scenarier kompakt
+    # Visa tillgängliga scenarier med filnamn och cache-kontroll
     st.sidebar.write("**Tillgängliga scenarier:**")
     for key, value in scenario_updates.items():
-        status = "✅" if value else "❌"
-        st.sidebar.caption(f"{status} {key}")
+        if value is not None:
+            status = "✅"
+            # Korta av filnamnet för bättre visning
+            short_name = value['name'][:30] + "..." if len(value['name']) > 30 else value['name']
+            st.sidebar.caption(f"{status} **{key}**")
+            st.sidebar.caption(f"   {short_name}")
+            st.sidebar.caption(f"   {value['created']}")
+        else:
+            status = "❌"
+            st.sidebar.caption(f"{status} {key} - Ingen export hittad")
+    
+    # Cache-varning för äldre scenarier
+    if any(scenario_updates.values()):
+        st.sidebar.info("Om problem uppstår, rensa Streamlit cache (Ctrl+Shift+R)")
     
     # Påverkbara kostnader
-    st.sidebar.subheader("💰 Påverkbara kostnader")
+    st.sidebar.subheader("Påverkbara kostnader")
     if scenario_updates['effektiviseringskrav']:
-        if st.sidebar.button("🔥 Hämta från Effektiviseringskrav"):
-            update_component_from_scenario('paverkbara', 'effektiviseringskrav', scenario_updates['effektiviseringskrav'])
+        if st.sidebar.button("Hämta från Effektiviseringskrav"):
+            update_component_from_scenario('paverkbara', 'effektiviseringskrav', scenario_updates['effektiviseringskrav']['file'])
+    else:
+        st.sidebar.info("Ingen effektiviseringskrav-export hittades")
     
     # Manuell uppdatering
     current_paverkbara = entity_data.get('Paverkbara_Kostnader', 0)
@@ -937,10 +775,10 @@ def show_component_controls(entity_data: pd.Series):
         update_component_manual('paverkbara', entity_data['REId'], new_paverkbara)
     
     # Kapitalkostnad  
-    st.sidebar.subheader("🗂️ Kapitalkostnad")
+    st.sidebar.subheader("Kapitalkostnad")
     if scenario_updates['kapitalbas']:
-        if st.sidebar.button("🔥 Hämta från Kapitalbas"):
-            update_component_from_scenario('kapitalkostnad', 'kapitalbas', scenario_updates['kapitalbas'])
+        if st.sidebar.button("Hämta från Kapitalbas"):
+            update_component_from_scenario('kapitalkostnad', 'kapitalbas', scenario_updates['kapitalbas']['file'])
     else:
         st.sidebar.info("Ingen kapitalbas-export hittades")
     
@@ -980,10 +818,10 @@ def show_component_controls(entity_data: pd.Series):
     # Återställ enskilda komponenter
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        if st.sidebar.button("↩️ Återställ Påverkbara"):
+        if st.sidebar.button("Återställ Påverkbara"):
             reset_component('paverkbara')
     with col2:
-        if st.sidebar.button("↩️ Återställ Kapital"):
+        if st.sidebar.button("Återställ Kapital"):
             reset_component('kapitalkostnad')
 
 
@@ -1173,7 +1011,7 @@ def show_scenario_loader():
     
     # Visa scenario-loader persistent i sidebar
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📁 Ladda tidigare scenario")
+    st.sidebar.subheader("Ladda tidigare scenario")
     
     # Skapa dropdown med scenario-filer
     file_names = [f.name.replace("ir_scenario_", "").replace(".parquet", "").replace("_", " ") 
@@ -1196,13 +1034,13 @@ def show_scenario_loader():
     col_load, col_cancel = st.sidebar.columns(2)
     
     with col_load:
-        if st.button("✅ Ladda scenario", key="load_scenario_btn"):
+        if st.button("Ladda scenario", key="load_scenario_btn"):
             load_scenario_from_file(selected_file)
             st.session_state.show_scenario_loader = False
             st.rerun()
     
     with col_cancel:
-        if st.button("❌ Avbryt", key="cancel_load_btn"):
+        if st.button("Avbryt", key="cancel_load_btn"):
             st.session_state.show_scenario_loader = False
             st.rerun()
     
@@ -1245,7 +1083,7 @@ def load_scenario_from_file(filepath: Path):
 def show_export_section(df_working: pd.DataFrame):
     """Visar export-kontroller för scenario och data."""
     
-    st.header("📤 Export och spara")
+    st.header("Export och spara")
     
     if not st.session_state.current_scenario_name:
         st.info("Skapa ett scenario för att kunna exportera data")
@@ -1254,7 +1092,7 @@ def show_export_section(df_working: pd.DataFrame):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("💾 Spara scenario")
+        st.subheader("Spara scenario")
         
         if st.button("Spara scenario till fil"):
             try:
@@ -1264,7 +1102,7 @@ def show_export_section(df_working: pd.DataFrame):
                 st.error(f"Fel vid sparande: {e}")
     
     with col2:
-        st.subheader("📊 Exportera data")
+        st.subheader("Exportera data")
         
         export_format = st.selectbox("Format", ["Excel", "CSV", "PDF"])
         
@@ -1294,7 +1132,7 @@ def show_export_section(df_working: pd.DataFrame):
     
     # Scenario-information
     if st.session_state.current_scenario_name:
-        with st.expander("📋 Scenario-information"):
+        with st.expander("Scenario-information"):
             scenario_info = st.session_state.scenario_data
             
             st.write(f"**Namn:** {st.session_state.current_scenario_name}")

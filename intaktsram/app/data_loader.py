@@ -1,12 +1,14 @@
 # data_loader.py
 # Laddar baseline-data från "Löpande kostnader från SDF 202427.xlsx"
 # och hanterar framtida scenario-integration med ny DMU-mappning
+# UPPDATERAD med förbättrad scenario-detection som returnerar filnamn och tidsstämplar
 
 from __future__ import annotations
 from pathlib import Path
 import pandas as pd
 import numpy as np
 from typing import Dict, Optional, Tuple, List
+from datetime import datetime
 
 
 def load_baseline_data(filepath: str) -> pd.DataFrame:
@@ -187,18 +189,27 @@ def load_dmu_mapping(filepath: str = "new_recon.csv") -> pd.DataFrame:
     return pd.DataFrame(columns=['REId', 'DMU', 'Företag'])
 
 
-# Uppdatera detect_scenario_updates() i data_loader.py
-def detect_scenario_updates() -> Dict[str, Optional[str]]:
+def detect_scenario_updates() -> Dict[str, Optional[Dict]]:
     """
-    Letar efter scenario-filer från andra sektioner i nya mappstrukturen.
+    UPPDATERAD FUNKTION: Letar efter scenario-filer från andra sektioner i nya mappstrukturen.
+    Returnerar nu filnamn och tidsstämplar för bättre debugging.
     
     Returns:
         Dict med information om tillgängliga scenarier:
         {
-            'effektiviseringskrav': 'scenario/effektiviseringskrav/exports_to_ir/ir_paverkbara_*.parquet' eller None,
-            'kapitalbas': 'scenario/kapitalbas/exports_to_ir/ir_kapkost_wacc_*.parquet' eller None
+            'effektiviseringskrav': {
+                'file': 'scenario/effektiviseringskrav/exports_to_ir/ir_paverkbara_*.parquet',
+                'name': 'ir_paverkbara_dea_method_20241204.parquet',
+                'created': '2024-12-04 15:30'
+            } eller None,
+            'kapitalbas': {
+                'file': 'scenario/kapitalbas/exports_to_ir/ir_kapkost_wacc_*.parquet',
+                'name': 'ir_kapkost_wacc_0p0475_y2024_2027_dmu.parquet', 
+                'created': '2024-12-04 14:15'
+            } eller None
         }
     """
+    
     updates = {
         'effektiviseringskrav': None,
         'kapitalbas': None
@@ -211,7 +222,11 @@ def detect_scenario_updates() -> Dict[str, Optional[str]]:
         if effkrav_files:
             # Ta senaste fil baserat på modifierad tid
             latest_effkrav = max(effkrav_files, key=lambda f: f.stat().st_mtime)
-            updates['effektiviseringskrav'] = str(latest_effkrav)
+            updates['effektiviseringskrav'] = {
+                'file': str(latest_effkrav),
+                'name': latest_effkrav.name,
+                'created': datetime.fromtimestamp(latest_effkrav.stat().st_mtime).strftime('%Y-%m-%d %H:%M')
+            }
 
     # Leta efter kapitalbas-filer i scenario/kapitalbas/exports_to_ir/
     kapital_dir = Path("scenario/kapitalbas/exports_to_ir/")
@@ -220,7 +235,11 @@ def detect_scenario_updates() -> Dict[str, Optional[str]]:
         if kapital_files:
             # Ta senaste fil baserat på modifierad tid
             latest_kapital = max(kapital_files, key=lambda f: f.stat().st_mtime)
-            updates['kapitalbas'] = str(latest_kapital)
+            updates['kapitalbas'] = {
+                'file': str(latest_kapital),
+                'name': latest_kapital.name,
+                'created': datetime.fromtimestamp(latest_kapital.stat().st_mtime).strftime('%Y-%m-%d %H:%M')
+            }
     
     return updates
 

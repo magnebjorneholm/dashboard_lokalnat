@@ -1,27 +1,21 @@
-# Python code to process Stata data and create capbase_b.parquet
+# Python code to process parquet data and create capbase_b with calculated variables
 import pandas as pd
 import numpy as np
 from pathlib import Path
-
-# ==============================
-# Basmappar
-# ==============================
-BASE_DIR = Path("ny_kapitalbas") / "datafiler"
-RAW_DIR  = BASE_DIR / "rådata"
-PROC_DIR = BASE_DIR / "mellandata"
-PROC_DIR.mkdir(parents=True, exist_ok=True)
-
-# ==============================
-# Läs in rådata
-# ==============================
-capbase_a_path = RAW_DIR / "capbase_a_sample.parquet"
 
 def process_capbase_data(input_file, output_file):
     """
     Process capbase_a.parquet to create capbase_b.parquet with calculated variables
     for time periods 229-236, sorted by id_component.
+    
+    Parameters:
+    -----------
+    input_file : str or Path
+        Path to the input parquet file (capbase_a.parquet)
+    output_file : str or Path
+        Path to the output parquet file (capbase_b.parquet)
     """
-    # Load the Stata file
+    # Load the parquet file
     print(f"Loading data from {input_file}...")
     df = pd.read_parquet(input_file)
     print(f"Data loaded successfully: {df.shape[0]} rows, {df.shape[1]} columns")
@@ -33,16 +27,36 @@ def process_capbase_data(input_file, output_file):
     # Sort the dataframe by id_component to match the test file
     df = df.sort_values('id_component')
     
-    # Save the result to a Stata file
+    # Save the result to parquet and excel files
+    output_path = Path(output_file)
+    
     print(f"Saving data to {output_file}...")
-    df.to_parquet(output_file, index=False)
-    print(f"Data saved successfully to {output_file}")
+    df.to_parquet(output_file)
+    
+    # Also save as Excel
+    excel_file = output_path.with_suffix('.xlsx')
+    print(f"Saving data to {excel_file}...")
+    df.to_excel(excel_file, index=False)
+    
+    print(f"Data saved successfully to {output_file} and {excel_file}")
     
     return df
 
 def process_time_period(df, time):
     """
     Process a single time period, calculating all required variables.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        The dataframe to process
+    time : int
+        The time period to process (e.g., 229)
+        
+    Returns:
+    --------
+    pandas.DataFrame
+        The processed dataframe with new columns for the time period
     """
     print(f"Processing time period {time}...")
     
@@ -87,9 +101,8 @@ def process_time_period(df, time):
     # Merge the sums back to the original dataframe
     df = df.merge(sum_nuav_ord, on=['cat_encode', 'id_network'], how='left')
     
-    # Convert to thousands and round
+    # Convert to thousands - NO ROUNDING
     df[f'sum_nuav_ord_{time}'] = df[f'sum_nuav_ord_{time}'] / 1000
-    df[f'sum_nuav_ord_{time}'] = df[f'sum_nuav_ord_{time}'].round()
     
     # Summarize - tail
     # Group by cat_encode and id_network, then sum nuav_tail
@@ -98,13 +111,17 @@ def process_time_period(df, time):
     # Merge the sums back to the original dataframe
     df = df.merge(sum_nuav_tail, on=['cat_encode', 'id_network'], how='left')
     
-    # Convert to thousands and round
+    # Convert to thousands - NO ROUNDING
     df[f'sum_nuav_tail_{time}'] = df[f'sum_nuav_tail_{time}'] / 1000
-    df[f'sum_nuav_tail_{time}'] = df[f'sum_nuav_tail_{time}'].round()
     
     return df
 
 if __name__ == "__main__":
-    input_file = capbase_a_path
-    output_file = PROC_DIR / "capbase_b_sample.parquet"
+    # Setup paths
+    BASE_DIR = Path("kapitalbas") / "datafiler"
+    PROC_DIR = BASE_DIR / "mellandata"
+    PROC_DIR.mkdir(parents=True, exist_ok=True)
+    
+    input_file = PROC_DIR / "capbase_a.parquet"
+    output_file = PROC_DIR / "capbase_b.parquet"
     process_capbase_data(input_file, output_file)

@@ -254,6 +254,123 @@ def _build_dea_export_table(df_year: pd.DataFrame, r_new: float) -> tuple[pd.Dat
     out = out.rename(columns={"CAPEX_2024_wacc_tkr": f"CAPEX_2024_wacc_{tag}_tkr"})
     return out, excluded, tag
 
+
+def _build_ir_export_table_period(df_all: pd.DataFrame, r_new: float, years=(2024,2025,2026,2027)) -> tuple[pd.DataFrame, str]:
+    """
+    Bygger IR-exporttabell som SUMMA över hela regleringsperioden (default 2024–2027), DMU-nivå.
+    - Skalar endast return_* med r_new/r_old (per halvår) -> capcost_sum_new
+    - Summerar därefter alla halvår inom perioden till periodbelopp
+    - Applicerar manuella koncessionskostnader
+    """
+    df_period = get_period_df(df_all, years=years)
+    if df_period.empty:
+        raise ValueError("Inget underlag för vald period.")
+
+    scen = apply_interest_scenario(df_period, r_new)
+
+    # Summera över alla halvår 2024–2027 per DMU
+    ir = scen.groupby(["DMU", "Företag"], as_index=False).agg({
+        'dep_ord':'sum','dep_tail':'sum',
+        'return_ord':'sum','return_tail':'sum',
+        'return_ord_new':'sum','return_tail_new':'sum',
+        'capcost_sum':'sum','capcost_sum_new':'sum'
+    })
+
+    # Sätt exportkolumner (period)
+    ir["Kapitalkostnad_Baseline"] = ir["capcost_sum"]
+    ir["Kapitalkostnad_Ny"]       = ir["capcost_sum_new"]
+    ir["Avskrivningar_Ny"]        = ir["dep_ord"] + ir["dep_tail"]  # WACC påverkar ej
+    ir["Avkastning_Baseline"]     = ir["return_ord"] + ir["return_tail"]
+    ir["Avkastning_Ny"]           = ir["return_ord_new"] + ir["return_tail_new"]
+
+    # Framtid: ord/tail-delar
+    ir["dep_ord_Ny"]    = ir["dep_ord"]
+    ir["dep_tail_Ny"]   = ir["dep_tail"]
+    ir["return_ord_Ny"] = ir["return_ord_new"]
+    ir["return_tail_Ny"]= ir["return_tail_new"]
+
+    # NYTT: Applicera koncessionskostnader tillägg
+    ir = apply_concession_adjustments(ir)
+
+    # Metadata
+    tag = _format_wacc_tag(r_new)
+    ir["r_old"] = R_OLD
+    ir["r_new"] = round(float(r_new), 4)
+    ir["price_year"] = 2022
+    ir["scenario_tag"] = tag
+
+    cols = ['DMU','Företag','Kapitalkostnad_Baseline','Kapitalkostnad_Ny',
+            'Avskrivningar_Ny','Avkastning_Baseline','Avkastning_Ny',
+            'dep_ord_Ny','dep_tail_Ny','return_ord_Ny','return_tail_Ny',
+            'r_old','r_new','price_year','scenario_tag']
+    return ir[cols], tag
+
+# ========= Koncessionskostnader tillägg =========
+def get_concession_adjustments() -> dict:
+    """
+    Returnerar manuella tillägg för koncessionskostnader per DMU.
+    Baserat på delta-värdena från bilderna (negativa eftersom de saknas i datasetet).
+    Värdena är i tkr och representerar periodsumma 2024-2027.
+    """
+    # Från bilderna: företag med negativa delta-värden som behöver tillägg
+    # Avskrivning tillägg (från första bilden)
+    dep_adjustments = {
+        115: 1032,  # Umeå Energi Elnät AB
+        121: 1013,  # Kraftringen Nät AB  
+        41: 355,    # Jönköping Energinät AB
+        30: 1047,   # Göteborg Energi Nät AB
+        24: 59,     # Eskilstuna Energi och Miljö Elnät AB
+    }
+    
+    # Avkastning tillägg (från andra bilden)
+    return_adjustments = {
+        115: 941,   # Umeå Energi Elnät AB
+        30: 947,    # Göteborg Energi Nät AB
+        41: 265,    # Jönköping Energinät AB
+        121: 318,   # Kraftringen Nät AB
+        24: 68,     # Eskilstuna Energi och Miljö Elnät AB
+    }
+    
+    return {
+        'dep_adjustments': dep_adjustments,
+        'return_adjustments': return_adjustments
+    }
+
+def apply_concession_adjustments(df_ir_export: pd.DataFrame) -> pd.DataFrame:
+    """
+    Applicerar manuella koncessionskostnader på IR-export.
+    Dessa kostnader påverkas INTE av WACC-ändringar.
+    """
+    adjustments = get_concession_adjustments()
+    df_adjusted = df_ir_export.copy()
+    
+    applied_adjustments = []
+    
+    for dmu, dep_adj in adjustments['dep_adjustments'].items():
+        if dmu in df_adjusted['DMU'].values:
+            mask = df_adjusted['DMU'] == dmu
+            df_adjusted.loc[mask, 'Avskrivningar_Ny'] += dep_adj
+            df_adjusted.loc[mask, 'Kapitalkostnad_Ny'] += dep_adj
+            df_adjusted.loc[mask, 'dep_ord_Ny'] += dep_adj  # Anta ordinarie avskrivning
+            applied_adjustments.append(f"DMU {dmu}: +{dep_adj} tkr avskrivning")
+    
+    for dmu, ret_adj in adjustments['return_adjustments'].items():
+        if dmu in df_adjusted['DMU'].values:
+            mask = df_adjusted['DMU'] == dmu
+            df_adjusted.loc[mask, 'Avkastning_Ny'] += ret_adj
+            df_adjusted.loc[mask, 'Kapitalkostnad_Ny'] += ret_adj
+            df_adjusted.loc[mask, 'return_ord_Ny'] += ret_adj  # Anta ordinarie avkastning
+            applied_adjustments.append(f"DMU {dmu}: +{ret_adj} tkr avkastning")
+    
+    # Lägg till metadata för spårning
+    if applied_adjustments:
+        st.info(f"Tillade koncessionskostnader för {len(set(list(adjustments['dep_adjustments'].keys()) + list(adjustments['return_adjustments'].keys())))} DMU")
+        with st.expander("Tillagda koncessionskostnader"):
+            for adj in applied_adjustments:
+                st.write(f"• {adj}")
+    
+    return df_adjusted
+
 def _build_ir_export_table_period(df_all: pd.DataFrame, r_new: float, years=(2024,2025,2026,2027)) -> tuple[pd.DataFrame, str]:
     """
     Bygger IR-exporttabell som SUMMA över hela regleringsperioden (default 2024–2027), DMU-nivå.
@@ -286,6 +403,8 @@ def _build_ir_export_table_period(df_all: pd.DataFrame, r_new: float, years=(202
     ir["dep_tail_Ny"]   = ir["dep_tail"]
     ir["return_ord_Ny"] = ir["return_ord_new"]
     ir["return_tail_Ny"]= ir["return_tail_new"]
+
+    ir = apply_concession_adjustments(ir)
 
     # Metadata
     tag = _format_wacc_tag(r_new)

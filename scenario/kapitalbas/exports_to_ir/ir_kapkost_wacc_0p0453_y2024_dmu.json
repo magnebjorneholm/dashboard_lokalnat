@@ -1,0 +1,13 @@
+{
+  "description": "Detaljerad kapitalkostnad för IR-dekomposition, DMU-nivå",
+  "price_year": 2022,
+  "unit": "tkr",
+  "level": "DMU",
+  "wacc_old": 0.0453,
+  "wacc_new": 0.0453,
+  "constructed_as": "H1+H2 after half-year rounding, aggregated to DMU",
+  "components": {
+    "Avskrivningar_Ny": "dep_ord + dep_tail (unchanged by WACC)",
+    "Avkastning_Ny": "return_ord_new + return_tail_new (scaled by WACC)"
+  }
+}
