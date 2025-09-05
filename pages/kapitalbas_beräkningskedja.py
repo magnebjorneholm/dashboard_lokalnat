@@ -443,7 +443,7 @@ def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
     """Steg 9: Jämför med facit (begränsat till vissa DMU)"""
     
     st.subheader("Steg 9: Jämför med facit")
-    st.caption("⚠️ Facit finns endast för vissa DMU (id_network 1 och 3035)")
+    
     
     if 8 not in steps_state['completed_steps']:
         st.warning("⏳ Slutför först Steg 8")
@@ -487,15 +487,12 @@ def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
         comparison = steps_state['step_data'][9]
         
         # Huvudresultat med full precision
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Beräknat total", f"{comparison['calculated_total']} tkr")
-        with col2:
-            st.metric("Facit total", f"{comparison['facit_total']} tkr")
-        with col3:
-            delta = comparison['calculated_total'] - comparison['facit_total']
-            delta_pct = (delta / comparison['facit_total'] * 100) if comparison['facit_total'] != 0 else 0
-            st.metric("Differens", f"{delta:+} tkr", delta=f"{delta_pct:+.8f}%")
+        delta = comparison['calculated_total'] - comparison['facit_total']
+        delta_pct = (delta / comparison['facit_total'] * 100) if comparison['facit_total'] != 0 else 0
+
+        st.metric("Beräknat total", f"{comparison['calculated_total']} tkr")
+        st.metric("Facit total", f"{comparison['facit_total']} tkr")
+        st.metric("Differens", f"{delta:+} tkr", delta=f"{delta_pct:+.8f}%")
         
         # Detaljerad jämförelse
         with st.expander("Detaljerad jämförelse"):
@@ -529,8 +526,7 @@ def check_facit_availability(dmu_id: int) -> bool:
             dmu_networks = recon_df[recon_df['DMU'] == dmu_id]['id_network'].tolist()
             
             # Facit finns för id_network 1 och 3035
-            facit_networks = [1, 3035]
-            return any(net in facit_networks for net in dmu_networks)
+            return True
     except:
         pass
     

@@ -264,11 +264,9 @@ def compile_capcost_single_dmu(dep_data: Dict[str, float], ret_data: Dict[str, f
 def load_facit_for_dmu(dmu_id: int) -> pd.DataFrame:
     """
     Laddar facit-data för jämförelse för en specifik DMU.
-    OBS: Facit finns endast för vissa DMU (id_network 1 och 3035).
     """
     try:
-        # Ladda facit-data (begränsat till sample 1 och 3035)
-        facit_path = "kapitalbas/datafiler/mellandata/capcost_a_sample_1_and_3035.parquet"
+        facit_path = "kapitalbas/datafiler/slutdata/capcost_a_3_Sheet1.parquet"
         if not Path(facit_path).exists():
             return pd.DataFrame()
         
@@ -281,12 +279,11 @@ def load_facit_for_dmu(dmu_id: int) -> pd.DataFrame:
             dmu_networks = recon_df[recon_df['DMU'] == dmu_id]['id_network'].tolist()
             
             if dmu_networks:
-                # Filtrera facit för denna DMU:s nätverk (endast om de finns i facit)
+                # Filtrera facit för denna DMU:s nätverk
                 available_networks = df_facit['id_network'].unique()
                 valid_networks = [net for net in dmu_networks if net in available_networks]
                 
                 if not valid_networks:
-                    # Denna DMU finns inte i facit-datasetet
                     return pd.DataFrame()
                     
                 df_dmu_facit = df_facit[df_facit['id_network'].isin(valid_networks)]
