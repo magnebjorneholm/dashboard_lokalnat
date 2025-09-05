@@ -1,6 +1,5 @@
 import streamlit as st
 
-
 from effektiviseringskrav.app.data_loader import load_data
 from effektiviseringskrav.view.show_dea import show_dea_view
 from effektiviseringskrav.view.show_pystoned import show_pystoned_view
@@ -21,33 +20,31 @@ st.markdown("Välj modell och se effektivitet, krav och utfall för olika föret
 data_file = "effektiviseringskrav/data/Data_modeller.xlsx"
 df = load_data(data_file)
 
-
-
 # --- Modellval ---
 modellval = st.sidebar.selectbox(
     "Välj modell",
-    ["DEA", "SFA", "PyStoned", "Färdiga körningar", "Jämför körningar", "Företagsanalys", "Geografisk karta"]
+    ["DEA", "SFA och Pystoned", "Jämför körningar", "Företagsanalys", "Geografisk karta"]
 )
 
 if modellval == "DEA":
     show_dea_view(df)
 
 
-elif modellval == "PyStoned":
-    st.header("PyStoned")
-    st.warning("Tekniska problem för externa användare pga solver funkar bara lokalt")
-    st.info("Se 'färdiga körningar'")
-    st.stop()
+# elif modellval == "PyStoned":
+   # st.header("PyStoned")
+   # st.warning("Tekniska problem för externa användare pga solver funkar bara lokalt")
+   # st.info("Se 'färdiga körningar'")
+   # st.stop()
 
 
-elif modellval == "SFA":
-    st.header("SFA")
-    st.warning("Tekniska problem")
-    st.info("Se 'färdiga körningar'")
-    st.stop()
+#elif modellval == "SFA":
+#    st.header("SFA")
+#    st.warning("Tekniska problem")
+#    st.info("Se 'färdiga körningar'")
+#    st.stop()
 
 
-elif modellval == "Färdiga körningar":
+elif modellval == "SFA och Pystoned":
     show_fardiga_korningar_view()
 
 

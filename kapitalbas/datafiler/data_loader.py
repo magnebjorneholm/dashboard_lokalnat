@@ -15,7 +15,6 @@ def load_reconciliation():
 def load_capbase_b():
     return pd.read_parquet("kapitalbas/datafiler/mellandata/capbase_b.parquet")
 
-
 @st.cache_data
 def load_capbase_compress_tail():
     return pd.read_parquet("kapitalbas/datafiler/mellandata/capbase_compress_tail.parquet")
@@ -25,20 +24,8 @@ def load_capbase_compress():
     return pd.read_parquet("kapitalbas/datafiler/mellandata/capbase_compress.parquet")
 
 @st.cache_data
-def load_depreciation_compress_sample():
-    return pd.read_parquet("kapitalbas/datafiler/mellandata/depreciation_compress_sample_1_and_3035.parquet")
-
-@st.cache_data
 def load_depreciation_compress():
     return pd.read_parquet("kapitalbas/datafiler/mellandata/depreciation_compress.parquet")
-
-@st.cache_data
-def load_depreciation():
-    return pd.read_parquet("kapitalbas/datafiler/mellandata/depreciation.parquet")
-
-@st.cache_data
-def load_returns_compress_sample():
-    return pd.read_parquet("kapitalbas/datafiler/mellandata/returns_compress_sample.parquet")
 
 @st.cache_data
 def load_returns_compress():
@@ -46,22 +33,12 @@ def load_returns_compress():
 
 
 # === RÅDATA ===
-
-@st.cache_data
-def load_capbase_a_sample():
-    return pd.read_parquet("kapitalbas/datafiler/rådata/capbase_a_sample.parquet")
-
 @st.cache_data
 def load_capbase_a():
     return pd.read_parquet("kapitalbas/datafiler/rådata/capbase_a.parquet")
 
 
 # === SLUTDATA ===
-
-@st.cache_data
-def load_capcost_a_sample():
-    return pd.read_parquet("kapitalbas/datafiler/slutdata/capcost_a_sample_1_and_3035.parquet")
-
 @st.cache_data
 def load_capcost_a():
    return pd.read_parquet("kapitalbas/datafiler/slutdata/capcost_a_3_Sheet1.parquet")
@@ -69,10 +46,6 @@ def load_capcost_a():
 @st.cache_data
 def load_capcost_python():
     return pd.read_parquet("kapitalbas/datafiler/slutdata/capcost_python.parquet")
-
-@st.cache_data
-def load_final_capbase_sample():
-    return pd.read_parquet("kapitalbas/datafiler/slutdata/final_capbase_sample.parquet")
 
 @st.cache_data
 def load_final_capbase():

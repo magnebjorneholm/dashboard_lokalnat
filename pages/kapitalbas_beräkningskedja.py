@@ -13,7 +13,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 import plotly.express as px
 import plotly.graph_objects as go
 
