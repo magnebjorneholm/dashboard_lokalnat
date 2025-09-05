@@ -1,5 +1,5 @@
 """
-kapitalbas_calculator.py - Refaktoriserade beräkningsfunktioner för enskilda DMU
+beräkningskedja.py - Refaktoriserade beräkningsfunktioner för enskilda DMU
 
 Extraherar beräkningslogiken från scripts 5-9 och gör dem återanvändbara
 för interaktiv användning per DMU.
@@ -59,6 +59,7 @@ def calculate_ages_and_nuav(df: pd.DataFrame) -> pd.DataFrame:
     for time in range(229, 237):
         result_df = process_time_period(result_df, time)
     
+    result_df = result_df.copy() 
     return result_df
 
 
@@ -89,7 +90,7 @@ def process_time_period(df: pd.DataFrame, time: int) -> pd.DataFrame:
     # Calculate nuav_ord
     df[f'nuav_ord_{time}'] = 0
     df.loc[df[f'base_ord_{time}'] == 1, f'nuav_ord_{time}'] = df['nuav_2022'] * df[f'base_ord_{time}']
-    
+
     # Initial capital base tail
     df[f'base_tail_{time}'] = 0
     mask = (df[f'age_component_{time}'] <= df['maxdep']) & (df[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 1)
@@ -112,6 +113,7 @@ def process_time_period(df: pd.DataFrame, time: int) -> pd.DataFrame:
     df = df.merge(sum_nuav_tail, on=['cat_encode', 'id_network'], how='left')
     df[f'sum_nuav_tail_{time}'] = df[f'sum_nuav_tail_{time}'] / 1000  # Convert to thousands
     
+    df = df.copy() 
     return df
 
 

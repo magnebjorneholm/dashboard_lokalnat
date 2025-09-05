@@ -106,7 +106,7 @@ def select_dmu() -> Optional[int]:
     
     # Hämta tillgängliga DMU från reconciliation
     try:
-        # Läs från new_recon.csv istället
+        # Läs från new_recon.csv
         recon_path = "effektiviseringskrav/data/new_recon.csv"
         if Path(recon_path).exists():
             recon_df = pd.read_csv(recon_path)
@@ -150,7 +150,7 @@ def select_dmu() -> Optional[int]:
     )
     
     if selected_display:
-        return entity_mapping[selected_display]  # Returnera direkt från mapping - NO STRING PARSING!
+        return entity_mapping[selected_display]  # DENNA RAD ISTÄLLET FÖR STRING PARSING!
     
     return None
 
@@ -270,24 +270,26 @@ def run_step_6_depreciation(dmu_id: int, steps_state: dict):
         st.success("✅ Steg 6 slutfört")
         result_data = steps_state['step_data'][6]
         
-        # KPI
+        # KPI med full precision
         col1, col2 = st.columns(2)
         with col1:
             dep_ord_total = sum(result_data.get(f'dep_ord_{t}', 0) for t in range(229, 237))
-            st.metric("Total ordinarie avskrivning (tkr)", f"{dep_ord_total:,.0f}")
+            st.metric("Total ordinarie avskrivning (tkr)", f"{dep_ord_total}")
         with col2:
             dep_tail_total = sum(result_data.get(f'dep_tail_{t}', 0) for t in range(229, 237))
-            st.metric("Total svansavskrivning (tkr)", f"{dep_tail_total:,.0f}")
+            st.metric("Total svansavskrivning (tkr)", f"{dep_tail_total}")
         
         with st.expander("Resultat per tidsperiod"):
-            # Skapa tabell per tidsperiod
+            # Skapa tabell per tidsperiod med full precision
             periods_data = []
             for t in range(229, 237):
+                dep_ord = result_data.get(f'dep_ord_{t}', 0)
+                dep_tail = result_data.get(f'dep_tail_{t}', 0)
                 periods_data.append({
                     'Period': f"{t} ({2024 + (t-229)//2}H{((t-229)%2)+1})",
-                    'Ordinarie (tkr)': f"{result_data.get(f'dep_ord_{t}', 0):,.0f}",
-                    'Svans (tkr)': f"{result_data.get(f'dep_tail_{t}', 0):,.0f}",
-                    'Total (tkr)': f"{result_data.get(f'dep_ord_{t}', 0) + result_data.get(f'dep_tail_{t}', 0):,.0f}"
+                    'Ordinarie (tkr)': dep_ord,
+                    'Svans (tkr)': dep_tail,
+                    'Total (tkr)': dep_ord + dep_tail
                 })
             
             st.dataframe(pd.DataFrame(periods_data), use_container_width=True)
@@ -342,14 +344,14 @@ def run_step_7_returns(dmu_id: int, steps_state: dict):
         st.success("✅ Steg 7 slutfört")
         result_data = steps_state['step_data'][7]
         
-        # KPI
+        # KPI med höga decimaler
         col1, col2 = st.columns(2)
         with col1:
             ret_ord_total = sum(result_data.get(f'return_ord_{t}', 0) for t in range(229, 237))
-            st.metric("Total ordinarie avkastning (tkr)", f"{ret_ord_total:,.0f}")
+            st.metric("Total ordinarie avkastning (tkr)", f"{ret_ord_total:.6f}")
         with col2:
             ret_tail_total = sum(result_data.get(f'return_tail_{t}', 0) for t in range(229, 237))
-            st.metric("Total svansavkastning (tkr)", f"{ret_tail_total:,.0f}")
+            st.metric("Total svansavkastning (tkr)", f"{ret_tail_total:.6f}")
 
 
 def run_step_8_compile(dmu_id: int, steps_state: dict):
@@ -383,13 +385,21 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
         st.success("✅ Steg 8 slutfört")
         result_data = steps_state['step_data'][8]
         
-        # Huvudresultat
+        # Beräkna KPI:er med full precision
         total_capcost = result_data['capcost_sum'].sum()
-        st.metric("🎯 Total kapitalkostnad (tkr)", f"{total_capcost:,.0f}")
+        total_kapitalbindning = result_data['return_ord'].sum() + result_data['return_tail'].sum()
+        total_kapitalforslitning = result_data['dep_ord'].sum() + result_data['dep_tail'].sum()
         
+        # Huvudresultat - tre KPI:er med hög precision
+        st.metric("🎯 Total kapitalkostnad (tkr)", f"{total_capcost}")
+        st.metric("💰 Total kapitalbindning (tkr)", f"{total_kapitalbindning}")
+        st.metric("⚡ Total kapitalförslitning (tkr)", f"{total_kapitalforslitning}")
+
         # Breakdown per period
         with st.expander("Breakdown per tidsperiod"):
-            st.dataframe(result_data, use_container_width=True)
+            # Formatera för att visa fler decimaler
+            display_data = result_data.copy()
+            st.dataframe(display_data, use_container_width=True)
         
         # Visualisering
         with st.expander("Visualisering - Kapitalkostnad över tid"):
@@ -408,6 +418,25 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
                 labels={'capcost_sum': 'Kapitalkostnad (tkr)', 'period_label': 'Period'}
             )
             st.plotly_chart(fig, use_container_width=True)
+            
+        # Detaljerad uppdelning med full precision
+        with st.expander("Detaljerad uppdelning per komponent"):
+            breakdown_data = []
+            for time in range(229, 237):
+                period_data = result_data[result_data['time'] == time].iloc[0]
+                breakdown_data.append({
+                    'Period': f"{time} ({2024 + (time-229)//2}H{((time-229)%2)+1})",
+                    'Ordinarie avskrivning': period_data['dep_ord'],
+                    'Svansavskrivning': period_data['dep_tail'],
+                    'Ordinarie avkastning': period_data['return_ord'],
+                    'Svansavkastning': period_data['return_tail'],
+                    'Total kapitalkostnad': period_data['capcost_sum'],
+                    'Kapitalförslitning (dep_ord + dep_tail)': period_data['dep_ord'] + period_data['dep_tail'],
+                    'Kapitalbindning (return_ord + return_tail)': period_data['return_ord'] + period_data['return_tail']
+                })
+            
+            breakdown_df = pd.DataFrame(breakdown_data)
+            st.dataframe(breakdown_df, use_container_width=True)
 
 
 def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
@@ -457,30 +486,40 @@ def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
         st.success("✅ Steg 9 slutfört")
         comparison = steps_state['step_data'][9]
         
-        # Huvudresultat
+        # Huvudresultat med full precision
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Beräknat total", f"{comparison['calculated_total']:,.0f} tkr")
+            st.metric("Beräknat total", f"{comparison['calculated_total']} tkr")
         with col2:
-            st.metric("Facit total", f"{comparison['facit_total']:,.0f} tkr")
+            st.metric("Facit total", f"{comparison['facit_total']} tkr")
         with col3:
             delta = comparison['calculated_total'] - comparison['facit_total']
             delta_pct = (delta / comparison['facit_total'] * 100) if comparison['facit_total'] != 0 else 0
-            st.metric("Differens", f"{delta:+,.0f} tkr", delta=f"{delta_pct:+.2f}%")
+            st.metric("Differens", f"{delta:+} tkr", delta=f"{delta_pct:+.8f}%")
         
         # Detaljerad jämförelse
         with st.expander("Detaljerad jämförelse"):
             if 'comparison_df' in comparison:
-                st.dataframe(comparison['comparison_df'], use_container_width=True)
+                # Visa med full precision
+                display_df = comparison['comparison_df'].copy()
+                st.dataframe(display_df, use_container_width=True)
         
-        # Toleransanalys
-        tolerance_tkr = st.number_input("Tolerans (tkr)", min_value=0, value=100, step=10)
-        if abs(delta) <= tolerance_tkr:
-            st.success(f"✅ Beräkning OK! Differens {abs(delta):,.0f} tkr ligger inom tolerans {tolerance_tkr} tkr")
+        # Toleransanalys med högre precision
+        tolerance_tkr = st.number_input("Tolerans (tkr)", min_value=0.0, value=0.1, step=0.01, format="%.6f")
+        abs_delta = abs(delta)
+        if abs_delta <= tolerance_tkr:
+            st.success(f"✅ Beräkning OK! Differens {abs_delta} tkr ligger inom tolerans {tolerance_tkr} tkr")
         else:
-            st.warning(f"⚠️ Differens {abs(delta):,.0f} tkr överskrider tolerans {tolerance_tkr} tkr")
-
-
+            st.warning(f"⚠️ Differens {abs_delta} tkr överskrider tolerans {tolerance_tkr} tkr")
+            
+        # Visa exakt differens för debugging
+        with st.expander("Exakt differens-analys"):
+            st.write(f"**Beräknat värde:** {comparison['calculated_total']}")
+            st.write(f"**Facit värde:** {comparison['facit_total']}")
+            st.write(f"**Absolut differens:** {abs_delta}")
+            st.write(f"**Relativ differens:** {delta_pct}%")
+            
+          
 def check_facit_availability(dmu_id: int) -> bool:
     """Kontrollerar om facit finns för den valda DMU:n"""
     try:
