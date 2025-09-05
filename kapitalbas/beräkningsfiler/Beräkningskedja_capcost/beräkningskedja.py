@@ -67,7 +67,6 @@ def process_time_period(df: pd.DataFrame, time: int) -> pd.DataFrame:
     """
     Bearbetar en tidsperiod - extraherat från 5_ages_and_nuav.py
     """
-    print(f"Bearbetar tidsperiod {time}...")
     
     # Age on components
     df[f'age_component_{time}'] = time - df['time_from']

@@ -8,7 +8,9 @@ from kapitalbas.visualiseringsfiler.intensitet_view import show_intensity_analys
 from kapitalbas.visualiseringsfiler.översikt import show_capcost
 
 
-st.title("Kapitalbas")
+st.set_page_config(page_title="Kapitalkostnader", layout="wide")
+st.title("Kapitalkostnader")
+st.markdown("Se över kapitalkostnader, beräkna nya kapitalkapitalkostnader, och exportera till intäktsramen eller DEA.")
 
 # === Ladda data ===
 st.session_state["capcost_a"] = load_capcost_a()

@@ -27,12 +27,16 @@ from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.beräkningskedja impor
     load_facit_for_dmu
 )
 
+if "access_granted" not in st.session_state or not st.session_state.access_granted:
+    st.stop()
+
+st.set_page_config(page_title="Beräkningkedja för kapitalkostnader", layout="wide")
+st.title("Beräkningkedja för kapitalkostnader")
+st.markdown("Gå igenom beräkningskedjan med möjlighet att (snart) ändra utdata i varje steg.")
+
 
 def show_kapitalbas_berakningslogik():
     """Huvudvy för stegvis beräkningslogik"""
-    
-    st.title("Kapitalbas - Stegvis beräkningslogik")
-    st.caption("Kör beräkningskedjan steg för steg för en enskild DMU")
     
     # === DMU-val ===
     dmu_id = select_dmu()
@@ -144,13 +148,11 @@ def select_dmu() -> Optional[int]:
         return None
     
     selected_display = st.sidebar.selectbox(
-        "DMU att beräkna",
         entity_options,
-        help="Välj vilket nätföretag (DMU) du vill köra beräkningar på"
     )
     
     if selected_display:
-        return entity_mapping[selected_display]  # DENNA RAD ISTÄLLET FÖR STRING PARSING!
+        return entity_mapping[selected_display]
     
     return None
 
@@ -182,7 +184,7 @@ def run_step_5_ages_nuav(capbase_data: pd.DataFrame, dmu_id: int, steps_state: d
                 steps_state['step_data'][5] = result_data
                 steps_state['completed_steps'].add(5)
                 steps_state['current_step'] = max(steps_state['current_step'], 5)
-                st.success("✅ Steg 5 slutfört!")
+                st.success("Steg 5 slutfört!")
                 st.rerun()
                 
             except Exception as e:
@@ -191,7 +193,7 @@ def run_step_5_ages_nuav(capbase_data: pd.DataFrame, dmu_id: int, steps_state: d
     
     # Visa resultat om steg är slutfört
     if 5 in steps_state['completed_steps']:
-        st.success("✅ Steg 5 slutfört")
+        st.success("Steg 5 slutfört")
         result_data = steps_state['step_data'][5]
         
         # Sammanfattning
@@ -239,7 +241,7 @@ def run_step_6_depreciation(dmu_id: int, steps_state: dict):
     
     # Kontrollera att steg 5 är klart
     if 5 not in steps_state['completed_steps']:
-        st.warning("⏳ Slutför först Steg 5")
+        st.warning("Slutför först Steg 5")
         return
     
     # Visa metodik
@@ -258,7 +260,7 @@ def run_step_6_depreciation(dmu_id: int, steps_state: dict):
                 steps_state['step_data'][6] = result_data
                 steps_state['completed_steps'].add(6)
                 steps_state['current_step'] = max(steps_state['current_step'], 6)
-                st.success("✅ Steg 6 slutfört!")
+                st.success("Steg 6 slutfört!")
                 st.rerun()
                 
             except Exception as e:
@@ -267,7 +269,7 @@ def run_step_6_depreciation(dmu_id: int, steps_state: dict):
     
     # Visa resultat
     if 6 in steps_state['completed_steps']:
-        st.success("✅ Steg 6 slutfört")
+        st.success("Steg 6 slutfört")
         result_data = steps_state['step_data'][6]
         
         # KPI med full precision
@@ -302,7 +304,7 @@ def run_step_7_returns(dmu_id: int, steps_state: dict):
     st.write("Beräknar kapitalavkastning baserat på åldersjusterad kapitalbas")
     
     if 6 not in steps_state['completed_steps']:
-        st.warning("⏳ Slutför först Steg 6")
+        st.warning("Slutför först Steg 6")
         return
     
     # WACC-inställning
@@ -332,7 +334,7 @@ def run_step_7_returns(dmu_id: int, steps_state: dict):
                 steps_state['step_data'][7] = result_data
                 steps_state['completed_steps'].add(7)
                 steps_state['current_step'] = max(steps_state['current_step'], 7)
-                st.success("✅ Steg 7 slutfört!")
+                st.success("Steg 7 slutfört!")
                 st.rerun()
                 
             except Exception as e:
@@ -341,7 +343,7 @@ def run_step_7_returns(dmu_id: int, steps_state: dict):
     
     # Visa resultat
     if 7 in steps_state['completed_steps']:
-        st.success("✅ Steg 7 slutfört")
+        st.success("Steg 7 slutfört")
         result_data = steps_state['step_data'][7]
         
         # KPI med höga decimaler
@@ -361,7 +363,7 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
     st.write("Kombinerar avskrivningar och avkastning till total kapitalkostnad")
     
     if not (6 in steps_state['completed_steps'] and 7 in steps_state['completed_steps']):
-        st.warning("⏳ Slutför först Steg 6 och 7")
+        st.warning("Slutför först Steg 6 och 7")
         return
     
     if st.button("Kör Steg 8: Sammanställning", key="step8_button"):
@@ -373,7 +375,7 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
                 steps_state['step_data'][8] = result_data
                 steps_state['completed_steps'].add(8)
                 steps_state['current_step'] = max(steps_state['current_step'], 8)
-                st.success("✅ Steg 8 slutfört!")
+                st.success("Steg 8 slutfört!")
                 st.rerun()
                 
             except Exception as e:
@@ -382,7 +384,7 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
     
     # Visa resultat
     if 8 in steps_state['completed_steps']:
-        st.success("✅ Steg 8 slutfört")
+        st.success("Steg 8 slutfört")
         result_data = steps_state['step_data'][8]
         
         # Beräkna KPI:er med full precision
@@ -391,9 +393,9 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
         total_kapitalforslitning = result_data['dep_ord'].sum() + result_data['dep_tail'].sum()
         
         # Huvudresultat - tre KPI:er med hög precision
-        st.metric("🎯 Total kapitalkostnad (tkr)", f"{total_capcost}")
-        st.metric("💰 Total kapitalbindning (tkr)", f"{total_kapitalbindning}")
-        st.metric("⚡ Total kapitalförslitning (tkr)", f"{total_kapitalforslitning}")
+        st.metric("Total kapitalkostnad (tkr)", f"{total_capcost}")
+        st.metric("Total kapitalbindning (tkr)", f"{total_kapitalbindning}")
+        st.metric("Total kapitalförslitning (tkr)", f"{total_kapitalforslitning}")
 
         # Breakdown per period
         with st.expander("Breakdown per tidsperiod"):
@@ -444,21 +446,13 @@ def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
     
     st.subheader("Steg 9: Jämför med facit")
     
-    
     if 8 not in steps_state['completed_steps']:
-        st.warning("⏳ Slutför först Steg 8")
+        st.warning("Slutför först Steg 8")
         return
     
     # Kolla om facit finns för denna DMU
     facit_available = check_facit_availability(dmu_id)
-    
-    if not facit_available:
-        st.info(f"📊 Facit-data finns inte för DMU {dmu_id}. Facit är begränsat till vissa test-nätföretag.")
-        st.write("**Du kan ändå:**")
-        st.write("- Granska beräknade resultat i Steg 8")
-        st.write("- Exportera data för vidare analys") 
-        st.write("- Testa med DMU som har id_network 1 eller 3035")
-        return
+
     
     if st.button("Ladda och jämför facit", key="step9_button"):
         with st.spinner("Laddar facit och jämför..."):
@@ -474,7 +468,7 @@ def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
                 comparison = compare_with_facit(calculated_data, facit_data, dmu_id)
                 steps_state['step_data'][9] = comparison
                 steps_state['completed_steps'].add(9)
-                st.success("✅ Steg 9 slutfört!")
+                st.success("Steg 9 slutfört!")
                 st.rerun()
                 
             except Exception as e:
@@ -483,7 +477,7 @@ def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
     
     # Visa jämförelse
     if 9 in steps_state['completed_steps']:
-        st.success("✅ Steg 9 slutfört")
+        st.success("Steg 9 slutfört")
         comparison = steps_state['step_data'][9]
         
         # Huvudresultat med full precision
@@ -505,9 +499,9 @@ def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
         tolerance_tkr = st.number_input("Tolerans (tkr)", min_value=0.0, value=0.1, step=0.01, format="%.6f")
         abs_delta = abs(delta)
         if abs_delta <= tolerance_tkr:
-            st.success(f"✅ Beräkning OK! Differens {abs_delta} tkr ligger inom tolerans {tolerance_tkr} tkr")
+            st.success(f"Beräkning OK! Differens {abs_delta} tkr ligger inom tolerans {tolerance_tkr} tkr")
         else:
-            st.warning(f"⚠️ Differens {abs_delta} tkr överskrider tolerans {tolerance_tkr} tkr")
+            st.warning(f"Differens {abs_delta} tkr överskrider tolerans {tolerance_tkr} tkr")
             
         # Visa exakt differens för debugging
         with st.expander("Exakt differens-analys"):

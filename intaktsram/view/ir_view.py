@@ -119,7 +119,7 @@ def apply_rel_filter(df: pd.DataFrame) -> pd.DataFrame:
     excluded_count = initial_count - filtered_count
     
     if excluded_count > 0:
-        st.info(f"Filtrerade bort {excluded_count} regionnät (RER*) - arbetar med {filtered_count} lokalnät (REL*)")
+        st.info(f"Filtrerade bort {excluded_count} regionnät (RER) - arbetar med {filtered_count} lokalnät (REL)")
     
     return df_filtered
 

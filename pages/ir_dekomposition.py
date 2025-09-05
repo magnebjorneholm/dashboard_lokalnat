@@ -7,8 +7,8 @@ from intaktsram.view.ir_view import show_ir_dekomposition_view
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
     st.stop()
 
-st.set_page_config(page_title="Intäktsram Dekomposition", layout="wide")
-st.title("Intäktsram Dekomposition")
+st.set_page_config(page_title="Dekomposition av intäktsram", layout="wide")
+st.title("Dekomposition av intäktsram")
 st.markdown("Visa och analysera intäktsramens komponenter med möjlighet att uppdatera från andra sektioner.")
 
 # --- Ladda baseline-data ---

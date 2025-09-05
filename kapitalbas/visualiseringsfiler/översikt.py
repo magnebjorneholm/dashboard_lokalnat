@@ -56,13 +56,13 @@ def get_period_df(df: pd.DataFrame, years=(2024, 2025, 2026, 2027)) -> pd.DataFr
 # KPI (tkr → MSEK visuellt)
 KPI_DISPLAY = ["capcost_sum", "dep_ord", "dep_tail", "nuav_ord", "nuav_tail", "return_ord", "return_tail"]
 KPI_LABEL = {
-    "capcost_sum": "Kapitalkostnad – summa (capcost_sum) (MSEK)",
-    "dep_ord":     "Ordinarie avskrivning (dep_ord) (MSEK)",
-    "dep_tail":    "Svansavskrivning (dep_tail) (MSEK)",
+    "capcost_sum": "Kapitalkostnad – år (capcost_sum) (MSEK)",
+    "dep_ord":     "Kapitalförslitning – ordinarie (dep_ord) (MSEK)",
+    "dep_tail":    "Kapitalförslitning – svans (dep_tail) (MSEK)",
     "nuav_ord":    "Nuanskaffningsvärde – ordinarie (nuav_ord) (MSEK)",
     "nuav_tail":   "Nuanskaffningsvärde – svans (nuav_tail) (MSEK)",
-    "return_ord":  "Avkastning – ordinarie (return_ord) (MSEK)",
-    "return_tail": "Avkastning – svans (return_tail) (MSEK)",
+    "return_ord":  "Kapitalbindning – ordinarie (return_ord) (MSEK)",
+    "return_tail": "Kapitalbindning – svans (return_tail) (MSEK)",
 }
 
 def fmt_msek_from_tkr(x, decimals: int = 3) -> str:
@@ -148,7 +148,7 @@ def _read_reconciliation(path_csv: str) -> Optional[pd.DataFrame]:
 
         idcol   = cols.get("id_network", "id_network")
         dmucol  = cols.get("dmu", "DMU")
-        namecol = cols.get("id_firm", "id_firm")         # innehåller företagsnamn hos dig
+        namecol = cols.get("id_firm", "id_firm")         
         reicol  = cols.get("reid", cols.get("id_network_string", "id_network_string"))
 
         rec = rec.rename(columns={
@@ -184,8 +184,7 @@ def _aggregate_to_dmu(df_facit: pd.DataFrame) -> pd.DataFrame:
     if "REId" in df_with_dmu.columns:
         before = len(df_with_dmu)
         df_with_dmu = df_with_dmu[df_with_dmu["REId"].astype("string").str.startswith("REL", na=False)]
-        st.info(f"Filtrerade bort {before - len(df_with_dmu)} rader (ej REL*).")
-
+        
     # Debuginfo
     missing_dmu = df_with_dmu['DMU'].isna()
     mapped_networks   = df_with_dmu[~missing_dmu]['id_network'].unique()
@@ -216,7 +215,7 @@ def _aggregate_to_dmu(df_facit: pd.DataFrame) -> pd.DataFrame:
         .agg({col: 'sum' for col in agg_cols})
         .reset_index()
     )
-    st.info(f"Aggregerat till {df_aggregated['DMU'].nunique()} DMU (endast REL).")
+    st.info(f"Totalt {df_aggregated['DMU'].nunique()} DMU (endast lokalnät).")
 
     return df_aggregated
 
@@ -364,7 +363,7 @@ def apply_concession_adjustments(df_ir_export: pd.DataFrame) -> pd.DataFrame:
     
     # Lägg till metadata för spårning
     if applied_adjustments:
-        st.info(f"Tillade koncessionskostnader för {len(set(list(adjustments['dep_adjustments'].keys()) + list(adjustments['return_adjustments'].keys())))} DMU")
+        st.info(f"Tillade koncessionskostnader för {len(set(list(adjustments['dep_adjustments'].keys()) + list(adjustments['return_adjustments'].keys())))} DMU:er för att matcha intäktsramen")
         with st.expander("Tillagda koncessionskostnader"):
             for adj in applied_adjustments:
                 st.write(f"• {adj}")
@@ -552,15 +551,12 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
         
         # Resten av Tab 1 och 2 fungerar som vanligt, men export kommer inte fungera
         # Lägg till varning i Tab 3
-        TAB1, TAB2, TAB3 = st.tabs(["Tab 1 – Facit", "Tab 2 – Beräkna kalkylränta", "Tab 3 – Export (inaktiverad)"])
+        TAB1, TAB2, TAB3 = st.tabs(["Tab 1 – Facit", "Tab 2 – Beräkna kalkylränta från grunden", "Tab 3 – Export (inaktiverad)"])
         
         with TAB3:
             st.error("Export är inaktiverad eftersom DMU-mappning misslyckades. Kontrollera reconciliation-filen.")
         
         return
-
-    st.header("Översikt – Kapitalbas (DMU-nivå)")
-    st.caption("Enhet: tkr (data) / MSEK (visas). Prisår: nominell 2022. Årssiffror: H1+H2. Aggregerat till DMU-nivå.")
 
     # ---- Filter (år & DMU) ----
     with st.sidebar:
@@ -584,17 +580,16 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
             return out
         return out[out["DMU"] == float(dmu_choice)]
 
-    TAB1, TAB2, TAB3, TAB_DEBUG = st.tabs(["Tab 1 – Facit", "Tab 2 – Beräkna kalkylränta", "Tab 3 – Scenario + Export", "Debug – DMU-mappning"])
+    TAB1, TAB2, TAB3 = st.tabs(["Översikt", "Beräkna kalkylränta från grunden", "Scenario + Export"])
 
     # ---- Tab 1: Facit (år, MSEK) ----
     with TAB1:
-        st.subheader("KPI:er (facit)")
+        st.subheader("Översikt")
         filt_df = _filter_df(df)
         if filt_df.empty:
             st.warning("Ingen rad matchar valt DMU/år.")
         else:
             kpi = filt_df[KPI_DISPLAY].sum(numeric_only=True)
-            st.markdown(f"**KPI för {year_choice} · DMU: {dmu_choice}**")
             for cols in [KPI_DISPLAY[i:i+2] for i in range(0,len(KPI_DISPLAY),2)]:
                 c = st.columns(2)
                 for j, col in enumerate(cols):
@@ -603,10 +598,34 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
             with st.expander("Visa underlag (tkr)"):
                 tmp = filt_df.copy(); tmp["time_label"] = tmp["time"].map(CODE_TO_TIME_LABEL)
                 st.dataframe(tmp, use_container_width=True, hide_index=True)
+        
+        with st.expander("DMU-mappning: vilka nätverk tillhör varje DMU"):
+            rec = _read_reconciliation(RECON_CSV)
+            if rec is not None:
+                # Gruppera id_networks per DMU
+                dmu_networks = rec.groupby('DMU').agg({
+                    'id_network': lambda x: list(x),
+                    'Företag': 'first'  # Ta första företagsnamnet per DMU
+                }).reset_index()
+                
+                # Lägg till antal nätverk per DMU
+                dmu_networks['antal_nätverk'] = dmu_networks['id_network'].apply(len)
+                dmu_networks['nätverk_lista'] = dmu_networks['id_network'].apply(lambda x: ', '.join(map(str, sorted(x))))
+                
+                # Sortera efter antal nätverk (flest först) för att se aggregeringarna tydligt
+                dmu_networks = dmu_networks.sort_values('antal_nätverk', ascending=False)
+                
+                # Visa tabell
+                display_df = dmu_networks[['DMU', 'Företag', 'antal_nätverk', 'nätverk_lista']].copy()
+                display_df.columns = ['DMU', 'Företag', 'Antal nätverk', 'id_network lista']
+                
+                st.dataframe(display_df, use_container_width=True)
+            else:
+                st.error("Kunde inte ladda reconciliation-data för mappningstabell")
 
     # ---- Tab 2: WACC ----
     with TAB2:
-        st.subheader("Beräkna kalkylränta (Ei)")
+        st.subheader("Beräkna kalkylränta från grunden")
         defaults = {"rf_nom":0.0287,"mrp":0.0668,"infl":0.0202,"credit":0.0114,"debt_share":0.36,"tax_rate":0.206,"beta_mode":"β_A","beta_a":0.37,"beta_e":0.54}
         for k,v in defaults.items(): st.session_state.setdefault(k,v)
         st.session_state.setdefault("r_new", R_OLD)
@@ -671,7 +690,7 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
 
     # ---- Tab 3: Scenario + Export ----
     with TAB3:
-        st.subheader("Scenario: ny kalkylränta (Ei-logik i tkr)")
+        st.subheader("Räkna kapitalkostnader med annan WACC och exportera till intäktsramen eller DEA")
 
         r_new = round(float(st.number_input("WACC (real, pre-tax) för scenario",
                                             value=float(st.session_state.get("r_new", R_OLD)),
@@ -694,19 +713,12 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
                 val_tkr = float(new_vals[k]); base_k = k.replace("_new","")
                 delta_tkr = val_tkr - float(base_vals[base_k])
                 cols[i].metric(
-                    {"return_ord_new":"Avkastning – ordinarie (return_ord) (MSEK)",
-                     "return_tail_new":"Avkastning – svans (return_tail) (MSEK)",
-                     "capcost_sum_new":"Kapitalkostnad – summa (capcost_sum) (MSEK)"}[k],
+                    {"return_ord_new":"Kapitalbindning – ordinarie (return_ord) (MSEK)",
+                     "return_tail_new":"Kapitalbindning – svans (return_tail) (MSEK)",
+                     "capcost_sum_new":"Kapitalkostnad - år (capcost_sum) (MSEK)"}[k],
                     fmt_msek_from_tkr(val_tkr),
                     delta=fmt_msek_delta_from_tkr_tol(delta_tkr)
                 )
-
-        with st.expander("Underlag (scenario, tkr)"):
-            t = scen_year.copy(); t["time_label"]=t["time"].map(CODE_TO_TIME_LABEL)
-            st.dataframe(t, use_container_width=True, hide_index=True)
-        with st.expander("Underlag (facit, tkr)"):
-            t = base_year.copy(); t["time_label"]=t["time"].map(CODE_TO_TIME_LABEL)
-            st.dataframe(t, use_container_width=True, hide_index=True)
 
         # ==== Export-sektion (endast 2024) ====
         st.markdown("---")
@@ -763,7 +775,7 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
         col_dea, col_ir, col_both = st.columns(3)
         
         with col_dea:
-            if st.button("📊 Exportera till DEA", help="Exporterar CAPEX-data för DEA-pipen"):
+            if st.button("Exportera till DEA", help="Exporterar CAPEX-data för DEA-pipen"):
                 try:
                     path_data, path_meta = _write_dea_export(df_dea_export, dea_tag)
                     st.success(f"DEA-export klar!")
@@ -773,7 +785,7 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
                     st.error(f"DEA-export misslyckades: {e}")
 
         with col_ir:
-            if st.button("🔍 Exportera till IR", help="Exporterar detaljerad kapitalkostnad för IR-dekomposition"):
+            if st.button("Exportera till IR", help="Exporterar detaljerad kapitalkostnad för IR-dekomposition"):
                 try:
                     path_data, path_meta = _write_ir_export(df_ir_export, ir_tag)
                     st.success(f"IR-export klar!")
@@ -783,7 +795,7 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
                     st.error(f"IR-export misslyckades: {e}")
 
         with col_both:
-            if st.button("🚀 Exportera båda", help="Exporterar till både DEA och IR"):
+            if st.button("Exportera båda", help="Exporterar till både DEA och IR"):
                 try:
                     # DEA export
                     dea_path_data, dea_path_meta = _write_dea_export(df_dea_export, dea_tag)
@@ -802,7 +814,7 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
                     st.error(f"Export misslyckades: {e}")
 
         # Export-information
-        with st.expander("ℹ️ Export-information"):
+        with st.expander("Export-information"):
             st.markdown(
                 f"""
                 **DEA-export:**
@@ -823,96 +835,3 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
                 """
             )
     
-    # ---- Debug-tab: DMU-mappning ----
-    with TAB_DEBUG:
-        st.subheader("Debug: DMU-mappning och aggregering")
-        
-        if 'dmu_debug' not in st.session_state:
-            st.warning("Ingen debug-information tillgänglig. Kör om aggregeringen.")
-            return
-        
-        debug = st.session_state['dmu_debug']
-        
-        # Översikt
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Kapitalbas-nätverk (original)", debug['original_count'])
-        with col2:
-            st.metric("Reconciliation-nätverk", debug['reconciliation_count'])  
-        with col3:
-            st.metric("Slutliga DMU:er", df['DMU'].nunique() if 'DMU' in df.columns else 0)
-        
-        # Mappningsresultat
-        st.subheader("Mappningsresultat")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Mappade nätverk", debug['mapped_count'], delta=None)
-        with col2:
-            st.metric("Exkluderade nätverk", debug['unmapped_count'], delta=f"-{debug['unmapped_count']}")
-        
-        # Detaljerad analys
-        with st.expander("DMU-mappning: vilka nätverk tillhör varje DMU"):
-            rec = _read_reconciliation(RECON_CSV)
-            if rec is not None:
-                # Gruppera id_networks per DMU
-                dmu_networks = rec.groupby('DMU').agg({
-                    'id_network': lambda x: list(x),
-                    'Företag': 'first'  # Ta första företagsnamnet per DMU
-                }).reset_index()
-                
-                # Lägg till antal nätverk per DMU
-                dmu_networks['antal_nätverk'] = dmu_networks['id_network'].apply(len)
-                dmu_networks['nätverk_lista'] = dmu_networks['id_network'].apply(lambda x: ', '.join(map(str, sorted(x))))
-                
-                # Sortera efter antal nätverk (flest först) för att se aggregeringarna tydligt
-                dmu_networks = dmu_networks.sort_values('antal_nätverk', ascending=False)
-                
-                # Visa tabell
-                display_df = dmu_networks[['DMU', 'Företag', 'antal_nätverk', 'nätverk_lista']].copy()
-                display_df.columns = ['DMU', 'Företag', 'Antal nätverk', 'id_network lista']
-                
-                st.dataframe(display_df, use_container_width=True)
-                
-                # Sammanfattning av aggregering
-                multi_network_dmus = dmu_networks[dmu_networks['antal_nätverk'] > 1]
-                if not multi_network_dmus.empty:
-                    st.write(f"**{len(multi_network_dmus)} DMU har flera nätverk:**")
-                    for _, row in multi_network_dmus.head(10).iterrows():  # Visa top 10
-                        st.write(f"- DMU {int(row['DMU'])} ({row['Företag']}): {row['antal_nätverk']} nätverk")
-                    
-                    if len(multi_network_dmus) > 10:
-                        st.write(f"... och {len(multi_network_dmus) - 10} till")
-            else:
-                st.error("Kunde inte ladda reconciliation-data för mappningstabell")
-        
-        # Lista över exkluderade nätverk
-        if debug['unmapped_count'] > 0:
-            with st.expander(f"Exkluderade id_network ({debug['unmapped_count']} st)"):
-                if len(debug['unmapped_networks']) > 100:
-                    st.warning(f"Visar första 100 av {len(debug['unmapped_networks'])} exkluderade nätverk")
-                    unmapped_sample = debug['unmapped_networks'][:100]
-                else:
-                    unmapped_sample = debug['unmapped_networks']
-                
-                # Skapa DataFrame för bättre visning
-                unmapped_df = pd.DataFrame({
-                    'id_network': unmapped_sample,
-                    'status': ['Saknas i reconciliation'] * len(unmapped_sample)
-                })
-                st.dataframe(unmapped_df, use_container_width=True)
-        
-        # Rådata-inspektion
-        with st.expander("Rådata för felsökning"):
-            st.write("**Kapitalbas id_networks (sample):**")
-            if debug['original_count'] > 0:
-                sample_original = list(df_facit['id_network'].unique())[:20]
-                st.code(f"{sample_original}")
-            
-            st.write("**Reconciliation id_networks (sample):**") 
-            if debug['reconciliation_count'] > 0:
-                rec = _read_reconciliation(RECON_CSV)
-                if rec is not None:
-                    sample_recon = list(rec['id_network'].unique())[:20]
-                    st.code(f"{sample_recon}")
-
-    # Avslut med fallback-hantering som tidigare...

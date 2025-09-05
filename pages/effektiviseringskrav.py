@@ -12,9 +12,9 @@ from effektiviseringskrav.view.show_heatmap import show_heatmap
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
     st.stop()
 
-st.set_page_config(page_title="Effektiviseringsdashboard", layout="wide")
-st.title("Effektiviseringsdashboard för lokalnätsföretag")
-st.markdown("Välj modell och se effektivitet, krav och utfall för olika företag.")
+st.set_page_config(page_title="Effektiviseringskrav", layout="wide")
+st.title("Effektiviseringskrav")
+st.markdown("Beräkna effektiviseringskrav och påverkbara kostnader och exportera till intäktsramen.")
 
 # --- Ladda data ---
 data_file = "effektiviseringskrav/data/Data_modeller.xlsx"

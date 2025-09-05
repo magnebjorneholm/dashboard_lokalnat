@@ -14,8 +14,9 @@ from effektiviseringskrav.app.data_loader import merge_capex_scenario
 
 
 def show_dea_view(df):
-    st.header("DEA-modell")
-    st.sidebar.subheader("DEA-parametrar")
+    st.header("DEA")
+    st.warning("NOTERA: Om man kör Ei:s standard-DEA så får man exakt samma påverkbara kostnader för alla företag förutom LKAB nät (delta -23 tkr) och Jukkasjärvi (delta -238 tkr). Anledningen är att vi får små skillnader i uppskattade krav (1,75% hos Ei vs. 1,82% här för LKAB och 1,50% hos Ei vs. 1,62% här Jukkasjärvi), oklart varför.")
+    st.sidebar.subheader("Modellspecifikation")
   
     # --- Försök merga CAPEX-scenario från Kapitalbas (DMU) -------------------
     df, scen_info = merge_capex_scenario(df)
@@ -41,19 +42,12 @@ def show_dea_view(df):
         totex_wacc_col = scen_info.get("totex_col")
         # Lägg bara in de kolumner som faktiskt finns i df
         all_inputs += [c for c in [capex_wacc_col, totex_wacc_col] if c and c in df.columns]
-        st.sidebar.success(f"WACC-scenario aktiv: {scen_info['tag'].replace('p','.')} • täckning {scen_info['coverage']:.0%}")
+        st.sidebar.success(f"WACC-scenario hittat: {scen_info['tag'].replace('p','.')} \n Täckning {scen_info['coverage']:.0%} av DMU")
     else:
         st.sidebar.info("Inget CAPEX-scenario laddat från Kapitalbas")
 
-    st.sidebar.caption(
-        "**Input-alternativ**\n"
-        "• CAPEX + OPEXp: separata poster för analys av kostnadstyper\n"
-        "• TOTEX: totalkostnad utan uppdelning\n"
-        "• _wacc_: scenario från Kapitalbas med justerad kalkylränta"
-    )
-
     # Default: CAPEX + OPEXp
-    input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs])
+    input_cols = st.sidebar.multiselect("Inputs", all_inputs, default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs])
 
     # --- Exklusivitetsregler ------------------------------------------------
     has_capex_std  = "CAPEX" in input_cols
@@ -88,15 +82,14 @@ def show_dea_view(df):
                 )
                 st.stop()
 
-    output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=all_outputs)
-    use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers före beräkning", value=True)
+    output_cols = st.sidebar.multiselect("Outputs", all_outputs, default=all_outputs)
+    use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers", value=True)
 
     if not input_cols or not output_cols:
         st.warning("Välj minst en input och en output för att köra modellen.")
         st.stop()
 
     # --- RTS och trunkering ---
-    st.sidebar.caption("**Skalavkastning (RTS)**\n• crs: Konstant skalavkastning\n• vrs: Variabel skalavkastning")
     dea_rts = st.sidebar.selectbox("Skalavkastning (RTS)", ["crs", "vrs"], index=0)
 
     st.sidebar.caption("**Trunkering av intäktsreduktion**\nBegränsar hur mycket ineffektivitet får påverka kraven.")
@@ -138,9 +131,6 @@ def show_dea_view(df):
     # Visa resultat om de finns (antingen just körda eller från session state)
     if 'dea_result' in st.session_state:
         result = st.session_state['dea_result']
-
-        # --- Resultatvisning ---
-        st.subheader("DEA-resultat")
         
         # Outlier-sammanfattning
         df_outliers = result[result["is_outlier"] == True][["Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc"]]
@@ -190,7 +180,7 @@ def show_dea_view(df):
         # --- IR-EXPORT SEKTION ---
         st.markdown("---")
         st.subheader("Export till Intäktsram-dekomposition")
-        st.caption("Beräknar påverkbara kostnader för 2024-2027 perioden baserat på Ei:s verkliga beräkningsmetod")
+        st.caption("Beräknar påverkbara kostnader för 2024-2027 perioden baserat på Ei:s beräkningsmetod")
         
         with st.expander("Beräkningslogik för påverkbara kostnader (generella formler)"):
             st.markdown("### 1) Prisomräkning av historik och medelvärde")
@@ -218,7 +208,7 @@ def show_dea_view(df):
             st.latex(r"B \;=\; \overline C \;+\; \Delta")
             st.markdown(
                 "och låter avdragen växa geometriskt med $(1+e)^{t-1}$. "
-                "Excel-logiken avrundar **årsvis** (”half-up”):"
+                "Vi avrundar **årsvis** (”half-up”):"
             )
             st.latex(
                 r"\text{inc}_t \;=\; \operatorname{round}_{0.5\uparrow}\!\big(e\cdot B\cdot (1+e)^{\,t-1}\big),\qquad t=1,2,3,4"
@@ -231,7 +221,6 @@ def show_dea_view(df):
             st.markdown(
                 "> Utan årsvis avrundning skulle "
                 "$A_t^{\\text{theo}} = B\\big((1+e)^{t}-1\\big)$. "
-                "Excel använder dock $\\text{inc}_t$ och summerar dem årsvis."
             )
             st.markdown("**”Totalt avdrag 2024–2027”** i arket motsvarar:")
             st.latex(r"A_{\text{sum}} \;=\; \sum_{t=1}^{4} A_t")
@@ -246,28 +235,6 @@ def show_dea_view(df):
             st.markdown("Utan att ta hänsyn till årsvis avrundning kan man se identiteten")
             st.latex(
                 r"T \;\approx\; 4\,\overline C \;-\; \sum_{t=1}^{4}A_t \;+\; N \quad\text{(exakt om }Y_t\text{ ej avrundas årsvis).}"
-            )
-
-            st.markdown("### 6) Baseline vs. scenario")
-            st.markdown(
-                "* **Baseline**: sätt $e=e_{\\text{base}}$ (Ei:s årliga krav) och beräkna "
-                "$\\{\\text{inc}_t^{\\text{base}}, A_t^{\\text{base}}, Y_t^{\\text{base}}, T_{\\text{base}}\\}$.\n"
-                "* **Scenario (DEA)**: sätt $e=e_{\\text{scn}}$ (t.ex. från DEA-exporten) och beräkna "
-                "$\\{\\text{inc}_t^{\\text{scn}}, A_t^{\\text{scn}}, Y_t^{\\text{scn}}, T_{\\text{scn}}\\}$."
-            )
-            st.markdown(
-                "Rapporterade exportkolumner motsvarar vanligtvis:\n\n"
-                "$\\text{Paverkbara\\_Baseline\\_4yr}=T_{\\text{base}},\\quad "
-                "\\text{Paverkbara\\_Target}=T_{\\text{scn}},\\quad "
-                "\\text{Total\\_Reduction\\_tkr}=T_{\\text{base}}-T_{\\text{scn}}$."
-            )
-
-            st.markdown("### 7) Avrundningsdefinition (Excel “half-up”)")
-            st.latex(r"\operatorname{round}_{0.5\uparrow}(x)\;=\;\big\lfloor x+0.5\big\rfloor")
-            st.markdown(
-                "Används för varje $\\text{inc}_t$ och varje $Y_t$. Det är denna årsvisa avrundning som gör att "
-                "$A_{\\text{sum}}$ respektive totalsumman $T$ exakt matchar Excel, medan en ren, oavrundad "
-                "”slutformel” kan ge ±1–2 tkr avvikelse."
             )
         
         # Kontrollera att vi har nödvändiga kolumner
@@ -287,14 +254,14 @@ def show_dea_view(df):
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             total_baseline = export_data['Paverkbara_Baseline_4yr'].sum() / 1000  # MSEK
-                            st.metric("Baseline 4-år totalt", f"{total_baseline:.1f} MSEK")
+                            st.metric("Påverkbara (Ei-standard)", f"{total_baseline:.1f} MSEK")
                         with col2:
                             total_target = export_data['Paverkbara_Target'].sum() / 1000  # MSEK
-                            st.metric("Efter effektiviseringskrav", f"{total_target:.1f} MSEK")
+                            st.metric("Påverkbara (Scenario)", f"{total_target:.1f} MSEK")
                         with col3:
                             total_reduction = export_data['Total_Reduction_tkr'].sum() / 1000  # MSEK
                             reduction_pct = (total_reduction / total_baseline) * 100 if total_baseline > 0 else 0
-                            st.metric("Total reduktion", f"{total_reduction:.1f} MSEK ({reduction_pct:.1f}%)")
+                            st.metric("Delta", f"{total_reduction:.1f} MSEK ({reduction_pct:.1f}%)")
                         
                         # Visa preview av export-data
                         with st.expander("Förhandsvisning av export-data"):
@@ -328,10 +295,7 @@ def show_dea_view(df):
                 st.warning(f"IR baseline-fil hittades inte: {ir_baseline_file}")
                 st.info("Kontrollera sökvägen till Excel-filen med 'Påverkbara' ark")
 
-        # --- Standard Excel-export för DEA-resultat ---
-        st.markdown("---")
-        st.subheader("Export av DEA-resultat")
-        
+        # --- Standard Excel-export för DEA-resultat ---    
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
             result.to_excel(writer, sheet_name="Resultat", index=False)
@@ -344,7 +308,7 @@ def show_dea_view(df):
         )
         
     else:
-        st.info("Välj modellspecifikationer och klicka på 'Kör DEA' för att se resultat och export-alternativ.")
+        st.info("Välj modellspecifikation och klicka på 'Kör DEA' för att se resultat och export-alternativ.")
         
         # Lägg till knapp för att rensa lagrade resultat
         if 'dea_result' in st.session_state:
