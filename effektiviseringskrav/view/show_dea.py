@@ -15,7 +15,96 @@ from effektiviseringskrav.app.data_loader import merge_capex_scenario
 
 def show_dea_view(df):
     st.header("DEA")
-    st.warning("NOTERA: Om man kör Ei:s standard-DEA så får man exakt samma påverkbara kostnader för alla företag förutom LKAB nät (delta -23 tkr) och Jukkasjärvi (delta -238 tkr). Anledningen är att vi får små skillnader i uppskattade krav (1,75% hos Ei vs. 1,82% här för LKAB och 1,50% hos Ei vs. 1,62% här Jukkasjärvi), oklart varför.")
+    with st.expander("Metodik och modelspecifikation för DEA-effektiviseringskrav", expanded=False):
+        st.markdown(
+            """
+            **Data Envelopment Analysis (DEA)** är en icke-parametrisk frontmetod som jämför elnätsföretagens 
+            prestationer för att uppskatta effektiviseringspotentialer. Metoden bygger på att de mest effektiva 
+            företagen bildar en "effektiv front" som utgör förebild för övriga företag.
+            """
+        )
+        
+        st.markdown("### 1. Val av inputvariabler (kostnader)")
+        st.markdown(
+            """
+            **CAPEX + OPEXp:** Separerar kapitalkostnader och påverkbara driftskostnader. 
+            Kapitalkostnaderna baseras på företagens rapporterade kapitalbas för 2024, medan OPEXp är 
+            medelvärdet 2018–2021. Detta ger en mer nyanserad bild av företagens kostnadsstruktur.
+            
+            **TOTEX:** Totala kostnader (CAPEX + OPEXp). Enklare men kan maskera skillnader mellan 
+            kapital- och driftskostnadseffektivitet.
+            
+            **Scenario-versioner:** CAPEX_wacc och TOTEX_wacc använder alternativ kalkylränta istället för 
+            Ei:s standard (4,53% real, före skatt). Detta möjliggör känslighetsanalys för olika WACC-antaganden.
+            """
+        )
+        
+        st.markdown("### 2. Hantering av outliers (avvikande observationer)")
+        st.markdown(
+            """
+            **Varför filtrera outliers?** DEA är deterministisk och tar inte hänsyn till slump. 
+            Extrema observationer kan skapa missvisande förebilder och påverka hela frontens form negativt.
+            
+            **Identifiering:** Använder supereffektivitetstest med Ei:s etablerade kriterie:
+            """
+        )
+        st.latex(r"\text{Outlier om: } \theta_i > q_{75} + 2 \times (q_{75} - q_{25})")
+        st.markdown(
+            """
+            där $\\theta_i$ är företag $i$:s supereffektivitetsmått, $q_{75}$ och $q_{25}$ är tredje respektive första kvartilen.
+            
+            **Påverkan på fronten:** Outliers exkluderas INNAN den effektiva fronten beräknas för resterande företag. 
+            Detta säkerställer att icke-outliers jämförs mot en robust, representativ front.
+            
+            **Krav för outliers:** Tilldelas det lägsta effektiviseringskravet eftersom de saknar jämförbara förebilder.
+            """
+        )
+        
+        st.markdown("### 3. Skalavkastning")
+        st.markdown(
+            """
+            **CRS:** Antar konstant skalavkastning och skattar en gemensam 
+            effektiv front för alla företag. Det innebär att *alla företag jämförs med alla andra* oavsett storlek. 
+            En liten landsbygdsnätägare kan alltså bli jämförd direkt med Vattenfall Eldistribution. 
+            Detta simulerar konkurrenstryck och ger incitament för optimal företagsstorlek.
+            
+            **VRS:** Fronten "böjs" genom att lägga till en skalbegränsning 
+            (convexity constraint, även kallad BCC-modellen). Det betyder att ett företag *bara jämförs 
+            med andra av ungefär samma storleksordning*. Modellen separerar bort renodlade skaleffekter från ineffektivitet.
+            
+            """
+        )
+        
+        st.markdown("### 4. Från ineffektivitet till årligt effektiviseringskrav")
+        st.markdown(
+            """
+            DEA-modellen ger varje företag en **kostnadseffektivitet** mellan 0 och 1, där 1 = fullt effektiv. 
+            **Effektiviseringspotentialen** är $(1 - \\text{effektivitet})$ och anger hur mycket kostnaderna 
+            teoretiskt skulle kunna minskas.
+            
+            **Trunkering av intäktsreduktion:** För att hantera modellens förenklingar begränsas potentialen:
+            """
+        )
+        st.latex(r"\text{Justerad potential} = \min(\max(\text{potential}, \text{min\_trunkering}), \text{max\_trunkering})")
+        st.markdown(
+            """
+            **Realisering och delning:** Ei antar att företag får två tillsynsperioder (8 år) för full realisering. 
+            Under kommande period (4 år) ska 50% realiseras, och hälften av denna förbättring delas med kunderna:
+            """
+        )
+        st.latex(r"\text{Krav för period} = \frac{\text{Justerad potential} \times 0.5}{2} = \frac{\text{Justerad potential}}{4}")
+        st.markdown("**Geometrisk omvandling till årligt krav:**")
+        st.latex(r"\text{Årligt krav} = (1 + \text{Krav för period})^{1/4} - 1")
+        st.markdown(
+            """
+            **Gränser:** Årligt krav mellan 1,0% (branschens genomsnittliga produktivitetsökning) 
+            och 1,82% (motsvarar 30% potential efter alla justeringar).
+            
+            **Exempel:** Företag med 20% potential → 5% periodkrav → 1,23% årligt krav.
+            """
+        )
+
+    st.warning("OBS: Om man kör Ei:s standard-DEA så får man exakt samma påverkbara kostnader för alla företag förutom LKAB nät (delta -23 tkr) och Jukkasjärvi (delta -238 tkr). Anledningen är att vi får små skillnader i uppskattade krav (1,75% hos Ei vs. 1,82% här för LKAB och 1,50% hos Ei vs. 1,62% här Jukkasjärvi), oklart varför.")
     st.sidebar.subheader("Modellspecifikation")
   
     # --- Försök merga CAPEX-scenario från Kapitalbas (DMU) -------------------
@@ -91,8 +180,7 @@ def show_dea_view(df):
 
     # --- RTS och trunkering ---
     dea_rts = st.sidebar.selectbox("Skalavkastning (RTS)", ["crs", "vrs"], index=0)
-
-    st.sidebar.caption("**Trunkering av intäktsreduktion**\nBegränsar hur mycket ineffektivitet får påverka kraven.")
+    
     dea_trunk_min = st.sidebar.slider("Minsta trunkering", 0.0, 0.3, 0.162416, step=0.005)
     dea_trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
 
