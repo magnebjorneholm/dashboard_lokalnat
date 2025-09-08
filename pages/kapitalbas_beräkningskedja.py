@@ -141,13 +141,11 @@ def select_dmu() -> Optional[int]:
         return None
     
     # DMU-väljare
-    st.sidebar.header("Välj DMU")
-    
     if not entity_options:
         st.sidebar.error("Inga DMU hittades")
         return None
     
-    selected_display = st.sidebar.selectbox(
+    selected_display = st.sidebar.selectbox("Välj DMU",
         entity_options,
     )
     

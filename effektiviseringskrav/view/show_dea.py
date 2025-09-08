@@ -28,11 +28,9 @@ def show_dea_view(df):
         st.markdown(
             """
             **CAPEX + OPEXp:** Separerar kapitalkostnader och påverkbara driftskostnader. 
-            Kapitalkostnaderna baseras på företagens rapporterade kapitalbas för 2024, medan OPEXp är 
-            medelvärdet 2018–2021. Detta ger en mer nyanserad bild av företagens kostnadsstruktur.
+            Forts...
             
-            **TOTEX:** Totala kostnader (CAPEX + OPEXp). Enklare men kan maskera skillnader mellan 
-            kapital- och driftskostnadseffektivitet.
+            **TOTEX:** Totala kostnader (CAPEX + OPEXp).forts...
             
             **Scenario-versioner:** CAPEX_wacc och TOTEX_wacc använder alternativ kalkylränta istället för 
             Ei:s standard (4,53% real, före skatt). Detta möjliggör känslighetsanalys för olika WACC-antaganden.
