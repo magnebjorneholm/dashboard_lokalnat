@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import io
+import io, json, os
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple, Optional
@@ -12,6 +12,18 @@ from effektiviseringskrav.app.plots import (
 )
 # NYTT: scenariomerge från data_loader
 from effektiviseringskrav.app.data_loader import merge_capex_scenario
+
+def get_user_org() -> str:
+    """Hämtar aktuell organisations-ID från session state"""
+    return st.session_state.get('current_user', 'default')
+
+
+def ensure_org_dir(base_path: str) -> str:
+    """Skapar organisationsspecifik katalog och returnerar sökvägen"""
+    org = get_user_org()
+    org_path = os.path.join(base_path, org)
+    os.makedirs(org_path, exist_ok=True)
+    return org_path
 
 
 def show_dea_view(df):
@@ -910,11 +922,14 @@ def load_ir_paverkbara_baseline(filepath: str) -> Optional[pd.DataFrame]:
         return None
 
 def export_ir_paverkbara_scenario(export_data: pd.DataFrame, scenario_name: str) -> Tuple[str, str]:
-    """Exporterar påverkbara kostnader till IR-dekompositionen. Returnerar (data_path, meta_path)."""
+    """
+    UPPDATERAD: Exporterar påverkbara kostnader till organisationsspecifik katalog.
+    Returnerar (data_path, meta_path).
+    """
     
-    # Skapa export-katalog - rätt sökväg enligt din specifikation
-    export_dir = Path("scenario/effektiviseringskrav/exports_to_ir")
-    export_dir.mkdir(parents=True, exist_ok=True)
+    # Skapa organisationsspecifik export-katalog
+    base_export_dir = "scenario/effektiviseringskrav/exports_to_ir"
+    export_dir = Path(ensure_org_dir(base_export_dir))
     
     # Skapa filnamn med timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -935,30 +950,23 @@ def export_ir_paverkbara_scenario(export_data: pd.DataFrame, scenario_name: str)
     
     # Skapa metadata-fil
     metadata = {
-        "description": "Påverkbara kostnader baserat på DEA-effektiviseringskrav för IR-dekomposition (Ei-korrekt metod)",
+        "description": "Påverkbara kostnader baserat på DEA-effektiviseringskrav för IR-dekomposition",
         "scenario_name": scenario_name,
+        "organization": get_user_org(),
         "analysis_method": "DEA_corrected_exact_columns",
         "export_timestamp": datetime.now().isoformat(),
         "price_year": 2022,
         "unit": "tkr",
         "level": "REId",
         "period": "2024-2027",
-        "formula": "Ei-korrekt: B_eff återställd från baseline, μ-faktor från 2024/2025-förhållande",
         "reid_count": len(final_export),
         "total_baseline_tkr": int(final_export['Paverkbara_Baseline_4yr'].sum()),
         "total_target_tkr": int(final_export['Paverkbara_Target'].sum()),
         "total_reduction_tkr": int(final_export['Total_Reduction_tkr'].sum()),
-        "method_details": {
-            "step1": "B_eff = y2024_base / (1 - e_base)",
-            "step2": "μ = 1 - e_base - (y2025_base / y2024_base)",
-            "step3": "y_t_scn = y_{t-1}_scn * (1 - e_scn - μ) for t > 2024",
-            "step4": "Totalsumma_scn = sum(y2024_scn + y2025_scn + y2026_scn + y2027_scn)"
-        }
     }
     
     metadata_path = filepath.with_suffix('.json')
     with open(metadata_path, 'w', encoding='utf-8') as f:
-        import json
         json.dump(metadata, f, ensure_ascii=False, indent=2)
     
     return str(filepath), str(metadata_path)

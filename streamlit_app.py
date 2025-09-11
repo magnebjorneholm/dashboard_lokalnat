@@ -16,7 +16,7 @@ if not st.session_state.access_granted:
     # Input-fält för användarnamn och lösenord
     col1, col2 = st.columns(2)
     with col1:
-        username = st.text_input("Användarnamn", placeholder="t.ex. stina")
+        username = st.text_input("Användarnamn")
     with col2:
         password = st.text_input("Lösenord", type="password")
     
@@ -37,10 +37,6 @@ if not st.session_state.access_granted:
         else:
             st.warning("Ange både användarnamn och lösenord")
     
-    # Hjälpinformation för testmiljö
-    with st.expander("Testinformation"):
-        st.info("Testorganisation: användarnamn='stina', lösenord='Bison'")
-        st.caption("Kontakta administratören för att få tillgång med ditt organisations konto.")
     
     st.stop()
 

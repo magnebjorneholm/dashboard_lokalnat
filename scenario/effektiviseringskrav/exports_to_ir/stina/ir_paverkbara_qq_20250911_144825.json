@@ -1,0 +1,15 @@
+{
+  "description": "Påverkbara kostnader baserat på DEA-effektiviseringskrav för IR-dekomposition",
+  "scenario_name": "qq",
+  "organization": "stina",
+  "analysis_method": "DEA_corrected_exact_columns",
+  "export_timestamp": "2025-09-11T14:48:25.132096",
+  "price_year": 2022,
+  "unit": "tkr",
+  "level": "REId",
+  "period": "2024-2027",
+  "reid_count": 148,
+  "total_baseline_tkr": 44926372,
+  "total_target_tkr": 44926109,
+  "total_reduction_tkr": 263
+}
