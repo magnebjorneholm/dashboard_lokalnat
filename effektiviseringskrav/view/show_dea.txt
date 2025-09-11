@@ -430,25 +430,21 @@ def calculate_ir_paverkbara_export_fixed(dea_result: pd.DataFrame, ir_baseline_f
             B_val = dt + delta
             
             # Beräkna årliga inkrement med FULLSTÄNDIG precision
-            # NYTT: Behåll både exakta och avrundade värden separat
-            inc_exact_vals = []
-            inc_rounded_vals = []
+            # VIKTIGT: Avrunda INTE inkrementen individuellt!
+            inc_vals = []
             avdrag_vals = []
-
+            
             for t in range(1, 5):  # t = 1,2,3,4 för åren 2024-2027
                 # Beräkna inkrement med full precision
                 growth_factor = (1.0 + e) ** (t - 1)
                 inc_exact = e * B_val * growth_factor
                 
-                # Spara exakt värde för kumulativ summa
-                inc_exact_vals.append(inc_exact)
-                
-                # Avrunda för kompatibilitet (används vid rapportering)
+                # Avrunda inkrement enligt Excel half-up
                 inc_rounded = excel_half_up_round(inc_exact)
-                inc_rounded_vals.append(inc_rounded)
+                inc_vals.append(inc_rounded)
                 
-                # KRITISK FIX: Kumulativt avdrag baserat på EXAKTA värden
-                avdrag_kum = sum(inc_exact_vals)
+                # Kumulativt avdrag
+                avdrag_kum = sum(inc_vals)
                 avdrag_vals.append(avdrag_kum)
             
             # Beräkna årsvärden: Y_t = DT - Avdrag_t + Δ
@@ -460,9 +456,8 @@ def calculate_ir_paverkbara_export_fixed(dea_result: pd.DataFrame, ir_baseline_f
 
             
             results.append({
-                'inc': inc_rounded_vals,      # Avrundade för visning
-                'inc_exact': inc_exact_vals,  # Exakta för beräkning
-                'avdrag': avdrag_vals,        # Baserat på exakta värden
+                'inc': inc_vals,
+                'avdrag': avdrag_vals,
                 'years': year_vals,
                 'B': B_val,
                 'total': sum(year_vals)

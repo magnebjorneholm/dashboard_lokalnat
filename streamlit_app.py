@@ -3,18 +3,53 @@ import base64
 from pathlib import Path
 import streamlit.components.v1 as components
 
-# === Lösenordsskydd ===
+# === Organisationsbaserat lösenordsskydd ===
 if "access_granted" not in st.session_state:
     st.session_state.access_granted = False
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
 
 if not st.session_state.access_granted:
-    pw = st.text_input("Ange lösenord", type="password")
-    if pw == st.secrets["password"]:
-        st.session_state.access_granted = True
-        st.rerun()
-    elif pw != "":
-        st.warning("Fel lösenord.")
+    st.title("Logga in")
+    st.markdown("Ange din organisations användarnamn och lösenord för att komma åt systemet.")
+    
+    # Input-fält för användarnamn och lösenord
+    col1, col2 = st.columns(2)
+    with col1:
+        username = st.text_input("Användarnamn", placeholder="t.ex. stina")
+    with col2:
+        password = st.text_input("Lösenord", type="password")
+    
+    if st.button("Logga in", type="primary"):
+        if username and password:
+            # Kontrollera mot secrets
+            users = st.secrets.get("users", {})
+            if username.lower() in users:
+                if users[username.lower()] == password:
+                    st.session_state.access_granted = True
+                    st.session_state.current_user = username.lower()
+                    st.success(f"Välkommen {username}!")
+                    st.rerun()
+                else:
+                    st.error("Fel lösenord")
+            else:
+                st.error("Användarnamnet finns inte")
+        else:
+            st.warning("Ange både användarnamn och lösenord")
+    
+    # Hjälpinformation för testmiljö
+    with st.expander("Testinformation"):
+        st.info("Testorganisation: användarnamn='stina', lösenord='Bison'")
+        st.caption("Kontakta administratören för att få tillgång med ditt organisations konto.")
+    
     st.stop()
+
+# === Visa inloggningsstatus ===
+st.sidebar.success(f"Inloggad som: {st.session_state.current_user}")
+if st.sidebar.button("Logga ut"):
+    st.session_state.access_granted = False
+    st.session_state.current_user = None
+    st.rerun()
 
 # === Ladda menybild ===
 image_path = Path("images/reglering_oversikt.png")
@@ -45,4 +80,3 @@ components.html(
     height=700,
     scrolling=True
 )
-

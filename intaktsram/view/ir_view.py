@@ -3,11 +3,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
-import io
+import io, os, json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
-import json
 
 from intaktsram.app.data_loader import (
     load_dmu_mapping, 
@@ -15,6 +14,18 @@ from intaktsram.app.data_loader import (
     load_scenario_data,
     calculate_intaktsram
 )
+
+def get_user_org() -> str:
+    """Hämtar aktuell organisations-ID från session state"""
+    return st.session_state.get('current_user', 'default')
+
+
+def ensure_org_dir(base_path: str) -> str:
+    """Skapar organisationsspecifik katalog och returnerar sökvägen"""
+    org = get_user_org()
+    org_path = os.path.join(base_path, org)
+    os.makedirs(org_path, exist_ok=True)
+    return org_path
 
 
 def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
@@ -1169,9 +1180,11 @@ def show_export_section(df_working: pd.DataFrame):
 
 
 def save_scenario_to_file(scenario_name: str, df_data: pd.DataFrame):
-    """Sparar scenario till fil för framtida användning."""
-    scenario_dir = Path("scenario/saved")
-    scenario_dir.mkdir(parents=True, exist_ok=True)
+    """
+    UPPDATERAD: Sparar scenario till organisationsspecifik fil för framtida användning.
+    """
+    base_scenario_dir = "scenario/saved"
+    scenario_dir = Path(ensure_org_dir(base_scenario_dir))
     
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"ir_scenario_{scenario_name.replace(' ', '_')}_{timestamp}.parquet"
@@ -1180,6 +1193,7 @@ def save_scenario_to_file(scenario_name: str, df_data: pd.DataFrame):
     # Spara både data och metadata
     scenario_metadata = {
         'name': scenario_name,
+        'organization': get_user_org(),
         'created': datetime.now().isoformat(),
         'modifications': st.session_state.scenario_data.get('modifications', {}),
         'component_sources': st.session_state.scenario_data.get('component_sources', {})
@@ -1190,6 +1204,72 @@ def save_scenario_to_file(scenario_name: str, df_data: pd.DataFrame):
     df_data.to_parquet(filepath)
     
     return str(filepath)
+
+
+def show_scenario_loader():
+    """
+    UPPDATERAD: Visar dialog för att ladda tidigare sparade scenarier från organisationsspecifik katalog.
+    """
+    base_scenario_dir = "scenario/saved"
+    org = get_user_org()
+    scenario_dir = Path(base_scenario_dir) / org
+    
+    if not scenario_dir.exists():
+        st.sidebar.error(f"Inga sparade scenarier finns ännu för {org}")
+        if st.sidebar.button("Stäng", key="close_empty_loader"):
+            st.session_state.show_scenario_loader = False
+            st.rerun()
+        return
+    
+    # Leta efter sparade scenario-filer
+    scenario_files = list(scenario_dir.glob("ir_scenario_*.parquet"))
+    
+    if not scenario_files:
+        st.sidebar.error(f"Inga sparade scenarier hittades för {org}")
+        if st.sidebar.button("Stäng", key="close_no_files"):
+            st.session_state.show_scenario_loader = False
+            st.rerun()
+        return
+    
+    # Sortera efter modifierad tid (nyast först)
+    scenario_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    
+    # Visa scenario-loader persistent i sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.subheader(f"Ladda tidigare scenario ({org})")
+    
+    # Skapa dropdown med scenario-filer
+    file_names = [f.name.replace("ir_scenario_", "").replace(".parquet", "").replace("_", " ") 
+                  for f in scenario_files]
+    
+    selected_index = st.sidebar.selectbox(
+        "Välj scenario att ladda:",
+        options=range(len(scenario_files)),
+        format_func=lambda i: file_names[i],
+        key="scenario_selection"
+    )
+    
+    selected_file = scenario_files[selected_index]
+    
+    # Info om valt scenario
+    file_info = selected_file.stat()
+    st.sidebar.caption(f"Skapad: {datetime.fromtimestamp(file_info.st_mtime).strftime('%Y-%m-%d %H:%M')}")
+    
+    # Knappar för att ladda eller avbryta
+    col_load, col_cancel = st.sidebar.columns(2)
+    
+    with col_load:
+        if st.button("Ladda scenario", key="load_scenario_btn"):
+            load_scenario_from_file(selected_file)
+            st.session_state.show_scenario_loader = False
+            st.rerun()
+    
+    with col_cancel:
+        if st.button("Avbryt", key="cancel_load_btn"):
+            st.session_state.show_scenario_loader = False
+            st.rerun()
+    
+    st.sidebar.markdown("---")
 
 
 def create_excel_export(df_data: pd.DataFrame) -> io.BytesIO:

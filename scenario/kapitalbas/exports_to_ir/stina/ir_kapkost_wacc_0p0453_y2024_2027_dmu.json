@@ -1,0 +1,19 @@
+{
+  "description": "Detaljerad kapitalkostnad för IR-dekomposition – SUMMA 2024–2027, DMU-nivå",
+  "organization": "stina",
+  "price_year": 2022,
+  "unit": "tkr",
+  "level": "DMU",
+  "period": {
+    "start": 2024,
+    "end": 2027
+  },
+  "wacc_old": 0.0453,
+  "wacc_new": 0.0453,
+  "export_timestamp": "2025-09-11T10:27:34.356428",
+  "constructed_as": "Return-delar skalas per halvår (r_new/r_old); capcost_sum_new beräknas; därefter summeras H1+H2 för varje år och aggregeras till periodsumma 2024–2027; DMU-aggregat. Endast lokalnät (REId börjar på REL).",
+  "components": {
+    "Avskrivningar_Ny": "dep_ord + dep_tail (oförändrat av WACC)",
+    "Avkastning_Ny": "return_ord_new + return_tail_new (påverkas av WACC)"
+  }
+}

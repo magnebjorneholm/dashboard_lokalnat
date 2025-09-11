@@ -20,6 +20,7 @@ from __future__ import annotations
 import os, math, json
 from dataclasses import dataclass
 from typing import Optional
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -64,6 +65,18 @@ KPI_LABEL = {
     "return_ord":  "Kapitalbindning – ordinarie (return_ord) (MSEK)",
     "return_tail": "Kapitalbindning – svans (return_tail) (MSEK)",
 }
+
+def get_user_org() -> str:
+    """Hämtar aktuell organisations-ID från session state"""
+    return st.session_state.get('current_user', 'default')
+
+
+def ensure_org_dir(base_path: str) -> str:
+    """Skapar organisationsspecifik katalog och returnerar sökvägen"""
+    org = get_user_org()
+    org_path = os.path.join(base_path, org)
+    os.makedirs(org_path, exist_ok=True)
+    return org_path
 
 def fmt_msek_from_tkr(x, decimals: int = 3) -> str:
     v = pd.to_numeric(x, errors="coerce")
@@ -410,39 +423,58 @@ def _build_ir_export_table_period(df_all: pd.DataFrame, r_new: float, years=(202
 
 
 def _write_dea_export(df_export: pd.DataFrame, tag: str) -> tuple[str,str]:
-    """Skriv DEA-export (Parquet + metadata JSON). Return: (data_path, meta_path)."""
-    _ensure_dir(DEA_EXPORT_DIR)
-    data_path = os.path.join(DEA_EXPORT_DIR, f"capex_wacc_{tag}_y2024_dmu.parquet")
+    """
+    UPPDATERAD: Skriv DEA-export till organisationsspecifik katalog.
+    Return: (data_path, meta_path).
+    """
+    base_export_dir = "scenario/kapitalbas/exports_to_dea"
+    export_dir = ensure_org_dir(base_export_dir)
+    
+    data_path = os.path.join(export_dir, f"capex_wacc_{tag}_y2024_dmu.parquet")
     meta_path = data_path.replace(".parquet",".json")
+    
     df_export.to_parquet(data_path, index=False)
+    
     meta = {
         "description": "CAPEX export för DEA-pipen, DMU-nivå",
+        "organization": get_user_org(),
         "price_year": 2022, 
         "unit": "tkr",
         "level": "DMU",
-        "wacc_old": R_OLD, 
+        "wacc_old": 0.0453,  # R_OLD från översikt.py
         "wacc_new": float(tag.replace("p",".")),
+        "export_timestamp": datetime.now().isoformat(),
         "constructed_as": "Aggregated to annual level before scenario calculation and rounding, DMU level"
     }
+    
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
+    
     return data_path, meta_path
 
+
 def _write_ir_export(df_export: pd.DataFrame, tag: str) -> tuple[str,str]:
-    """Skriv IR-export (period 2024–2027) – Parquet + metadata JSON."""
-    _ensure_dir(IR_EXPORT_DIR)
-    data_path = os.path.join(IR_EXPORT_DIR, f"ir_kapkost_wacc_{tag}_y2024_2027_dmu.parquet")
+    """
+    UPPDATERAD: Skriv IR-export till organisationsspecifik katalog.
+    """
+    base_export_dir = "scenario/kapitalbas/exports_to_ir"
+    export_dir = ensure_org_dir(base_export_dir)
+    
+    data_path = os.path.join(export_dir, f"ir_kapkost_wacc_{tag}_y2024_2027_dmu.parquet")
     meta_path = data_path.replace(".parquet",".json")
 
     df_export.to_parquet(data_path, index=False)
+    
     meta = {
         "description": "Detaljerad kapitalkostnad för IR-dekomposition – SUMMA 2024–2027, DMU-nivå",
+        "organization": get_user_org(),
         "price_year": 2022,
         "unit": "tkr",
         "level": "DMU",
         "period": {"start": 2024, "end": 2027},
-        "wacc_old": R_OLD,
+        "wacc_old": 0.0453,  # R_OLD från översikt.py
         "wacc_new": float(tag.replace("p",".")),
+        "export_timestamp": datetime.now().isoformat(),
         "constructed_as": (
             "Return-delar skalas per halvår (r_new/r_old); capcost_sum_new beräknas; "
             "därefter summeras H1+H2 för varje år och aggregeras till periodsumma 2024–2027; DMU-aggregat. "
@@ -453,8 +485,10 @@ def _write_ir_export(df_export: pd.DataFrame, tag: str) -> tuple[str,str]:
             "Avkastning_Ny": "return_ord_new + return_tail_new (påverkas av WACC)"
         }
     }
+    
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
+    
     return data_path, meta_path
 
 

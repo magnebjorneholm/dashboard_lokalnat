@@ -2,6 +2,7 @@
 # Laddar baseline-data från "Löpande kostnader från SDF 202427.xlsx"
 # och hanterar framtida scenario-integration med ny DMU-mappning
 # UPPDATERAD med förbättrad scenario-detection som returnerar filnamn och tidsstämplar
+# UPPDATERAD med organisationsbaserad filhantering
 
 from __future__ import annotations
 from pathlib import Path
@@ -9,6 +10,12 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Optional, Tuple, List
 from datetime import datetime
+import streamlit as st
+
+
+def get_user_org() -> str:
+    """Hämtar aktuell organisations-ID från session state"""
+    return st.session_state.get('current_user', 'default')
 
 
 def load_baseline_data(filepath: str) -> pd.DataFrame:
@@ -191,32 +198,35 @@ def load_dmu_mapping(filepath: str = "new_recon.csv") -> pd.DataFrame:
 
 def detect_scenario_updates() -> Dict[str, Optional[Dict]]:
     """
-    UPPDATERAD FUNKTION: Letar efter scenario-filer från andra sektioner i nya mappstrukturen.
+    UPPDATERAD FUNKTION: Letar efter scenario-filer från andra sektioner i organisationsbaserade sökvägar.
     Returnerar nu filnamn och tidsstämplar för bättre debugging.
     
     Returns:
-        Dict med information om tillgängliga scenarier:
+        Dict med information om tillgängliga scenarier för den inloggade organisationen:
         {
             'effektiviseringskrav': {
-                'file': 'scenario/effektiviseringskrav/exports_to_ir/ir_paverkbara_*.parquet',
+                'file': 'scenario/effektiviseringskrav/exports_to_ir/stina/ir_paverkbara_*.parquet',
                 'name': 'ir_paverkbara_dea_method_20241204.parquet',
                 'created': '2024-12-04 15:30'
             } eller None,
             'kapitalbas': {
-                'file': 'scenario/kapitalbas/exports_to_ir/ir_kapkost_wacc_*.parquet',
+                'file': 'scenario/kapitalbas/exports_to_ir/stina/ir_kapkost_wacc_*.parquet',
                 'name': 'ir_kapkost_wacc_0p0475_y2024_2027_dmu.parquet', 
                 'created': '2024-12-04 14:15'
             } eller None
         }
     """
     
+    # Hämta aktuell organisation
+    org = get_user_org()
+    
     updates = {
         'effektiviseringskrav': None,
         'kapitalbas': None
     }
 
-    # Leta efter effektiviseringskrav-filer i scenario/effektiviseringskrav/exports_to_ir/
-    effkrav_dir = Path("scenario/effektiviseringskrav/exports_to_ir/")
+    # Leta efter effektiviseringskrav-filer i organisationsspecifik katalog
+    effkrav_dir = Path(f"scenario/effektiviseringskrav/exports_to_ir/{org}/")
     if effkrav_dir.exists():
         effkrav_files = list(effkrav_dir.glob("ir_paverkbara_*.parquet"))
         if effkrav_files:
@@ -228,8 +238,8 @@ def detect_scenario_updates() -> Dict[str, Optional[Dict]]:
                 'created': datetime.fromtimestamp(latest_effkrav.stat().st_mtime).strftime('%Y-%m-%d %H:%M')
             }
 
-    # Leta efter kapitalbas-filer i scenario/kapitalbas/exports_to_ir/
-    kapital_dir = Path("scenario/kapitalbas/exports_to_ir/")
+    # Leta efter kapitalbas-filer i organisationsspecifik katalog
+    kapital_dir = Path(f"scenario/kapitalbas/exports_to_ir/{org}/")
     if kapital_dir.exists():
         kapital_files = list(kapital_dir.glob("ir_kapkost_wacc_*.parquet"))
         if kapital_files:
@@ -250,7 +260,7 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
     
     Args:
         scenario_type: 'effektiviseringskrav' eller 'kapitalbas'
-        scenario_file: Sökväg till scenario-fil
+        scenario_file: Sökväg till scenario-fil (redan organisationsspecifik från detect_scenario_updates)
         baseline_df: Baseline-data för merge
         
     Returns:
