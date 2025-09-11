@@ -225,17 +225,56 @@ def _check_year_completeness(df_year: pd.DataFrame) -> pd.DataFrame:
     cnt = df_year.groupby("DMU")["time"].nunique().reset_index(name="n_halvår")
     return cnt[cnt["n_halvår"]<2]
 
-def _build_dea_export_table(df_year: pd.DataFrame, r_new: float) -> tuple[pd.DataFrame, pd.DataFrame, str]:
-    """Bygger DEA-exporttabell (tkr) per DMU för 2024 och exklusionslista."""
-    # Scenario-beräkning per halvår
-    scen = apply_interest_scenario(df_year, r_new)
+# LÖSNING: Ändra _build_dea_export_table för att använda årsaggregering istället för halvårsavrundning
 
-    # Årssumma per DMU (KRITISK FIX: inte per id_network)
-    base = df_year.groupby(["DMU", "Företag"], as_index=False).agg(CAPEX_2024_tkr=("capcost_sum","sum"))
-    new = scen.groupby(["DMU", "Företag"], as_index=False).agg(CAPEX_2024_wacc_tkr=("capcost_sum_new","sum"))
-    out = base.merge(new, on=["DMU", "Företag"], how="outer")
+def _build_dea_export_table(df_year: pd.DataFrame, r_new: float) -> tuple[pd.DataFrame, pd.DataFrame, str]:
+    """
+    Fixad DEA-exporttabell som summerar FÖRE avrundning för att matcha IR-exporten.
+    """
+    
+    # NYTT: Aggregera till årsnivå FÖRE scenario-beräkning
+    # Detta undviker avrundningsfel per halvår
+    df_year_agg = df_year.groupby(["DMU", "Företag"], as_index=False).agg({
+        'capcost_sum': 'sum',
+        'dep_ord': 'sum', 
+        'dep_tail': 'sum',
+        'return_ord': 'sum',
+        'return_tail': 'sum'
+    })
+    
+    # Scenario-beräkning på årsnivå (EN GÅNG per DMU)
+    if not (isinstance(r_new, (float,int)) and math.isfinite(r_new)):
+        raise ValueError("r_new måste vara ändligt.")
+    
+    scale = float(r_new) / R_OLD
+    
+    # Exakt hantering när r_new == R_OLD
+    if abs(float(r_new) - R_OLD) < 1e-10:
+        df_year_agg["return_ord_new"] = df_year_agg["return_ord"]
+        df_year_agg["return_tail_new"] = df_year_agg["return_tail"]
+    else:
+        # Avrunda EFTER summering av halvår
+        df_year_agg["return_ord_new"] = (df_year_agg["return_ord"] * scale).round()
+        df_year_agg["return_tail_new"] = (df_year_agg["return_tail"] * scale).round()
+    
+    df_year_agg["capcost_sum_new"] = (
+        df_year_agg["dep_ord"] + 
+        df_year_agg["dep_tail"] + 
+        df_year_agg["return_ord_new"] + 
+        df_year_agg["return_tail_new"]
+    )
+    
+    # Bygg export-tabell
+    out = df_year_agg.rename(columns={
+        'capcost_sum': 'CAPEX_2024_tkr',
+        'capcost_sum_new': 'CAPEX_2024_wacc_tkr'
+    })[["DMU", "Företag", "CAPEX_2024_tkr", "CAPEX_2024_wacc_tkr"]].copy()
     
     out["delta_tkr"] = out["CAPEX_2024_wacc_tkr"] - out["CAPEX_2024_tkr"]
+    tolerance = 1e-6 
+    mask = abs(out["delta_tkr"]) < tolerance
+    out.loc[mask, "delta_tkr"] = 0.0
+    out["delta_tkr"] = out["delta_tkr"].round(3)
     out["r_old"] = R_OLD
     out["r_new"] = round(float(r_new), 4)
     out["price_year"] = 2022
@@ -251,58 +290,9 @@ def _build_dea_export_table(df_year: pd.DataFrame, r_new: float) -> tuple[pd.Dat
     # Döp scenariokolumnen med wacc-tagg
     tag = _format_wacc_tag(out["r_new"].iloc[0] if len(out) else r_new)
     out = out.rename(columns={"CAPEX_2024_wacc_tkr": f"CAPEX_2024_wacc_{tag}_tkr"})
+    
     return out, excluded, tag
 
-
-def _build_ir_export_table_period(df_all: pd.DataFrame, r_new: float, years=(2024,2025,2026,2027)) -> tuple[pd.DataFrame, str]:
-    """
-    Bygger IR-exporttabell som SUMMA över hela regleringsperioden (default 2024–2027), DMU-nivå.
-    - Skalar endast return_* med r_new/r_old (per halvår) -> capcost_sum_new
-    - Summerar därefter alla halvår inom perioden till periodbelopp
-    - Applicerar manuella koncessionskostnader
-    """
-    df_period = get_period_df(df_all, years=years)
-    if df_period.empty:
-        raise ValueError("Inget underlag för vald period.")
-
-    scen = apply_interest_scenario(df_period, r_new)
-
-    # Summera över alla halvår 2024–2027 per DMU
-    ir = scen.groupby(["DMU", "Företag"], as_index=False).agg({
-        'dep_ord':'sum','dep_tail':'sum',
-        'return_ord':'sum','return_tail':'sum',
-        'return_ord_new':'sum','return_tail_new':'sum',
-        'capcost_sum':'sum','capcost_sum_new':'sum'
-    })
-
-    # Sätt exportkolumner (period)
-    ir["Kapitalkostnad_Baseline"] = ir["capcost_sum"]
-    ir["Kapitalkostnad_Ny"]       = ir["capcost_sum_new"]
-    ir["Avskrivningar_Ny"]        = ir["dep_ord"] + ir["dep_tail"]  # WACC påverkar ej
-    ir["Avkastning_Baseline"]     = ir["return_ord"] + ir["return_tail"]
-    ir["Avkastning_Ny"]           = ir["return_ord_new"] + ir["return_tail_new"]
-
-    # Framtid: ord/tail-delar
-    ir["dep_ord_Ny"]    = ir["dep_ord"]
-    ir["dep_tail_Ny"]   = ir["dep_tail"]
-    ir["return_ord_Ny"] = ir["return_ord_new"]
-    ir["return_tail_Ny"]= ir["return_tail_new"]
-
-    # NYTT: Applicera koncessionskostnader tillägg
-    ir = apply_concession_adjustments(ir)
-
-    # Metadata
-    tag = _format_wacc_tag(r_new)
-    ir["r_old"] = R_OLD
-    ir["r_new"] = round(float(r_new), 4)
-    ir["price_year"] = 2022
-    ir["scenario_tag"] = tag
-
-    cols = ['DMU','Företag','Kapitalkostnad_Baseline','Kapitalkostnad_Ny',
-            'Avskrivningar_Ny','Avkastning_Baseline','Avkastning_Ny',
-            'dep_ord_Ny','dep_tail_Ny','return_ord_Ny','return_tail_Ny',
-            'r_old','r_new','price_year','scenario_tag']
-    return ir[cols], tag
 
 # ========= Koncessionskostnader tillägg =========
 def get_concession_adjustments() -> dict:
@@ -432,7 +422,7 @@ def _write_dea_export(df_export: pd.DataFrame, tag: str) -> tuple[str,str]:
         "level": "DMU",
         "wacc_old": R_OLD, 
         "wacc_new": float(tag.replace("p",".")),
-        "constructed_as": "H1+H2 after half-year rounding, aggregated to DMU"
+        "constructed_as": "Aggregated to annual level before scenario calculation and rounding, DMU level"
     }
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
@@ -700,12 +690,34 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
         if base_year.empty:
             st.warning("Ingen rad matchar valt DMU/år."); return
 
-        scen_year = apply_interest_scenario(base_year, r_new)
+        # Aggregera först (samma logik som baseline KPI:er)
+        totals = base_year.agg({
+            'return_ord': 'sum',
+            'return_tail': 'sum', 
+            'dep_ord': 'sum',
+            'dep_tail': 'sum'
+        })
 
-        new_vals  = scen_year[["return_ord_new","return_tail_new","capcost_sum_new"]].sum(numeric_only=True)
+        # Scenario-beräkning på aggregerad data
+        scale = float(r_new) / R_OLD
+        if abs(float(r_new) - R_OLD) < 1e-10:
+            return_ord_new = totals["return_ord"]
+            return_tail_new = totals["return_tail"]
+        else:
+            return_ord_new = round(totals["return_ord"] * scale)
+            return_tail_new = round(totals["return_tail"] * scale)
+
+        capcost_sum_new = totals["dep_ord"] + totals["dep_tail"] + return_ord_new + return_tail_new
+
+        # Skapa new_vals Series för kompatibilitet
+        new_vals = pd.Series({
+            "return_ord_new": return_ord_new,
+            "return_tail_new": return_tail_new,
+            "capcost_sum_new": capcost_sum_new
+        })
         base_vals = base_year[["return_ord","return_tail","capcost_sum"]].sum(numeric_only=True)
 
-        st.caption("Korten visar MSEK (avrundat). Skalning görs per halvår och summeras till år; avskrivningar lämnas oförändrade.")
+        st.caption("Korten visar MSEK (avrundat). Data aggregeras till årsnivå före scenario-beräkning och avrundning; avskrivningar lämnas oförändrade.")
         for keys in [["return_ord_new","return_tail_new"],["capcost_sum_new"]]:
             cols = st.columns(2)
             for i,k in enumerate(keys):
