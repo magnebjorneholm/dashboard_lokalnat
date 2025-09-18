@@ -10,7 +10,7 @@
   },
   "wacc_old": 0.0453,
   "wacc_new": 0.0453,
-  "export_timestamp": "2025-09-11T14:31:28.749187",
+  "export_timestamp": "2025-09-17T15:21:26.583917",
   "constructed_as": "Return-delar skalas per halvår (r_new/r_old); capcost_sum_new beräknas; därefter summeras H1+H2 för varje år och aggregeras till periodsumma 2024–2027; DMU-aggregat. Endast lokalnät (REId börjar på REL).",
   "components": {
     "Avskrivningar_Ny": "dep_ord + dep_tail (oförändrat av WACC)",

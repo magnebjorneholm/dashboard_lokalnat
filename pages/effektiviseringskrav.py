@@ -58,3 +58,10 @@ elif modellval == "Företagsanalys":
 elif modellval == "Geografisk karta":
     show_heatmap()
 
+st.sidebar.markdown("---")
+if st.sidebar.button("Logga ut"):
+    st.session_state.access_granted = False
+    st.session_state.current_user = None
+    st.session_state.user_role = None
+    st.session_state.user_dmu = None
+    st.rerun()

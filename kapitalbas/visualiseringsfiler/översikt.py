@@ -105,8 +105,8 @@ def apply_interest_scenario(df: pd.DataFrame, r_new: float) -> pd.DataFrame:
         raise ValueError("r_new måste vara ändligt.")
     scale = float(r_new) / R_OLD
     out = df.copy()
-    out["return_ord_new"]  = (out["return_ord"]  * scale).round().astype("Int64")
-    out["return_tail_new"] = (out["return_tail"] * scale).round().astype("Int64")
+    out["return_ord_new"]  = out["return_ord"]  * scale
+    out["return_tail_new"] = out["return_tail"] * scale
     out["capcost_sum_new"] = (
         out["dep_ord"].astype("float64")
         + out["dep_tail"].astype("float64")

@@ -553,3 +553,11 @@ def compare_with_facit(calculated_data: pd.DataFrame, facit_data: pd.DataFrame, 
 
 if __name__ == "__main__":
     show_kapitalbas_berakningslogik()
+
+st.sidebar.markdown("---")
+if st.sidebar.button("Logga ut"):
+    st.session_state.access_granted = False
+    st.session_state.current_user = None
+    st.session_state.user_role = None
+    st.session_state.user_dmu = None
+    st.rerun()

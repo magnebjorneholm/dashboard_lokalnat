@@ -1,19 +1,36 @@
 import streamlit as st
-import base64
-from pathlib import Path
-import streamlit.components.v1 as components
 
-# === Organisationsbaserat lösenordsskydd ===
+# === Rollbaserad autentisering ===
 if "access_granted" not in st.session_state:
     st.session_state.access_granted = False
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
+if "user_dmu" not in st.session_state:
+    st.session_state.user_dmu = None
 
+def get_user_role_and_dmu(username):
+    """Bestämmer användarroll och DMU baserat på username"""
+    regulator_users = st.secrets.get("regulator_users", {})
+    company_users = st.secrets.get("company_users", {})
+    
+    if username.lower() in regulator_users:
+        return "regulator", None
+    elif username.lower() in company_users:
+        user_info = company_users[username.lower()]
+        # AttrDict access för Streamlit secrets
+        if hasattr(user_info, 'dmu'):
+            return "company", user_info.dmu
+        else:
+            return "company", None
+    return None, None
+
+# === LOGIN-SIDA ===
 if not st.session_state.access_granted:
     st.title("Logga in")
     st.markdown("Ange din organisations användarnamn och lösenord för att komma åt systemet.")
     
-    # Input-fält för användarnamn och lösenord
     col1, col2 = st.columns(2)
     with col1:
         username = st.text_input("Användarnamn")
@@ -22,13 +39,32 @@ if not st.session_state.access_granted:
     
     if st.button("Logga in", type="primary"):
         if username and password:
-            # Kontrollera mot secrets
-            users = st.secrets.get("users", {})
-            if username.lower() in users:
-                if users[username.lower()] == password:
+            regulator_users = st.secrets.get("regulator_users", {})
+            company_users = st.secrets.get("company_users", {})
+            
+            user_role, user_dmu = get_user_role_and_dmu(username)
+            
+            if user_role == "regulator":
+                if regulator_users[username.lower()] == password:
                     st.session_state.access_granted = True
                     st.session_state.current_user = username.lower()
-                    st.success(f"Välkommen {username}!")
+                    st.session_state.user_role = "regulator"
+                    st.session_state.user_dmu = None
+                    st.success(f"Välkommen {username} (Regulator)!")
+                    st.rerun()
+                else:
+                    st.error("Fel lösenord")
+                    
+            elif user_role == "company":
+                user_info = company_users[username.lower()]
+                expected_password = user_info.password if hasattr(user_info, 'password') else str(user_info)
+                
+                if expected_password == password:
+                    st.session_state.access_granted = True
+                    st.session_state.current_user = username.lower()
+                    st.session_state.user_role = "company"
+                    st.session_state.user_dmu = user_dmu  # Sparar DMU-värdet här
+                    st.success(f"Välkommen {username} (Företag - DMU {user_dmu})!")
                     st.rerun()
                 else:
                     st.error("Fel lösenord")
@@ -37,42 +73,40 @@ if not st.session_state.access_granted:
         else:
             st.warning("Ange både användarnamn och lösenord")
     
+    st.stop()
+
+# === NAVIGATION (endast när inloggad) ===
+if st.session_state.user_role == "regulator":
+    pages = {
+        "Start": [
+            st.Page("pages/hem_regulator.py", title="Hem")
+        ],
+        "Sidor": [
+            st.Page("pages/effektiviseringskrav.py", title="Effektiviseringskrav"),
+            st.Page("pages/kapitalbas.py", title="Kapitalbas"),
+            st.Page("pages/kapitalbas_beräkningskedja.py", title="Beräkningskedja"),
+            st.Page("pages/ir_dekomposition.py", title="IR-dekomposition")
+        ]
+    }
     
+elif st.session_state.user_role == "company":
+    pages = {
+        "Start": [
+            st.Page("pages/hem_foretag.py", title="Hem")
+        ],
+        "Sidor": [
+            st.Page("pages/foretag/foretag_kapital.py", title="Kapitalbas"),
+            st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
+            st.Page("pages/foretag/foretag_effektivitet.py", title="Effektivitet")
+        ]
+    }
+
+else:
+    st.error("Okänd användarroll. Kontakta administratör.")
     st.stop()
 
-# === Visa inloggningsstatus ===
-st.sidebar.success(f"Inloggad som: {st.session_state.current_user}")
-if st.sidebar.button("Logga ut"):
-    st.session_state.access_granted = False
-    st.session_state.current_user = None
-    st.rerun()
+# Kör navigation
+pg = st.navigation(pages)
 
-# === Ladda menybild ===
-image_path = Path("images/reglering_oversikt.png")
-if not image_path.exists():
-    st.error("Kunde inte hitta bilden 'reglering_oversikt.png'")
-    st.stop()
-
-with open(image_path, "rb") as img_file:
-    encoded_image = base64.b64encode(img_file.read()).decode()
-
-# === Titel ===
-st.title("Intäktsramsreglering – översikt")
-
-# === Visa bild med klickbara områden ===
-components.html(
-    f"""
-    <div style="overflow-x: auto;">
-        <div style="width: 900px; margin: auto;">
-            <img src="data:image/png;base64,{encoded_image}" usemap="#menu" width="900" style="border:1px solid #ccc;">
-        </div>
-
-        <map name="menu">
-            <area shape="rect" coords="180,150,330,210" href="/effektiviseringskrav" alt="effektiviseringskrav">
-            <area shape="rect" coords="590,87,906,138" href="/kapitalbas" alt="kapitalbas">
-        </map>
-    </div>
-    """,
-    height=700,
-    scrolling=True
-)
+# Kör den valda sidan
+pg.run()

@@ -39,3 +39,11 @@ except Exception as e:
 
 # --- Visa huvudvyn ---
 show_ir_dekomposition_view(df_baseline)
+
+st.sidebar.markdown("---")
+if st.sidebar.button("Logga ut"):
+    st.session_state.access_granted = False
+    st.session_state.current_user = None
+    st.session_state.user_role = None
+    st.session_state.user_dmu = None
+    st.rerun()
