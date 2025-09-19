@@ -1,0 +1,16 @@
+{
+  "description": "Detaljerad kapitalkostnad för IR-dekomposition – företagsspecifik",
+  "organization": "kraftringen",
+  "user_dmu": 121,
+  "price_year": 2022,
+  "unit": "tkr",
+  "level": "DMU",
+  "period": {
+    "start": 2024,
+    "end": 2027
+  },
+  "wacc_old": 0.0453,
+  "wacc_new": 0.0453,
+  "export_timestamp": "2025-09-19T07:53:27.216365",
+  "constructed_as": "Company-specific export with return components scaled per half-year"
+}

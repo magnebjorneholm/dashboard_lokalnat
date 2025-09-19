@@ -95,6 +95,7 @@ elif st.session_state.user_role == "company":
             st.Page("pages/hem_foretag.py", title="Hem")
         ],
         "Sidor": [
+            st.Page("pages/foretag/foretag_intaktsram.py", title="Intäktsram"),
             st.Page("pages/foretag/foretag_kapital.py", title="Kapitalbas"),
             st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
             st.Page("pages/foretag/foretag_effektivitet.py", title="Effektivitet")
