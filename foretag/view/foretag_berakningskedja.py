@@ -1,6 +1,6 @@
 # foretag_berakningskedja.py
 # Företagsspecifik stegvis beräkningskedja för kapitalkostnader
-# ÅTERANVÄNDER EXAKT samma beräkningslogik från beräkningskedja.py
+# UPPDATERAD: Med dedikerad WACC-beräkningstab (importerad från översikt.py)
 
 import streamlit as st
 import pandas as pd
@@ -32,6 +32,14 @@ from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.beräkningskedja impor
     validate_input_data,
     analyze_component_ages,
     analyze_nuav_distribution
+)
+
+# NYTT: Importera WACC-funktioner från översikt.py
+from kapitalbas.visualiseringsfiler.översikt import (
+    R_OLD,
+    EiWaccInputs,
+    ei_wacc_real_pre_tax,
+    _render_methodology_info
 )
 
 # Autentisering
@@ -107,12 +115,13 @@ def show_foretag_berakningskedja():
     
     steps_state = st.session_state[session_key]
     
-    # Huvudtabs för beräkningssteg
+    # Huvudtabs för beräkningssteg - NYTT: Lagt till WACC-tab
     st.header("Beräkningssteg")
     
     step_tabs = st.tabs([
         "Steg 5: Åldrar & NUAV",
         "Steg 6: Avskrivningar", 
+        "WACC-kalkylator",  # NY TAB
         "Steg 7: Avkastning",
         "Steg 8: Sammanställning",
         "Steg 9: Jämför facit"
@@ -124,13 +133,16 @@ def show_foretag_berakningskedja():
     with step_tabs[1]:
         run_company_step_6_depreciation(user_dmu, steps_state, company_name)
     
-    with step_tabs[2]:
+    with step_tabs[2]:  # NY TAB
+        run_company_wacc_calculator(company_name)
+    
+    with step_tabs[3]:  # Tidigare step_tabs[2], nu step_tabs[3]
         run_company_step_7_returns(user_dmu, steps_state, company_name)
     
-    with step_tabs[3]:
+    with step_tabs[4]:  # Tidigare step_tabs[3], nu step_tabs[4]
         run_company_step_8_compile(user_dmu, steps_state, company_name)
     
-    with step_tabs[4]:
+    with step_tabs[5]:  # Tidigare step_tabs[4], nu step_tabs[5]
         run_company_step_9_compare_facit(user_dmu, steps_state, company_name)
 
 
@@ -266,26 +278,188 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
             st.metric("Total svansavskrivning (tkr)", f"{dep_tail_total:,.0f}")
 
 
+def run_company_wacc_calculator(company_name: str):
+    """NY FUNKTION: Dedikerad WACC-kalkylator (importerad från översikt.py)"""
+    
+    st.subheader(f"WACC-kalkylator för {company_name}")
+    st.write("Beräkna kalkylränta från grundparametrar enligt Ei:s metodik")
+    
+    # Använd samma defaults som i översikt.py
+    defaults = {
+        "rf_nom": 0.0287,
+        "mrp": 0.0668,
+        "infl": 0.0202,
+        "credit": 0.0114,
+        "debt_share": 0.36,
+        "tax_rate": 0.206,
+        "beta_mode": "β_A",
+        "beta_a": 0.37,
+        "beta_e": 0.54
+    }
+    
+    # Initiera session state
+    for k, v in defaults.items():
+        st.session_state.setdefault(k, v)
+    st.session_state.setdefault("r_new", R_OLD)
+    
+    # Input-fält i tre kolumner (samma layout som översikt.py)
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
+        st.number_input(
+            "Riskfri ränta (nominell) Rf", 
+            key="rf_nom", 
+            step=0.0001, 
+            format="%.4f",
+            help="KI:s 9-årsprognos för 10-årig svensk statsobligation (nominell). Ingår i både R_E och R_D."
+        )
+        st.number_input(
+            "Marknadsriskpremie (nominell) MRP", 
+            key="mrp", 
+            step=0.0001, 
+            format="%.4f",
+            help="Långsiktig aktiemarknadspremie (nominell), baserad på PwC:s riskpremiestudier."
+        )
+        st.number_input(
+            "Inflation π (KPIF)", 
+            key="infl", 
+            step=0.0001, 
+            format="%.4f",
+            help="KPIF enligt KI:s 9-årsprognos. Fisher-omräkning till real nivå."
+        )
+
+    with c2:
+        st.number_input(
+            "Kreditriskpremie (nominell)", 
+            key="credit", 
+            step=0.0001, 
+            format="%.4f",
+            help="Spread för lånat kapital (typiskt europeiska utilities BBB vs 10-årig Bund)."
+        )
+        st.number_input(
+            "Skuldsättningsgrad S = D/(D+E)", 
+            key="debt_share", 
+            min_value=0.0, 
+            max_value=0.95, 
+            step=0.01, 
+            format="%.2f",
+            help="Vikt för skuld i WACC. Relation: D/E = S/(1−S)."
+        )
+        st.number_input(
+            "Bolagsskatt T", 
+            key="tax_rate", 
+            min_value=0.0, 
+            max_value=0.99, 
+            step=0.001, 
+            format="%.3f",
+            help="Omräkning från efter skatt till före skatt."
+        )
+
+    with c3:
+        st.radio(
+            "Beta-inmatning", 
+            ["β_A", "β_E"], 
+            index=0, 
+            key="beta_mode",
+            help="Välj att ange tillgångsbeta (β_A) eller aktiebeta (β_E) direkt."
+        )
+        if st.session_state["beta_mode"] == "β_A":
+            st.number_input(
+                "β_A", 
+                key="beta_a", 
+                step=0.01, 
+                format="%.2f",
+                help="Tillgångsbeta (obelanad). Omvandlas till aktiebeta med Hamada."
+            )
+        else:
+            st.number_input(
+                "β_E", 
+                key="beta_e", 
+                step=0.01, 
+                format="%.2f",
+                help="Aktiebeta (belanad). Används direkt i CAPM."
+            )
+
+    # Beräkna WACC med importerade funktioner
+    beta_a = st.session_state["beta_a"] if st.session_state["beta_mode"] == "β_A" else None
+    beta_e = st.session_state["beta_e"] if st.session_state["beta_mode"] == "β_E" else None
+    
+    Re, Rd, Wn, Wr = ei_wacc_real_pre_tax(EiWaccInputs(
+        rf_nominal=st.session_state["rf_nom"],
+        mrp_nominal=st.session_state["mrp"],
+        credit_spread=st.session_state["credit"],
+        debt_share=st.session_state["debt_share"],
+        tax_rate=st.session_state["tax_rate"],
+        inflation=st.session_state["infl"],
+        beta_asset=beta_a,
+        beta_equity=beta_e
+    ))
+
+    # Visa resultat
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Re (nominell, efter skatt)", f"{Re*100:.2f} %")
+    k2.metric("Rd (nominell, före skatt)", f"{Rd*100:.2f} %")
+    k3.metric("WACC (nominell, före skatt)", f"{Wn*100:.2f} %")
+    k4.metric("WACC (real, före skatt)", f"{Wr*100:.2f} %", help="Detta värde används i Steg 7")
+
+    # Kontrollknappar
+    def _reset_ei_defaults():
+        for k, v in defaults.items():
+            st.session_state[k] = v
+        st.session_state["r_new"] = R_OLD
+
+    cc1, cc2 = st.columns([1, 1])
+    with cc1:
+        if st.button("Använd denna kalkylränta i Steg 7", type="primary"):
+            st.session_state["r_new"] = round(float(Wr), 4)
+            st.success(f"Satt r_new = {st.session_state['r_new']:.4f} för användning i Steg 7")
+    
+    with cc2:
+        st.button("Återställ till Ei-standard", on_click=_reset_ei_defaults)
+
+    # Visa nuvarande värde som kommer användas i Steg 7
+    current_r_new = st.session_state.get("r_new", R_OLD)
+    if abs(current_r_new - Wr) > 1e-6:
+        st.info(f"📌 Aktuell WACC för Steg 7: {current_r_new:.4f} (klicka 'Använd denna kalkylränta' för att uppdatera)")
+    else:
+        st.success(f"✅ Denna WACC ({Wr:.4f}) kommer användas i Steg 7")
+
+    # Metodikruta (importerad från översikt.py)
+    _render_methodology_info()
+
+
 def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 7: Beräkna avkastning för företaget - ANVÄNDER SAMMA LOGIK"""
+    """Steg 7: Beräkna avkastning för företaget - Med flexibel WACC-input som översikt.py"""
     
     st.subheader(f"Steg 7: Avkastning för {company_name}")
-    st.write("Beräknar kapitalavkastning baserat på ålderssjusterad kapitalbas")
+    st.write("Beräknar kapitalavkastning baserat på åldersjusterad kapitalbas")
     
     if 6 not in steps_state['completed_steps']:
         st.warning("Slutför först Steg 6")
         return
 
-    # ENKEL WACC-input (standard Ei-värde för nu)
-    current_wacc = st.number_input(
-        "Kalkylränta (WACC) - real, före skatt",
-        min_value=0.0,
-        max_value=0.15,
-        value=0.0453,
-        step=0.0001,
+    # FLEXIBEL WACC-input (samma UI som översikt.py Tab 3)
+    current_wacc = round(float(st.number_input(
+        "WACC (real, före skatt, decimal) för scenario",
+        value=float(st.session_state.get("r_new", R_OLD)),
+        step=0.0001, 
         format="%.4f",
-        help="Real kalkylränta före skatt (Ei-standard: 4.53%)"
-    )
+        help="Använd värde från WACC-kalkylatorn eller ange direkt"
+    )), 4)
+    
+    # Uppdatera session state med det nya värdet
+    st.session_state["r_new"] = current_wacc
+    
+    # Visa källa och jämförelse med Ei-standard
+    col1, col2 = st.columns(2)
+    with col1:
+        if abs(current_wacc - R_OLD) < 1e-6:
+            st.info("Använder Ei-standard (4.53%)")
+        else:
+            st.info(f"Använder {current_wacc*100:.2f}% som WACC i nästa körning")
+
+    with col2:
+        st.caption("💡 Tips: Använd WACC-kalkylator-taben för att beräkna från grundparametrar")
     
     # Visa avkastningsmetodik
     with st.expander("Avkastningsmetodik"):
@@ -317,7 +491,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
     if 7 in steps_state['completed_steps']:
         st.success("✅ Steg 7 slutfört")
         result_data = steps_state['step_data'][7]
-        used_wacc = result_data.get('used_wacc', 0.0453)
+        used_wacc = result_data.get('used_wacc', R_OLD)
         
         # Visa vilken WACC som användes
         st.info(f"Beräkning genomförd med WACC: {used_wacc:.4f}")
