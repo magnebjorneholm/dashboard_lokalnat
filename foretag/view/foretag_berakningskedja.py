@@ -123,8 +123,7 @@ def show_foretag_berakningskedja():
         "Steg 6: Avskrivningar", 
         "WACC-kalkylator",  # NY TAB
         "Steg 7: Avkastning",
-        "Steg 8: Sammanställning",
-        "Steg 9: Jämför facit"
+        "Steg 8: Sammanställning"  # KOMBINERAT STEG 8+9
     ])
     
     with step_tabs[0]:
@@ -139,11 +138,8 @@ def show_foretag_berakningskedja():
     with step_tabs[3]:  # Tidigare step_tabs[2], nu step_tabs[3]
         run_company_step_7_returns(user_dmu, steps_state, company_name)
     
-    with step_tabs[4]:  # Tidigare step_tabs[3], nu step_tabs[4]
-        run_company_step_8_compile(user_dmu, steps_state, company_name)
-    
-    with step_tabs[5]:  # Tidigare step_tabs[4], nu step_tabs[5]
-        run_company_step_9_compare_facit(user_dmu, steps_state, company_name)
+    with step_tabs[4]:  # KOMBINERAT STEG 8+9
+        run_company_step_8_compile_and_validate(user_dmu, steps_state, company_name)
 
 
 def run_company_step_5_ages_nuav(capbase_data: pd.DataFrame, dmu_id: int, steps_state: dict, company_name: str):
@@ -207,26 +203,132 @@ def run_company_step_5_ages_nuav(capbase_data: pd.DataFrame, dmu_id: int, steps_
             nuav_229 = result_data.get('nuav_ord_229', pd.Series(0)).sum()
             st.metric("NUAV ordinarie 2024H1 (tkr)", f"{nuav_229:,.0f}")
         
-        # Analys för debugging - SAMMA FUNKTION
+        # Förbättrad analys med visualiseringar
         with st.expander("Analys - åldersfördelning för ditt företag"):
-            if 'age_component_229' in result_data.columns:
-                analysis = analyze_component_ages(result_data, 229)
+            if 'age_component_229' in result_data.columns and 'cat_encode' in result_data.columns:
                 
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.write("**Åldersstatistik 2024H1:**")
-                    stats = analysis['age_stats']
-                    st.write(f"• Medel: {stats['mean']:.1f} år")
-                    st.write(f"• Median: {stats['median']:.1f} år")
-                    st.write(f"• Min: {stats['min']:.0f} år")
-                    st.write(f"• Max: {stats['max']:.0f} år")
+                # Histogram över åldersfördelning per kategori (använder 2024H1 som referens)
+                fig_age = px.histogram(
+                    result_data, 
+                    x='age_component_229', 
+                    color='cat_encode',
+                    title=f'Åldersfördelning per komponentkategori 2024 - {company_name}',
+                    labels={'age_component_229': 'Ålder (år)', 'count': 'Antal komponenter'},
+                    nbins=20
+                )
+                fig_age.update_layout(height=400)
+                st.plotly_chart(fig_age, use_container_width=True)
                 
-                with col_b:
-                    st.write("**Åldersfördelning:**")
-                    dist = analysis['age_distribution']
-                    st.write(f"• Unga (0-10 år): {dist['young_0_10']} komponenter")
-                    st.write(f"• Medelålders (10-30 år): {dist['medium_10_30']} komponenter")
-                    st.write(f"• Gamla (30+ år): {dist['old_30_plus']} komponenter")
+                # Andel ordinarie vs svans per kategori (kombinerat för hela 2024)
+                if all(col in result_data.columns for col in ['nuav_ord_229', 'nuav_tail_229', 'nuav_ord_230', 'nuav_tail_230']):
+                    # Beräkna andelar per kategori för hela 2024 (H1 + H2)
+                    share_analysis = result_data.groupby('cat_encode').agg({
+                        'nuav_ord_229': 'sum',
+                        'nuav_tail_229': 'sum',
+                        'nuav_ord_230': 'sum', 
+                        'nuav_tail_230': 'sum'
+                    }).reset_index()
+                    
+                    # Summera H1 + H2 för hela 2024
+                    share_analysis['nuav_ord_2024'] = share_analysis['nuav_ord_229'] + share_analysis['nuav_ord_230']
+                    share_analysis['nuav_tail_2024'] = share_analysis['nuav_tail_229'] + share_analysis['nuav_tail_230']
+                    share_analysis['total_nuav_2024'] = share_analysis['nuav_ord_2024'] + share_analysis['nuav_tail_2024']
+                    
+                    # Filtrera bort kategorier utan NUAV
+                    share_analysis = share_analysis[share_analysis['total_nuav_2024'] > 0]
+                    
+                    if not share_analysis.empty:
+                        share_analysis['andel_ordinarie'] = (share_analysis['nuav_ord_2024'] / share_analysis['total_nuav_2024'] * 100).round(1)
+                        share_analysis['andel_svans'] = (share_analysis['nuav_tail_2024'] / share_analysis['total_nuav_2024'] * 100).round(1)
+                        
+                        # Stacked bar chart för andelar
+                        fig_share = px.bar(
+                            share_analysis,
+                            x='cat_encode',
+                            y=['andel_ordinarie', 'andel_svans'],
+                            title=f'Andel ordinarie vs svans per komponentkategori 2024 - {company_name}',
+                            labels={'value': 'Andel (%)', 'cat_encode': 'Komponentkategori'},
+                            color_discrete_map={'andel_ordinarie': '#2E8B57', 'andel_svans': '#FF6347'}
+                        )
+                        fig_share.update_layout(height=400, barmode='stack')
+                        st.plotly_chart(fig_share, use_container_width=True)
+                        
+                        # Förklarande text
+                        st.caption("Ordinarie (grön) = komponenter inom ekonomisk livslängd. Svans (röd) = komponenter utanför ekonomisk livslängd men inom maximal livslängd. Data för hela 2024 (H1+H2).")
+                
+                # Utveckling av andel svans över tid per kategori
+                if all(f'nuav_ord_{t}' in result_data.columns and f'nuav_tail_{t}' in result_data.columns for t in range(229, 237)):
+                    
+                    # Beräkna andel svans för alla tidsperioder
+                    trend_data = []
+                    for t in range(229, 237):
+                        period_data = result_data.groupby('cat_encode').agg({
+                            f'nuav_ord_{t}': 'sum',
+                            f'nuav_tail_{t}': 'sum'
+                        }).reset_index()
+                        
+                        period_data['total_nuav'] = period_data[f'nuav_ord_{t}'] + period_data[f'nuav_tail_{t}']
+                        period_data = period_data[period_data['total_nuav'] > 0]  # Filtrera kategorier utan NUAV
+                        
+                        if not period_data.empty:
+                            period_data['andel_svans'] = (period_data[f'nuav_tail_{t}'] / period_data['total_nuav'] * 100).round(1)
+                            period_data['period'] = t
+                            period_data['period_label'] = f"{2024 + (t-229)//2}H{((t-229)%2)+1}"
+                            
+                            trend_data.append(period_data[['cat_encode', 'andel_svans', 'period', 'period_label']])
+                    
+                    if trend_data:
+                        trend_df = pd.concat(trend_data, ignore_index=True)
+                        
+                        # Linjediagram över utvecklingen
+                        fig_trend = px.line(
+                            trend_df,
+                            x='period_label',
+                            y='andel_svans',
+                            color='cat_encode',
+                            title=f'Utveckling av svansandel över tid per kategori - {company_name}',
+                            labels={'andel_svans': 'Svansandel (%)', 'period_label': 'Tidsperiod'},
+                            markers=True
+                        )
+                        fig_trend.update_layout(height=400)
+                        st.plotly_chart(fig_trend, use_container_width=True)
+                        
+                        st.caption("Visar hur stor andel av kapitalet som befinner sig i svansperiod över tiden. Stigande linjer indikerar åldrande komponentportfölj.")
+                
+                # Kvalitetskontroller
+                st.markdown("---")
+                st.write("**Kvalitetskontroller:**")
+                
+                quality_issues = []
+                
+                # Kontrollera negativa åldrar
+                negative_ages = (result_data['age_component_229'] < 0).sum()
+                if negative_ages > 0:
+                    quality_issues.append(f"⚠️ {negative_ages} komponenter har negativ ålder")
+                
+                # Kontrollera extremt gamla komponenter
+                very_old = (result_data['age_component_229'] > 50).sum()
+                if very_old > 0:
+                    quality_issues.append(f"ℹ️ {very_old} komponenter är äldre än 50 år")
+                
+                # Kontrollera komponenter utan NUAV
+                zero_nuav = 0
+                if 'nuav_ord_229' in result_data.columns and 'nuav_tail_229' in result_data.columns:
+                    zero_nuav = ((result_data['nuav_ord_229'] == 0) & (result_data['nuav_tail_229'] == 0)).sum()
+                    if zero_nuav > 0:
+                        quality_issues.append(f"⚠️ {zero_nuav} komponenter har ingen NUAV-värdering")
+                
+                # Kontrollera livslängdskonsistens
+                if 'ekdep' in result_data.columns and 'maxdep' in result_data.columns:
+                    inconsistent_life = (result_data['ekdep'] > result_data['maxdep']).sum()
+                    if inconsistent_life > 0:
+                        quality_issues.append(f"⚠️ {inconsistent_life} komponenter har ekdep > maxdep")
+                
+                if quality_issues:
+                    for issue in quality_issues:
+                        st.write(issue)
+                else:
+                    st.success("✅ Inga kvalitetsproblem identifierade")
 
 
 def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name: str):
@@ -276,6 +378,126 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
         with col2:
             dep_tail_total = sum(result_data.get(f'dep_tail_{t}', 0) for t in range(229, 237))
             st.metric("Total svansavskrivning (tkr)", f"{dep_tail_total:,.0f}")
+        
+        # Visualiseringar för avskrivningsanalys
+        with st.expander("Analys - avskrivningsfördelning för ditt företag"):
+            # Hämta originaldata för kategorianalys
+            input_data = steps_state['step_data'][5]
+            
+            if 'cat_encode' in input_data.columns:
+                # 1. Andel ordinarie vs svans avskrivning per kategori (2024)
+                if all(f'dep_ord_{t}' in result_data for t in [229, 230]) and all(f'dep_tail_{t}' in result_data for t in [229, 230]):
+                    
+                    # Skapa mock data per kategori baserat på input_data
+                    # Vi behöver beräkna avskrivning per kategori från komponenter
+                    dep_by_cat = []
+                    for cat in input_data['cat_encode'].unique():
+                        cat_data = input_data[input_data['cat_encode'] == cat]
+                        
+                        # Beräkna totala avskrivningar för denna kategori (2024)
+                        dep_ord_2024 = 0
+                        dep_tail_2024 = 0
+                        
+                        for t in [229, 230]:  # 2024H1 + 2024H2
+                            if f'nuav_ord_{t}' in cat_data.columns and f'nuav_tail_{t}' in cat_data.columns:
+                                # Ordinarie avskrivning
+                                if 'ekdep' in cat_data.columns:
+                                    dep_ord_2024 += (cat_data[f'nuav_ord_{t}'] / cat_data['ekdep']).sum() / 1000
+                                
+                                # Svansavskrivning (förenklad beräkning)
+                                if f'age_component_{t}' in cat_data.columns:
+                                    age_reg = cat_data[f'age_component_{t}'].copy()
+                                    # Justera för udda åldrar
+                                    mask = (age_reg % 2 == 1)
+                                    age_reg.loc[mask] += age_reg.loc[mask].apply(lambda x: 1 if x > 0 else -1)
+                                    
+                                    # Säker division
+                                    valid_age = age_reg != 0
+                                    dep_tail_cat = 0
+                                    if valid_age.any():
+                                        dep_tail_cat = (cat_data.loc[valid_age, f'nuav_tail_{t}'] / age_reg.loc[valid_age]).sum() / 1000
+                                    dep_tail_2024 += dep_tail_cat
+                        
+                        dep_by_cat.append({
+                            'cat_encode': cat,
+                            'dep_ord_2024': dep_ord_2024,
+                            'dep_tail_2024': dep_tail_2024
+                        })
+                    
+                    dep_analysis = pd.DataFrame(dep_by_cat)
+                    dep_analysis['total_dep_2024'] = dep_analysis['dep_ord_2024'] + dep_analysis['dep_tail_2024']
+                    
+                    # Filtrera kategorier utan avskrivning
+                    dep_analysis = dep_analysis[dep_analysis['total_dep_2024'] > 0.1]  # Minst 100 kr
+                    
+                    if not dep_analysis.empty:
+                        dep_analysis['andel_ordinarie'] = (dep_analysis['dep_ord_2024'] / dep_analysis['total_dep_2024'] * 100).round(1)
+                        dep_analysis['andel_svans'] = (dep_analysis['dep_tail_2024'] / dep_analysis['total_dep_2024'] * 100).round(1)
+                        
+                        # Stacked bar chart för avskrivningsandelar
+                        fig_dep_share = px.bar(
+                            dep_analysis,
+                            x='cat_encode',
+                            y=['andel_ordinarie', 'andel_svans'],
+                            title=f'Andel ordinarie vs svans avskrivning per kategori 2024 - {company_name}',
+                            labels={'value': 'Andel (%)', 'cat_encode': 'Komponentkategori'},
+                            color_discrete_map={'andel_ordinarie': '#4CAF50', 'andel_svans': '#FF9800'}
+                        )
+                        fig_dep_share.update_layout(height=400, barmode='stack')
+                        st.plotly_chart(fig_dep_share, use_container_width=True)
+                        
+                        st.caption("Ordinarie (grön) = avskrivning av komponenter inom ekonomisk livslängd. Svans (orange) = avskrivning av komponenter utanför ekonomisk livslängd.")
+                
+                # 2. Avskrivningsutveckling över tid per kategori
+                dep_trend_data = []
+                for t in range(229, 237):
+                    period_label = f"{2024 + (t-229)//2}H{((t-229)%2)+1}"
+                    
+                    for cat in input_data['cat_encode'].unique():
+                        cat_data = input_data[input_data['cat_encode'] == cat]
+                        
+                        # Beräkna total avskrivning för denna kategori och period
+                        total_dep_cat = 0
+                        
+                        # Ordinarie
+                        if f'nuav_ord_{t}' in cat_data.columns and 'ekdep' in cat_data.columns:
+                            total_dep_cat += (cat_data[f'nuav_ord_{t}'] / cat_data['ekdep']).sum() / 1000
+                        
+                        # Svans
+                        if f'nuav_tail_{t}' in cat_data.columns and f'age_component_{t}' in cat_data.columns:
+                            age_reg = cat_data[f'age_component_{t}'].copy()
+                            mask = (age_reg % 2 == 1)
+                            age_reg.loc[mask] += age_reg.loc[mask].apply(lambda x: 1 if x > 0 else -1)
+                            
+                            valid_age = age_reg != 0
+                            if valid_age.any():
+                                total_dep_cat += (cat_data.loc[valid_age, f'nuav_tail_{t}'] / age_reg.loc[valid_age]).sum() / 1000
+                        
+                        if total_dep_cat > 0.1:  # Bara kategorier med betydande avskrivning
+                            dep_trend_data.append({
+                                'cat_encode': cat,
+                                'period_label': period_label,
+                                'total_dep': total_dep_cat,
+                                'period': t
+                            })
+                
+                if dep_trend_data:
+                    dep_trend_df = pd.DataFrame(dep_trend_data)
+                    
+                    # Linjediagram över avskrivningsutveckling
+                    fig_dep_trend = px.line(
+                        dep_trend_df,
+                        x='period_label',
+                        y='total_dep',
+                        color='cat_encode',
+                        title=f'Avskrivningsutveckling över tid per kategori - {company_name}',
+                        labels={'total_dep': 'Total avskrivning (tkr)', 'period_label': 'Tidsperiod'},
+                        markers=True
+                    )
+                    fig_dep_trend.update_layout(height=400)
+                    st.plotly_chart(fig_dep_trend, use_container_width=True)
+                    
+                    st.caption("Visar hur total avskrivning (ordinarie + svans) utvecklas över regleringsperioden per komponentkategori.")
 
 
 def run_company_wacc_calculator(company_name: str):
@@ -440,7 +662,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
 
     # FLEXIBEL WACC-input (samma UI som översikt.py Tab 3)
     current_wacc = round(float(st.number_input(
-        "WACC (real, före skatt, decimal) för scenario",
+        "WACC (real, före skatt) för scenario",
         value=float(st.session_state.get("r_new", R_OLD)),
         step=0.0001, 
         format="%.4f",
@@ -456,10 +678,10 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
         if abs(current_wacc - R_OLD) < 1e-6:
             st.info("Använder Ei-standard (4.53%)")
         else:
-            st.info(f"Använder {current_wacc*100:.2f}% som WACC i nästa körning")
-
+            st.info(f"Använder: {current_wacc*100:.2f}%")
+    
     with col2:
-        st.caption("💡 Tips: Använd WACC-kalkylator-taben för att beräkna från grundparametrar")
+        st.caption("Tips: Använd WACC-kalkylator-taben för att beräkna från grundparametrar")
     
     # Visa avkastningsmetodik
     with st.expander("Avkastningsmetodik"):
@@ -504,19 +726,148 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
         with col2:
             ret_tail_total = sum(result_data.get(f'return_tail_{t}', 0) for t in range(229, 237))
             st.metric("Total svansavkastning (tkr)", f"{ret_tail_total:,.0f}")
+        
+        # Visualiseringar för avkastningsanalys
+        with st.expander("Analys - avkastning och kapitalbindning för ditt företag"):
+            # Hämta originaldata för kategorianalys
+            input_data = steps_state['step_data'][5]
+            
+            if 'cat_encode' in input_data.columns:
+                # 1. Avkastning per kategori (2024)
+                ret_by_cat_2024 = []
+                cap_by_cat_all_periods = []
+                
+                for cat in input_data['cat_encode'].unique():
+                    cat_data = input_data[input_data['cat_encode'] == cat]
+                    
+                    # Beräkna avkastning för 2024 (H1 + H2)
+                    ret_ord_2024 = 0
+                    ret_tail_2024 = 0
+                    
+                    # För kapitalbindning över alla perioder
+                    for t in range(229, 237):
+                        period_label = f"{2024 + (t-229)//2}H{((t-229)%2)+1}"
+                        cap_ord_cat = 0
+                        cap_tail_cat = 0
+                        ret_ord_cat = 0
+                        ret_tail_cat = 0
+                        
+                        if f'age_component_{t}' in cat_data.columns and f'nuav_ord_{t}' in cat_data.columns and f'nuav_tail_{t}' in cat_data.columns:
+                            # Beräkna age_return
+                            age_return = cat_data[f'age_component_{t}'].copy()
+                            mask = (age_return % 2 == 1)
+                            age_return.loc[mask] += age_return.loc[mask].apply(lambda x: 1 if x > 0 else -1)
+                            age_return = age_return / 2 - 1
+                            
+                            if 'ekdep' in cat_data.columns:
+                                ekdep2 = cat_data['ekdep'] / 2
+                                
+                                # Ordinarie kapitalbindning och avkastning
+                                capbase_left_ord = ((ekdep2 - age_return) / ekdep2) * cat_data[f'nuav_ord_{t}']
+                                capbase_left_ord = capbase_left_ord.where(age_return >= 0, 0)  # Sätt till 0 om age_return < 0
+                                cap_ord_cat = capbase_left_ord.sum() / 1000
+                                ret_ord_cat = (used_wacc * capbase_left_ord / 2).sum() / 1000
+                                
+                                # Svans kapitalbindning och avkastning
+                                capbase_left_tail = cat_data[f'nuav_tail_{t}'] / (age_return + 1)
+                                capbase_left_tail = capbase_left_tail.where((age_return + 1) != 0, 0)
+                                cap_tail_cat = capbase_left_tail.sum() / 1000
+                                ret_tail_cat = (used_wacc * capbase_left_tail / 2).sum() / 1000
+                        
+                        # Spara för 2024 (H1 + H2)
+                        if t in [229, 230]:
+                            ret_ord_2024 += ret_ord_cat
+                            ret_tail_2024 += ret_tail_cat
+                        
+                        # Spara för kapitalbindningstrend
+                        cap_by_cat_all_periods.append({
+                            'cat_encode': cat,
+                            'period_label': period_label,
+                            'period': t,
+                            'cap_bindning': cap_ord_cat + cap_tail_cat,
+                            'avkastning': ret_ord_cat + ret_tail_cat
+                        })
+                    
+                    ret_by_cat_2024.append({
+                        'cat_encode': cat,
+                        'ret_ord_2024': ret_ord_2024,
+                        'ret_tail_2024': ret_tail_2024
+                    })
+                
+                # Graf 1: Avkastning per kategori 2024
+                ret_analysis = pd.DataFrame(ret_by_cat_2024)
+                ret_analysis['total_ret_2024'] = ret_analysis['ret_ord_2024'] + ret_analysis['ret_tail_2024']
+                ret_analysis = ret_analysis[ret_analysis['total_ret_2024'] > 0.1]  # Minst 100 kr
+                
+                if not ret_analysis.empty:
+                    ret_analysis['andel_ordinarie'] = (ret_analysis['ret_ord_2024'] / ret_analysis['total_ret_2024'] * 100).round(1)
+                    ret_analysis['andel_svans'] = (ret_analysis['ret_tail_2024'] / ret_analysis['total_ret_2024'] * 100).round(1)
+                    
+                    fig_ret_share = px.bar(
+                        ret_analysis,
+                        x='cat_encode',
+                        y=['andel_ordinarie', 'andel_svans'],
+                        title=f'Andel ordinarie vs svans avkastning per kategori 2024 - {company_name}',
+                        labels={'value': 'Andel (%)', 'cat_encode': 'Komponentkategori'},
+                        color_discrete_map={'andel_ordinarie': '#1E88E5', 'andel_svans': '#FFC107'}
+                    )
+                    fig_ret_share.update_layout(height=400, barmode='stack')
+                    st.plotly_chart(fig_ret_share, use_container_width=True)
+                    
+                    st.caption("Ordinarie (blå) = avkastning på komponenter inom ekonomisk livslängd. Svans (gul) = avkastning på komponenter utanför ekonomisk livslängd.")
+                
+                # Graf 2 & 3: Kapitalbindning och avkastning över tid
+                if cap_by_cat_all_periods:
+                    trend_df = pd.DataFrame(cap_by_cat_all_periods)
+                    
+                    # Filtrera kategorier med betydande kapitalbindning
+                    significant_cats = trend_df.groupby('cat_encode')['cap_bindning'].max()
+                    significant_cats = significant_cats[significant_cats > 1.0].index  # Minst 1000 kr
+                    trend_df = trend_df[trend_df['cat_encode'].isin(significant_cats)]
+                    
+                    if not trend_df.empty:
+                        # Graf 2: Kapitalbindningsutveckling
+                        fig_cap_trend = px.line(
+                            trend_df,
+                            x='period_label',
+                            y='cap_bindning',
+                            color='cat_encode',
+                            title=f'Kapitalbindningsutveckling över tid per kategori - {company_name}',
+                            labels={'cap_bindning': 'Kapitalbindning (tkr)', 'period_label': 'Tidsperiod'},
+                            markers=True
+                        )
+                        fig_cap_trend.update_layout(height=400)
+                        st.plotly_chart(fig_cap_trend, use_container_width=True)
+                        
+                        st.caption("Visar hur mycket kapital som är bundet i varje komponentkategori över tiden. Minskande kapitalbindning = åldrande komponenter.")
+                        
+                        # Graf 3: Avkastningsutveckling
+                        fig_ret_trend = px.line(
+                            trend_df,
+                            x='period_label',
+                            y='avkastning',
+                            color='cat_encode',
+                            title=f'Avkastningsutveckling över tid per kategori - {company_name}',
+                            labels={'avkastning': 'Total avkastning (tkr)', 'period_label': 'Tidsperiod'},
+                            markers=True
+                        )
+                        fig_ret_trend.update_layout(height=400)
+                        st.plotly_chart(fig_ret_trend, use_container_width=True)
+                        
+                        st.caption(f"Visar hur avkastningen utvecklas över regleringsperioden (WACC: {used_wacc:.4f}). Avkastning = WACC × Kapitalbindning ÷ 2.")
 
 
-def run_company_step_8_compile(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 8: Sammanställ kapitalkostnad för företaget - ANVÄNDER SAMMA LOGIK"""
+def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, company_name: str):
+    """Steg 8: Sammanställ kapitalkostnad och validera mot facit för företaget"""
     
     st.subheader(f"Steg 8: Sammanställning för {company_name}")
-    st.write("Kombinerar avskrivningar och avkastning till total kapitalkostnad")
+    st.write("Kombinerar avskrivningar och avkastning till total kapitalkostnad och jämför mot facit")
     
     if not (6 in steps_state['completed_steps'] and 7 in steps_state['completed_steps']):
         st.warning("Slutför först Steg 6 och 7")
         return
     
-    # Kör beräkning - EXAKT SAMMA FUNKTION
+    # Kör beräkning och automatisk
     if st.button("Kör Steg 8: Sammanställning", key=f"step8_button_{dmu_id}"):
         with st.spinner(f"Sammanställer kapitalkostnad för {company_name}..."):
             try:
@@ -533,106 +884,114 @@ def run_company_step_8_compile(dmu_id: int, steps_state: dict, company_name: str
                 st.error(f"Fel i steg 8: {e}")
                 st.exception(e)
     
-    # Visa resultat
+    # Visa resultat och automatisk validering
     if 8 in steps_state['completed_steps']:
         st.success("✅ Steg 8 slutfört")
         result_data = steps_state['step_data'][8]
         
-        # Huvudresultat för företaget
-        total_capcost = result_data['capcost_sum'].sum()
-        total_kapitalbindning = result_data['return_ord'].sum() + result_data['return_tail'].sum()
-        total_kapitalforslitning = result_data['dep_ord'].sum() + result_data['dep_tail'].sum()
+        # Beräkna alla KPIs
+        calculated_kpis = {
+            'capcost_sum': result_data['capcost_sum'].sum(),
+            'dep_ord': result_data['dep_ord'].sum(),
+            'dep_tail': result_data['dep_tail'].sum(),
+            'return_ord': result_data['return_ord'].sum(),
+            'return_tail': result_data['return_tail'].sum()
+        }
         
-        st.markdown(f"#### Sammanställning för {company_name}")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total kapitalkostnad (tkr)", f"{total_capcost:,.0f}")
-        with col2:
-            st.metric("Total kapitalbindning (tkr)", f"{total_kapitalbindning:,.0f}")
-        with col3:
-            st.metric("Total kapitalförslitning (tkr)", f"{total_kapitalforslitning:,.0f}")
+        # Härledda KPIs
+        calculated_kpis['total_kapitalforslitning'] = calculated_kpis['dep_ord'] + calculated_kpis['dep_tail']
+        calculated_kpis['total_kapitalbindning'] = calculated_kpis['return_ord'] + calculated_kpis['return_tail']
         
-        # Breakdown per period
-        with st.expander("Breakdown per tidsperiod"):
-            st.dataframe(result_data, use_container_width=True)
-
-
-def run_company_step_9_compare_facit(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 9: Jämför med facit för företaget - ANVÄNDER SAMMA LOGIK"""
-    
-    st.subheader(f"Steg 9: Jämför med facit för {company_name}")
-    
-    if 8 not in steps_state['completed_steps']:
-        st.warning("Slutför först Steg 8")
-        return
-    
-    # Kolla om facit finns för denna DMU - SAMMA FUNKTION
-    try:
-        facit_data = load_facit_for_dmu(dmu_id)
-        facit_available = not facit_data.empty
-    except:
-        facit_available = False
-    
-    if not facit_available:
-        st.info(f"Facit-data är inte tillgänglig för DMU {dmu_id} i demonstrationsversionen")
-        st.write("Detta betyder inte att beräkningarna är felaktiga - bara att vi inte har referensdata att jämföra med.")
-        return
-    
-    if st.button("Ladda och jämför facit", key=f"step9_button_{dmu_id}"):
-        with st.spinner("Laddar facit och jämför..."):
-            try:
-                calculated_data = steps_state['step_data'][8]
-                # SAMMA FUNKTION som fungerande version
-                facit_data = load_facit_for_dmu(dmu_id)
+        # Kontrollera facit-tillgänglighet
+        try:
+            facit_data = load_facit_for_dmu(dmu_id)
+            facit_available = not facit_data.empty
+        except:
+            facit_available = False
+        
+        if not facit_available:
+            # Visa resultat utan validering
+            st.markdown(f"#### Sammanställning för {company_name}")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total kapitalkostnad (tkr)", f"{calculated_kpis['capcost_sum']:,.0f}")
+            with col2:
+                st.metric("Total kapitalbindning (tkr)", f"{calculated_kpis['total_kapitalbindning']:,.0f}")
+            with col3:
+                st.metric("Total kapitalförslitning (tkr)", f"{calculated_kpis['total_kapitalforslitning']:,.0f}")
+            
+            st.info(f"Facit-data är inte tillgänglig för DMU {dmu_id} i demonstrationsversionen")
+            
+            with st.expander("Breakdown per tidsperiod"):
+                st.dataframe(result_data, use_container_width=True)
+        
+        else:
+            # Automatisk validering med facit
+            with st.spinner("Jämför mot facit..."):
+                # Beräkna facit-KPIs
+                facit_kpis = {
+                    'capcost_sum': facit_data['capcost_sum'].sum() if 'capcost_sum' in facit_data.columns else 0,
+                    'dep_ord': facit_data['dep_ord'].sum() if 'dep_ord' in facit_data.columns else 0,
+                    'dep_tail': facit_data['dep_tail'].sum() if 'dep_tail' in facit_data.columns else 0,
+                    'return_ord': facit_data['return_ord'].sum() if 'return_ord' in facit_data.columns else 0,
+                    'return_tail': facit_data['return_tail'].sum() if 'return_tail' in facit_data.columns else 0
+                }
                 
-                if facit_data.empty:
-                    st.error("Ingen facit-data kunde laddas för ditt företag")
-                    return
+                # Härledda facit-KPIs
+                facit_kpis['total_kapitalforslitning'] = facit_kpis['dep_ord'] + facit_kpis['dep_tail']
+                facit_kpis['total_kapitalbindning'] = facit_kpis['return_ord'] + facit_kpis['return_tail']
                 
-                # Jämför - samma logik
-                calc_total = calculated_data['capcost_sum'].sum()
-                facit_total = facit_data['capcost_sum'].sum() if 'capcost_sum' in facit_data.columns else 0
+                # KPI-jämförelse med färgkodning
+                st.markdown(f"#### Skillnad mot baseline")
                 
+                kpi_labels = {
+                    'capcost_sum': 'Total kapitalkostnad (tkr)',
+                    'total_kapitalforslitning': 'Total kapitalförslitning (tkr)',
+                    'total_kapitalbindning': 'Total kapitalbindning (tkr)', 
+                    'dep_ord': 'Kapitalförslitning - ordinarie (tkr)',
+                    'dep_tail': 'Kapitalförslitning - svans (tkr)',
+                    'return_ord': 'Kapitalbindning - ordinarie (tkr)',
+                    'return_tail': 'Kapitalbindning - svans (tkr)'
+                }
+                
+                # Layout i 4 kolumner för kompakt visning av 7 KPIs
+                row1_cols = st.columns(4)
+                row2_cols = st.columns(3)
+                all_cols = list(row1_cols) + list(row2_cols)
+                
+                for idx, (kpi, label) in enumerate(kpi_labels.items()):
+                    calc_val = calculated_kpis[kpi]
+                    facit_val = facit_kpis[kpi]
+                    delta = calc_val - facit_val
+                    
+                    with all_cols[idx]:
+                        # Färgkodning: Röd för högre, grön för lägre
+                        if abs(delta) <= 1.0:  # Praktiskt noll
+                            delta_color = "normal"
+                            delta_str = "≈0"
+                        elif delta > 0:  # Högre än facit
+                            delta_color = "inverse"  # Röd bakgrund
+                            delta_str = f"+{delta:,.0f}"
+                        else:  # Lägre än facit  
+                            delta_color = "normal"  # Grön pil
+                            delta_str = f"{delta:,.0f}"
+                        
+                        st.metric(
+                            label,
+                            f"{calc_val:,.0f}",
+                            delta=delta_str,
+                            delta_color=delta_color
+                        )
+                
+                # Spara jämförelse i session state för eventuell framtida användning
                 comparison = {
-                    'calculated_total': calc_total,
-                    'facit_total': facit_total,
+                    'calculated_kpis': calculated_kpis,
+                    'facit_kpis': facit_kpis,
                     'dmu_id': dmu_id,
                     'company_name': company_name
                 }
-                
                 steps_state['step_data'][9] = comparison
                 steps_state['completed_steps'].add(9)
-                st.success("Steg 9 slutfört!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Fel i steg 9: {e}")
-                st.exception(e)
-    
-    # Visa jämförelse
-    if 9 in steps_state['completed_steps']:
-        st.success("✅ Steg 9 slutfört")
-        comparison = steps_state['step_data'][9]
-        
-        # Huvudresultat för företaget
-        delta = comparison['calculated_total'] - comparison['facit_total']
-        delta_pct = (delta / comparison['facit_total'] * 100) if comparison['facit_total'] != 0 else 0
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Beräknat total", f"{comparison['calculated_total']:,.0f} tkr")
-        with col2:
-            st.metric("Facit total", f"{comparison['facit_total']:,.0f} tkr")
-        with col3:
-            st.metric("Differens", f"{delta:+,.0f} tkr", delta=f"{delta_pct:+.3f}%")
-        
-        # Toleransanalys
-        tolerance_tkr = st.number_input("Tolerans (tkr)", min_value=0.0, value=1.0, step=0.1)
-        abs_delta = abs(delta)
-        
-        if abs_delta <= tolerance_tkr:
-            st.success(f"✅ Beräkning OK! Differens {abs_delta:,.1f} tkr ligger inom tolerans {tolerance_tkr} tkr")
-        else:
-            st.warning(f"⚠️ Differens {abs_delta:,.1f} tkr överskrider tolerans {tolerance_tkr} tkr")
 
 
 # Huvudfunktion som kallas från pages
