@@ -1,0 +1,14 @@
+{
+  "description": "DEA-export från beräkningskedja - alla DMU med samma WACC",
+  "organization": "kraftringen",
+  "initiated_by_dmu": 121,
+  "total_dmu_count": 148,
+  "wacc_old": 0.0453,
+  "wacc_new": 0.0453,
+  "export_timestamp": "2025-09-28T08:17:49.622901",
+  "period": "2024",
+  "source": "foretag_berakningskedja",
+  "methodological_note": "Alla DMU får samma WACC-justering för rättvis DEA-jämförelse",
+  "price_year": 2022,
+  "unit": "tkr"
+}

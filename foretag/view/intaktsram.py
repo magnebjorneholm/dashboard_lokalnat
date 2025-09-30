@@ -37,6 +37,7 @@ if st.session_state.user_role != "company":
     st.stop()
 
 
+
 def get_user_org() -> str:
     """Hämtar aktuell organisations-ID från session state"""
     return st.session_state.get('current_user', 'default')
@@ -454,28 +455,28 @@ def show_component_table(entity_data: pd.Series, components: List[tuple], has_de
             källa = entity_data.get('Källa_Paverkbara', 'Baseline')
             uppdaterad = bool(entity_data.get('Uppdaterad_Paverkbara', False))
             baseline_val = get_baseline_value(name)
-            uppdaterad_text = calculate_delta_text(value, baseline_val, uppdaterad)
+            uppdaterad_text = calculate_delta_text(value, baseline_val, uppdaterad, DELTA_THRESHOLD)
             
         elif 'avskrivning' in name_lower:
             # Avskrivningar: kan komma från scenario (kapitalbas)
             källa = entity_data.get('Källa_Kapitalkostnad', 'Baseline')
             uppdaterad = bool(entity_data.get('Uppdaterad_Kapitalkostnad', False))
             baseline_val = get_baseline_value(name)
-            uppdaterad_text = calculate_delta_text(value, baseline_val, uppdaterad)
+            uppdaterad_text = calculate_delta_text(value, baseline_val, uppdaterad, DELTA_THRESHOLD)
             
         elif 'avkastning' in name_lower:
             # Avkastning: kan komma från scenario (kapitalbas)
             källa = entity_data.get('Källa_Kapitalkostnad', 'Baseline')
             uppdaterad = bool(entity_data.get('Uppdaterad_Kapitalkostnad', False))
             baseline_val = get_baseline_value(name)
-            uppdaterad_text = calculate_delta_text(value, baseline_val, uppdaterad)
+            uppdaterad_text = calculate_delta_text(value, baseline_val, uppdaterad, DELTA_THRESHOLD)
             
         elif 'kapital' in name_lower:
             # Total kapitalkostnad: kan komma från scenario
             källa = entity_data.get('Källa_Kapitalkostnad', 'Baseline')
             uppdaterad = bool(entity_data.get('Uppdaterad_Kapitalkostnad', False))
             baseline_val = get_baseline_value(name)
-            uppdaterad_text = calculate_delta_text(value, baseline_val, uppdaterad)
+            uppdaterad_text = calculate_delta_text(value, baseline_val, uppdaterad, DELTA_THRESHOLD)
             
         else:
             # Övriga (Flex, Avbrottsersättning m.m.): baseline
@@ -490,24 +491,31 @@ def show_component_table(entity_data: pd.Series, components: List[tuple], has_de
             'Uppdaterad': uppdaterad_text
         })
 
-    # Total-rad
+    # Total-rad med tröskel
     total_calculated = sum([comp[1] for comp in components])
     delta_total = total_calculated - baseline_total if baseline_total else 0
     delta_total_pct = (delta_total / baseline_total * 100.0) if baseline_total else 0.0
+
+    # Applicera tröskel på total-delta också
+    if abs(delta_total) > DELTA_THRESHOLD:
+        total_delta_text = f"Δ {delta_total:+,.3f} ({delta_total_pct:+.3f}%)"
+    else:
+        total_delta_text = 'Δ 0.000 (0.000%)'
 
     table_data.append({
         'Komponent': '**TOTAL INTÄKTSRAM**',
         'Belopp (tkr)': f"**{total_calculated:,.3f}**",  # Behåll decimaler
         'Källa': 'Beräknad',
-        'Uppdaterad': f"Δ {delta_total:+,.3f} ({delta_total_pct:+.3f}%)" if abs(delta_total) > 0 else '➖'
+        'Uppdaterad': total_delta_text
     })
 
     df_table = pd.DataFrame(table_data)
     st.dataframe(df_table, use_container_width=True)
 
+DELTA_THRESHOLD = 1.0
 
-def calculate_delta_text(current_value: float, baseline_value: Optional[float], is_updated: bool) -> str:
-    """Beräknar och formaterar delta-text för komponenter."""
+def calculate_delta_text(current_value: float, baseline_value: Optional[float], is_updated: bool, threshold: float = DELTA_THRESHOLD) -> str:
+    """Beräknar och formaterar delta-text för komponenter med tröskel för insignifikanta förändringar."""
     if baseline_value is None:
         baseline_value = current_value  # Gör Δ=0 om baseline saknas
     
@@ -518,11 +526,14 @@ def calculate_delta_text(current_value: float, baseline_value: Optional[float], 
     
     delta_pct = (delta / baseline_value * 100.0) if (baseline_value not in (None, 0, 0.0)) else 0.0
     
-    if abs(delta) > 0:
+    # Applicera tröskel - om absoluta deltat är under tröskeln, behandla som noll
+    if abs(delta) > threshold:
         prefix = "✅ " if is_updated else ""
         return f"{prefix}Δ {delta:+,.3f} ({delta_pct:+.3f}%)"  # Behåll decimaler
     else:
-        return '✅' if is_updated else '➖'
+        # Delta under tröskel - visa som noll men explicit
+        prefix = "✅ " if is_updated else ""
+        return f"{prefix}Δ 0.000 (0.000%)"
 
 
 def show_component_controls(entity_data: pd.Series):

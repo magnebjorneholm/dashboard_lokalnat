@@ -1,6 +1,6 @@
 # foretag_berakningskedja.py
 # Företagsspecifik stegvis beräkningskedja för kapitalkostnader
-# UPPDATERAD: Med dedikerad WACC-beräkningstab (importerad från översikt.py)
+# UPPDATERAD: Med dedikerad WACC-beräkningstab och export-funktionalitet
 
 import streamlit as st
 import pandas as pd
@@ -8,7 +8,7 @@ import numpy as np
 import json
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
@@ -39,7 +39,11 @@ from kapitalbas.visualiseringsfiler.översikt import (
     R_OLD,
     EiWaccInputs,
     ei_wacc_real_pre_tax,
-    _render_methodology_info
+    _render_methodology_info,
+    _aggregate_to_dmu,
+    _build_dea_export_table,
+    YEAR_TO_CODES,
+    apply_concession_adjustments
 )
 
 # Autentisering
@@ -115,15 +119,16 @@ def show_foretag_berakningskedja():
     
     steps_state = st.session_state[session_key]
     
-    # Huvudtabs för beräkningssteg - NYTT: Lagt till WACC-tab
+    # Huvudtabs för beräkningssteg - UPPDATERAD: Lagt till DEA-export tab
     st.header("Beräkningssteg")
     
     step_tabs = st.tabs([
         "Steg 5: Åldrar & NUAV",
         "Steg 6: Avskrivningar", 
-        "WACC-kalkylator",  # NY TAB
+        "WACC-kalkylator",
         "Steg 7: Avkastning",
-        "Steg 8: Sammanställning"  # KOMBINERAT STEG 8+9
+        "Steg 8: Sammanställning",
+        "DEA-export"  # NY TAB
     ])
     
     with step_tabs[0]:
@@ -132,15 +137,17 @@ def show_foretag_berakningskedja():
     with step_tabs[1]:
         run_company_step_6_depreciation(user_dmu, steps_state, company_name)
     
-    with step_tabs[2]:  # NY TAB
+    with step_tabs[2]:
         run_company_wacc_calculator(company_name)
     
-    with step_tabs[3]:  # Tidigare step_tabs[2], nu step_tabs[3]
+    with step_tabs[3]:
         run_company_step_7_returns(user_dmu, steps_state, company_name)
     
-    with step_tabs[4]:  # KOMBINERAT STEG 8+9
+    with step_tabs[4]:
         run_company_step_8_compile_and_validate(user_dmu, steps_state, company_name)
-
+    
+    with step_tabs[5]:  # NY TAB
+        run_company_dea_export(user_dmu, steps_state, company_name)
 
 def run_company_step_5_ages_nuav(capbase_data: pd.DataFrame, dmu_id: int, steps_state: dict, company_name: str):
     """Steg 5: Beräkna åldrar och NUAV-värden för företaget - ANVÄNDER SAMMA LOGIK"""
@@ -858,7 +865,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
 
 
 def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 8: Sammanställ kapitalkostnad och validera mot facit för företaget"""
+    """Steg 8: Sammanställ kapitalkostnad och validera mot facit för företaget + IR-export"""
     
     st.subheader(f"Steg 8: Sammanställning för {company_name}")
     st.write("Kombinerar avskrivningar och avkastning till total kapitalkostnad och jämför mot facit")
@@ -867,7 +874,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
         st.warning("Slutför först Steg 6 och 7")
         return
     
-    # Kör beräkning och automatisk
+    # Kör beräkning
     if st.button("Kör Steg 8: Sammanställning", key=f"step8_button_{dmu_id}"):
         with st.spinner(f"Sammanställer kapitalkostnad för {company_name}..."):
             try:
@@ -992,6 +999,431 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                 }
                 steps_state['step_data'][9] = comparison
                 steps_state['completed_steps'].add(9)
+        
+        # NYT: IR-EXPORT SEKTION (FÖRENKLAD)
+        st.markdown("---")
+        st.markdown("#### IR-export (endast ditt företag)")
+        st.write("Exportera detaljerad kapitalkostnad för IR-dekomposition")
+        st.caption("Använder beräknad WACC från Steg 7")
+        
+        # Export-förhandsvisning (utan WACC-input)
+        if st.button("🔍 Förhandsgranska IR-export", type="secondary"):
+            try:
+                ir_preview = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
+                
+                st.markdown("**Förhandsvisning av IR-export:**")
+                display_cols = ['DMU', 'Företag', 'Kapitalkostnad_Ny', 'Avskrivningar_Ny', 'Avkastning_Ny', 'r_new']
+                st.dataframe(ir_preview[display_cols], use_container_width=True, hide_index=True)
+                
+            except Exception as e:
+                st.error(f"Förhandsvisning misslyckades: {e}")
+        
+        # Export-knapp (förenklad)
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📊 Exportera till IR-dekomposition", type="primary"):
+                try:
+                    ir_data = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
+                    ir_path = execute_ir_export(ir_data, company_name)
+                    
+                    st.success("IR-export slutförd!")
+                    st.caption(f"Exporterat till: {ir_path}")
+                    
+                    with st.expander("Export-detaljer"):
+                        st.write("**Exporterad data:**")
+                        st.dataframe(ir_data, use_container_width=True, hide_index=True)
+                    
+                except Exception as e:
+                    st.error(f"IR-export misslyckades: {e}")
+                    import traceback
+                    with st.expander("Teknisk felinfo"):
+                        st.code(traceback.format_exc())
+        
+        with col2:
+            st.info("💡 Tips: Använd DEA-export tab för att exportera WACC-scenarier för alla företag")
+
+
+def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
+    """NYT: DEA-export för alla företag med metodologisk korrekthet"""
+    
+    st.subheader(f"DEA-export (alla företag)")
+    st.write("Exportera WACC-scenarier för ALLA företag för metodologiskt korrekt effektivitetsanalys")
+    
+    # Förklaring
+    st.info("""
+    **Metodologisk viktighet:** DEA-analysen kräver att alla DMU:er justeras med samma WACC 
+    för rättvis jämförelse. Om bara ditt företag får ny WACC medan andra behåller 4.53%, 
+    blir effektivitetsjämförelsen snedvriden.
+    """)
+    
+    # WACC-input
+    st.markdown("#### WACC-scenario för alla företag")
+    
+    dea_wacc = st.number_input(
+        "WACC för DEA-scenario (appliceras på ALLA DMU)",
+        min_value=0.0,
+        max_value=0.15,
+        value=float(st.session_state.get("r_new", R_OLD)),
+        step=0.0001,
+        format="%.4f",
+        help="Denna WACC appliceras på alla DMU:er för rättvis jämförelse"
+    )
+    
+    # Avancerade inställningar
+    with st.expander("Avancerade inställningar"):
+        full_recalc = st.checkbox(
+            "Fullständig omberäkning av alla DMU", 
+            value=False,
+            help="""
+            - ✅ Markerad: Kör hela beräkningskedjan för alla DMU (exakt men långsam)
+            - ❌ Ej markerad: Skala bara WACC på befintliga resultat (snabb men approximativ)
+            """
+        )
+        
+        if full_recalc:
+            st.warning("⚠️ Fullständig omberäkning kan ta flera minuter för alla DMU")
+            st.caption("Rekommenderas när andra parametrar än WACC ändrats i framtiden")
+        else:
+            st.info("ℹ️ Snabb WACC-skalning - avskrivningar förblir oförändrade")
+            st.caption("Lämplig för nuvarande läge där bara WACC är justerbar")
+    
+    # Förhandsvisning
+    if st.button("🔍 Förhandsgranska DEA-export", type="secondary"):
+        with st.spinner("Förbereder förhandsvisning..."):
+            try:
+                preview_data = prepare_dea_export_preview(dea_wacc, full_recalc, dmu_id)
+                
+                st.markdown("**Förhandsvisning av DEA-export:**")
+                
+                # Visa sammanfattning
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Antal DMU", len(preview_data))
+                with col2:
+                    st.metric("WACC baseline", f"{R_OLD:.4f}")
+                with col3:
+                    st.metric("WACC scenario", f"{dea_wacc:.4f}")
+                
+                # Visa sample data
+                if len(preview_data) > 0:
+                    st.markdown("**Sample data (första 10 rader):**")
+                    display_cols = ['DMU', 'Företag', 'CAPEX_2024_tkr', f'CAPEX_2024_wacc_{int(dea_wacc*10000)}_tkr', 'delta_tkr']
+                    available_cols = [col for col in display_cols if col in preview_data.columns]
+                    st.dataframe(preview_data[available_cols].head(10), use_container_width=True, hide_index=True)
+                
+            except Exception as e:
+                st.error(f"Förhandsvisning misslyckades: {e}")
+    
+    # Export-knapp
+    st.markdown("---")
+    if st.button("📈 Exportera DEA-scenario (alla företag)", type="primary"):
+        with st.spinner("Exporterar DEA-scenario för alla företag..."):
+            try:
+                dea_data = prepare_dea_export_all_companies(
+                    dea_wacc, 
+                    initiated_by_dmu=dmu_id,
+                    full_recalc=full_recalc
+                )
+                
+                dea_path = execute_dea_export(dea_data, dea_wacc)
+                
+                st.success("DEA-export slutförd!")
+                st.caption(f"Exporterat till: {dea_path}")
+                
+                # Visa statistik
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Exporterade DMU", len(dea_data))
+                with col2:
+                    st.metric("WACC använd", f"{dea_wacc:.4f}")
+                with col3:
+                    method = "Fullständig omberäkning" if full_recalc else "WACC-skalning"
+                    st.metric("Metod", method)
+                
+                st.info("🔬 Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
+                
+                with st.expander("Export-detaljer"):
+                    st.write("**Exporterad data (första 10 rader):**")
+                    st.dataframe(dea_data.head(10), use_container_width=True, hide_index=True)
+                    
+                    if len(dea_data) > 10:
+                        st.caption(f"Visar 10 av {len(dea_data)} exporterade rader")
+                
+            except Exception as e:
+                st.error(f"DEA-export misslyckades: {e}")
+                import traceback
+                with st.expander("Teknisk felinfo"):
+                    st.code(traceback.format_exc())
+
+
+def prepare_ir_export_from_berakningskedja(steps_state: dict, dmu_id: int, company_name: str) -> pd.DataFrame:
+    """Förbereder IR-export från beräkningskedjans resultat (använder beräknad WACC från steg 7)"""
+    
+    if 8 not in steps_state['completed_steps']:
+        raise ValueError("Steg 8 måste vara slutfört för export")
+    
+    if 7 not in steps_state['completed_steps']:
+        raise ValueError("Steg 7 måste vara slutfört för att få WACC-värde")
+    
+    result_data = steps_state['step_data'][8]
+    used_wacc = steps_state['step_data'][7].get('used_wacc', R_OLD)
+    
+    # Aggregera över hela perioden 2024-2027 (använder befintliga värden)
+    total_deps_ord = result_data['dep_ord'].sum()
+    total_deps_tail = result_data['dep_tail'].sum()
+    total_returns_ord = result_data['return_ord'].sum()
+    total_returns_tail = result_data['return_tail'].sum()
+    total_capcost = result_data['capcost_sum'].sum()
+    
+    # Formatera för IR (samma struktur som kapital.py för koncessionsjustering)
+    wacc_tag = f"{int(used_wacc * 10000)}"
+    
+    ir_export = pd.DataFrame({
+        'DMU': [int(dmu_id)],
+        'Företag': [str(company_name)],
+        'Kapitalkostnad_Baseline': [(float(total_capcost))],  # Avrundning som kapital.py
+        'Kapitalkostnad_Ny': [(float(total_capcost))],  # Samma värde eftersom vi använder beräknad WACC
+        'Avskrivningar_Ny': [(float(total_deps_ord + total_deps_tail))],
+        'Avkastning_Baseline': [(float(total_returns_ord + total_returns_tail))],
+        'Avkastning_Ny': [(float(total_returns_ord + total_returns_tail))],  # Samma värde
+        
+        # KRITISKT: Lägg till detaljerade ord/tail-delar som apply_concession_adjustments() förväntar sig
+        'dep_ord_Ny': [(float(total_deps_ord))],
+        'dep_tail_Ny': [(float(total_deps_tail))],
+        'return_ord_Ny': [(float(total_returns_ord))],
+        'return_tail_Ny': [(float(total_returns_tail))],
+        
+        'r_old': [float(R_OLD)],
+        'r_new': [round(float(used_wacc), 4)],  # Konsistent avrundning
+        'price_year': [2022],
+        'scenario_tag': [str(wacc_tag)],
+        'source': ['berakningskedja'],
+        'export_timestamp': [datetime.now().isoformat()]
+    })
+    
+    # KRITISKT: Applicera koncessionsjustering (samma som kapital.py)
+    ir_export = apply_concession_adjustments(ir_export)
+    
+    return ir_export
+
+
+def prepare_dea_export_preview(wacc: float, full_recalc: bool, initiated_by_dmu: int) -> pd.DataFrame:
+    """Förbereder förhandsvisning av DEA-export"""
+    
+    # För förhandsvisning, kör alltid snabb variant
+    return prepare_dea_export_wacc_scaling(wacc, initiated_by_dmu)
+
+
+def prepare_dea_export_all_companies(wacc: float, initiated_by_dmu: int, full_recalc: bool = False) -> pd.DataFrame:
+    """DEA-export med val mellan skalning (snabb) eller fullständig omberäkning (framtidssäker)"""
+    
+    if full_recalc:
+        # FRAMTIDA: Fullständig omberäkning för alla DMU
+        return prepare_dea_export_full_recalculation(wacc, initiated_by_dmu)
+    else:
+        # NUVARANDE: Snabb WACC-skalning (återanvänder kapital.py logik)
+        return prepare_dea_export_wacc_scaling(wacc, initiated_by_dmu)
+
+
+def prepare_dea_export_wacc_scaling(wacc: float, initiated_by_dmu: int) -> pd.DataFrame:
+    """Snabb WACC-skalning för nuvarande läge"""
+    
+    # Samma logik som kapital.py - ladda färdig data och skala
+    from kapitalbas.datafiler.data_loader import load_capcost_a
+    
+    df_all = load_capcost_a()  # Färdiga resultat
+    
+    if df_all.empty:
+        raise ValueError("Kunde inte ladda data för alla företag")
+    
+    # Aggregera till DMU-nivå
+    df_all_dmu = _aggregate_to_dmu(df_all)
+    
+    # Filtrera till 2024
+    df_2024 = df_all_dmu[df_all_dmu["time"].isin(YEAR_TO_CODES[2024])].copy()
+    
+    if df_2024.empty:
+        raise ValueError("Ingen 2024-data för alla företag")
+    
+    # Kontrollera komplett H1+H2 data
+    def _check_completeness(df):
+        cnt = df.groupby("DMU")["time"].nunique().reset_index(name="n_halvår")
+        incomplete = cnt[cnt["n_halvår"] < 2]
+        if not incomplete.empty:
+            st.warning(f"{len(incomplete)} DMU saknar H1 eller H2 för 2024")
+        # Filtrera till kompletta DMU
+        complete_dmus = cnt[cnt["n_halvår"] == 2]["DMU"]
+        return df[df["DMU"].isin(complete_dmus)]
+    
+    df_2024_complete = _check_completeness(df_2024)
+    
+    # Använd befintlig logik från översikt.py
+    df_dea_export, df_dea_excl, dea_tag = _build_dea_export_table(df_2024_complete, wacc)
+    
+    # Lägg till metadata
+    df_dea_export['initiated_by_dmu'] = initiated_by_dmu
+    df_dea_export['source'] = 'berakningskedja_wacc_scaling'
+    df_dea_export['export_timestamp'] = datetime.now().isoformat()
+    
+    return df_dea_export
+
+
+def prepare_dea_export_full_recalculation(wacc: float, initiated_by_dmu: int) -> pd.DataFrame:
+    """FRAMTIDA: Fullständig omberäkning för alla DMU"""
+    
+    # Hämta alla DMU-id:n
+    all_dmus = get_all_dmu_ids()
+    
+    all_results = []
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    for i, dmu in enumerate(all_dmus):
+        try:
+            status_text.text(f"Beräknar DMU {dmu} ({i+1}/{len(all_dmus)})")
+            progress_bar.progress((i + 1) / len(all_dmus))
+            
+            # Steg 5-8 för varje DMU med nya parametrar
+            capbase_data = load_dmu_capbase_a(dmu)
+            if capbase_data.empty:
+                continue
+                
+            ages_result = calculate_ages_and_nuav(capbase_data)
+            dep_result = calculate_depreciation_single_dmu(ages_result)
+            ret_result = calculate_returns_single_dmu(ages_result, wacc)  # NY WACC
+            final_result = compile_capcost_single_dmu(dep_result, ret_result, dmu)
+            
+            # Filtrera till 2024 och aggregera
+            result_2024 = final_result[final_result['time'].isin([229, 230])]
+            if not result_2024.empty:
+                agg_result = {
+                    'DMU': dmu,
+                    'Företag': f'DMU_{dmu}',  # Placeholder - skulle behöva företagsnamn
+                    'CAPEX_2024_baseline': result_2024['capcost_sum'].sum(),  # Skulle behöva baseline
+                    'CAPEX_2024_new': result_2024['capcost_sum'].sum(),  # Redan med ny WACC
+                    f'CAPEX_2024_wacc_{int(wacc*10000)}_tkr': result_2024['capcost_sum'].sum(),
+                    'delta_tkr': 0,  # Skulle behöva baseline för att beräkna
+                    'r_old': R_OLD,
+                    'r_new': wacc,
+                    'initiated_by_dmu': initiated_by_dmu,
+                    'source': 'berakningskedja_full_recalc',
+                    'export_timestamp': datetime.now().isoformat()
+                }
+                all_results.append(agg_result)
+                
+        except Exception as e:
+            st.warning(f"Kunde inte beräkna DMU {dmu}: {e}")
+            continue
+    
+    status_text.text("Slutfört!")
+    progress_bar.progress(1.0)
+    
+    return pd.DataFrame(all_results)
+
+
+def get_all_dmu_ids() -> List[int]:
+    """Hämtar alla tillgängliga DMU-id:n"""
+    try:
+        from kapitalbas.datafiler.data_loader import load_capcost_a
+        df_all = load_capcost_a()
+        return sorted(df_all['DMU'].unique()) if not df_all.empty else []
+    except:
+        # Fallback - använd reconciliation data
+        try:
+            recon_path = "effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv"
+            if Path(recon_path).exists():
+                recon_df = pd.read_csv(recon_path)
+                return sorted(recon_df['DMU'].unique())
+        except:
+            pass
+        return []
+
+
+# FIXAD EXPORT-FUNKTION MED RÄTT MAPPAR
+def execute_ir_export(ir_data: pd.DataFrame, company_name: str) -> str:
+    """Utför IR-export med samma mappstruktur som kapital.py"""
+    
+    # Använd samma struktur som kapital.py
+    base_export_dir = "scenario/kapitalbas/exports_to_ir"
+    
+    # Skapa organisationsspecifik katalog (samma som kapital.py)
+    org = get_user_org()
+    export_dir = os.path.join(base_export_dir, org)
+    os.makedirs(export_dir, exist_ok=True)
+    
+    # Filnamn med timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    wacc_tag = ir_data['scenario_tag'].iloc[0] if len(ir_data) > 0 else "0453"
+    filename = f"ir_kapkost_wacc_{wacc_tag}_y2024_2027_berakningskedja_{timestamp}.parquet"
+    filepath = os.path.join(export_dir, filename)
+    
+    # Exportera data
+    ir_data.to_parquet(filepath, index=False)
+    
+    # Metadata (konvertera alla värden till JSON-kompatibla typer)
+    meta_path = filepath.replace('.parquet', '.json')
+    metadata = {
+        "description": "IR-export från beräkningskedja",
+        "organization": str(org),
+        "company": str(company_name),
+        "dmu": int(ir_data['DMU'].iloc[0]) if len(ir_data) > 0 else None,
+        "wacc_used": float(ir_data['r_new'].iloc[0]) if len(ir_data) > 0 else None,
+        "export_timestamp": datetime.now().isoformat(),
+        "period": "2024-2027",
+        "source": "foretag_berakningskedja",
+        "price_year": 2022,
+        "unit": "tkr"
+    }
+    
+    with open(meta_path, 'w', encoding='utf-8') as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
+    
+    return filepath
+
+
+# FIXAD DEA-EXPORT MED RÄTT MAPPAR
+def execute_dea_export(dea_data: pd.DataFrame, wacc: float) -> str:
+    """Utför DEA-export med samma mappstruktur som kapital.py"""
+    
+    # Använd samma struktur som kapital.py  
+    base_export_dir = "scenario/kapitalbas/exports_to_dea"
+    
+    # Skapa organisationsspecifik katalog
+    org = get_user_org()
+    export_dir = os.path.join(base_export_dir, org)
+    os.makedirs(export_dir, exist_ok=True)
+    
+    # Filnamn
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    wacc_tag = f"{int(wacc * 10000)}"
+    filename = f"capex_wacc_{wacc_tag}_y2024_dmu_berakningskedja_{timestamp}.parquet"
+    filepath = os.path.join(export_dir, filename)
+    
+    # Exportera data
+    dea_data.to_parquet(filepath, index=False)
+    
+    # Metadata (konvertera alla värden till JSON-kompatibla typer)
+    meta_path = filepath.replace('.parquet', '.json')
+    metadata = {
+        "description": "DEA-export från beräkningskedja - alla DMU med samma WACC",
+        "organization": str(org),
+        "initiated_by_dmu": int(get_user_dmu()),
+        "total_dmu_count": int(len(dea_data)),
+        "wacc_old": float(R_OLD),
+        "wacc_new": float(wacc),
+        "export_timestamp": datetime.now().isoformat(),
+        "period": "2024",
+        "source": "foretag_berakningskedja",
+        "methodological_note": "Alla DMU får samma WACC-justering för rättvis DEA-jämförelse",
+        "price_year": 2022,
+        "unit": "tkr"
+    }
+    
+    with open(meta_path, 'w', encoding='utf-8') as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
+    
+    return filepath
 
 
 # Huvudfunktion som kallas från pages
