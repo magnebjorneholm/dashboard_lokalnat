@@ -21,6 +21,8 @@ from foretag.app.kapitalbas_data_loader import (
     validate_company_data
 )
 
+from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.data_upload_validator import (get_validated_data_for_berakningskedja, apply_lifetime_scenario)
+
 # KRITISK: Importera ALLA beräkningsfunktioner från fungerande version
 from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.beräkningskedja import (
     load_dmu_capbase_a,
@@ -82,32 +84,6 @@ def show_foretag_berakningskedja():
             st.json(validation)
         return
     
-    # Ladda grunddata för DMU - ANVÄNDER SAMMA FUNKTION
-    with st.spinner("Laddar komponentdata för ditt företag..."):
-        capbase_data = load_dmu_capbase_a(user_dmu)
-    
-    if capbase_data.empty:
-        st.error(f"Ingen komponentdata hittades för DMU {user_dmu}")
-        st.info("Detta kan bero på att din DMU inte finns i kapitalbasen eller att data inte är tillgänglig")
-        return
-    
-    st.success(f"Laddade {len(capbase_data)} komponenter för {company_name}")
-    
-    # Visa grunddata
-    with st.expander("Grunddata (capbase_a) för ditt företag"):
-        st.dataframe(capbase_data, use_container_width=True)
-        
-        # Företagsstatistik
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Antal komponenter", len(capbase_data))
-        with col2:
-            total_nuav = capbase_data['nuav_2022'].sum() if 'nuav_2022' in capbase_data.columns else 0
-            st.metric("Total NUAV 2022 (MSEK)", f"{total_nuav/1000:.1f}")
-        with col3:
-            unique_categories = capbase_data['cat_encode'].nunique() if 'cat_encode' in capbase_data.columns else 0
-            st.metric("Antal kategorier", unique_categories)
-    
     # Initiera session state för steg
     session_key = f'company_steps_{user_dmu}'
     if session_key not in st.session_state:
@@ -132,8 +108,8 @@ def show_foretag_berakningskedja():
     ])
     
     with step_tabs[0]:
-        run_company_step_5_ages_nuav(capbase_data, user_dmu, steps_state, company_name)
-    
+        run_company_step_5_ages_nuav(user_dmu, steps_state, company_name)
+
     with step_tabs[1]:
         run_company_step_6_depreciation(user_dmu, steps_state, company_name)
     
@@ -149,11 +125,19 @@ def show_foretag_berakningskedja():
     with step_tabs[5]:  # NY TAB
         run_company_dea_export(user_dmu, steps_state, company_name)
 
-def run_company_step_5_ages_nuav(capbase_data: pd.DataFrame, dmu_id: int, steps_state: dict, company_name: str):
+def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: str):
     """Steg 5: Beräkna åldrar och NUAV-värden för företaget - ANVÄNDER SAMMA LOGIK"""
     
     st.subheader(f"Steg 5: Åldrar och NUAV-värden för {company_name}")
     st.write("Beräknar komponenternas ålder och nuanskaffningsvärden för varje tidsperiod (229-236)")
+
+    capbase_data, is_custom_data = get_validated_data_for_berakningskedja(
+        default_loader_func=lambda: load_dmu_capbase_a(dmu_id)
+    )
+    if capbase_data is None:
+        return  # Väntar på giltig data
+
+    capbase_data = apply_lifetime_scenario(capbase_data)
     
     # Visa indata-sammanfattning
     with st.expander("Indata-översikt för ditt företag"):
@@ -974,14 +958,11 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                     with all_cols[idx]:
                         # Färgkodning: Röd för högre, grön för lägre
                         if abs(delta) <= 1.0:  # Praktiskt noll
-                            delta_color = "normal"
+                            delta_color = "off"  # Ingen färg
                             delta_str = "≈0"
-                        elif delta > 0:  # Högre än facit
-                            delta_color = "inverse"  # Röd bakgrund
-                            delta_str = f"+{delta:,.0f}"
-                        else:  # Lägre än facit  
-                            delta_color = "normal"  # Grön pil
-                            delta_str = f"{delta:,.0f}"
+                        else:
+                            delta_color = "inverse"  # Ger: röd↑ för +, grön↓ för -
+                            delta_str = f"+{delta:,.0f}" if delta > 0 else f"{delta:,.0f}"
                         
                         st.metric(
                             label,
