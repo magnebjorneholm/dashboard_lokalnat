@@ -17,9 +17,10 @@ from effektiviseringskrav.app.data_loader import merge_capex_scenario, load_data
 # Import företagsspecifika funktioner
 from foretag.app.kapitalbas_data_loader import (
     get_user_dmu,
-    get_user_org,
     load_reconciliation_foretag_info
 )
+
+from core.session_utils import get_user_org, ensure_org_dir
 
 # Import från show_dea.py för att återanvända exakt beräkningsfunktion
 from effektiviseringskrav.view.show_dea import (
@@ -34,17 +35,6 @@ if "access_granted" not in st.session_state or not st.session_state.access_grant
 if st.session_state.user_role != "company":
     st.error("Denna sida är endast tillgänglig för företagsanvändare")
     st.stop()
-
-def get_user_org() -> str:
-    """Hämtar aktuell organisations-ID från session state"""
-    return st.session_state.get('current_user', 'default')
-
-def ensure_org_dir(base_path: str) -> str:
-    """Skapar organisationsspecifik katalog och returnerar sökvägen"""
-    org = get_user_org()
-    org_path = os.path.join(base_path, org)
-    os.makedirs(org_path, exist_ok=True)
-    return org_path
 
 def show_foretag_effektivitet():
     """Huvudfunktion för företagsspecifik effektivitetsanalys"""

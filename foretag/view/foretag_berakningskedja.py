@@ -1,6 +1,6 @@
 # foretag_berakningskedja.py
 # Företagsspecifik stegvis beräkningskedja för kapitalkostnader
-# UPPDATERAD: Med dedikerad WACC-beräkningstab och export-funktionalitet
+# UPPDATERAD: Använder core-moduler för backend-logik
 
 import streamlit as st
 import pandas as pd
@@ -21,9 +21,12 @@ from foretag.app.kapitalbas_data_loader import (
     validate_company_data
 )
 
-from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.data_upload_validator import (get_validated_data_for_berakningskedja, apply_lifetime_scenario)
+from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.data_upload_validator import (
+    get_validated_data_for_berakningskedja, 
+    apply_lifetime_scenario
+)
 
-# KRITISK: Importera ALLA beräkningsfunktioner från fungerande version
+# Importera beräkningsfunktioner från beräkningskedja
 from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.beräkningskedja import (
     load_dmu_capbase_a,
     calculate_ages_and_nuav,
@@ -36,17 +39,23 @@ from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.beräkningskedja impor
     analyze_nuav_distribution
 )
 
-# NYTT: Importera WACC-funktioner från översikt.py
-from kapitalbas.visualiseringsfiler.översikt import (
-    R_OLD,
-    EiWaccInputs,
-    ei_wacc_real_pre_tax,
-    _render_methodology_info,
-    _aggregate_to_dmu,
-    _build_dea_export_table,
-    YEAR_TO_CODES,
+# Importera från core-moduler
+from core.calculations import (
+    R_OLD, YEAR_TO_CODES,
+    EiWaccInputs, ei_wacc_real_pre_tax
+)
+from core.dmu_aggregation import (
+    aggregate_to_dmu,
+    check_year_completeness
+)
+from core.export_builders import (
+    build_dea_export_table,
     apply_concession_adjustments
 )
+from core.export_writers import write_dea_export, write_ir_export
+
+# Behåll UI-funktion från översikt.py
+from kapitalbas.visualiseringsfiler.översikt import _render_methodology_info
 
 # Autentisering
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
@@ -95,7 +104,7 @@ def show_foretag_berakningskedja():
     
     steps_state = st.session_state[session_key]
     
-    # Huvudtabs för beräkningssteg - UPPDATERAD: Lagt till DEA-export tab
+    # Huvudtabs för beräkningssteg
     st.header("Beräkningssteg")
     
     step_tabs = st.tabs([
@@ -104,7 +113,7 @@ def show_foretag_berakningskedja():
         "WACC-kalkylator",
         "Steg 7: Avkastning",
         "Steg 8: Sammanställning",
-        "DEA-export"  # NY TAB
+        "DEA-export"
     ])
     
     with step_tabs[0]:
@@ -122,11 +131,12 @@ def show_foretag_berakningskedja():
     with step_tabs[4]:
         run_company_step_8_compile_and_validate(user_dmu, steps_state, company_name)
     
-    with step_tabs[5]:  # NY TAB
+    with step_tabs[5]:
         run_company_dea_export(user_dmu, steps_state, company_name)
 
+
 def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 5: Beräkna åldrar och NUAV-värden för företaget - ANVÄNDER SAMMA LOGIK"""
+    """Steg 5: Beräkna åldrar och NUAV-värden för företaget"""
     
     st.subheader(f"Steg 5: Åldrar och NUAV-värden för {company_name}")
     st.write("Beräknar komponenternas ålder och nuanskaffningsvärden för varje tidsperiod (229-236)")
@@ -135,7 +145,7 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
         default_loader_func=lambda: load_dmu_capbase_a(dmu_id)
     )
     if capbase_data is None:
-        return  # Väntar på giltig data
+        return
 
     capbase_data = apply_lifetime_scenario(capbase_data)
     
@@ -152,7 +162,6 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
             st.write("- `maxdep`: Maximal livslängd")
             st.write("- `nuav_2022`: Nuanskaffningsvärde 2022")
         
-        # Validation av indata - SAMMA FUNKTION
         validation = validate_input_data(capbase_data)
         if not validation['valid']:
             st.warning("Problem med indata:")
@@ -163,11 +172,10 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
             for warning in validation['warnings']:
                 st.warning(f"• {warning}")
     
-    # Kör beräkning - EXAKT SAMMA FUNKTION
+    # Kör beräkning
     if st.button("Kör Steg 5: Åldrar & NUAV", key=f"step5_button_{dmu_id}"):
         with st.spinner("Beräknar åldrar och NUAV för ditt företag..."):
             try:
-                # SAMMA FUNKTION som fungerande version
                 result_data = calculate_ages_and_nuav(capbase_data)
                 steps_state['step_data'][5] = result_data
                 steps_state['completed_steps'].add(5)
@@ -194,11 +202,11 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
             nuav_229 = result_data.get('nuav_ord_229', pd.Series(0)).sum()
             st.metric("NUAV ordinarie 2024H1 (tkr)", f"{nuav_229:,.0f}")
         
-        # Förbättrad analys med visualiseringar
+        # Visualiseringar
         with st.expander("Analys - åldersfördelning för ditt företag"):
             if 'age_component_229' in result_data.columns and 'cat_encode' in result_data.columns:
                 
-                # Histogram över åldersfördelning per kategori (använder 2024H1 som referens)
+                # Histogram över åldersfördelning per kategori
                 fig_age = px.histogram(
                     result_data, 
                     x='age_component_229', 
@@ -209,121 +217,10 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
                 )
                 fig_age.update_layout(height=400)
                 st.plotly_chart(fig_age, use_container_width=True)
-                
-                # Andel ordinarie vs svans per kategori (kombinerat för hela 2024)
-                if all(col in result_data.columns for col in ['nuav_ord_229', 'nuav_tail_229', 'nuav_ord_230', 'nuav_tail_230']):
-                    # Beräkna andelar per kategori för hela 2024 (H1 + H2)
-                    share_analysis = result_data.groupby('cat_encode').agg({
-                        'nuav_ord_229': 'sum',
-                        'nuav_tail_229': 'sum',
-                        'nuav_ord_230': 'sum', 
-                        'nuav_tail_230': 'sum'
-                    }).reset_index()
-                    
-                    # Summera H1 + H2 för hela 2024
-                    share_analysis['nuav_ord_2024'] = share_analysis['nuav_ord_229'] + share_analysis['nuav_ord_230']
-                    share_analysis['nuav_tail_2024'] = share_analysis['nuav_tail_229'] + share_analysis['nuav_tail_230']
-                    share_analysis['total_nuav_2024'] = share_analysis['nuav_ord_2024'] + share_analysis['nuav_tail_2024']
-                    
-                    # Filtrera bort kategorier utan NUAV
-                    share_analysis = share_analysis[share_analysis['total_nuav_2024'] > 0]
-                    
-                    if not share_analysis.empty:
-                        share_analysis['andel_ordinarie'] = (share_analysis['nuav_ord_2024'] / share_analysis['total_nuav_2024'] * 100).round(1)
-                        share_analysis['andel_svans'] = (share_analysis['nuav_tail_2024'] / share_analysis['total_nuav_2024'] * 100).round(1)
-                        
-                        # Stacked bar chart för andelar
-                        fig_share = px.bar(
-                            share_analysis,
-                            x='cat_encode',
-                            y=['andel_ordinarie', 'andel_svans'],
-                            title=f'Andel ordinarie vs svans per komponentkategori 2024 - {company_name}',
-                            labels={'value': 'Andel (%)', 'cat_encode': 'Komponentkategori'},
-                            color_discrete_map={'andel_ordinarie': '#2E8B57', 'andel_svans': '#FF6347'}
-                        )
-                        fig_share.update_layout(height=400, barmode='stack')
-                        st.plotly_chart(fig_share, use_container_width=True)
-                        
-                        # Förklarande text
-                        st.caption("Ordinarie (grön) = komponenter inom ekonomisk livslängd. Svans (röd) = komponenter utanför ekonomisk livslängd men inom maximal livslängd. Data för hela 2024 (H1+H2).")
-                
-                # Utveckling av andel svans över tid per kategori
-                if all(f'nuav_ord_{t}' in result_data.columns and f'nuav_tail_{t}' in result_data.columns for t in range(229, 237)):
-                    
-                    # Beräkna andel svans för alla tidsperioder
-                    trend_data = []
-                    for t in range(229, 237):
-                        period_data = result_data.groupby('cat_encode').agg({
-                            f'nuav_ord_{t}': 'sum',
-                            f'nuav_tail_{t}': 'sum'
-                        }).reset_index()
-                        
-                        period_data['total_nuav'] = period_data[f'nuav_ord_{t}'] + period_data[f'nuav_tail_{t}']
-                        period_data = period_data[period_data['total_nuav'] > 0]  # Filtrera kategorier utan NUAV
-                        
-                        if not period_data.empty:
-                            period_data['andel_svans'] = (period_data[f'nuav_tail_{t}'] / period_data['total_nuav'] * 100).round(1)
-                            period_data['period'] = t
-                            period_data['period_label'] = f"{2024 + (t-229)//2}H{((t-229)%2)+1}"
-                            
-                            trend_data.append(period_data[['cat_encode', 'andel_svans', 'period', 'period_label']])
-                    
-                    if trend_data:
-                        trend_df = pd.concat(trend_data, ignore_index=True)
-                        
-                        # Linjediagram över utvecklingen
-                        fig_trend = px.line(
-                            trend_df,
-                            x='period_label',
-                            y='andel_svans',
-                            color='cat_encode',
-                            title=f'Utveckling av svansandel över tid per kategori - {company_name}',
-                            labels={'andel_svans': 'Svansandel (%)', 'period_label': 'Tidsperiod'},
-                            markers=True
-                        )
-                        fig_trend.update_layout(height=400)
-                        st.plotly_chart(fig_trend, use_container_width=True)
-                        
-                        st.caption("Visar hur stor andel av kapitalet som befinner sig i svansperiod över tiden. Stigande linjer indikerar åldrande komponentportfölj.")
-                
-                # Kvalitetskontroller
-                st.markdown("---")
-                st.write("**Kvalitetskontroller:**")
-                
-                quality_issues = []
-                
-                # Kontrollera negativa åldrar
-                negative_ages = (result_data['age_component_229'] < 0).sum()
-                if negative_ages > 0:
-                    quality_issues.append(f"⚠️ {negative_ages} komponenter har negativ ålder")
-                
-                # Kontrollera extremt gamla komponenter
-                very_old = (result_data['age_component_229'] > 50).sum()
-                if very_old > 0:
-                    quality_issues.append(f"ℹ️ {very_old} komponenter är äldre än 50 år")
-                
-                # Kontrollera komponenter utan NUAV
-                zero_nuav = 0
-                if 'nuav_ord_229' in result_data.columns and 'nuav_tail_229' in result_data.columns:
-                    zero_nuav = ((result_data['nuav_ord_229'] == 0) & (result_data['nuav_tail_229'] == 0)).sum()
-                    if zero_nuav > 0:
-                        quality_issues.append(f"⚠️ {zero_nuav} komponenter har ingen NUAV-värdering")
-                
-                # Kontrollera livslängdskonsistens
-                if 'ekdep' in result_data.columns and 'maxdep' in result_data.columns:
-                    inconsistent_life = (result_data['ekdep'] > result_data['maxdep']).sum()
-                    if inconsistent_life > 0:
-                        quality_issues.append(f"⚠️ {inconsistent_life} komponenter har ekdep > maxdep")
-                
-                if quality_issues:
-                    for issue in quality_issues:
-                        st.write(issue)
-                else:
-                    st.success("✅ Inga kvalitetsproblem identifierade")
 
 
 def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 6: Beräkna avskrivningar för företaget - ANVÄNDER SAMMA LOGIK"""
+    """Steg 6: Beräkna avskrivningar för företaget"""
     
     st.subheader(f"Steg 6: Avskrivningar för {company_name}")
     st.write("Beräknar ordinarie och svansavskrivningar baserat på åldrar och livslängder")
@@ -340,12 +237,11 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
         st.latex(r"dep\_tail = \frac{nuav\_tail}{age\_reg}")
         st.write("Där age_reg justeras för udda åldrar")
     
-    # Kör beräkning - EXAKT SAMMA FUNKTION
+    # Kör beräkning
     if st.button("Kör Steg 6: Avskrivningar", key=f"step6_button_{dmu_id}"):
         with st.spinner(f"Beräknar avskrivningar för {company_name}..."):
             try:
                 input_data = steps_state['step_data'][5]
-                # SAMMA FUNKTION som fungerande version
                 result_data = calculate_depreciation_single_dmu(input_data)
                 steps_state['step_data'][6] = result_data
                 steps_state['completed_steps'].add(6)
@@ -369,130 +265,10 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
         with col2:
             dep_tail_total = sum(result_data.get(f'dep_tail_{t}', 0) for t in range(229, 237))
             st.metric("Total svansavskrivning (tkr)", f"{dep_tail_total:,.0f}")
-        
-        # Visualiseringar för avskrivningsanalys
-        with st.expander("Analys - avskrivningsfördelning för ditt företag"):
-            # Hämta originaldata för kategorianalys
-            input_data = steps_state['step_data'][5]
-            
-            if 'cat_encode' in input_data.columns:
-                # 1. Andel ordinarie vs svans avskrivning per kategori (2024)
-                if all(f'dep_ord_{t}' in result_data for t in [229, 230]) and all(f'dep_tail_{t}' in result_data for t in [229, 230]):
-                    
-                    # Skapa mock data per kategori baserat på input_data
-                    # Vi behöver beräkna avskrivning per kategori från komponenter
-                    dep_by_cat = []
-                    for cat in input_data['cat_encode'].unique():
-                        cat_data = input_data[input_data['cat_encode'] == cat]
-                        
-                        # Beräkna totala avskrivningar för denna kategori (2024)
-                        dep_ord_2024 = 0
-                        dep_tail_2024 = 0
-                        
-                        for t in [229, 230]:  # 2024H1 + 2024H2
-                            if f'nuav_ord_{t}' in cat_data.columns and f'nuav_tail_{t}' in cat_data.columns:
-                                # Ordinarie avskrivning
-                                if 'ekdep' in cat_data.columns:
-                                    dep_ord_2024 += (cat_data[f'nuav_ord_{t}'] / cat_data['ekdep']).sum() / 1000
-                                
-                                # Svansavskrivning (förenklad beräkning)
-                                if f'age_component_{t}' in cat_data.columns:
-                                    age_reg = cat_data[f'age_component_{t}'].copy()
-                                    # Justera för udda åldrar
-                                    mask = (age_reg % 2 == 1)
-                                    age_reg.loc[mask] += age_reg.loc[mask].apply(lambda x: 1 if x > 0 else -1)
-                                    
-                                    # Säker division
-                                    valid_age = age_reg != 0
-                                    dep_tail_cat = 0
-                                    if valid_age.any():
-                                        dep_tail_cat = (cat_data.loc[valid_age, f'nuav_tail_{t}'] / age_reg.loc[valid_age]).sum() / 1000
-                                    dep_tail_2024 += dep_tail_cat
-                        
-                        dep_by_cat.append({
-                            'cat_encode': cat,
-                            'dep_ord_2024': dep_ord_2024,
-                            'dep_tail_2024': dep_tail_2024
-                        })
-                    
-                    dep_analysis = pd.DataFrame(dep_by_cat)
-                    dep_analysis['total_dep_2024'] = dep_analysis['dep_ord_2024'] + dep_analysis['dep_tail_2024']
-                    
-                    # Filtrera kategorier utan avskrivning
-                    dep_analysis = dep_analysis[dep_analysis['total_dep_2024'] > 0.1]  # Minst 100 kr
-                    
-                    if not dep_analysis.empty:
-                        dep_analysis['andel_ordinarie'] = (dep_analysis['dep_ord_2024'] / dep_analysis['total_dep_2024'] * 100).round(1)
-                        dep_analysis['andel_svans'] = (dep_analysis['dep_tail_2024'] / dep_analysis['total_dep_2024'] * 100).round(1)
-                        
-                        # Stacked bar chart för avskrivningsandelar
-                        fig_dep_share = px.bar(
-                            dep_analysis,
-                            x='cat_encode',
-                            y=['andel_ordinarie', 'andel_svans'],
-                            title=f'Andel ordinarie vs svans avskrivning per kategori 2024 - {company_name}',
-                            labels={'value': 'Andel (%)', 'cat_encode': 'Komponentkategori'},
-                            color_discrete_map={'andel_ordinarie': '#4CAF50', 'andel_svans': '#FF9800'}
-                        )
-                        fig_dep_share.update_layout(height=400, barmode='stack')
-                        st.plotly_chart(fig_dep_share, use_container_width=True)
-                        
-                        st.caption("Ordinarie (grön) = avskrivning av komponenter inom ekonomisk livslängd. Svans (orange) = avskrivning av komponenter utanför ekonomisk livslängd.")
-                
-                # 2. Avskrivningsutveckling över tid per kategori
-                dep_trend_data = []
-                for t in range(229, 237):
-                    period_label = f"{2024 + (t-229)//2}H{((t-229)%2)+1}"
-                    
-                    for cat in input_data['cat_encode'].unique():
-                        cat_data = input_data[input_data['cat_encode'] == cat]
-                        
-                        # Beräkna total avskrivning för denna kategori och period
-                        total_dep_cat = 0
-                        
-                        # Ordinarie
-                        if f'nuav_ord_{t}' in cat_data.columns and 'ekdep' in cat_data.columns:
-                            total_dep_cat += (cat_data[f'nuav_ord_{t}'] / cat_data['ekdep']).sum() / 1000
-                        
-                        # Svans
-                        if f'nuav_tail_{t}' in cat_data.columns and f'age_component_{t}' in cat_data.columns:
-                            age_reg = cat_data[f'age_component_{t}'].copy()
-                            mask = (age_reg % 2 == 1)
-                            age_reg.loc[mask] += age_reg.loc[mask].apply(lambda x: 1 if x > 0 else -1)
-                            
-                            valid_age = age_reg != 0
-                            if valid_age.any():
-                                total_dep_cat += (cat_data.loc[valid_age, f'nuav_tail_{t}'] / age_reg.loc[valid_age]).sum() / 1000
-                        
-                        if total_dep_cat > 0.1:  # Bara kategorier med betydande avskrivning
-                            dep_trend_data.append({
-                                'cat_encode': cat,
-                                'period_label': period_label,
-                                'total_dep': total_dep_cat,
-                                'period': t
-                            })
-                
-                if dep_trend_data:
-                    dep_trend_df = pd.DataFrame(dep_trend_data)
-                    
-                    # Linjediagram över avskrivningsutveckling
-                    fig_dep_trend = px.line(
-                        dep_trend_df,
-                        x='period_label',
-                        y='total_dep',
-                        color='cat_encode',
-                        title=f'Avskrivningsutveckling över tid per kategori - {company_name}',
-                        labels={'total_dep': 'Total avskrivning (tkr)', 'period_label': 'Tidsperiod'},
-                        markers=True
-                    )
-                    fig_dep_trend.update_layout(height=400)
-                    st.plotly_chart(fig_dep_trend, use_container_width=True)
-                    
-                    st.caption("Visar hur total avskrivning (ordinarie + svans) utvecklas över regleringsperioden per komponentkategori.")
 
 
 def run_company_wacc_calculator(company_name: str):
-    """NY FUNKTION: Dedikerad WACC-kalkylator (importerad från översikt.py)"""
+    """WACC-kalkylator (importerad från översikt.py)"""
     
     st.subheader(f"WACC-kalkylator för {company_name}")
     st.write("Beräkna kalkylränta från grundparametrar enligt Ei:s metodik")
@@ -515,7 +291,7 @@ def run_company_wacc_calculator(company_name: str):
         st.session_state.setdefault(k, v)
     st.session_state.setdefault("r_new", R_OLD)
     
-    # Input-fält i tre kolumner (samma layout som översikt.py)
+    # Input-fält i tre kolumner
     c1, c2, c3 = st.columns(3)
     
     with c1:
@@ -524,21 +300,21 @@ def run_company_wacc_calculator(company_name: str):
             key="rf_nom", 
             step=0.0001, 
             format="%.4f",
-            help="KI:s 9-årsprognos för 10-årig svensk statsobligation (nominell). Ingår i både R_E och R_D."
+            help="KI:s 9-årsprognos för 10-årig svensk statsobligation (nominell)."
         )
         st.number_input(
             "Marknadsriskpremie (nominell) MRP", 
             key="mrp", 
             step=0.0001, 
             format="%.4f",
-            help="Långsiktig aktiemarknadspremie (nominell), baserad på PwC:s riskpremiestudier."
+            help="Långsiktig aktiemarknadspremie (nominell)."
         )
         st.number_input(
             "Inflation π (KPIF)", 
             key="infl", 
             step=0.0001, 
             format="%.4f",
-            help="KPIF enligt KI:s 9-årsprognos. Fisher-omräkning till real nivå."
+            help="KPIF enligt KI:s 9-årsprognos."
         )
 
     with c2:
@@ -547,7 +323,7 @@ def run_company_wacc_calculator(company_name: str):
             key="credit", 
             step=0.0001, 
             format="%.4f",
-            help="Spread för lånat kapital (typiskt europeiska utilities BBB vs 10-årig Bund)."
+            help="Spread för lånat kapital."
         )
         st.number_input(
             "Skuldsättningsgrad S = D/(D+E)", 
@@ -556,7 +332,7 @@ def run_company_wacc_calculator(company_name: str):
             max_value=0.95, 
             step=0.01, 
             format="%.2f",
-            help="Vikt för skuld i WACC. Relation: D/E = S/(1−S)."
+            help="Vikt för skuld i WACC."
         )
         st.number_input(
             "Bolagsskatt T", 
@@ -582,7 +358,7 @@ def run_company_wacc_calculator(company_name: str):
                 key="beta_a", 
                 step=0.01, 
                 format="%.2f",
-                help="Tillgångsbeta (obelanad). Omvandlas till aktiebeta med Hamada."
+                help="Tillgångsbeta (obelanad)."
             )
         else:
             st.number_input(
@@ -590,10 +366,10 @@ def run_company_wacc_calculator(company_name: str):
                 key="beta_e", 
                 step=0.01, 
                 format="%.2f",
-                help="Aktiebeta (belanad). Används direkt i CAPM."
+                help="Aktiebeta (belanad)."
             )
 
-    # Beräkna WACC med importerade funktioner
+    # Beräkna WACC med core-funktion
     beta_a = st.session_state["beta_a"] if st.session_state["beta_mode"] == "β_A" else None
     beta_e = st.session_state["beta_e"] if st.session_state["beta_mode"] == "β_E" else None
     
@@ -642,7 +418,7 @@ def run_company_wacc_calculator(company_name: str):
 
 
 def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 7: Beräkna avkastning för företaget - Med flexibel WACC-input som översikt.py"""
+    """Steg 7: Beräkna avkastning för företaget"""
     
     st.subheader(f"Steg 7: Avkastning för {company_name}")
     st.write("Beräknar kapitalavkastning baserat på åldersjusterad kapitalbas")
@@ -651,7 +427,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
         st.warning("Slutför först Steg 6")
         return
 
-    # FLEXIBEL WACC-input (samma UI som översikt.py Tab 3)
+    # WACC-input
     current_wacc = round(float(st.number_input(
         "WACC (real, före skatt) för scenario",
         value=float(st.session_state.get("r_new", R_OLD)),
@@ -660,7 +436,6 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
         help="Använd värde från WACC-kalkylatorn eller ange direkt"
     )), 4)
     
-    # Uppdatera session state med det nya värdet
     st.session_state["r_new"] = current_wacc
     
     # Visa källa och jämförelse med Ei-standard
@@ -683,12 +458,11 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
         st.latex(r"capbase\_left\_tail = \frac{nuav\_tail}{age\_return + 1}")
         st.latex(r"return\_tail = WACC \times capbase\_left\_tail / 2")
     
-    # Kör avkastningsberäkning - EXAKT SAMMA FUNKTION
+    # Kör avkastningsberäkning
     if st.button("Kör Steg 7: Avkastning", key=f"step7_button_{dmu_id}"):
         with st.spinner(f"Beräknar avkastning för {company_name} med WACC {current_wacc:.4f}..."):
             try:
                 input_data = steps_state['step_data'][5]
-                # SAMMA FUNKTION som fungerande version
                 result_data = calculate_returns_single_dmu(input_data, interest_rate=current_wacc)
                 steps_state['step_data'][7] = result_data
                 steps_state['step_data'][7]['used_wacc'] = current_wacc
@@ -706,7 +480,6 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
         result_data = steps_state['step_data'][7]
         used_wacc = result_data.get('used_wacc', R_OLD)
         
-        # Visa vilken WACC som användes
         st.info(f"Beräkning genomförd med WACC: {used_wacc:.4f}")
         
         # KPI för företaget
@@ -717,142 +490,13 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
         with col2:
             ret_tail_total = sum(result_data.get(f'return_tail_{t}', 0) for t in range(229, 237))
             st.metric("Total svansavkastning (tkr)", f"{ret_tail_total:,.0f}")
-        
-        # Visualiseringar för avkastningsanalys
-        with st.expander("Analys - avkastning och kapitalbindning för ditt företag"):
-            # Hämta originaldata för kategorianalys
-            input_data = steps_state['step_data'][5]
-            
-            if 'cat_encode' in input_data.columns:
-                # 1. Avkastning per kategori (2024)
-                ret_by_cat_2024 = []
-                cap_by_cat_all_periods = []
-                
-                for cat in input_data['cat_encode'].unique():
-                    cat_data = input_data[input_data['cat_encode'] == cat]
-                    
-                    # Beräkna avkastning för 2024 (H1 + H2)
-                    ret_ord_2024 = 0
-                    ret_tail_2024 = 0
-                    
-                    # För kapitalbindning över alla perioder
-                    for t in range(229, 237):
-                        period_label = f"{2024 + (t-229)//2}H{((t-229)%2)+1}"
-                        cap_ord_cat = 0
-                        cap_tail_cat = 0
-                        ret_ord_cat = 0
-                        ret_tail_cat = 0
-                        
-                        if f'age_component_{t}' in cat_data.columns and f'nuav_ord_{t}' in cat_data.columns and f'nuav_tail_{t}' in cat_data.columns:
-                            # Beräkna age_return
-                            age_return = cat_data[f'age_component_{t}'].copy()
-                            mask = (age_return % 2 == 1)
-                            age_return.loc[mask] += age_return.loc[mask].apply(lambda x: 1 if x > 0 else -1)
-                            age_return = age_return / 2 - 1
-                            
-                            if 'ekdep' in cat_data.columns:
-                                ekdep2 = cat_data['ekdep'] / 2
-                                
-                                # Ordinarie kapitalbindning och avkastning
-                                capbase_left_ord = ((ekdep2 - age_return) / ekdep2) * cat_data[f'nuav_ord_{t}']
-                                capbase_left_ord = capbase_left_ord.where(age_return >= 0, 0)  # Sätt till 0 om age_return < 0
-                                cap_ord_cat = capbase_left_ord.sum() / 1000
-                                ret_ord_cat = (used_wacc * capbase_left_ord / 2).sum() / 1000
-                                
-                                # Svans kapitalbindning och avkastning
-                                capbase_left_tail = cat_data[f'nuav_tail_{t}'] / (age_return + 1)
-                                capbase_left_tail = capbase_left_tail.where((age_return + 1) != 0, 0)
-                                cap_tail_cat = capbase_left_tail.sum() / 1000
-                                ret_tail_cat = (used_wacc * capbase_left_tail / 2).sum() / 1000
-                        
-                        # Spara för 2024 (H1 + H2)
-                        if t in [229, 230]:
-                            ret_ord_2024 += ret_ord_cat
-                            ret_tail_2024 += ret_tail_cat
-                        
-                        # Spara för kapitalbindningstrend
-                        cap_by_cat_all_periods.append({
-                            'cat_encode': cat,
-                            'period_label': period_label,
-                            'period': t,
-                            'cap_bindning': cap_ord_cat + cap_tail_cat,
-                            'avkastning': ret_ord_cat + ret_tail_cat
-                        })
-                    
-                    ret_by_cat_2024.append({
-                        'cat_encode': cat,
-                        'ret_ord_2024': ret_ord_2024,
-                        'ret_tail_2024': ret_tail_2024
-                    })
-                
-                # Graf 1: Avkastning per kategori 2024
-                ret_analysis = pd.DataFrame(ret_by_cat_2024)
-                ret_analysis['total_ret_2024'] = ret_analysis['ret_ord_2024'] + ret_analysis['ret_tail_2024']
-                ret_analysis = ret_analysis[ret_analysis['total_ret_2024'] > 0.1]  # Minst 100 kr
-                
-                if not ret_analysis.empty:
-                    ret_analysis['andel_ordinarie'] = (ret_analysis['ret_ord_2024'] / ret_analysis['total_ret_2024'] * 100).round(1)
-                    ret_analysis['andel_svans'] = (ret_analysis['ret_tail_2024'] / ret_analysis['total_ret_2024'] * 100).round(1)
-                    
-                    fig_ret_share = px.bar(
-                        ret_analysis,
-                        x='cat_encode',
-                        y=['andel_ordinarie', 'andel_svans'],
-                        title=f'Andel ordinarie vs svans avkastning per kategori 2024 - {company_name}',
-                        labels={'value': 'Andel (%)', 'cat_encode': 'Komponentkategori'},
-                        color_discrete_map={'andel_ordinarie': '#1E88E5', 'andel_svans': '#FFC107'}
-                    )
-                    fig_ret_share.update_layout(height=400, barmode='stack')
-                    st.plotly_chart(fig_ret_share, use_container_width=True)
-                    
-                    st.caption("Ordinarie (blå) = avkastning på komponenter inom ekonomisk livslängd. Svans (gul) = avkastning på komponenter utanför ekonomisk livslängd.")
-                
-                # Graf 2 & 3: Kapitalbindning och avkastning över tid
-                if cap_by_cat_all_periods:
-                    trend_df = pd.DataFrame(cap_by_cat_all_periods)
-                    
-                    # Filtrera kategorier med betydande kapitalbindning
-                    significant_cats = trend_df.groupby('cat_encode')['cap_bindning'].max()
-                    significant_cats = significant_cats[significant_cats > 1.0].index  # Minst 1000 kr
-                    trend_df = trend_df[trend_df['cat_encode'].isin(significant_cats)]
-                    
-                    if not trend_df.empty:
-                        # Graf 2: Kapitalbindningsutveckling
-                        fig_cap_trend = px.line(
-                            trend_df,
-                            x='period_label',
-                            y='cap_bindning',
-                            color='cat_encode',
-                            title=f'Kapitalbindningsutveckling över tid per kategori - {company_name}',
-                            labels={'cap_bindning': 'Kapitalbindning (tkr)', 'period_label': 'Tidsperiod'},
-                            markers=True
-                        )
-                        fig_cap_trend.update_layout(height=400)
-                        st.plotly_chart(fig_cap_trend, use_container_width=True)
-                        
-                        st.caption("Visar hur mycket kapital som är bundet i varje komponentkategori över tiden. Minskande kapitalbindning = åldrande komponenter.")
-                        
-                        # Graf 3: Avkastningsutveckling
-                        fig_ret_trend = px.line(
-                            trend_df,
-                            x='period_label',
-                            y='avkastning',
-                            color='cat_encode',
-                            title=f'Avkastningsutveckling över tid per kategori - {company_name}',
-                            labels={'avkastning': 'Total avkastning (tkr)', 'period_label': 'Tidsperiod'},
-                            markers=True
-                        )
-                        fig_ret_trend.update_layout(height=400)
-                        st.plotly_chart(fig_ret_trend, use_container_width=True)
-                        
-                        st.caption(f"Visar hur avkastningen utvecklas över regleringsperioden (WACC: {used_wacc:.4f}). Avkastning = WACC × Kapitalbindning ÷ 2.")
 
 
 def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 8: Sammanställ kapitalkostnad och validera mot facit för företaget + IR-export"""
+    """Steg 8: Sammanställ kapitalkostnad och validera mot facit + IR-export"""
     
     st.subheader(f"Steg 8: Sammanställning för {company_name}")
-    st.write("Kombinerar avskrivningar och avkastning till total kapitalkostnad och jämför mot facit")
+    st.write("Kombinerar avskrivningar och avkastning till total kapitalkostnad")
     
     if not (6 in steps_state['completed_steps'] and 7 in steps_state['completed_steps']):
         st.warning("Slutför först Steg 6 och 7")
@@ -864,7 +508,6 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
             try:
                 dep_data = steps_state['step_data'][6]
                 ret_data = steps_state['step_data'][7]
-                # SAMMA FUNKTION som fungerande version
                 result_data = compile_capcost_single_dmu(dep_data, ret_data, dmu_id)
                 steps_state['step_data'][8] = result_data
                 steps_state['completed_steps'].add(8)
@@ -875,12 +518,12 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                 st.error(f"Fel i steg 8: {e}")
                 st.exception(e)
     
-    # Visa resultat och automatisk validering
+    # Visa resultat
     if 8 in steps_state['completed_steps']:
         st.success("✅ Steg 8 slutfört")
         result_data = steps_state['step_data'][8]
         
-        # Beräkna alla KPIs
+        # Beräkna KPIs
         calculated_kpis = {
             'capcost_sum': result_data['capcost_sum'].sum(),
             'dep_ord': result_data['dep_ord'].sum(),
@@ -888,6 +531,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
             'return_ord': result_data['return_ord'].sum(),
             'return_tail': result_data['return_tail'].sum()
         }
+        
         
         # Härledda KPIs
         calculated_kpis['total_kapitalforslitning'] = calculated_kpis['dep_ord'] + calculated_kpis['dep_tail']
@@ -981,13 +625,13 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                 steps_state['step_data'][9] = comparison
                 steps_state['completed_steps'].add(9)
         
-        # NYT: IR-EXPORT SEKTION (FÖRENKLAD)
+        # IR-EXPORT SEKTION
         st.markdown("---")
         st.markdown("#### IR-export (endast ditt företag)")
         st.write("Exportera detaljerad kapitalkostnad för IR-dekomposition")
         st.caption("Använder beräknad WACC från Steg 7")
         
-        # Export-förhandsvisning (utan WACC-input)
+        # Export-förhandsvisning
         if st.button("🔍 Förhandsgranska IR-export", type="secondary"):
             try:
                 ir_preview = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
@@ -999,7 +643,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
             except Exception as e:
                 st.error(f"Förhandsvisning misslyckades: {e}")
         
-        # Export-knapp (förenklad)
+        # Export-knapp
         col1, col2 = st.columns(2)
         with col1:
             if st.button("📊 Exportera till IR-dekomposition", type="primary"):
@@ -1025,7 +669,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
 
 
 def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
-    """NYT: DEA-export för alla företag med metodologisk korrekthet"""
+    """DEA-export för alla företag med metodologisk korrekthet"""
     
     st.subheader(f"DEA-export (alla företag)")
     st.write("Exportera WACC-scenarier för ALLA företag för metodologiskt korrekt effektivitetsanalys")
@@ -1050,29 +694,11 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
         help="Denna WACC appliceras på alla DMU:er för rättvis jämförelse"
     )
     
-    # Avancerade inställningar
-    with st.expander("Avancerade inställningar"):
-        full_recalc = st.checkbox(
-            "Fullständig omberäkning av alla DMU", 
-            value=False,
-            help="""
-            - ✅ Markerad: Kör hela beräkningskedjan för alla DMU (exakt men långsam)
-            - ❌ Ej markerad: Skala bara WACC på befintliga resultat (snabb men approximativ)
-            """
-        )
-        
-        if full_recalc:
-            st.warning("⚠️ Fullständig omberäkning kan ta flera minuter för alla DMU")
-            st.caption("Rekommenderas när andra parametrar än WACC ändrats i framtiden")
-        else:
-            st.info("ℹ️ Snabb WACC-skalning - avskrivningar förblir oförändrade")
-            st.caption("Lämplig för nuvarande läge där bara WACC är justerbar")
-    
     # Förhandsvisning
     if st.button("🔍 Förhandsgranska DEA-export", type="secondary"):
         with st.spinner("Förbereder förhandsvisning..."):
             try:
-                preview_data = prepare_dea_export_preview(dea_wacc, full_recalc, dmu_id)
+                preview_data = prepare_dea_export_preview(dea_wacc, dmu_id)
                 
                 st.markdown("**Förhandsvisning av DEA-export:**")
                 
@@ -1088,9 +714,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                 # Visa sample data
                 if len(preview_data) > 0:
                     st.markdown("**Sample data (första 10 rader):**")
-                    display_cols = ['DMU', 'Företag', 'CAPEX_2024_tkr', f'CAPEX_2024_wacc_{int(dea_wacc*10000)}_tkr', 'delta_tkr']
-                    available_cols = [col for col in display_cols if col in preview_data.columns]
-                    st.dataframe(preview_data[available_cols].head(10), use_container_width=True, hide_index=True)
+                    st.dataframe(preview_data.head(10), use_container_width=True, hide_index=True)
                 
             except Exception as e:
                 st.error(f"Förhandsvisning misslyckades: {e}")
@@ -1100,12 +724,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
     if st.button("📈 Exportera DEA-scenario (alla företag)", type="primary"):
         with st.spinner("Exporterar DEA-scenario för alla företag..."):
             try:
-                dea_data = prepare_dea_export_all_companies(
-                    dea_wacc, 
-                    initiated_by_dmu=dmu_id,
-                    full_recalc=full_recalc
-                )
-                
+                dea_data, dea_tag = prepare_dea_export_all_companies(dea_wacc, dmu_id)
                 dea_path = execute_dea_export(dea_data, dea_wacc)
                 
                 st.success("DEA-export slutförd!")
@@ -1118,8 +737,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                 with col2:
                     st.metric("WACC använd", f"{dea_wacc:.4f}")
                 with col3:
-                    method = "Fullständig omberäkning" if full_recalc else "WACC-skalning"
-                    st.metric("Metod", method)
+                    st.metric("Metod", "WACC-skalning")
                 
                 st.info("🔬 Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
                 
@@ -1137,8 +755,10 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                     st.code(traceback.format_exc())
 
 
+# ========= HJÄLPFUNKTIONER FÖR EXPORT =========
+
 def prepare_ir_export_from_berakningskedja(steps_state: dict, dmu_id: int, company_name: str) -> pd.DataFrame:
-    """Förbereder IR-export från beräkningskedjans resultat (använder beräknad WACC från steg 7)"""
+    """Förbereder IR-export från beräkningskedjans resultat"""
     
     if 8 not in steps_state['completed_steps']:
         raise ValueError("Steg 8 måste vara slutfört för export")
@@ -1149,262 +769,136 @@ def prepare_ir_export_from_berakningskedja(steps_state: dict, dmu_id: int, compa
     result_data = steps_state['step_data'][8]
     used_wacc = steps_state['step_data'][7].get('used_wacc', R_OLD)
     
-    # Aggregera över hela perioden 2024-2027 (använder befintliga värden)
+    # Aggregera över hela perioden 2024-2027
     total_deps_ord = result_data['dep_ord'].sum()
     total_deps_tail = result_data['dep_tail'].sum()
     total_returns_ord = result_data['return_ord'].sum()
     total_returns_tail = result_data['return_tail'].sum()
     total_capcost = result_data['capcost_sum'].sum()
     
-    # Formatera för IR (samma struktur som kapital.py för koncessionsjustering)
-    wacc_tag = f"{int(used_wacc * 10000)}"
+    # Formatera för IR
+    from core.calculations import format_wacc_tag
+    wacc_tag = format_wacc_tag(used_wacc)
     
     ir_export = pd.DataFrame({
         'DMU': [int(dmu_id)],
         'Företag': [str(company_name)],
-        'Kapitalkostnad_Baseline': [(float(total_capcost))],  # Avrundning som kapital.py
-        'Kapitalkostnad_Ny': [(float(total_capcost))],  # Samma värde eftersom vi använder beräknad WACC
-        'Avskrivningar_Ny': [(float(total_deps_ord + total_deps_tail))],
-        'Avkastning_Baseline': [(float(total_returns_ord + total_returns_tail))],
-        'Avkastning_Ny': [(float(total_returns_ord + total_returns_tail))],  # Samma värde
-        
-        # KRITISKT: Lägg till detaljerade ord/tail-delar som apply_concession_adjustments() förväntar sig
-        'dep_ord_Ny': [(float(total_deps_ord))],
-        'dep_tail_Ny': [(float(total_deps_tail))],
-        'return_ord_Ny': [(float(total_returns_ord))],
-        'return_tail_Ny': [(float(total_returns_tail))],
-        
+        'Kapitalkostnad_Baseline': [float(total_capcost)],
+        'Kapitalkostnad_Ny': [float(total_capcost)],
+        'Avskrivningar_Ny': [float(total_deps_ord + total_deps_tail)],
+        'Avkastning_Baseline': [float(total_returns_ord + total_returns_tail)],
+        'Avkastning_Ny': [float(total_returns_ord + total_returns_tail)],
+        'dep_ord_Ny': [float(total_deps_ord)],
+        'dep_tail_Ny': [float(total_deps_tail)],
+        'return_ord_Ny': [float(total_returns_ord)],
+        'return_tail_Ny': [float(total_returns_tail)],
         'r_old': [float(R_OLD)],
-        'r_new': [round(float(used_wacc), 4)],  # Konsistent avrundning
+        'r_new': [round(float(used_wacc), 4)],
         'price_year': [2022],
         'scenario_tag': [str(wacc_tag)],
         'source': ['berakningskedja'],
         'export_timestamp': [datetime.now().isoformat()]
     })
     
-    # KRITISKT: Applicera koncessionsjustering (samma som kapital.py)
+    # Applicera koncessionsjustering
     ir_export = apply_concession_adjustments(ir_export)
     
     return ir_export
 
 
-def prepare_dea_export_preview(wacc: float, full_recalc: bool, initiated_by_dmu: int) -> pd.DataFrame:
+def prepare_dea_export_preview(wacc: float, initiated_by_dmu: int) -> pd.DataFrame:
     """Förbereder förhandsvisning av DEA-export"""
-    
-    # För förhandsvisning, kör alltid snabb variant
-    return prepare_dea_export_wacc_scaling(wacc, initiated_by_dmu)
+    return prepare_dea_export_all_companies(wacc, initiated_by_dmu)[0]
 
 
-def prepare_dea_export_all_companies(wacc: float, initiated_by_dmu: int, full_recalc: bool = False) -> pd.DataFrame:
-    """DEA-export med val mellan skalning (snabb) eller fullständig omberäkning (framtidssäker)"""
+def prepare_dea_export_all_companies(wacc: float, initiated_by_dmu: int) -> Tuple[pd.DataFrame, str]:
+    """Bygger DEA-export för alla företag med core-funktioner"""
     
-    if full_recalc:
-        # FRAMTIDA: Fullständig omberäkning för alla DMU
-        return prepare_dea_export_full_recalculation(wacc, initiated_by_dmu)
-    else:
-        # NUVARANDE: Snabb WACC-skalning (återanvänder kapital.py logik)
-        return prepare_dea_export_wacc_scaling(wacc, initiated_by_dmu)
-
-
-def prepare_dea_export_wacc_scaling(wacc: float, initiated_by_dmu: int) -> pd.DataFrame:
-    """Snabb WACC-skalning för nuvarande läge"""
-    
-    # Samma logik som kapital.py - ladda färdig data och skala
-    from kapitalbas.datafiler.data_loader import load_capcost_a
-    
-    df_all = load_capcost_a()  # Färdiga resultat
-    
-    if df_all.empty:
-        raise ValueError("Kunde inte ladda data för alla företag")
-    
-    # Aggregera till DMU-nivå
-    df_all_dmu = _aggregate_to_dmu(df_all)
-    
-    # Filtrera till 2024
-    df_2024 = df_all_dmu[df_all_dmu["time"].isin(YEAR_TO_CODES[2024])].copy()
-    
-    if df_2024.empty:
-        raise ValueError("Ingen 2024-data för alla företag")
-    
-    # Kontrollera komplett H1+H2 data
-    def _check_completeness(df):
-        cnt = df.groupby("DMU")["time"].nunique().reset_index(name="n_halvår")
-        incomplete = cnt[cnt["n_halvår"] < 2]
-        if not incomplete.empty:
-            st.warning(f"{len(incomplete)} DMU saknar H1 eller H2 för 2024")
-        # Filtrera till kompletta DMU
-        complete_dmus = cnt[cnt["n_halvår"] == 2]["DMU"]
-        return df[df["DMU"].isin(complete_dmus)]
-    
-    df_2024_complete = _check_completeness(df_2024)
-    
-    # Använd befintlig logik från översikt.py
-    df_dea_export, df_dea_excl, dea_tag = _build_dea_export_table(df_2024_complete, wacc)
-    
-    # Lägg till metadata
-    df_dea_export['initiated_by_dmu'] = initiated_by_dmu
-    df_dea_export['source'] = 'berakningskedja_wacc_scaling'
-    df_dea_export['export_timestamp'] = datetime.now().isoformat()
-    
-    return df_dea_export
-
-
-def prepare_dea_export_full_recalculation(wacc: float, initiated_by_dmu: int) -> pd.DataFrame:
-    """FRAMTIDA: Fullständig omberäkning för alla DMU"""
-    
-    # Hämta alla DMU-id:n
-    all_dmus = get_all_dmu_ids()
-    
-    all_results = []
-    
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    for i, dmu in enumerate(all_dmus):
-        try:
-            status_text.text(f"Beräknar DMU {dmu} ({i+1}/{len(all_dmus)})")
-            progress_bar.progress((i + 1) / len(all_dmus))
-            
-            # Steg 5-8 för varje DMU med nya parametrar
-            capbase_data = load_dmu_capbase_a(dmu)
-            if capbase_data.empty:
-                continue
-                
-            ages_result = calculate_ages_and_nuav(capbase_data)
-            dep_result = calculate_depreciation_single_dmu(ages_result)
-            ret_result = calculate_returns_single_dmu(ages_result, wacc)  # NY WACC
-            final_result = compile_capcost_single_dmu(dep_result, ret_result, dmu)
-            
-            # Filtrera till 2024 och aggregera
-            result_2024 = final_result[final_result['time'].isin([229, 230])]
-            if not result_2024.empty:
-                agg_result = {
-                    'DMU': dmu,
-                    'Företag': f'DMU_{dmu}',  # Placeholder - skulle behöva företagsnamn
-                    'CAPEX_2024_baseline': result_2024['capcost_sum'].sum(),  # Skulle behöva baseline
-                    'CAPEX_2024_new': result_2024['capcost_sum'].sum(),  # Redan med ny WACC
-                    f'CAPEX_2024_wacc_{int(wacc*10000)}_tkr': result_2024['capcost_sum'].sum(),
-                    'delta_tkr': 0,  # Skulle behöva baseline för att beräkna
-                    'r_old': R_OLD,
-                    'r_new': wacc,
-                    'initiated_by_dmu': initiated_by_dmu,
-                    'source': 'berakningskedja_full_recalc',
-                    'export_timestamp': datetime.now().isoformat()
-                }
-                all_results.append(agg_result)
-                
-        except Exception as e:
-            st.warning(f"Kunde inte beräkna DMU {dmu}: {e}")
-            continue
-    
-    status_text.text("Slutfört!")
-    progress_bar.progress(1.0)
-    
-    return pd.DataFrame(all_results)
-
-
-def get_all_dmu_ids() -> List[int]:
-    """Hämtar alla tillgängliga DMU-id:n"""
     try:
         from kapitalbas.datafiler.data_loader import load_capcost_a
+        
+        # Ladda ALL data
         df_all = load_capcost_a()
-        return sorted(df_all['DMU'].unique()) if not df_all.empty else []
-    except:
-        # Fallback - använd reconciliation data
-        try:
-            recon_path = "effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv"
-            if Path(recon_path).exists():
-                recon_df = pd.read_csv(recon_path)
-                return sorted(recon_df['DMU'].unique())
-        except:
-            pass
-        return []
+        if df_all.empty:
+            raise ValueError("Kunde inte ladda kapitalkostnad-data")
+        
+        # Aggregera till DMU-nivå
+        df_all_dmu = aggregate_to_dmu(
+            df_all,
+            recon_path="effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv",
+            filter_regional=True
+        )
+        
+        if df_all_dmu.empty:
+            raise ValueError("DMU-aggregering misslyckades")
+        
+        # Filtrera till 2024
+        df_2024 = df_all_dmu[df_all_dmu["time"].isin(YEAR_TO_CODES[2024])].copy()
+        
+        if df_2024.empty:
+            raise ValueError("Ingen 2024-data för alla företag")
+        
+        # Kontrollera komplett H1+H2 data
+        df_complete, incomplete = check_year_completeness(df_2024, 2024)
+        
+        if not incomplete.empty:
+            st.warning(f"{len(incomplete)} DMU saknar H1 eller H2 för 2024 och exporteras inte.")
+            df_2024 = df_complete
+        
+        if df_2024.empty:
+            raise ValueError("Ingen DMU har komplett H1+H2 data för 2024")
+        
+        # Bygg DEA-export med core-funktion
+        df_dea_export, df_dea_excl, dea_tag = build_dea_export_table(
+            df_2024, 
+            wacc,
+            dea_base_path="effektiviseringskrav/data/Data_modeller.xlsx",
+            exclude_missing_dmus=True
+        )
+        
+        # Lägg till metadata
+        df_dea_export['initiated_by_dmu'] = initiated_by_dmu
+        df_dea_export['source'] = 'berakningskedja_wacc_scaling'
+        df_dea_export['export_timestamp'] = datetime.now().isoformat()
+        
+        return df_dea_export, dea_tag
+        
+    except Exception as e:
+        st.error(f"Fel vid byggande av DEA-export: {e}")
+        raise
 
 
-# FIXAD EXPORT-FUNKTION MED RÄTT MAPPAR
 def execute_ir_export(ir_data: pd.DataFrame, company_name: str) -> str:
-    """Utför IR-export med samma mappstruktur som kapital.py"""
+    """Utför IR-export med core-funktion"""
     
-    # Använd samma struktur som kapital.py
-    base_export_dir = "scenario/kapitalbas/exports_to_ir"
-    
-    # Skapa organisationsspecifik katalog (samma som kapital.py)
-    org = get_user_org()
-    export_dir = os.path.join(base_export_dir, org)
-    os.makedirs(export_dir, exist_ok=True)
-    
-    # Filnamn med timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    wacc_tag = ir_data['scenario_tag'].iloc[0] if len(ir_data) > 0 else "0453"
-    filename = f"ir_kapkost_wacc_{wacc_tag}_y2024_2027_berakningskedja_{timestamp}.parquet"
-    filepath = os.path.join(export_dir, filename)
-    
-    # Exportera data
-    ir_data.to_parquet(filepath, index=False)
-    
-    # Metadata (konvertera alla värden till JSON-kompatibla typer)
-    meta_path = filepath.replace('.parquet', '.json')
-    metadata = {
-        "description": "IR-export från beräkningskedja",
-        "organization": str(org),
-        "company": str(company_name),
-        "dmu": int(ir_data['DMU'].iloc[0]) if len(ir_data) > 0 else None,
-        "wacc_used": float(ir_data['r_new'].iloc[0]) if len(ir_data) > 0 else None,
-        "export_timestamp": datetime.now().isoformat(),
-        "period": "2024-2027",
-        "source": "foretag_berakningskedja",
-        "price_year": 2022,
-        "unit": "tkr"
-    }
-    
-    with open(meta_path, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, ensure_ascii=False, indent=2)
-    
-    return filepath
+    try:
+        org = get_user_org()
+        wacc_tag = ir_data['scenario_tag'].iloc[0] if len(ir_data) > 0 else "0453"
+        
+        # Använd core-funktion
+        data_path, meta_path = write_ir_export(ir_data, wacc_tag, org)
+        
+        return data_path
+        
+    except Exception as e:
+        raise Exception(f"IR-export misslyckades: {e}")
 
 
-# FIXAD DEA-EXPORT MED RÄTT MAPPAR
 def execute_dea_export(dea_data: pd.DataFrame, wacc: float) -> str:
-    """Utför DEA-export med samma mappstruktur som kapital.py"""
+    """Utför DEA-export med core-funktion"""
     
-    # Använd samma struktur som kapital.py  
-    base_export_dir = "scenario/kapitalbas/exports_to_dea"
-    
-    # Skapa organisationsspecifik katalog
-    org = get_user_org()
-    export_dir = os.path.join(base_export_dir, org)
-    os.makedirs(export_dir, exist_ok=True)
-    
-    # Filnamn
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    wacc_tag = f"{int(wacc * 10000)}"
-    filename = f"capex_wacc_{wacc_tag}_y2024_dmu_berakningskedja_{timestamp}.parquet"
-    filepath = os.path.join(export_dir, filename)
-    
-    # Exportera data
-    dea_data.to_parquet(filepath, index=False)
-    
-    # Metadata (konvertera alla värden till JSON-kompatibla typer)
-    meta_path = filepath.replace('.parquet', '.json')
-    metadata = {
-        "description": "DEA-export från beräkningskedja - alla DMU med samma WACC",
-        "organization": str(org),
-        "initiated_by_dmu": int(get_user_dmu()),
-        "total_dmu_count": int(len(dea_data)),
-        "wacc_old": float(R_OLD),
-        "wacc_new": float(wacc),
-        "export_timestamp": datetime.now().isoformat(),
-        "period": "2024",
-        "source": "foretag_berakningskedja",
-        "methodological_note": "Alla DMU får samma WACC-justering för rättvis DEA-jämförelse",
-        "price_year": 2022,
-        "unit": "tkr"
-    }
-    
-    with open(meta_path, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, ensure_ascii=False, indent=2)
-    
-    return filepath
+    try:
+        org = get_user_org()
+        from core.calculations import format_wacc_tag
+        wacc_tag = format_wacc_tag(wacc)
+        
+        # Använd core-funktion
+        data_path, meta_path = write_dea_export(dea_data, wacc_tag, org)
+        
+        return data_path
+        
+    except Exception as e:
+        raise Exception(f"DEA-export misslyckades: {e}")
 
 
 # Huvudfunktion som kallas från pages

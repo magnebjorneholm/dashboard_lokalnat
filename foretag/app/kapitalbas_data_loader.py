@@ -7,16 +7,12 @@ import pandas as pd
 import numpy as np
 from typing import Optional, List
 from pathlib import Path
+from core.session_utils import get_user_org, ensure_org_dir
 
 
 def get_user_dmu() -> Optional[int]:
     """Hämtar inloggat företags DMU från session state"""
     return st.session_state.get('user_dmu', None)
-
-
-def get_user_org() -> str:
-    """Hämtar aktuell organisations-ID från session state"""
-    return st.session_state.get('current_user', 'default')
 
 
 @st.cache_data

@@ -1,9 +1,0 @@
-{
-  "description": "CAPEX export för DEA-pipen, DMU-nivå",
-  "price_year": 2022,
-  "unit": "tkr",
-  "level": "DMU",
-  "wacc_old": 0.0453,
-  "wacc_new": 0.09,
-  "constructed_as": "H1+H2 after half-year rounding, aggregated to DMU"
-}

@@ -14,18 +14,7 @@ from intaktsram.app.data_loader import (
     load_scenario_data,
     calculate_intaktsram
 )
-
-def get_user_org() -> str:
-    """Hämtar aktuell organisations-ID från session state"""
-    return st.session_state.get('current_user', 'default')
-
-
-def ensure_org_dir(base_path: str) -> str:
-    """Skapar organisationsspecifik katalog och returnerar sökvägen"""
-    org = get_user_org()
-    org_path = os.path.join(base_path, org)
-    os.makedirs(org_path, exist_ok=True)
-    return org_path
+from core.session_utils import get_user_org, ensure_org_dir
 
 
 def show_ir_dekomposition_view(df_baseline: pd.DataFrame):

@@ -12,23 +12,12 @@ from effektiviseringskrav.app.plots import (
 )
 # NYTT: scenariomerge från data_loader
 from effektiviseringskrav.app.data_loader import merge_capex_scenario
-
-def get_user_org() -> str:
-    """Hämtar aktuell organisations-ID från session state"""
-    return st.session_state.get('current_user', 'default')
-
-
-def ensure_org_dir(base_path: str) -> str:
-    """Skapar organisationsspecifik katalog och returnerar sökvägen"""
-    org = get_user_org()
-    org_path = os.path.join(base_path, org)
-    os.makedirs(org_path, exist_ok=True)
-    return org_path
-
+from core.session_utils import get_user_org, ensure_org_dir
 
 def show_dea_view(df):
     st.header("DEA-modell")
     st.sidebar.subheader("DEA-parametrar")
+    st.warning("NOTERA: Om man kör Ei:s standard-DEA så får man exakt samma påverkbara kostnader för alla företag förutom LKAB nät (delta -23 tkr) och Jukkasjärvi (delta -238 tkr). Anledningen är att vi får små skillnader i uppskattade krav (1,75% hos Ei vs. 1,82% här för LKAB och 1,50% hos Ei vs. 1,62% här Jukkasjärvi), oklart varför.")
   
     # --- Försök merga CAPEX-scenario från Kapitalbas (DMU) -------------------
     df, scen_info = merge_capex_scenario(df)

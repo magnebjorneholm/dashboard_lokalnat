@@ -11,11 +11,7 @@ import numpy as np
 from typing import Dict, Optional, Tuple, List
 from datetime import datetime
 import streamlit as st
-
-
-def get_user_org() -> str:
-    """Hämtar aktuell organisations-ID från session state"""
-    return st.session_state.get('current_user', 'default')
+from core.session_utils import get_user_org, ensure_org_dir
 
 
 def load_baseline_data(filepath: str) -> pd.DataFrame:

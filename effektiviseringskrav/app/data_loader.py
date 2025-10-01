@@ -9,15 +9,10 @@ import re
 import pandas as pd
 from typing import Tuple, Dict
 import streamlit as st
+from core.session_utils import get_user_org, ensure_org_dir
 
 # UPPDATERAD: Bas-katalog utan organisationsspecifikation (läggs till senare)
 SCENARIO_DIR_BASE = "scenario/kapitalbas/exports_to_dea"
-
-
-def get_user_org() -> str:
-    """Hämtar aktuell organisations-ID från session state"""
-    return st.session_state.get('current_user', 'default')
-
 
 # ======= Basinläsning av DEA-data (Excel) ====================================
 def load_data(filepath: str) -> pd.DataFrame:
