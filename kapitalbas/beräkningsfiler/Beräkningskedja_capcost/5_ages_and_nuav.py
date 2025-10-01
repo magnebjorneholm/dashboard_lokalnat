@@ -60,55 +60,67 @@ def process_time_period(df, time):
     """
     print(f"Processing time period {time}...")
     
+    # Collect all new columns in a dictionary for efficient addition
+    new_cols = {}
+    
     # Age on components
-    df[f'age_component_{time}'] = time - df['time_from']
-    df[f'age_component_{time}_invest'] = np.where(df['capbase_existing'] == 0, 
+    new_cols[f'age_component_{time}'] = time - df['time_from']
+    new_cols[f'age_component_{time}_invest'] = np.where(df['capbase_existing'] == 0, 
                                                  time - df['time_invest'], 
                                                  np.nan)
     
     # Initial capital base ordinary
-    df[f'base_ord_{time}'] = 0
-    mask = (df[f'age_component_{time}'] <= df['ekdep']) & (df[f'age_component_{time}'] > 0) & (df['capbase_existing'] == 1)
-    df.loc[mask, f'base_ord_{time}'] = 1
+    new_cols[f'base_ord_{time}'] = 0
+    mask = (new_cols[f'age_component_{time}'] <= df['ekdep']) & (new_cols[f'age_component_{time}'] > 0) & (df['capbase_existing'] == 1)
+    base_ord = new_cols[f'base_ord_{time}'].copy()
+    base_ord[mask] = 1
+    new_cols[f'base_ord_{time}'] = base_ord
     
     # Investments and retirements ordinary
-    mask = (df[f'age_component_{time}'] <= df['ekdep']) & (df[f'age_component_{time}_invest'] > 0) & (df['capbase_existing'] == 0)
-    df.loc[mask, f'base_ord_{time}'] = 1
+    mask = (new_cols[f'age_component_{time}'] <= df['ekdep']) & (new_cols[f'age_component_{time}_invest'] > 0) & (df['capbase_existing'] == 0)
+    base_ord = new_cols[f'base_ord_{time}'].copy()
+    base_ord[mask] = 1
+    new_cols[f'base_ord_{time}'] = base_ord
     
-    mask = (df[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 0)
-    df.loc[mask, f'base_ord_{time}'] = 0
+    mask = (new_cols[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 0)
+    base_ord = new_cols[f'base_ord_{time}'].copy()
+    base_ord[mask] = 0
+    new_cols[f'base_ord_{time}'] = base_ord
     
-    # Calculate nuav_ord
-    df[f'nuav_ord_{time}'] = 0
-    df.loc[df[f'base_ord_{time}'] == 1, f'nuav_ord_{time}'] = df['nuav_2022'] * df[f'base_ord_{time}']
+    # Calculate nuav_ord - FIX: Explicit float64 conversion before assignment
+    nuav_ord = np.zeros(len(df), dtype='float64')
+    mask = new_cols[f'base_ord_{time}'] == 1
+    nuav_ord[mask] = (df['nuav_2022'] * new_cols[f'base_ord_{time}'])[mask]
+    new_cols[f'nuav_ord_{time}'] = nuav_ord
     
     # Initial capital base tail
-    df[f'base_tail_{time}'] = 0
-    mask = (df[f'age_component_{time}'] <= df['maxdep']) & (df[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 1)
-    df.loc[mask, f'base_tail_{time}'] = 1
+    new_cols[f'base_tail_{time}'] = 0
+    mask = (new_cols[f'age_component_{time}'] <= df['maxdep']) & (new_cols[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 1)
+    base_tail = new_cols[f'base_tail_{time}'].copy()
+    base_tail[mask] = 1
+    new_cols[f'base_tail_{time}'] = base_tail
     
     # Investments and retirements tail
-    mask = (df[f'age_component_{time}'] <= df['maxdep']) & (df[f'age_component_{time}'] > df['ekdep']) & (df['time_invest'] < time) & (~df['invest'].isna())
-    df.loc[mask, f'base_tail_{time}'] = 1
+    mask = (new_cols[f'age_component_{time}'] <= df['maxdep']) & (new_cols[f'age_component_{time}'] > df['ekdep']) & (df['time_invest'] < time) & (~df['invest'].isna())
+    base_tail = new_cols[f'base_tail_{time}'].copy()
+    base_tail[mask] = 1
+    new_cols[f'base_tail_{time}'] = base_tail
     
     # Calculate nuav_tail
-    df[f'nuav_tail_{time}'] = df['nuav_2022'] * df[f'base_tail_{time}']
+    new_cols[f'nuav_tail_{time}'] = df['nuav_2022'] * new_cols[f'base_tail_{time}']
+    
+    # Add all new columns at once - FIX: More efficient than repeated insert
+    df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
     
     # Summarize - ordinary capital base
-    # Group by cat_encode and id_network, then sum nuav_ord
     sum_nuav_ord = df.groupby(['cat_encode', 'id_network'])[f'nuav_ord_{time}'].sum().reset_index(name=f'sum_nuav_ord_{time}')
-    
-    # Merge the sums back to the original dataframe
     df = df.merge(sum_nuav_ord, on=['cat_encode', 'id_network'], how='left')
     
     # Convert to thousands - NO ROUNDING
     df[f'sum_nuav_ord_{time}'] = df[f'sum_nuav_ord_{time}'] / 1000
     
     # Summarize - tail
-    # Group by cat_encode and id_network, then sum nuav_tail
     sum_nuav_tail = df.groupby(['cat_encode', 'id_network'])[f'nuav_tail_{time}'].sum().reset_index(name=f'sum_nuav_tail_{time}')
-    
-    # Merge the sums back to the original dataframe
     df = df.merge(sum_nuav_tail, on=['cat_encode', 'id_network'], how='left')
     
     # Convert to thousands - NO ROUNDING

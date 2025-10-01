@@ -66,41 +66,54 @@ def calculate_ages_and_nuav(df: pd.DataFrame) -> pd.DataFrame:
 def process_time_period(df: pd.DataFrame, time: int) -> pd.DataFrame:
     """
     Bearbetar en tidsperiod - extraherat från 5_ages_and_nuav.py
+    FIXAD: Använder batch-tillägg för kolumner och explicit float64-konvertering
     """
     
+    # Samla alla nya kolumner i dictionary för effektiv tillägg
+    new_cols = {}
+    
     # Age on components
-    df[f'age_component_{time}'] = time - df['time_from']
-    df[f'age_component_{time}_invest'] = np.where(df['capbase_existing'] == 0, 
+    new_cols[f'age_component_{time}'] = time - df['time_from']
+    new_cols[f'age_component_{time}_invest'] = np.where(df['capbase_existing'] == 0, 
                                                  time - df['time_invest'], 
                                                  np.nan)
     
-    # Initial capital base ordinary
-    df[f'base_ord_{time}'] = 0
-    mask = (df[f'age_component_{time}'] <= df['ekdep']) & (df[f'age_component_{time}'] > 0) & (df['capbase_existing'] == 1)
-    df.loc[mask, f'base_ord_{time}'] = 1
+    # Initial capital base ordinary - FIX: Create as array not scalar
+    base_ord = np.zeros(len(df), dtype='int64')
+    mask = (new_cols[f'age_component_{time}'] <= df['ekdep']) & (new_cols[f'age_component_{time}'] > 0) & (df['capbase_existing'] == 1)
+    base_ord[mask] = 1
     
     # Investments and retirements ordinary
-    mask = (df[f'age_component_{time}'] <= df['ekdep']) & (df[f'age_component_{time}_invest'] > 0) & (df['capbase_existing'] == 0)
-    df.loc[mask, f'base_ord_{time}'] = 1
+    mask = (new_cols[f'age_component_{time}'] <= df['ekdep']) & (new_cols[f'age_component_{time}_invest'] > 0) & (df['capbase_existing'] == 0)
+    base_ord[mask] = 1
     
-    mask = (df[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 0)
-    df.loc[mask, f'base_ord_{time}'] = 0
+    mask = (new_cols[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 0)
+    base_ord[mask] = 0
     
-    # Calculate nuav_ord
-    df[f'nuav_ord_{time}'] = 0
-    df.loc[df[f'base_ord_{time}'] == 1, f'nuav_ord_{time}'] = df['nuav_2022'] * df[f'base_ord_{time}']
+    new_cols[f'base_ord_{time}'] = base_ord
+    
+    # Calculate nuav_ord - FIX: Explicit float64 conversion
+    nuav_ord = np.zeros(len(df), dtype='float64')
+    mask = base_ord == 1
+    nuav_ord[mask] = (df['nuav_2022'] * base_ord)[mask]
+    new_cols[f'nuav_ord_{time}'] = nuav_ord
 
-    # Initial capital base tail
-    df[f'base_tail_{time}'] = 0
-    mask = (df[f'age_component_{time}'] <= df['maxdep']) & (df[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 1)
-    df.loc[mask, f'base_tail_{time}'] = 1
+    # Initial capital base tail - FIX: Create as array not scalar
+    base_tail = np.zeros(len(df), dtype='int64')
+    mask = (new_cols[f'age_component_{time}'] <= df['maxdep']) & (new_cols[f'age_component_{time}'] > df['ekdep']) & (df['capbase_existing'] == 1)
+    base_tail[mask] = 1
     
     # Investments and retirements tail
-    mask = (df[f'age_component_{time}'] <= df['maxdep']) & (df[f'age_component_{time}'] > df['ekdep']) & (df['time_invest'] < time) & (~df['invest'].isna())
-    df.loc[mask, f'base_tail_{time}'] = 1
+    mask = (new_cols[f'age_component_{time}'] <= df['maxdep']) & (new_cols[f'age_component_{time}'] > df['ekdep']) & (df['time_invest'] < time) & (~df['invest'].isna())
+    base_tail[mask] = 1
+    
+    new_cols[f'base_tail_{time}'] = base_tail
     
     # Calculate nuav_tail
-    df[f'nuav_tail_{time}'] = df['nuav_2022'] * df[f'base_tail_{time}']
+    new_cols[f'nuav_tail_{time}'] = df['nuav_2022'] * base_tail
+    
+    # FIX: Lägg till alla nya kolumner på en gång för bättre prestanda
+    df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
     
     # Summarize - ordinary capital base
     sum_nuav_ord = df.groupby(['cat_encode', 'id_network'])[f'nuav_ord_{time}'].sum().reset_index(name=f'sum_nuav_ord_{time}')
@@ -120,8 +133,10 @@ def calculate_depreciation_single_dmu(df: pd.DataFrame) -> Dict[str, float]:
     """
     Beräknar avskrivningar för en DMU.
     Refaktoriserad version av 6_deprecation.py
+    OPTIMERAD: Batch-tillägg av kolumner för bättre prestanda
     """
     results = {}
+    new_cols = {}  # Samla alla nya kolumner här
     
     # Bearbeta alla tidsperioder
     for t in range(229, 237):
@@ -131,41 +146,48 @@ def calculate_depreciation_single_dmu(df: pd.DataFrame) -> Dict[str, float]:
             continue
             
         comp_dep = df[nuav_col] / df['ekdep']
-        df[f'comp_dep_{t}'] = comp_dep
-        
-        # Aggregera dep_ord by group
-        aggr_ord = df.groupby(['cat_encode', 'id_network'])[f'comp_dep_{t}'].sum().reset_index()
-        dep_ord_total = aggr_ord[f'comp_dep_{t}'].sum() / 1000  # Convert to thousands
-        results[f'dep_ord_{t}'] = dep_ord_total
+        new_cols[f'comp_dep_{t}'] = comp_dep
         
         # 2. Compute dep_tail
         age_comp = f'age_component_{t}'
         age_reg = f'age_reg_{t}'
         
-        # Convert age_component to numeric
-        df[age_comp] = pd.to_numeric(df[age_comp], errors='coerce')
+        # Convert age_component to numeric (already exists in df)
+        age_component_numeric = pd.to_numeric(df[age_comp], errors='coerce')
         
         # Compute age_reg
-        adjustment = np.where((df[age_comp] % 2 == 1), 
-                            np.where(df[age_comp] > 0, 1, -1), 
+        adjustment = np.where((age_component_numeric % 2 == 1), 
+                            np.where(age_component_numeric > 0, 1, -1), 
                             0)
-        df[age_reg] = df[age_comp] + adjustment
-        df[age_reg] = pd.to_numeric(df[age_reg], errors='coerce')
+        age_reg_values = age_component_numeric + adjustment
+        age_reg_values = pd.to_numeric(age_reg_values, errors='coerce')
+        new_cols[age_reg] = age_reg_values
         
         # Compute comp_dep_tail using safe division
         tail_col = f'nuav_tail_{t}'
         if tail_col in df.columns:
-            df[tail_col] = pd.to_numeric(df[tail_col], errors='coerce')
-            denominator = df[age_reg].to_numpy().astype(float)
-            numerator = df[tail_col].to_numpy().astype(float)
+            nuav_tail_numeric = pd.to_numeric(df[tail_col], errors='coerce')
+            denominator = age_reg_values.to_numpy().astype(float)
+            numerator = nuav_tail_numeric.to_numpy().astype(float)
             comp_dep_tail = np.divide(numerator, denominator, 
                                     out=np.zeros_like(denominator, dtype=float), 
                                     where=(denominator != 0))
-            df[f'comp_dep_tail_{t}'] = comp_dep_tail
-            
-            # Aggregera dep_tail by group
+            new_cols[f'comp_dep_tail_{t}'] = comp_dep_tail
+    
+    # Lägg till alla nya kolumner på en gång - OPTIMERING
+    if new_cols:
+        df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
+    
+    # Nu aggregera med alla kolumner på plats
+    for t in range(229, 237):
+        if f'comp_dep_{t}' in df.columns:
+            aggr_ord = df.groupby(['cat_encode', 'id_network'])[f'comp_dep_{t}'].sum().reset_index()
+            dep_ord_total = aggr_ord[f'comp_dep_{t}'].sum() / 1000
+            results[f'dep_ord_{t}'] = dep_ord_total
+        
+        if f'comp_dep_tail_{t}' in df.columns:
             aggr_tail = df.groupby(['cat_encode', 'id_network'])[f'comp_dep_tail_{t}'].sum().reset_index()
-            dep_tail_total = aggr_tail[f'comp_dep_tail_{t}'].sum() / 1000  # Convert to thousands
+            dep_tail_total = aggr_tail[f'comp_dep_tail_{t}'].sum() / 1000
             results[f'dep_tail_{t}'] = dep_tail_total
         else:
             results[f'dep_tail_{t}'] = 0
@@ -177,12 +199,15 @@ def calculate_returns_single_dmu(df: pd.DataFrame, interest_rate: float = 0.0453
     """
     Beräknar avkastning för en DMU.
     Refaktoriserad version av 7_returns.py
+    OPTIMERAD: Batch-tillägg av kolumner för bättre prestanda
     """
     results = {}
     
-    # Calculate ekdep2 and maxdep2
+    # Calculate ekdep2 and maxdep2 - dessa behövs före loop
     df['ekdep2'] = df['ekdep'] / 2
     df['maxdep2'] = df['maxdep'] / 2
+    
+    new_cols = {}  # Samla alla nya kolumner här
     
     # Bearbeta för varje tidsperiod (229 to 236 inclusive)
     for time in range(229, 237):
@@ -192,36 +217,48 @@ def calculate_returns_single_dmu(df: pd.DataFrame, interest_rate: float = 0.0453
             continue
             
         ret_col = f'age_return_{time}'
-        df[ret_col] = df[age_col].copy()
+        age_return_values = df[age_col].copy()
         
         # For rows where the value is odd, adjust by 1 in the proper direction
-        mask = (df[ret_col] % 2 == 1)
-        df.loc[mask, ret_col] += df.loc[mask, ret_col].apply(lambda x: 1 if x > 0 else -1)
-        df[ret_col] = df[ret_col] / 2
-        df[ret_col] = df[ret_col] - 1
+        mask = (age_return_values % 2 == 1)
+        age_return_values[mask] += age_return_values[mask].apply(lambda x: 1 if x > 0 else -1)
+        age_return_values = age_return_values / 2
+        age_return_values = age_return_values - 1
+        new_cols[ret_col] = age_return_values
 
         # Ordinary returns calculations
-        cap_ord = f'capbase_left_ord_{time}'
         nuav_ord_col = f'nuav_ord_{time}'
         if nuav_ord_col in df.columns:
-            df[cap_ord] = ((df['ekdep2'] - df[ret_col]) / df['ekdep2']) * df[nuav_ord_col]
-            df.loc[df[ret_col] < 0, cap_ord] = 0
-            ret_ord = f'return_ord_{time}'
-            df[ret_ord] = interest_rate * df[cap_ord] / 2
+            cap_ord = f'capbase_left_ord_{time}'
+            capbase_left_ord_values = ((df['ekdep2'] - age_return_values) / df['ekdep2']) * df[nuav_ord_col]
+            capbase_left_ord_values[age_return_values < 0] = 0
+            new_cols[cap_ord] = capbase_left_ord_values
             
-            # Aggregera för DMU
-            ret_ord_total = df.groupby(['cat_encode', 'id_network'])[ret_ord].sum().sum() / 1000
-            results[ret_ord] = ret_ord_total
+            ret_ord = f'return_ord_{time}'
+            new_cols[ret_ord] = interest_rate * capbase_left_ord_values / 2
 
         # Tail returns calculations
-        cap_tail = f'capbase_left_tail_{time}'
         nuav_tail_col = f'nuav_tail_{time}'
         if nuav_tail_col in df.columns:
-            df[cap_tail] = (1 / (df[ret_col] + 1)) * df[nuav_tail_col]
-            ret_tail = f'return_tail_{time}'
-            df[ret_tail] = interest_rate * df[cap_tail] / 2
+            cap_tail = f'capbase_left_tail_{time}'
+            new_cols[cap_tail] = (1 / (age_return_values + 1)) * df[nuav_tail_col]
             
-            # Aggregera för DMU
+            ret_tail = f'return_tail_{time}'
+            new_cols[ret_tail] = interest_rate * new_cols[cap_tail] / 2
+    
+    # Lägg till alla nya kolumner på en gång - OPTIMERING
+    if new_cols:
+        df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
+    
+    # Nu aggregera med alla kolumner på plats
+    for time in range(229, 237):
+        ret_ord = f'return_ord_{time}'
+        if ret_ord in df.columns:
+            ret_ord_total = df.groupby(['cat_encode', 'id_network'])[ret_ord].sum().sum() / 1000
+            results[ret_ord] = ret_ord_total
+        
+        ret_tail = f'return_tail_{time}'
+        if ret_tail in df.columns:
             ret_tail_total = df.groupby(['cat_encode', 'id_network'])[ret_tail].sum().sum() / 1000
             results[ret_tail] = ret_tail_total
 
