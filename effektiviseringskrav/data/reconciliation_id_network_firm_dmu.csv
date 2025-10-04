@@ -109,7 +109,7 @@ id_network,id_network_string,id_firm,DMU,in_reference,in_data_modeller
 255,REL00255,Östra Kinds Elkraft ek. för.,108.0,True,True
 257,REL00257,Övik Energi Nät AB,109.0,True,True
 267,REL00267,Mälarenergi Elnät AB,110.0,True,True
-318,RER00318,Skellefteå Kraft Elnät AB,119.0,True,True
+318,RER00318,Skellefteå Kraft Elnät AB,119.0,True,False
 332,REL00332,Tidaholms Elnät AB,111.0,True,True
 364,REL00364,Österlens Kraft AB,112.0,True,True
 570,REL00570,Västerbergslagens Elnät AB,113.0,True,True
@@ -119,12 +119,12 @@ id_network,id_network_string,id_firm,DMU,in_reference,in_data_modeller
 590,REL00590,LKAB Nät AB,117.0,True,True
 594,REL00594,VänerEnergi AB,118.0,True,True
 824,REL00824,Skellefteå Kraft Elnät AB,119.0,True,True
-855,RER00855,E.ON Energidistribution AB,138.0,True,True
+855,RER00855,E.ON Energidistribution AB,138.0,True,False
 878,RER00878,Bliekevare Nät AB,,True,False
 885,REL00885,Gävle Energi AB,120.0,True,True
 886,REL00886,Kraftringen Nät AB,121.0,True,True
 899,REL00899,Kvänumbygdens Energi ek. för.,122.0,True,True
-903,RER00903,Öresundskraft AB,123.0,True,True
+903,RER00903,Öresundskraft AB,123.0,True,False
 904,REL00904,Öresundskraft AB,123.0,True,True
 936,REL00936,Njudung Vetlanda Elnät AB,124.0,True,True
 937,REL00937,Tranås Energi Elnät AB,125.0,True,True
@@ -137,7 +137,7 @@ id_network,id_network_string,id_firm,DMU,in_reference,in_data_modeller
 965,REL00965,Sörbylunds Elnät HB,131.0,True,True
 996,RER00996,Markbygden Net AB,,True,False
 1010,REL01010,Sandviken Energi Elnät AB,132.0,True,True
-1011,RER01011,Vattenfall Eldistribution AB,139.0,True,True
+1011,RER01011,Vattenfall Eldistribution AB,139.0,True,False
 1012,REL01012,Brittedals Elnät ek. för.,133.0,True,True
 3003,RER03003,Karskruv Nät AB,,True,False
 3009,REL03009,Dala Energi Elnät AB,134.0,True,True

@@ -6,7 +6,6 @@ from effektiviseringskrav.view.show_pystoned import show_pystoned_view
 from effektiviseringskrav.view.show_fardiga_korningar import show_fardiga_korningar_view
 from effektiviseringskrav.view.show_jamfor_korning import show_jamfor_korningar_view
 from effektiviseringskrav.view.show_foretagsanalys import show_foretagsanalys_view
-from effektiviseringskrav.view.show_heatmap import show_heatmap
 
 
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
@@ -55,8 +54,6 @@ elif modellval == "Jämför körningar":
 elif modellval == "Företagsanalys":
     show_foretagsanalys_view(df)
 
-elif modellval == "Geografisk karta":
-    show_heatmap()
 
 st.sidebar.markdown("---")
 if st.sidebar.button("Logga ut"):
