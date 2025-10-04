@@ -109,7 +109,7 @@ def lägg_till_grannsnitt(
     gdf["centroid"] = gdf.geometry.centroid
     värden = gdf[indikator].values
     
-    # Bygg viktmatris
+    # PATCH 1: Bygg viktmatris - ALLTID binär för att undvika dubbelviktning
     if method == "knn":
         w = KNN.from_dataframe(gdf.set_geometry("centroid"), k=k)
         dists = w.full()[1]
@@ -118,23 +118,25 @@ def lägg_till_grannsnitt(
             gdf.set_geometry("centroid"),
             threshold=distance_threshold,
             silence_warnings=True,
-            binary=not avståndsviktning
+            binary=True  # VIKTIGT: alltid binär, egen viktning nedan
         )
         dists = w.full()[1]
     else:
         raise ValueError(f"Ogiltig metod: {method}. Välj 'knn' eller 'distanceband'.")
     
-    # Beräkna grannsnitt
+    # PATCH 1: Beräkna grannsnitt med explicit viktning
     if avståndsviktning:
-        # Använd epsilon istället för 1 meter för bättre precision
+        # Skapa egna vikter: 1/avstånd
         weights = 1 / np.maximum(dists, 1e-6)  # Numerisk stabilitet
-        weighted_vals = w.sparse.multiply(weights) @ värden
-        norm = w.sparse.multiply(weights).sum(axis=1).A1
+        Ww = w.sparse.multiply(weights)
+        weighted_vals = Ww @ värden
+        norm = Ww.sum(axis=1).A1
         
         # Hantera eventuella division-by-zero
         with np.errstate(divide='ignore', invalid='ignore'):
             grannsnitt = np.where(norm > 0, weighted_vals / norm, np.nan)
     else:
+        # Oviktad: vanligt medelvärde över grannar
         card = np.array(list(w.cardinalities.values()))
         
         # Hantera eventuella division-by-zero
