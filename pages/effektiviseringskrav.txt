@@ -1,6 +1,6 @@
 import streamlit as st
 
-from effektiviseringskrav.app.data_loader import load_data
+from effektiviseringskrav.backend.data_loader import load_data
 from effektiviseringskrav.view.show_dea import show_dea_view
 from effektiviseringskrav.view.show_pystoned import show_pystoned_view
 from effektiviseringskrav.view.show_fardiga_korningar import show_fardiga_korningar_view

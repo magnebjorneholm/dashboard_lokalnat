@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import io
-from effektiviseringskrav.app.data_loader import load_data
-from effektiviseringskrav.app.dea_model import run_dea_model
+from effektiviseringskrav.backend.data_loader import load_data
+from effektiviseringskrav.backend.dea_model import run_dea_model
 from effektiviseringskrav.app.pystoned_model import run_pystoned_model
 
 def show_foretagsanalys_view(df):

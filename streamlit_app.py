@@ -82,7 +82,7 @@ if st.session_state.user_role == "regulator":
             st.Page("pages/hem_regulator.py", title="Hem")
         ],
         "Sidor": [
-            st.Page("pages/effektiviseringskrav.py", title="Effektiviseringskrav"),
+            st.Page("pages/regulator/regulator_effektivitet.py", title="DEA och påverkbara kostnader"),
             st.Page("pages/kapitalbas.py", title="Kapitalbas"),
             st.Page("pages/kapitalbas_beräkningskedja.py", title="Beräkningskedja"),
             st.Page("pages/ir_dekomposition.py", title="IR-dekomposition")
@@ -96,9 +96,8 @@ elif st.session_state.user_role == "company":
         ],
         "Sidor": [
             st.Page("pages/foretag/foretag_intaktsram.py", title="Intäktsram"),
-            st.Page("pages/foretag/foretag_kapital.py", title="Kapitalbas"),
             st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
-            st.Page("pages/foretag/foretag_effektivitet.py", title="Effektivitet")
+            st.Page("pages/foretag/foretag_effektivitet.py", title="DEA och påverkbara kostnader")
         ]
     }
 

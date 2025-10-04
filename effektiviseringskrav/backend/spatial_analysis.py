@@ -12,6 +12,8 @@ Viktigt: GeoDataFrame måste vara i EPSG:3006 (SWEREF99 TM) för korrekta metera
 """
 
 import geopandas as gpd
+import pandas as pd
+from typing import Optional
 import numpy as np
 from libpysal.weights import KNN, DistanceBand
 from typing import Literal
@@ -187,3 +189,125 @@ def get_spatial_summary_stats(gdf: gpd.GeoDataFrame, indikator: str = "Effektivi
         'pct_above_neighbors': (gdf_clean['eff_gap'] > 0).sum() / len(gdf_clean) * 100,
         'n_analyzed': len(gdf_clean)
     }
+
+def calculate_company_neighbor_gap(result: pd.DataFrame, user_dmu: int) -> Optional[float]:
+    """
+    Beräknar företagets effektivitetsgap mot 4 närmaste grannar (KNN).
+    
+    Args:
+        result: DataFrame med DEA-resultat (alla företag)
+        user_dmu: Företagets DMU
+        
+    Returns:
+        Genomsnittligt gap eller None om beräkning misslyckas
+    """
+    try:
+        from effektiviseringskrav.backend.heatmap_utils import (
+            load_shapes_for_dea,
+            merge_dea_with_geodata,
+            aggregate_to_unique_geometries
+        )
+        
+        gdf_shapes, _ = load_shapes_for_dea()
+        gdf_merged, _ = merge_dea_with_geodata(gdf_shapes, result, value_column="Effektivitet")
+        gdf_agg = aggregate_to_unique_geometries(gdf_merged, value_column="Effektivitet")
+        gdf_for_spatial = gdf_agg[gdf_agg["Effektivitet"].notna()].copy()
+        
+        if len(gdf_for_spatial) < 5:  # Behöver minst 5 för k=4
+            return None
+        
+        gdf_spatial = lägg_till_grannsnitt(
+            gdf_for_spatial,
+            indikator="Effektivitet",
+            method="knn",
+            k=4,
+            avståndsviktning=False
+        )
+        
+        company_reid = result[result['DMU'] == user_dmu]['REId'].values
+        if len(company_reid) == 0:
+            return None
+        
+        company_gaps = []
+        for reid in company_reid:
+            matching = gdf_spatial[gdf_spatial['REId'].str.contains(reid, na=False)]
+            if not matching.empty and 'eff_gap' in matching.columns:
+                company_gaps.extend(matching['eff_gap'].dropna().tolist())
+        
+        return float(np.mean(company_gaps)) if company_gaps else None
+        
+    except Exception:
+        return None
+
+
+def get_company_geographic_context(result: pd.DataFrame, user_dmu: int) -> Optional[dict]:
+    """
+    Hämtar full geografisk kontext för företaget (för visualisering).
+    Fast k=4 KNN, ingen parametrisering.
+    
+    Returns:
+        Dict med:
+        - neighbor_gap: Gap mot grannar
+        - neighbor_mean: Medeleffektivitet bland grannar
+        - company_efficiency: Företagets effektivitet
+        - all_data: GeoDataFrame med alla företag (för karta)
+        - company_data: GeoDataFrame med bara företagets områden
+    """
+    try:
+        from effektiviseringskrav.backend.heatmap_utils import (
+            load_shapes_for_dea,
+            merge_dea_with_geodata,
+            aggregate_to_unique_geometries
+        )
+        
+        gdf_shapes, _ = load_shapes_for_dea()
+        gdf_merged, _ = merge_dea_with_geodata(gdf_shapes, result, value_column="Effektivitet")
+        gdf_agg = aggregate_to_unique_geometries(gdf_merged, value_column="Effektivitet")
+        gdf_for_spatial = gdf_agg[gdf_agg["Effektivitet"].notna()].copy()
+        
+        if len(gdf_for_spatial) < 5:
+            return None
+        
+        gdf_spatial = lägg_till_grannsnitt(
+            gdf_for_spatial,
+            indikator="Effektivitet",
+            method="knn",
+            k=4,
+            avståndsviktning=False
+        )
+        
+        company_reid = result[result['DMU'] == user_dmu]['REId'].values
+        if len(company_reid) == 0:
+            return None
+        
+        company_gaps = []
+        company_neighbor_means = []
+        company_effs = []
+        
+        for reid in company_reid:
+            matching = gdf_spatial[gdf_spatial['REId'].str.contains(reid, na=False)]
+            if not matching.empty:
+                if 'eff_gap' in matching.columns:
+                    company_gaps.extend(matching['eff_gap'].dropna().tolist())
+                if 'grannsnitt' in matching.columns:
+                    company_neighbor_means.extend(matching['grannsnitt'].dropna().tolist())
+                if 'Effektivitet' in matching.columns:
+                    company_effs.extend(matching['Effektivitet'].dropna().tolist())
+        
+        if not company_gaps:
+            return None
+        
+        company_geoms = gdf_spatial[
+            gdf_spatial['REId'].apply(lambda x: any(reid in str(x) for reid in company_reid))
+        ].copy()
+        
+        return {
+            'neighbor_gap': float(np.mean(company_gaps)),
+            'neighbor_mean': float(np.mean(company_neighbor_means)),
+            'company_efficiency': float(np.mean(company_effs)),
+            'all_data': gdf_spatial,
+            'company_data': company_geoms
+        }
+        
+    except Exception:
+        return None

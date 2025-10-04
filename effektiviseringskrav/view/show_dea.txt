@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Tuple, Optional
 import math
 
-from effektiviseringskrav.app.dea_model import run_dea_model
+from effektiviseringskrav.backend.dea_model import run_dea_model
 from effektiviseringskrav.app.plots import plot_efficiency_histogram
-from effektiviseringskrav.app.data_loader import merge_capex_scenario
+from effektiviseringskrav.backend.data_loader import merge_capex_scenario
 from core.session_utils import get_user_org, ensure_org_dir
 
 # Import av geografiska funktioner

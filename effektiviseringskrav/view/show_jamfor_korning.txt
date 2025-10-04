@@ -1,5 +1,5 @@
 import streamlit as st
-from effektiviseringskrav.app.run_logger import list_runs, load_run
+from effektiviseringskrav.backend.run_logger import list_runs, load_run
 import matplotlib.pyplot as plt
 import pandas as pd
 

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from pulp import LpProblem, LpVariable, LpMinimize, lpSum, value
-from effektiviseringskrav.app.run_logger import save_run
+from effektiviseringskrav.backend.run_logger import save_run
 
 def run_dea_model(
     df: pd.DataFrame,

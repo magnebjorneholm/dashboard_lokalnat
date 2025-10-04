@@ -5,27 +5,27 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import io, json, os
+import io
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple, Optional
 
-from effektiviseringskrav.app.dea_model import run_dea_model
-from effektiviseringskrav.app.plots import plot_efficiency_histogram
-from effektiviseringskrav.app.data_loader import merge_capex_scenario, load_data
+# Backend imports
+from effektiviseringskrav.backend.dea_model import run_dea_model
+from effektiviseringskrav.backend.data_loader import merge_capex_scenario, load_data
+from effektiviseringskrav.backend.ir_calculations import calculate_ir_paverkbara_from_file
+from effektiviseringskrav.backend.ir_export import export_ir_paverkbara_scenario
+from effektiviseringskrav.backend.spatial_analysis import calculate_company_neighbor_gap
 
-# Import företagsspecifika funktioner
+# Frontend imports
+from effektiviseringskrav.frontend.components import (
+    display_efficiency_histogram,
+    display_company_geographic_analysis
+)
+
+# Företagsspecifika funktioner
 from foretag.app.kapitalbas_data_loader import (
     get_user_dmu,
     load_reconciliation_foretag_info
-)
-
-from core.session_utils import get_user_org, ensure_org_dir
-
-# Import från show_dea.py för att återanvända exakt beräkningsfunktion
-from effektiviseringskrav.view.show_dea import (
-    calculate_ir_paverkbara_export_fixed,
-    export_ir_paverkbara_scenario
 )
 
 # Autentisering
@@ -35,6 +35,7 @@ if "access_granted" not in st.session_state or not st.session_state.access_grant
 if st.session_state.user_role != "company":
     st.error("Denna sida är endast tillgänglig för företagsanvändare")
     st.stop()
+
 
 def show_foretag_effektivitet():
     """Huvudfunktion för företagsspecifik effektivitetsanalys"""
@@ -98,10 +99,14 @@ def show_foretag_effektivitet():
         "• _wacc_: scenario från Kapitalbas"
     )
 
-    input_cols = st.sidebar.multiselect("Välj inputvariabler", all_inputs, default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs])
+    input_cols = st.sidebar.multiselect(
+        "Välj inputvariabler", 
+        all_inputs, 
+        default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs]
+    )
 
     # Validering av input-kombinationer
-    if not validate_input_combinations(input_cols, scen_info):
+    if not validate_input_combinations(input_cols, scen_info, df):
         return
 
     output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=all_outputs)
@@ -147,7 +152,7 @@ def show_foretag_effektivitet():
                     outlier_krav=dea_outlier_krav/100
                 )
                 
-                # Spara senaste körning (framtida: här läggs körning till i lista för jämförelse)
+                # Spara senaste körning
                 st.session_state[f'latest_dea_result_{user_dmu}'] = {
                     'result': result,
                     'params': {
@@ -177,7 +182,7 @@ def show_foretag_effektivitet():
         show_waiting_state(df_full, user_dmu, company_name)
 
 
-def validate_input_combinations(input_cols, scen_info):
+def validate_input_combinations(input_cols, scen_info, df):
     """Validerar input-kombinationer enligt DEA-regler"""
     
     # Analysera vald input
@@ -206,8 +211,14 @@ def validate_input_combinations(input_cols, scen_info):
         chosen_scen_cols = [c for c in [capex_wacc_col, totex_wacc_col] if c and c in input_cols]
         
         if chosen_scen_cols:
-            # Denna kontroll sker i df som redan är merged, så det borde vara ok
-            pass
+            missing = [c for c in chosen_scen_cols if df[c].isna().any()]
+            if missing:
+                st.error(
+                    "Scenario-kolumn saknar värden:\n"
+                    f"- {', '.join(missing)}\n\n"
+                    "Kontrollera exporten från Kapitalbas."
+                )
+                return False
     
     return True
 
@@ -226,31 +237,25 @@ def show_dea_results(latest_result, user_dmu, company_name):
     
     company_row = company_result.iloc[0]
     
-    # === PUNKT 2: FÖRETAGETS RESULTAT ===
+    # BERÄKNA GRANNGAP (för metric)
+    neighbor_gap = calculate_company_neighbor_gap(result, user_dmu)
+    
+    # === PUNKT 2: FÖRETAGETS RESULTAT (5 METRICS) ===
     st.subheader("Ditt företags resultat")
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         eff_val = company_row['Effektivitet']
         st.metric("Effektivitet", f"{eff_val:.3f}" if not pd.isna(eff_val) else "N/A")
     
     with col2:
-        # Visa supereffektivitet om relevant
-        if 'Supereffektivitet' in company_row.index and (not params['outlier_filter'] or company_row['is_outlier']):
-            super_eff = company_row['Supereffektivitet']
-            st.metric("Supereffektivitet", f"{super_eff:.3f}" if not pd.isna(super_eff) else "N/A")
-        else:
-            krav_val = company_row['Effkrav_proc']
-            st.metric("Årligt krav", f"{krav_val*100:.2f}%" if not pd.isna(krav_val) else "N/A")
+        krav_val = company_row['Effkrav_proc']
+        st.metric("Årligt krav", f"{krav_val*100:.2f}%" if not pd.isna(krav_val) else "N/A")
     
     with col3:
-        if not (params['outlier_filter'] and 'Supereffektivitet' in company_row.index):
-            krav_val = company_row['Effkrav_proc'] 
-            st.metric("Årligt krav", f"{krav_val*100:.2f}%" if not pd.isna(krav_val) else "N/A")
-        else:
-            is_outlier = company_row['is_outlier']
-            st.metric("Outlier", "Ja" if is_outlier else "Nej")
+        is_outlier = company_row['is_outlier']
+        st.metric("Outlier", "Ja" if is_outlier else "Nej")
     
     with col4:
         # Ranking
@@ -263,8 +268,19 @@ def show_dea_results(latest_result, user_dmu, company_name):
         else:
             st.metric("Ranking", "N/A")
     
+    with col5:
+        # NYA METRIKEN: vs Grannar
+        if neighbor_gap is not None:
+            st.metric(
+                "vs grannar",
+                f"{neighbor_gap:+.3f}",
+                delta=f"{neighbor_gap:+.3f}",
+                help="Skillnad mot 4 närmaste grannar (KNN). Positivt = bättre än grannar."
+            )
+        else:
+            st.metric("vs grannar", "N/A", help="Geografisk data saknas")
     
-    # Beräkna påverkbara kostnader för endast detta företag
+    # === PÅVERKBARA KOSTNADER ===
     company_paverkbara = calculate_company_paverkbara_costs(company_result)
     
     if company_paverkbara is not None:
@@ -305,9 +321,22 @@ def show_dea_results(latest_result, user_dmu, company_name):
     df_plot = result[result["is_outlier"] == False]
     
     with col_hist1:
-        plot_efficiency_histogram(df_plot["Effektivitet"], title="Effektivitet (exkl. outliers)")
+        display_efficiency_histogram(df_plot["Effektivitet"], title="Effektivitet (exkl. outliers)")
     with col_hist2:
-        plot_efficiency_histogram(df_plot["Effkrav_proc"] * 100, title="Årligt effektiviseringskrav (%)")
+        display_efficiency_histogram(df_plot["Effkrav_proc"] * 100, title="Årligt effektiviseringskrav (%)")
+
+    # Visa outliers om det finns
+    if n_outliers > 0:
+        with st.expander(f"Visa outliers ({n_outliers} företag)"):
+            df_outliers = result[result["is_outlier"] == True][["Företag", "DMU", "Effektivitet", "Effkrav_proc"]]
+            df_outliers["Effkrav_proc"] = (df_outliers["Effkrav_proc"] * 100).round(2)
+            df_outliers = df_outliers.rename(columns={"Effkrav_proc": "Årligt krav (%)"})
+            st.dataframe(df_outliers, use_container_width=True)
+
+    # === GEOGRAFISK ANALYS (NYTT) ===
+    st.markdown("---")
+    st.header("Geografisk analys")
+    display_company_geographic_analysis(result, user_dmu, company_name)
 
     # === PUNKT 5 & 6: EXPORT ===
     st.markdown("---")
@@ -320,7 +349,7 @@ def show_dea_results(latest_result, user_dmu, company_name):
         st.markdown("**DEA-resultat**")
         buffer = create_excel_export(result, company_result, company_name)
         st.download_button(
-            label="📊 Ladda ned som Excel",
+            label="Ladda ned som Excel",
             data=buffer.getvalue(),
             file_name=f"dea_resultat_{company_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -330,9 +359,13 @@ def show_dea_results(latest_result, user_dmu, company_name):
     with col_ir:
         st.markdown("**Påverkbara kostnader**")
         if company_paverkbara is not None:
-            export_name = st.text_input("Export-namn", value=f"DEA_{company_name.replace(' ', '_')}", key="ir_export_name")
+            export_name = st.text_input(
+                "Export-namn", 
+                value=f"DEA_{company_name.replace(' ', '_')}", 
+                key="ir_export_name"
+            )
             
-            if st.button("🏢 Exportera till IR-dekomposition"):
+            if st.button("Exportera till IR-dekomposition"):
                 try:
                     export_path = export_paverkbara_to_ir(company_result, export_name)
                     st.success("Export till IR klar!")
@@ -342,14 +375,6 @@ def show_dea_results(latest_result, user_dmu, company_name):
                     st.error(f"Export misslyckades: {e}")
         else:
             st.info("Inga påverkbara kostnader att exportera")
-
-    # Visa outliers om det finns
-    if n_outliers > 0:
-        with st.expander(f"Visa outliers ({n_outliers} företag)"):
-            df_outliers = result[result["is_outlier"] == True][["Företag", "DMU", "Effektivitet", "Effkrav_proc"]]
-            df_outliers["Effkrav_proc"] = (df_outliers["Effkrav_proc"] * 100).round(2)
-            df_outliers = df_outliers.rename(columns={"Effkrav_proc": "Årligt krav (%)"})
-            st.dataframe(df_outliers, use_container_width=True)
 
 
 def show_waiting_state(df_full, user_dmu, company_name):
@@ -375,37 +400,24 @@ def show_waiting_state(df_full, user_dmu, company_name):
 
 
 def calculate_company_paverkbara_costs(company_result):
-    """
-    REFAKTORERAD: Återanvänder exakt beräkning från show_dea.py
-    Fungerar perfekt för bara ett företag också!
-    """
+    """Beräknar påverkbara kostnader för företaget"""
     
     try:
-        # Kontrollera att IR baseline-fil finns
         ir_baseline_file = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
         if not Path(ir_baseline_file).exists():
             return None
         
-        # ÅTERANVÄND EXAKT SAMMA FUNKTION som show_dea.py!
-        # Den fungerar lika bra för 1 företag som för 100 företag
-        export_data = calculate_ir_paverkbara_export_fixed(company_result, ir_baseline_file)
+        export_data, metadata = calculate_ir_paverkbara_from_file(company_result, ir_baseline_file)
         
         if export_data is None or export_data.empty:
             return None
         
-        # Extrahera summerade resultat för företaget
-        total_baseline = export_data['Paverkbara_Baseline_4yr'].sum()
-        total_target = export_data['Paverkbara_Target'].sum() 
-        total_reduction = export_data['Total_Reduction_tkr'].sum()
-        reid_count = len(export_data)
-        
         return {
-            'baseline_4yr': total_baseline,
-            'target_4yr': total_target,
-            'reduction_4yr': total_reduction,
-            'reid_count': reid_count,
-            'method': 'Reused_from_show_dea_exact',
-            'detailed_data': export_data  # För eventuell debugging
+            'baseline_4yr': export_data['Paverkbara_Baseline_4yr'].sum(),
+            'target_4yr': export_data['Paverkbara_Target'].sum(),
+            'reduction_4yr': export_data['Total_Reduction_tkr'].sum(),
+            'reid_count': len(export_data),
+            'detailed_data': export_data
         }
         
     except Exception as e:
@@ -414,18 +426,20 @@ def calculate_company_paverkbara_costs(company_result):
 
 
 def export_paverkbara_to_ir(company_result, scenario_name):
-    """REFAKTORERAD: Återanvänder export-logik från show_dea.py"""
+    """Exporterar påverkbara kostnader till IR"""
     
     try:
-        # Beräkna först med exakt metod
         ir_baseline_file = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
-        export_data = calculate_ir_paverkbara_export_fixed(company_result, ir_baseline_file)
+        export_data, metadata = calculate_ir_paverkbara_from_file(company_result, ir_baseline_file)
         
         if export_data is None or export_data.empty:
             raise Exception("Ingen export-data kunde beräknas")
         
-        # Använd samma export-funktion som show_dea.py
-        data_path, meta_path = export_ir_paverkbara_scenario(export_data, scenario_name)
+        data_path, meta_path, summary = export_ir_paverkbara_scenario(
+            export_data, 
+            scenario_name,
+            st.session_state  # Session state för org-identifiering
+        )
         
         return data_path
         
@@ -453,7 +467,7 @@ def create_excel_export(result, company_result, company_name):
             'Mått': ['Företag totalt', 'Mitt företags ranking', 'Medeleffektivitet', 'Mitt företags effektivitet'],
             'Värde': [
                 len(result),
-                f"{company_result.iloc[0].get('Ranking', 'N/A')}",
+                "N/A",  # Behöver beräknas från ranking-logiken
                 f"{result[~result['is_outlier']]['Effektivitet'].mean():.3f}",
                 f"{company_result.iloc[0]['Effektivitet']:.3f}"
             ]
