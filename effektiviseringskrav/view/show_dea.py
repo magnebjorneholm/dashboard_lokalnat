@@ -202,25 +202,6 @@ def calculate_ir_paverkbara_export_fixed(dea_result: pd.DataFrame, ir_baseline_f
         export_data[f'Inc_{year}_base'] = [r['inc'][i] for r in base_results]
         export_data[f'Avdrag_{year}_base'] = [r['avdrag'][i] for r in base_results]
     
-    # Sanity check mot Excel-värden om de finns
-    if 'y2024_excel' in export_data.columns:
-        y2024_excel = export_data['y2024_excel'].astype(float)
-        diff_2024 = np.abs(y2024_base - y2024_excel)
-        export_data['Sanity_2024_diff'] = diff_2024
-        
-        max_diff = diff_2024.max()
-        avg_diff = diff_2024.mean()
-        st.info(f"Sanity check 2024: Max avvikelse {max_diff:.1f} tkr, Medel {avg_diff:.2f} tkr")
-    
-    if 'total_excel' in export_data.columns:
-        total_excel = export_data['total_excel'].astype(float)
-        diff_total = np.abs(total_4yr_base - total_excel)
-        export_data['Sanity_total_diff'] = diff_total
-        
-        max_diff = diff_total.max()
-        avg_diff = diff_total.mean()
-        st.info(f"Sanity check total: Max avvikelse {max_diff:.1f} tkr, Medel {avg_diff:.2f} tkr")
-    
     export_data['Analysis_Method'] = 'Excel_exact_precision_fixed'
     export_data['Export_Timestamp'] = datetime.now().isoformat()
     
@@ -302,8 +283,6 @@ def load_ir_paverkbara_baseline(filepath: str) -> Optional[pd.DataFrame]:
         critical_missing = df_out[['B_raw', 'e_base']].isna().any(axis=1).sum()
         if critical_missing > 0:
             st.warning(f"{critical_missing} REId saknar kritiska baseline-värden (B_raw eller e_base)")
-
-        st.success(f"Läste {len(df_out)} REId från Påverkbara-arket (korrigerad metod - DT som bas)")
         
         return df_out
 
@@ -761,11 +740,8 @@ def show_dea_view(df):
         if 'Effkrav_proc' not in result.columns:
             st.error("Export kräver Effkrav_proc. Kontrollera DEA-modellens output.")
         else:
-            ir_baseline_file = st.text_input(
-                "Sökväg till IR baseline Excel-fil",
-                value="intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx",
-                help="Excel-fil med 'Påverkbara' ark som innehåller baseline-data per REId"
-            )
+            # Fast sökväg till IR baseline-fil
+            ir_baseline_file = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
             
             if Path(ir_baseline_file).exists():
                 try:
@@ -782,12 +758,12 @@ def show_dea_view(df):
                         for col in float_cols:
                             if col in export_data.columns:
                                 export_data[col] = export_data[col].astype(np.float64)
-                    
-                    if export_data is not None and not export_data.empty:
+                        
+                        # Visa endast metrics
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             total_baseline = export_data['Paverkbara_Baseline_4yr'].sum() / 1000
-                            st.metric("Baseline 4-år totalt", f"{total_baseline:.1f} MSEK")
+                            st.metric("Baseline innan pålägg av eff.krav.", f"{total_baseline:.1f} MSEK")
                         with col2:
                             total_target = export_data['Paverkbara_Target'].sum() / 1000
                             st.metric("Efter effektiviseringskrav", f"{total_target:.1f} MSEK")
@@ -796,32 +772,7 @@ def show_dea_view(df):
                             reduction_pct = (total_reduction / total_baseline) * 100 if total_baseline > 0 else 0
                             st.metric("Total reduktion", f"{total_reduction:.1f} MSEK ({reduction_pct:.1f}%)")
                         
-                        # Sanity check
-                        with st.expander("Sanity check - Ei baseline vs vårt scenario"):
-                            ei_test = export_data.copy()
-                            ei_test['Test_Target'] = (
-                                ei_test['Y2024_baseline'] + 
-                                ei_test['Y2025_baseline'] + 
-                                ei_test['Y2026_baseline'] + 
-                                ei_test['Y2027_baseline']
-                            )
-                            ei_test['Test_Delta'] = ei_test['Test_Target'] - ei_test['Paverkbara_Baseline_4yr']
-                            
-                            test_delta_total = ei_test['Test_Delta'].sum()
-                            test_delta_pct = (test_delta_total / ei_test['Paverkbara_Baseline_4yr'].sum() * 100) if ei_test['Paverkbara_Baseline_4yr'].sum() > 0 else 0
-                            
-                            col_a, col_b = st.columns(2)
-                            with col_a:
-                                st.metric("Ei baseline total", f"{ei_test['Test_Target'].sum()/1000:.1f} MSEK")
-                            with col_b:
-                                st.metric("Delta mot IR baseline", f"{test_delta_total/1000:+.1f} MSEK ({test_delta_pct:+.2f}%)")
-                            
-                            if abs(test_delta_pct) < 0.1:
-                                st.success("Sanity check OK - mindre än 0,1% skillnad")
-                            else:
-                                st.warning(f"Sanity check: {test_delta_pct:.2f}% skillnad - kontrollera baseline-mappning")
-                        
-                        # Preview
+                        # Förhandsvisning
                         with st.expander("Förhandsvisning av export-data"):
                             preview_data = export_data[['DMU', 'REId', 'Företag', 'Paverkbara_Baseline_4yr', 'Effektiviseringskrav', 'Paverkbara_Target', 'Total_Reduction_tkr']].copy()
                             preview_data['Effektiviseringskrav'] = (preview_data['Effektiviseringskrav'] * 100).round(2)
