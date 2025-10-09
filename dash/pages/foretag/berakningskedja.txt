@@ -1,0 +1,1310 @@
+"""
+berakningskedja.py - Företagsspecifik beräkningskedja för kapitalkostnader
+===========================================================================
+
+Stegvis beräkning av kapitalkostnader för inloggat företag:
+- Steg 5: Åldrar och NUAV
+- Steg 6: Avskrivningar
+- WACC-kalkylator
+- Steg 7: Avkastning
+- Steg 8: Sammanställning med facit-validering
+
+Använder Long Callbacks för tunga beräkningar och hybrid state management
+(dcc.Store för metadata, flask_session för stora DataFrames).
+"""
+
+print("DEBUG: Starting berakningskedja.py imports")
+
+import sys
+print(f"DEBUG: streamlit in sys.modules: {'streamlit' in sys.modules}")
+
+from dash import html, dcc, Input, Output, State, callback, dash_table, no_update
+import dash_bootstrap_components as dbc
+from dash.exceptions import PreventUpdate
+import dash
+from flask import session as flask_session
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from typing import Dict, Any, Optional, Tuple
+import sys
+from pathlib import Path
+from app import app
+
+# Setup paths
+CURRENT_FILE = Path(__file__)  # .../dash/pages/foretag/berakningskedja.py
+DASH_DIR = CURRENT_FILE.parent.parent.parent  # .../dash/
+PROJECT_ROOT = DASH_DIR.parent  # .../dashboard_lokalnat/
+
+# Lägg till både dash/ och project root i path
+for path in [str(DASH_DIR), str(PROJECT_ROOT)]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+import components
+from utils import state_management
+
+# Import från befintliga backend-moduler
+from foretag.app.kapitalbas_data_loader import (
+    load_reconciliation_foretag_info,
+    validate_company_data
+)
+
+from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.beräkningskedja import (
+    load_dmu_capbase_a,
+    calculate_ages_and_nuav,
+    calculate_depreciation_single_dmu,
+    calculate_returns_single_dmu,
+    compile_capcost_single_dmu,
+    load_facit_for_dmu,
+    validate_input_data
+)
+
+from core.calculations import (
+    R_OLD,
+    EiWaccInputs,
+    ei_wacc_real_pre_tax
+)
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def get_current_user_info() -> Dict[str, Any]:
+    """
+    Hämtar info om inloggad användare från flask_session.
+    
+    Returns:
+        Dict med user_dmu, company_name, org
+    """
+    user_dmu = flask_session.get('user_dmu')
+    org = flask_session.get('org', 'unknown')
+    
+    # Hämta företagsnamn från reconciliation
+    try:
+        company_info = load_reconciliation_foretag_info()
+        company_name = company_info.get('company_name', 'Ditt företag')
+    except:
+        company_name = 'Ditt företag'
+    
+    return {
+        'user_dmu': user_dmu,
+        'company_name': company_name,
+        'org': org
+    }
+
+
+def load_baseline_data_for_company() -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """
+    Laddar baseline capbase_a data för inloggat företag.
+    
+    Returns:
+        Tuple med (DataFrame, status_dict)
+    """
+    user_info = get_current_user_info()
+    user_dmu = user_info['user_dmu']
+    
+    if user_dmu is None:
+        return pd.DataFrame(), {'error': 'Ingen DMU hittades'}
+    
+    try:
+        df = load_dmu_capbase_a(user_dmu)
+        
+        if df.empty:
+            return df, {'error': f'Ingen data för DMU {user_dmu}'}
+        
+        # Validera input
+        validation = validate_input_data(df)
+        
+        status = {
+            'rows': len(df),
+            'networks': df['id_network'].nunique() if 'id_network' in df.columns else 0,
+            'categories': df['cat_encode'].nunique() if 'cat_encode' in df.columns else 0,
+            'validation': validation
+        }
+        
+        return df, status
+        
+    except Exception as e:
+        return pd.DataFrame(), {'error': str(e)}
+
+
+def prepare_lifetime_table_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Förbereder data för lifetime-editering tabell.
+    Aggregerar till kategori-nivå.
+    
+    Args:
+        df: capbase_a DataFrame
+        
+    Returns:
+        DataFrame med kolumner: Kod, Beskrivning, Ekonomisk livslängd, Maximal livslängd
+    """
+    if df.empty:
+        return pd.DataFrame(columns=['Kod', 'Beskrivning', 'Ekonomisk livslängd', 'Maximal livslängd'])
+    
+    # Aggregera per kategori
+    group_cols = ['cat_encode']
+    if 'cat' in df.columns:
+        group_cols.append('cat')
+    
+    agg_df = df.groupby(group_cols).agg({
+        'ekdep': 'first',
+        'maxdep': 'first'
+    }).reset_index()
+    
+    # Formatera för display
+    result = pd.DataFrame({
+        'Kod': agg_df['cat_encode'],
+        'Beskrivning': agg_df['cat'] if 'cat' in agg_df.columns else agg_df['cat_encode'],
+        'Ekonomisk livslängd': agg_df['ekdep'].astype(int),
+        'Maximal livslängd': agg_df['maxdep'].astype(int)
+    })
+    
+    return result.sort_values('Kod').reset_index(drop=True)
+
+
+def apply_lifetime_adjustments_to_data(
+    df: pd.DataFrame, 
+    adjustments: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Applicerar lifetime-justeringar på capbase_a data.
+    
+    Args:
+        df: Original capbase_a DataFrame
+        adjustments: DataFrame från lifetime-tabell
+        
+    Returns:
+        Justerad DataFrame
+    """
+    df_adjusted = df.copy()
+    
+    for _, row in adjustments.iterrows():
+        kod = row['Kod']
+        new_ekdep = row['Ekonomisk livslängd']
+        new_maxdep = row['Maximal livslängd']
+        
+        mask = df_adjusted['cat_encode'] == kod
+        df_adjusted.loc[mask, 'ekdep'] = new_ekdep
+        df_adjusted.loc[mask, 'maxdep'] = new_maxdep
+    
+    return df_adjusted
+
+
+# ============================================================================
+# MAIN LAYOUT
+# ============================================================================
+
+def layout(session_data: Dict[str, Any]) -> html.Div:
+    """
+    Huvudlayout för beräkningskedja-sidan.
+    
+    Args:
+        session_data: Session info från routing
+        
+    Returns:
+        Dash layout component
+    """
+    user_info = get_current_user_info()
+    company_name = user_info['company_name']
+    user_dmu = user_info['user_dmu']
+    
+    # Ladda validation för att visa status
+    validation = validate_company_data()
+    
+    return html.Div([
+        # Stores
+        dcc.Store(id='steps-store', storage_type='session', data={
+            'completed_steps': [],
+            'current_step': None,
+            'wacc_for_step7': R_OLD
+        }),
+        
+        # Header med företagsinfo
+        html.H1("Beräkningskedja - Kapitalkostnader", className="mb-4"),
+        
+        # Company info alert
+        components.create_company_info_alert(
+            company_name,
+            user_dmu,
+            {
+                'networks': validation.get('details', {}).get('dmu_networks', 'N/A'),
+                'periods': 'H1-H2 2024-2027'
+            }
+        ),
+        
+        # Progress indicator
+        html.Div(id='progress-indicator'),
+        
+        # Main tabs
+        dcc.Tabs(id='main-tabs', value='step5', children=[
+            dcc.Tab(label='Steg 5: Åldrar & NUAV', value='step5', id='tab-step5'),
+            dcc.Tab(label='Steg 6: Avskrivningar', value='step6', id='tab-step6', 
+                    disabled=True),  # ← Initial disabled
+            dcc.Tab(label='WACC-kalkylator', value='wacc', id='tab-wacc'),
+            dcc.Tab(label='Steg 7: Avkastning', value='step7', id='tab-step7',
+                    disabled=True),  # ← Initial disabled
+            dcc.Tab(label='Steg 8: Sammanställning', value='step8', id='tab-step8',
+                    disabled=True),  # ← Initial disabled
+        ]),
+        
+        # Tab content (renderas dynamiskt)
+        html.Div(id='tab-content', className='mt-4')
+    ])
+
+
+# ============================================================================
+# TAB CONTENT LAYOUTS
+# ============================================================================
+
+def create_step5_content() -> html.Div:
+    """Layout för Steg 5 tab."""
+    return html.Div([
+        html.H3("Steg 5: Åldrar och NUAV-värden"),
+        html.P("Beräknar komponenternas ålder och nuanskaffningsvärden för varje tidsperiod (2024-2027)."),
+        
+        # VIKTIGT: Visa metodologi direkt (inte i collapse som kräver callback)
+        dbc.Card([
+            dbc.CardHeader("Beräkningslogik"),
+            dbc.CardBody([
+                html.P("""
+                För varje komponent och tidsperiod beräknas:
+                - Ålder: tid minus time_from
+                - NUAV ordinarie: för komponenter inom ekonomisk livslängd
+                - NUAV svans: för komponenter mellan ekonomisk och maximal livslängd
+                """)
+            ])
+        ], className="mb-4"),
+        
+        # Livslängdsjusteringar - VISA KNAPP DIREKT
+        html.Div([
+            html.H4("Livslängdsjusteringar (valfritt)", className="mt-4"),
+            html.P("Justera ekonomisk och maximal livslängd per kategori för scenarioanalys.",
+                   className="text-muted"),
+            dbc.Button(
+                "Visa/dölj livslängdsjusteringar",
+                id='lifetime-toggle-btn',
+                color='secondary',
+                size='sm',
+                className='mb-3'
+            ),
+            dbc.Collapse([
+                html.Div(id='lifetime-table-container'),
+                html.Div(id='lifetime-validation-output')
+            ], id='lifetime-collapse', is_open=False)
+        ]),
+        
+        # RUN-KNAPP - VISA DIREKT
+        html.Hr(),
+        dbc.Button(
+            "Kör Steg 5: Åldrar & NUAV",
+            id='run-step5-btn',
+            color='primary',
+            size='lg',
+            className='mb-3'
+        ),
+        
+        # RESULTAT - börja med instruktion istället för tom div
+        html.Div(id='step5-status', children=[
+            dbc.Alert("Klicka på 'Kör Steg 5' för att börja beräkningen", 
+                     color="info")
+        ]),
+        html.Div(id='step5-results')
+    ])
+
+
+def create_step6_content() -> html.Div:
+    """Layout för Steg 6 tab."""
+    return html.Div([
+        html.H3("Steg 6: Avskrivningar"),
+        html.P("Beräknar ordinarie och svansavskrivningar baserat på åldrar och livslängder."),
+        
+        # Methodology
+        components.create_methodology_card(
+            "Avskrivningsmetodik",
+            "Ordinarie avskrivning: dep_ord = nuav_ord / ekdep. "
+            "Svansavskrivning: dep_tail = nuav_tail / age_reg (justerad för udda åldrar).",
+            equations=[
+                "dep_ord = nuav_ord / ekdep",
+                "dep_tail = nuav_tail / age_reg"
+            ],
+            expanded=False
+        ),
+        
+        # Prerequisites check
+        html.Div(id='step6-prerequisites'),
+        
+        # Run button
+        html.Hr(),
+        dbc.Button(
+            "Kör Steg 6: Avskrivningar",
+            id='run-step6-btn',
+            color='primary',
+            size='lg',
+            className='mb-3',
+            disabled=True
+        ),
+        
+        # Results
+        dcc.Loading(
+            id='step6-loading',
+            type='default',
+            children=[
+                html.Div(id='step6-status'),
+                html.Div(id='step6-results')
+            ]
+        )
+    ])
+
+
+def create_wacc_content() -> html.Div:
+    """Layout för WACC-kalkylator tab."""
+    return html.Div([
+        html.H3("WACC-kalkylator"),
+        html.P("Beräkna kalkylränta från grundparametrar enligt Ei:s metodik."),
+        
+        # Methodology
+        components.create_methodology_card(
+            "WACC-beräkning",
+            """
+            Beräkningskedja:
+            1. CAPM för eget kapital (nominell, efter skatt)
+            2. Skuldränta (nominell, före skatt)
+            3. WACC (nominell, före skatt via omräkning)
+            4. Fisher-omräkning till real nivå
+            """,
+            equations=[
+                "Re = Rf + β_E × MRP",
+                "Rd = Rf + Kreditriskpremie",
+                "WACC_nom = [(1-S)×Re + S×Rd×(1-T)] / (1-T)",
+                "WACC_real = (1+WACC_nom)/(1+π) - 1"
+            ],
+            expanded=False
+        ),
+        
+        # Input form
+        html.H4("Parametrar", className="mt-4"),
+        html.Div(id='wacc-input-form'),
+        
+        # Calculate button
+        html.Hr(),
+        dbc.Row([
+            dbc.Col([
+                dbc.Button(
+                    "Beräkna WACC",
+                    id='calc-wacc-btn',
+                    color='primary',
+                    size='lg'
+                )
+            ], width='auto'),
+            dbc.Col([
+                dbc.Button(
+                    "Återställ till Ei-standard",
+                    id='reset-wacc-btn',
+                    color='secondary',
+                    size='lg'
+                )
+            ], width='auto')
+        ], className='mb-3'),
+        
+        # Results
+        html.Div(id='wacc-results'),
+        
+        # Use in Step 7 button
+        html.Div(id='wacc-use-in-step7')
+    ])
+
+
+def create_step7_content() -> html.Div:
+    """Layout för Steg 7 tab."""
+    return html.Div([
+        html.H3("Steg 7: Avkastning"),
+        html.P("Beräknar kapitalavkastning baserat på åldersjusterad kapitalbas."),
+        
+        # Methodology
+        components.create_methodology_card(
+            "Avkastningsmetodik",
+            "Ordinarie: capbase_left_ord = [(ekdep/2 - age_return) / (ekdep/2)] × nuav_ord, "
+            "return_ord = WACC × capbase_left_ord / 2. "
+            "Svans: capbase_left_tail = nuav_tail / (age_return + 1), "
+            "return_tail = WACC × capbase_left_tail / 2.",
+            expanded=False
+        ),
+        
+        # WACC selector
+        html.H4("WACC för avkastningsberäkning", className="mt-4"),
+        html.Div(id='step7-wacc-selector'),
+        
+        # Prerequisites check
+        html.Div(id='step7-prerequisites'),
+        
+        # Run button
+        html.Hr(),
+        dbc.Button(
+            "Kör Steg 7: Avkastning",
+            id='run-step7-btn',
+            color='primary',
+            size='lg',
+            className='mb-3',
+            disabled=True
+        ),
+        
+        # Results
+        dcc.Loading(
+            id='step7-loading',
+            type='default',
+            children=[
+                html.Div(id='step7-status'),
+                html.Div(id='step7-results')
+            ]
+        )
+    ])
+
+
+def create_step8_content() -> html.Div:
+    """Layout för Steg 8 tab."""
+    return html.Div([
+        html.H3("Steg 8: Sammanställning"),
+        html.P("Kombinerar avskrivningar och avkastning till total kapitalkostnad."),
+        
+        # Prerequisites check
+        html.Div(id='step8-prerequisites'),
+        
+        # Run button
+        html.Hr(),
+        dbc.Button(
+            "Kör Steg 8: Sammanställning",
+            id='run-step8-btn',
+            color='primary',
+            size='lg',
+            className='mb-3',
+            disabled=True
+        ),
+        
+        # Results
+        dcc.Loading(
+            id='step8-loading',
+            type='default',
+            children=[
+                html.Div(id='step8-status'),
+                html.Div(id='step8-results')
+            ]
+        )
+    ])
+
+# ============================================================================
+# TAB RENDERING
+# ============================================================================
+
+@callback(
+    Output('tab-content', 'children'),
+    Output('progress-indicator', 'children'),
+    Input('main-tabs', 'value'),
+    State('steps-store', 'data'),
+    prevent_initial_call=False
+)
+
+def render_tab_content(active_tab, steps_data):
+    """Renderar innehåll för aktiv tab + progress indicator."""
+    user_info = get_current_user_info()
+    if not user_info.get('user_dmu'):
+        return html.Div("Session data saknas"), None
+    
+    # Progress indicator
+    completed = steps_data.get('completed_steps', []) if steps_data else []
+    progress = components.create_step_progress_indicator(completed, total_steps=4)
+    
+    # Tab content
+    if active_tab == 'step5':
+        return create_step5_content(), progress
+    elif active_tab == 'step6':
+        return create_step6_content(), progress
+    elif active_tab == 'wacc':
+        return create_wacc_content(), progress
+    elif active_tab == 'step7':
+        return create_step7_content(), progress
+    elif active_tab == 'step8':
+        return create_step8_content(), progress
+    else:
+        return html.Div("Okänd tab"), progress
+
+
+# ============================================================================
+# TAB ENABLE/DISABLE LOGIC
+# ============================================================================
+
+@callback(
+    [Output('tab-step6', 'disabled'),
+     Output('tab-step7', 'disabled'),
+     Output('tab-step8', 'disabled')],
+    Input('steps-store', 'data')
+)
+def update_tab_states(steps_data):
+    """Uppdaterar vilka tabs som är tillgängliga baserat på completed_steps."""
+    if not steps_data:
+        return True, True, True
+    
+    completed = set(steps_data.get('completed_steps', []))
+    
+    step6_disabled = 5 not in completed
+    step7_disabled = 5 not in completed
+    step8_disabled = not (6 in completed and 7 in completed)
+    
+    return step6_disabled, step7_disabled, step8_disabled
+
+
+# ============================================================================
+# BUTTON ENABLE/DISABLE LOGIC
+# ============================================================================
+
+@callback(
+    Output('run-step6-btn', 'disabled'),
+    Input('steps-store', 'data')
+)
+def enable_step6_button(steps_data):
+    """Aktiverar Step 6 knapp när Step 5 är klar."""
+    if not steps_data:
+        return True
+    completed = set(steps_data.get('completed_steps', []))
+    return 5 not in completed
+
+
+@callback(
+    Output('run-step7-btn', 'disabled'),
+    Input('steps-store', 'data')
+)
+def enable_step7_button(steps_data):
+    """Aktiverar Step 7 knapp när Step 5 är klar."""
+    if not steps_data:
+        return True
+    completed = set(steps_data.get('completed_steps', []))
+    return 5 not in completed
+
+
+@callback(
+    Output('run-step8-btn', 'disabled'),
+    Input('steps-store', 'data')
+)
+def enable_step8_button(steps_data):
+    """Aktiverar Step 8 knapp när Step 6 OCH 7 är klara."""
+    if not steps_data:
+        return True
+    completed = set(steps_data.get('completed_steps', []))
+    return not (6 in completed and 7 in completed)
+
+
+# ============================================================================
+# LIFETIME ADJUSTMENTS
+# ============================================================================
+
+@callback(
+    Output('lifetime-collapse', 'is_open'),
+    Input('lifetime-toggle-btn', 'n_clicks'),
+    State('lifetime-collapse', 'is_open'),
+    prevent_initial_call=True
+)
+def toggle_lifetime_section(n_clicks, is_open):
+    """Toggle lifetime adjustments sektion."""
+    if n_clicks:
+        return not is_open
+    return is_open
+
+
+@callback(
+    Output('lifetime-table-container', 'children'),
+    Input('lifetime-collapse', 'is_open')
+)
+def load_lifetime_table(is_open):
+    """Laddar lifetime-tabell när sektionen öppnas."""
+    if not is_open:
+        return no_update
+    
+    # Ladda baseline data
+    df, status = load_baseline_data_for_company()
+    
+    if df.empty:
+        return dbc.Alert(f"Kunde inte ladda data: {status.get('error', 'Okänt fel')}", color="danger")
+    
+    # Förbered tabell-data
+    lifetime_df = prepare_lifetime_table_data(df)
+    
+    return components.create_lifetime_table(lifetime_df, table_id='lifetime-table')
+
+
+@callback(
+    Output('lifetime-validation-output', 'children'),
+    Output('steps-store', 'data', allow_duplicate=True),
+    Input('lifetime-table-apply-btn', 'n_clicks'),
+    [State('lifetime-table', 'data'),
+     State('steps-store', 'data')],
+    prevent_initial_call=True
+)
+def apply_lifetime_adjustments(n_clicks, table_data, steps_data):
+    """Applicerar lifetime-justeringar och invaliderar senare steg."""
+    if not n_clicks or not table_data:
+        raise PreventUpdate
+    
+    # Konvertera till DataFrame
+    adj_df = pd.DataFrame(table_data)
+    
+    # Validering: maxdep måste vara >= ekdep
+    invalid = adj_df[adj_df['Maximal livslängd'] < adj_df['Ekonomisk livslängd']]
+    if not invalid.empty:
+        return dbc.Alert(
+            f"Fel: {len(invalid)} kategori(er) har maximal livslängd < ekonomisk livslängd",
+            color="danger"
+        ), no_update
+    
+    # Spara justeringar server-side
+    user_info = get_current_user_info()
+    state_management.save_lifetime_adjustments(
+        user_info['user_dmu'],
+        {'adjustments': table_data}
+    )
+    
+    # Invalidera Step 5-8
+    user_info = get_current_user_info()
+    state_management.clear_steps_from(user_info['user_dmu'], start_step=5)
+    steps_data = state_management.invalidate_steps_from(steps_data, start_step=5)
+    
+    return dbc.Alert("Justeringar applicerade! Kör Steg 5 igen.", color="success"), steps_data
+
+
+@callback(
+    Output('lifetime-table', 'data'),
+    Input('lifetime-table-reset-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
+def reset_lifetime_adjustments(n_clicks):
+    """Återställer lifetime-tabell till baseline."""
+    if not n_clicks:
+        raise PreventUpdate
+    
+    # Rensa sparade justeringar
+    user_info = get_current_user_info()
+    state_management.clear_lifetime_adjustments(user_info['user_dmu'])
+    
+    # Ladda baseline igen
+    df, _ = load_baseline_data_for_company()
+    lifetime_df = prepare_lifetime_table_data(df)
+    
+    return lifetime_df.to_dict('records')
+
+
+# ============================================================================
+# STEP 5 - LONG CALLBACK
+# ============================================================================
+
+@app.long_callback(
+    [Output('steps-store', 'data', allow_duplicate=True),
+     Output('step5-status', 'children'),
+     Output('step5-results', 'children')],
+    Input('run-step5-btn', 'n_clicks'),
+    State('steps-store', 'data'),
+    running=[
+        (Output('run-step5-btn', 'disabled'), True, False),
+        (Output('step5-loading', 'children'), 
+         [dbc.Spinner(size="lg"), html.P("Beräknar åldrar och NUAV... Detta kan ta 10-30 sekunder.")],
+         None)
+    ],
+    prevent_initial_call=True
+)
+def run_step5(n_clicks, steps_data):
+    """Kör Steg 5: Åldrar och NUAV beräkning."""
+    if not n_clicks:
+        raise PreventUpdate
+    
+    user_info = get_current_user_info()
+    user_dmu = user_info['user_dmu']
+    
+    try:
+        # Ladda baseline data
+        df, status = load_baseline_data_for_company()
+        
+        if df.empty:
+            return (
+                steps_data,
+                dbc.Alert(f"Fel: {status.get('error', 'Kunde inte ladda data')}", color="danger"),
+                None
+            )
+        
+        # Applicera lifetime-justeringar om de finns
+        adjustments = state_management.load_lifetime_adjustments(user_dmu)
+        if adjustments:
+            adj_df = pd.DataFrame(adjustments['adjustments'])
+            df = apply_lifetime_adjustments_to_data(df, adj_df)
+        
+        # KÖR BERÄKNING (denna tar tid!)
+        result_df = calculate_ages_and_nuav(df)
+        
+        # Spara server-side
+        state_management.save_step_dataframe(user_dmu, 5, result_df)
+        
+        # Uppdatera Store
+        steps_data = state_management.update_store_step_completion(steps_data, 5)
+        
+        # Skapa resultat-visning
+        status_alert = dbc.Alert("✅ Steg 5 slutfört!", color="success")
+        
+        results = html.Div([
+            html.H4("Resultat", className="mt-3"),
+            dbc.Row([
+                dbc.Col([
+                    components.create_metric_card(
+                        "Komponenter",
+                        len(result_df),
+                        subtitle="Totalt antal"
+                    )
+                ], width=3),
+                dbc.Col([
+                    components.create_metric_card(
+                        "Tidsperioder",
+                        8,
+                        subtitle="H1-H2 2024-2027"
+                    )
+                ], width=3),
+                dbc.Col([
+                    components.create_metric_card(
+                        "NUAV ordinarie 2024H1",
+                        f"{result_df['nuav_ord_229'].sum():,.0f} tkr" if 'nuav_ord_229' in result_df.columns else "N/A"
+                    )
+                ], width=3)
+            ])
+        ])
+        
+        return steps_data, status_alert, results
+        
+    except Exception as e:
+        return (
+            steps_data,
+            dbc.Alert(f"Fel i Steg 5: {str(e)}", color="danger"),
+            None
+        )
+
+
+# ============================================================================
+# STEP 6 - LONG CALLBACK
+# ============================================================================
+
+@app.long_callback(
+    [Output('steps-store', 'data', allow_duplicate=True),
+     Output('step6-status', 'children'),
+     Output('step6-results', 'children')],
+    Input('run-step6-btn', 'n_clicks'),
+    State('steps-store', 'data'),
+    running=[
+        (Output('run-step6-btn', 'disabled'), True, False),
+        (Output('step6-loading', 'children'),
+         [dbc.Spinner(size="lg"), html.P("Beräknar avskrivningar...")],
+         None)
+    ],
+    prevent_initial_call=True
+)
+def run_step6(n_clicks, steps_data):
+    """Kör Steg 6: Avskrivningar."""
+    if not n_clicks:
+        raise PreventUpdate
+    
+    user_info = get_current_user_info()
+    user_dmu = user_info['user_dmu']
+    
+    try:
+        # Ladda Step 5 resultat
+        step5_df = state_management.load_step_dataframe(user_dmu, 5)
+        
+        if step5_df is None:
+            return (
+                steps_data,
+                dbc.Alert("Fel: Steg 5 måste köras först", color="danger"),
+                None
+            )
+        
+        # KÖR BERÄKNING
+        step6_dict = calculate_depreciation_single_dmu(step5_df)
+        
+        # Spara server-side
+        state_management.save_step_dict(user_dmu, 6, step6_dict)
+        
+        # Uppdatera Store
+        steps_data = state_management.update_store_step_completion(steps_data, 6)
+        
+        # Beräkna totaler
+        dep_ord_total = sum(step6_dict.get(f'dep_ord_{t}', 0) for t in range(229, 237))
+        dep_tail_total = sum(step6_dict.get(f'dep_tail_{t}', 0) for t in range(229, 237))
+        
+        # Resultat-visning
+        status_alert = dbc.Alert("✅ Steg 6 slutfört!", color="success")
+        
+        results = html.Div([
+            html.H4("Resultat", className="mt-3"),
+            dbc.Row([
+                dbc.Col([
+                    components.create_metric_card(
+                        "Ordinarie avskrivning",
+                        f"{dep_ord_total:,.0f} tkr",
+                        subtitle="Totalt 2024-2027"
+                    )
+                ], width=6),
+                dbc.Col([
+                    components.create_metric_card(
+                        "Svansavskrivning",
+                        f"{dep_tail_total:,.0f} tkr",
+                        subtitle="Totalt 2024-2027"
+                    )
+                ], width=6)
+            ])
+        ])
+        
+        return steps_data, status_alert, results
+        
+    except Exception as e:
+        return (
+            steps_data,
+            dbc.Alert(f"Fel i Steg 6: {str(e)}", color="danger"),
+            None
+        )
+
+
+# ============================================================================
+# WACC CALCULATOR
+# ============================================================================
+
+@callback(
+    Output('wacc-input-form', 'children'),
+    Output('wacc-results', 'children'),
+    [Input('calc-wacc-btn', 'n_clicks'),
+     Input('reset-wacc-btn', 'n_clicks')],
+    [State('wacc-rf-nom', 'value'),
+     State('wacc-mrp', 'value'),
+     State('wacc-infl', 'value'),
+     State('wacc-credit', 'value'),
+     State('wacc-debt-share', 'value'),
+     State('wacc-tax-rate', 'value'),
+     State('wacc-beta-mode', 'value')],
+    prevent_initial_call=False
+)
+def handle_wacc_calculation(calc_clicks, reset_clicks, rf_nom, mrp, infl, credit, 
+                           debt_share, tax_rate, beta_mode):
+    """Hanterar WACC-beräkning och reset."""
+    
+    ctx = dash.callback_context
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+    
+    # Defaults (Ei-standard)
+    defaults = {
+        'rf_nom': 0.0287,
+        'mrp': 0.0668,
+        'infl': 0.0202,
+        'credit': 0.0114,
+        'debt_share': 0.36,
+        'tax_rate': 0.206,
+        'beta_mode': 'beta_a',
+        'beta_a': 0.37,
+        'beta_e': 0.54
+    }
+
+    if calc_clicks is None and reset_clicks is None:
+        form = components.create_wacc_input_form('wacc', defaults)
+        return form, None
+    
+    # Reset till defaults
+    if triggered_id == 'reset-wacc-btn':
+        form = components.create_wacc_input_form('wacc', defaults)
+        return form, None
+    
+    # Initial load
+    if not calc_clicks:
+        form = components.create_wacc_input_form('wacc', defaults)
+        return form, None
+    
+    # Beräkna WACC
+    try:
+        # Bestäm beta
+        beta_a = defaults['beta_a'] if beta_mode == 'beta_a' else None
+        beta_e = defaults['beta_e'] if beta_mode == 'beta_e' else None
+        
+        # Skapa inputs
+        wacc_inputs = EiWaccInputs(
+            rf_nominal=rf_nom,
+            mrp_nominal=mrp,
+            inflation=infl,
+            credit_spread=credit,
+            debt_share=debt_share,
+            tax_rate=tax_rate,
+            beta_asset=beta_a,
+            beta_equity=beta_e
+        )
+        
+        # Beräkna
+        re_nom, rd_nom, wacc_nom, wacc_real = ei_wacc_real_pre_tax(wacc_inputs)
+        
+        # Result cards
+        result_cards = components.create_wacc_result_cards(re_nom, rd_nom, wacc_nom, wacc_real)
+        
+        form = components.create_wacc_input_form('wacc', {
+            'rf_nom': rf_nom,
+            'mrp': mrp,
+            'infl': infl,
+            'credit': credit,
+            'debt_share': debt_share,
+            'tax_rate': tax_rate,
+            'beta_mode': beta_mode,
+            'beta_a': defaults['beta_a'],
+            'beta_e': defaults['beta_e']
+        })
+        
+        return form, result_cards
+        
+    except Exception as e:
+        form = components.create_wacc_input_form('wacc', defaults)
+        error = dbc.Alert(f"Fel i beräkning: {str(e)}", color="danger")
+        return form, error
+
+
+@callback(
+    Output('wacc-beta-input-container', 'children'),
+    Input('wacc-beta-mode', 'value')
+)
+def update_beta_input(beta_mode):
+    """Uppdaterar beta-input baserat på valt mode."""
+    if beta_mode == 'beta_a':
+        return dbc.Input(
+            id='wacc-beta-a',
+            type='number',
+            value=0.37,
+            step=0.01,
+            placeholder='β_A'
+        )
+    else:
+        return dbc.Input(
+            id='wacc-beta-e',
+            type='number',
+            value=0.54,
+            step=0.01,
+            placeholder='β_E'
+        )
+
+
+@callback(
+    Output('wacc-use-in-step7', 'children'),
+    Output('steps-store', 'data', allow_duplicate=True),
+    Input('use-wacc-step7-btn', 'n_clicks'),
+    [State('wacc-results', 'children'),
+     State('steps-store', 'data')],
+    prevent_initial_call=True
+)
+def use_wacc_in_step7(n_clicks, wacc_results, steps_data):
+    """Sparar beräknat WACC-värde för användning i Step 7."""
+    if not n_clicks or not wacc_results:
+        raise PreventUpdate
+    
+    # Extrahera WACC real från results
+    # (Detta är lite hacky - i produktion bör vi spara värdet tydligare)
+    # För nu, läs från card-text
+    try:
+        # Placeholder - använd default tills vi har bättre lösning
+        wacc_real = R_OLD  # TODO: Extrahera från results
+        
+        steps_data = state_management.save_wacc_for_step7(steps_data, wacc_real)
+        
+        return (
+            dbc.Alert(f"✅ WACC {wacc_real:.4f} sparad för Step 7", color="success"),
+            steps_data
+        )
+    except:
+        return (
+            dbc.Alert("Kunde inte spara WACC", color="danger"),
+            steps_data
+        )
+
+
+# Lägg till "Använd i Step 7" button efter WACC-beräkning
+@callback(
+    Output('wacc-use-in-step7', 'children', allow_duplicate=True),
+    Input('wacc-results', 'children'),
+    prevent_initial_call=True
+)
+def show_use_wacc_button(wacc_results):
+    """Visar 'Använd i Step 7' knapp när WACC är beräknad."""
+    if wacc_results:
+        return dbc.Button(
+            "Använd denna WACC i Steg 7",
+            id='use-wacc-step7-btn',
+            color='success',
+            size='lg',
+            className='mt-3'
+        )
+    return None
+
+
+# ============================================================================
+# STEP 7 - LONG CALLBACK
+# ============================================================================
+
+@callback(
+    Output('step7-wacc-selector', 'children'),
+    Input('steps-store', 'data')
+)
+def show_wacc_selector(steps_data):
+    """Visar WACC-väljare för Step 7."""
+    current_wacc = state_management.get_wacc_for_step7(steps_data)
+    
+    return html.Div([
+        dbc.Label("WACC (real, före skatt)"),
+        dbc.Input(
+            id='step7-wacc-input',
+            type='number',
+            value=current_wacc,
+            step=0.0001,
+            className='mb-2'
+        ),
+        html.Small(
+            f"Nuvarande: {current_wacc:.4f} (använd WACC-kalkylatorn för att beräkna nytt värde)",
+            className="text-muted"
+        )
+    ])
+
+
+@app.long_callback(
+    [Output('steps-store', 'data', allow_duplicate=True),
+     Output('step7-status', 'children'),
+     Output('step7-results', 'children')],
+    Input('run-step7-btn', 'n_clicks'),
+    [State('step7-wacc-input', 'value'),
+     State('steps-store', 'data')],
+    running=[
+        (Output('run-step7-btn', 'disabled'), True, False),
+        (Output('step7-loading', 'children'),
+         [dbc.Spinner(size="lg"), html.P("Beräknar avkastning...")],
+         None)
+    ],
+    prevent_initial_call=True
+)
+def run_step7(n_clicks, wacc_value, steps_data):
+    """Kör Steg 7: Avkastning."""
+    if not n_clicks:
+        raise PreventUpdate
+    
+    user_info = get_current_user_info()
+    user_dmu = user_info['user_dmu']
+    
+    try:
+        # Ladda Step 5 resultat (Step 7 behöver df5, inte df6!)
+        step5_df = state_management.load_step_dataframe(user_dmu, 5)
+        
+        if step5_df is None:
+            return (
+                steps_data,
+                dbc.Alert("Fel: Steg 5 måste köras först", color="danger"),
+                None
+            )
+        
+        # KÖR BERÄKNING med vald WACC
+        step7_dict = calculate_returns_single_dmu(step5_df, interest_rate=wacc_value)
+        
+        # Spara used WACC
+        step7_dict['used_wacc'] = wacc_value
+        
+        # Spara server-side
+        state_management.save_step_dict(user_dmu, 7, step7_dict)
+        
+        # Uppdatera Store
+        steps_data = state_management.update_store_step_completion(steps_data, 7)
+        steps_data = state_management.save_wacc_for_step7(steps_data, wacc_value)
+        
+        # Beräkna totaler
+        ret_ord_total = sum(step7_dict.get(f'return_ord_{t}', 0) for t in range(229, 237))
+        ret_tail_total = sum(step7_dict.get(f'return_tail_{t}', 0) for t in range(229, 237))
+        
+        # Resultat-visning
+        status_alert = dbc.Alert([
+            html.Strong("✅ Steg 7 slutfört!"),
+            html.Br(),
+            html.Small(f"Beräknat med WACC: {wacc_value:.4f}")
+        ], color="success")
+        
+        results = html.Div([
+            html.H4("Resultat", className="mt-3"),
+            dbc.Row([
+                dbc.Col([
+                    components.create_metric_card(
+                        "Ordinarie avkastning",
+                        f"{ret_ord_total:,.0f} tkr",
+                        subtitle="Totalt 2024-2027"
+                    )
+                ], width=6),
+                dbc.Col([
+                    components.create_metric_card(
+                        "Svansavkastning",
+                        f"{ret_tail_total:,.0f} tkr",
+                        subtitle="Totalt 2024-2027"
+                    )
+                ], width=6)
+            ])
+        ])
+        
+        return steps_data, status_alert, results
+        
+    except Exception as e:
+        return (
+            steps_data,
+            dbc.Alert(f"Fel i Steg 7: {str(e)}", color="danger"),
+            None
+        )
+
+
+# ============================================================================
+# STEP 8 - LONG CALLBACK MED FACIT-VALIDERING
+# ============================================================================
+
+@app.long_callback(
+    [Output('steps-store', 'data', allow_duplicate=True),
+     Output('step8-status', 'children'),
+     Output('step8-results', 'children')],
+    Input('run-step8-btn', 'n_clicks'),
+    State('steps-store', 'data'),
+    running=[
+        (Output('run-step8-btn', 'disabled'), True, False),
+        (Output('step8-loading', 'children'),
+         [dbc.Spinner(size="lg"), html.P("Sammanställer kapitalkostnad...")],
+         None)
+    ],
+    prevent_initial_call=True
+)
+def run_step8(n_clicks, steps_data):
+    """Kör Steg 8: Sammanställning med facit-validering."""
+    if not n_clicks:
+        raise PreventUpdate
+    
+    user_info = get_current_user_info()
+    user_dmu = user_info['user_dmu']
+    company_name = user_info['company_name']
+    
+    try:
+        # Ladda Step 6 och 7 resultat
+        step6_dict = state_management.load_step_dict(user_dmu, 6)
+        step7_dict = state_management.load_step_dict(user_dmu, 7)
+        
+        if step6_dict is None or step7_dict is None:
+            return (
+                steps_data,
+                dbc.Alert("Fel: Steg 6 och 7 måste köras först", color="danger"),
+                None
+            )
+        
+        # KÖR SAMMANSTÄLLNING
+        step8_df = compile_capcost_single_dmu(step6_dict, step7_dict, user_dmu)
+        
+        # Spara server-side
+        state_management.save_step_dataframe(user_dmu, 8, step8_df)
+        
+        # Uppdatera Store
+        steps_data = state_management.update_store_step_completion(steps_data, 8)
+        
+        # Beräkna KPIs
+        capcost_total = step8_df['capcost_sum'].sum()
+        dep_ord_total = step8_df['dep_ord'].sum()
+        dep_tail_total = step8_df['dep_tail'].sum()
+        ret_ord_total = step8_df['return_ord'].sum()
+        ret_tail_total = step8_df['return_tail'].sum()
+        
+        total_dep = dep_ord_total + dep_tail_total
+        total_ret = ret_ord_total + ret_tail_total
+        
+        # FACIT-VALIDERING
+        try:
+            facit_df = load_facit_for_dmu(user_dmu)
+            facit_available = not facit_df.empty
+        except:
+            facit_available = False
+        
+        status_alert = dbc.Alert("✅ Steg 8 slutfört!", color="success")
+        
+        # Resultat med eller utan facit
+        if facit_available:
+            # MED facit - visa jämförelse
+            facit_capcost = facit_df['capcost_sum'].sum()
+            facit_dep_ord = facit_df['dep_ord'].sum()
+            facit_dep_tail = facit_df['dep_tail'].sum()
+            facit_ret_ord = facit_df['return_ord'].sum()
+            facit_ret_tail = facit_df['return_tail'].sum()
+            facit_dep = facit_dep_ord + facit_dep_tail
+            facit_ret = facit_ret_ord + facit_ret_tail
+            
+            results = html.Div([
+                html.H4(f"Sammanställning för {company_name}", className="mt-3"),
+                html.H5("Skillnad mot baseline", className="mt-3 mb-3"),
+                dbc.Row([
+                    dbc.Col([
+                        components.create_metric_card_with_delta(
+                            "Total kapitalkostnad",
+                            facit_capcost,
+                            capcost_total,
+                            unit="tkr"
+                        )
+                    ], width=4),
+                    dbc.Col([
+                        components.create_metric_card_with_delta(
+                            "Total kapitalförslitning",
+                            facit_dep,
+                            total_dep,
+                            unit="tkr"
+                        )
+                    ], width=4),
+                    dbc.Col([
+                        components.create_metric_card_with_delta(
+                            "Total kapitalbindning",
+                            facit_ret,
+                            total_ret,
+                            unit="tkr"
+                        )
+                    ], width=4)
+                ])
+            ])
+        else:
+            # UTAN facit - bara beräknade värden
+            results = html.Div([
+                html.H4(f"Sammanställning för {company_name}", className="mt-3"),
+                dbc.Alert(
+                    "Facit-data är inte tillgänglig för detta företag i demonstrationsversionen",
+                    color="info"
+                ),
+                dbc.Row([
+                    dbc.Col([
+                        components.create_metric_card(
+                            "Total kapitalkostnad",
+                            f"{capcost_total:,.0f} tkr"
+                        )
+                    ], width=4),
+                    dbc.Col([
+                        components.create_metric_card(
+                            "Total kapitalförslitning",
+                            f"{total_dep:,.0f} tkr"
+                        )
+                    ], width=4),
+                    dbc.Col([
+                        components.create_metric_card(
+                            "Total kapitalbindning",
+                            f"{total_ret:,.0f} tkr"
+                        )
+                    ], width=4)
+                ])
+            ])
+        
+        return steps_data, status_alert, results
+        
+    except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        return (
+            steps_data,
+            dbc.Alert([
+                html.Strong(f"Fel i Steg 8: {str(e)}"),
+                html.Br(),
+                html.Small(error_detail, style={'fontFamily': 'monospace'})
+            ], color="danger"),
+            None
+        )

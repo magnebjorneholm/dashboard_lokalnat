@@ -3,6 +3,7 @@
 # och hanterar framtida scenario-integration med ny DMU-mappning
 # UPPDATERAD med förbättrad scenario-detection som returnerar filnamn och tidsstämplar
 # UPPDATERAD med organisationsbaserad filhantering
+# UPPDATERAD med TOTEX-stöd för effektiviseringskrav
 
 from __future__ import annotations
 from pathlib import Path
@@ -201,8 +202,8 @@ def detect_scenario_updates() -> Dict[str, Optional[Dict]]:
         Dict med information om tillgängliga scenarier för den inloggade organisationen:
         {
             'effektiviseringskrav': {
-                'file': 'scenario/effektiviseringskrav/exports_to_ir/stina/ir_paverkbara_*.parquet',
-                'name': 'ir_paverkbara_dea_method_20241204.parquet',
+                'file': 'scenario/effektiviseringskrav/exports_to_ir/stina/ir_effkrav_*.parquet',
+                'name': 'ir_effkrav_dea_method_20241204.parquet',
                 'created': '2024-12-04 15:30'
             } eller None,
             'kapitalbas': {
@@ -224,7 +225,8 @@ def detect_scenario_updates() -> Dict[str, Optional[Dict]]:
     # Leta efter effektiviseringskrav-filer i organisationsspecifik katalog
     effkrav_dir = Path(f"scenario/effektiviseringskrav/exports_to_ir/{org}/")
     if effkrav_dir.exists():
-        effkrav_files = list(effkrav_dir.glob("ir_paverkbara_*.parquet"))
+        # Stöd både nya och gamla filnamn
+        effkrav_files = list(effkrav_dir.glob("ir_effkrav_*.parquet")) + list(effkrav_dir.glob("ir_paverkbara_*.parquet"))
         if effkrav_files:
             # Ta senaste fil baserat på modifierad tid
             latest_effkrav = max(effkrav_files, key=lambda f: f.stat().st_mtime)
@@ -254,41 +256,25 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
     """
     Laddar och integrerar scenario-data från andra sektioner med ny DMU-baserad merge.
     
+    UPPDATERAD: För effektiviseringskrav returneras nu bara procenten - applicering sker i separat funktion.
+    
     Args:
         scenario_type: 'effektiviseringskrav' eller 'kapitalbas'
         scenario_file: Sökväg till scenario-fil (redan organisationsspecifik från detect_scenario_updates)
         baseline_df: Baseline-data för merge
         
     Returns:
-        DataFrame med uppdaterade värden från scenariot
+        DataFrame med uppdaterade värden från scenariot (för kapitalbas)
+        ELLER original baseline (för effektiviseringskrav - applicering sker senare)
     """
     try:
         scenario_df = pd.read_parquet(scenario_file)
         result_df = baseline_df.copy()
         
         if scenario_type == 'effektiviseringskrav':
-            # Stöd både äldre och nya kolumnnamn
-            candidate_cols = [c for c in ['Paverkbara_Target', 'Paverkbara_Nya'] if c in scenario_df.columns]
-            if not candidate_cols:
-                return baseline_df
-
-            value_col = candidate_cols[0]
-
-            # Merge-nyckel: använd REId (exporten innehåller både DMU och REId)
-            if 'REId' not in scenario_df.columns:
-                return baseline_df
-
-            merge_df = scenario_df[['REId', value_col]].rename(columns={value_col: 'Paverkbara_Scenario'})
-            result_df = result_df.merge(merge_df, on='REId', how='left')
-
-            mask = result_df['Paverkbara_Scenario'].notna()
-            if mask.any():
-                result_df.loc[mask, 'Paverkbara_Kostnader'] = result_df.loc[mask, 'Paverkbara_Scenario']
-                result_df.loc[mask, 'Källa_Paverkbara'] = 'Scenario (effektiviseringskrav)'
-                result_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
-
-            result_df = result_df.drop(columns=['Paverkbara_Scenario'])
-
+            # ÄNDRAT: Returnera bara baseline - applicering sker i separat funktion
+            # Detta behövs eftersom vi behöver veta method (OPEX/TOTEX) först
+            return baseline_df
         
         elif scenario_type == 'kapitalbas':
             # Ny logik för kapitalbas med DMU-merge
@@ -343,6 +329,66 @@ def load_scenario_data(scenario_type: str, scenario_file: str, baseline_df: pd.D
     except Exception as e:
         print(f"Fel vid laddning av scenario {scenario_type}: {e}")
         return baseline_df
+
+
+def apply_effektiviseringskrav_to_working_df(
+    working_df: pd.DataFrame,
+    effkrav_data: pd.DataFrame,
+    ir_baseline: pd.DataFrame,
+    method: str = 'OPEX'
+) -> pd.DataFrame:
+    """
+    NYTT: Applicerar effektiviseringskrav på working_df med vald metod (OPEX eller TOTEX).
+    
+    KRITISKT: working_df måste redan innehålla uppdaterad CAPEX om kapitalbas-scenario laddats.
+    Denna funktion anropas EFTER att kapitalbas-scenario applicerats.
+    
+    Args:
+        working_df: DataFrame som redan har scenario-CAPEX (om laddat)
+        effkrav_data: DataFrame med effektiviseringskrav från DEA (REId, Effkrav_proc)
+        ir_baseline: DataFrame med baseline-data från Excel (DT, DU)
+        method: 'OPEX' eller 'TOTEX'
+        
+    Returns:
+        DataFrame med uppdaterade påverkbara kostnader
+    """
+    from effektiviseringskrav.backend.ir_calculations import calculate_ir_paverkbara_export
+    
+    # Anropa beräkningsfunktionen med working_df som innehåller korrekt CAPEX
+    try:
+        export_data, metadata = calculate_ir_paverkbara_export(
+            dea_result=effkrav_data,
+            ir_baseline=ir_baseline,
+            working_df=working_df,  # Innehåller redan scenario-CAPEX om det finns!
+            method=method
+        )
+        
+        # Merge tillbaka till working_df
+        # Vi vill uppdatera Paverkbara_Kostnader med Paverkbara_Target från export
+        result_df = working_df.copy()
+        
+        # Skapa merge-data med nya påverkbara kostnader
+        merge_data = export_data[['REId', 'Paverkbara_Target']].rename(
+            columns={'Paverkbara_Target': 'Paverkbara_Kostnader_Ny'}
+        )
+        
+        result_df = result_df.merge(merge_data, on='REId', how='left')
+        
+        # Uppdatera där vi har nya värden
+        mask = result_df['Paverkbara_Kostnader_Ny'].notna()
+        if mask.any():
+            result_df.loc[mask, 'Paverkbara_Kostnader'] = result_df.loc[mask, 'Paverkbara_Kostnader_Ny']
+            result_df.loc[mask, 'Källa_Paverkbara'] = f'Scenario (effektiviseringskrav - {method})'
+            result_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
+        
+        # Rensa temporär kolumn
+        result_df = result_df.drop(columns=['Paverkbara_Kostnader_Ny'])
+        
+        return result_df
+        
+    except Exception as e:
+        print(f"Fel vid applicering av effektiviseringskrav: {e}")
+        return working_df
 
 
 def calculate_intaktsram(df: pd.DataFrame) -> pd.DataFrame:

@@ -5,6 +5,8 @@ Backend för IR-påverkbara kostnader beräkningar.
 Ren beräkningslogik utan UI-beroenden.
 Implementerar Ei:s Excel-exakta metod för beräkning av påverkbara kostnader.
 
+UPPDATERAD: Stöd för TOTEX-metod (effektiviseringskrav på OPEX + CAPEX)
+
 DESIGN:
 - Tar DataFrames som input, returnerar DataFrames som output
 - Inga Streamlit/Dash imports
@@ -149,15 +151,23 @@ def load_ir_paverkbara_baseline(filepath: str) -> pd.DataFrame:
 
 def calculate_ir_paverkbara_export(
     dea_result: pd.DataFrame, 
-    ir_baseline: pd.DataFrame
+    ir_baseline: pd.DataFrame,
+    working_df: pd.DataFrame,
+    method: str = 'OPEX'
 ) -> Tuple[pd.DataFrame, dict]:
     """
     Beräknar påverkbara kostnader med Excel-exakt precision.
+    
+    UPPDATERAD: Stöd för TOTEX-metod (effektiviseringskrav på OPEX + CAPEX).
     
     Implementerar Ei:s metod:
     1. Behåller fullständig precision genom hela beräkningen
     2. Avrundar endast slutresultatet för varje år
     3. Använder exakta värden från Excel, inte föravrundade
+    
+    METODER:
+    - 'OPEX': Effektiviseringskrav appliceras endast på påverkbara kostnader (traditionell metod)
+    - 'TOTEX': Effektiviseringskrav appliceras på OPEX + CAPEX (Ei:s förslag från 2020)
     
     Args:
         dea_result: DataFrame med DEA-resultat, måste innehålla:
@@ -166,6 +176,9 @@ def calculate_ir_paverkbara_export(
             - Effkrav_proc (årligt effektiviseringskrav som decimal)
             - Företag (optional, för metadata)
         ir_baseline: DataFrame från load_ir_paverkbara_baseline()
+        working_df: DataFrame med aktivt CAPEX-värde (scenario eller baseline)
+            Måste innehålla: REId, Kapitalkostnad_Total
+        method: 'OPEX' eller 'TOTEX'
         
     Returns:
         Tuple med:
@@ -173,8 +186,12 @@ def calculate_ir_paverkbara_export(
         - metadata: Dict med sammanfattning och diagnostik
         
     Raises:
-        ValueError: Om obligatoriska kolumner saknas
+        ValueError: Om obligatoriska kolumner saknas eller method är ogiltig
     """
+    # Validera method
+    if method not in ['OPEX', 'TOTEX']:
+        raise ValueError(f"Method måste vara 'OPEX' eller 'TOTEX', fick '{method}'")
+    
     # Robust kolumnhantering för DEA-resultat
     available_cols = list(dea_result.columns)
     
@@ -194,6 +211,13 @@ def calculate_ir_paverkbara_export(
     if missing_cols:
         raise ValueError(f"DEA-resultat saknar kolumner: {missing_cols}")
     
+    # Validera working_df för TOTEX-metod
+    if method == 'TOTEX':
+        if 'Kapitalkostnad_Total' not in working_df.columns:
+            raise ValueError("working_df måste innehålla 'Kapitalkostnad_Total' för TOTEX-metod")
+        if 'REId' not in working_df.columns:
+            raise ValueError("working_df måste innehålla 'REId' för TOTEX-metod")
+    
     # Skapa export-data
     export_data = dea_result[required_cols].copy()
     if foretag_col and foretag_col != 'Företag':
@@ -202,8 +226,16 @@ def calculate_ir_paverkbara_export(
     # Merge med IR baseline
     export_data = export_data.merge(ir_baseline, on='REId', how='left')
     
+    # För TOTEX: Merge med working_df för CAPEX
+    if method == 'TOTEX':
+        capex_data = working_df[['REId', 'Kapitalkostnad_Total']].copy()
+        export_data = export_data.merge(capex_data, on='REId', how='left', suffixes=('', '_capex'))
+    
     # Filtrera till kompletta data
     required_baseline_cols = ['B_raw', 'e_base']
+    if method == 'TOTEX':
+        required_baseline_cols.append('Kapitalkostnad_Total')
+    
     complete_mask = export_data[required_baseline_cols].notna().all(axis=1)
     
     n_incomplete = (~complete_mask).sum()
@@ -215,16 +247,34 @@ def calculate_ir_paverkbara_export(
         raise ValueError("Ingen REId har komplett baseline-data")
     
     # Konvertera till float64 för maximal precision
-    DT = export_data['B_raw'].astype(np.float64)
-    DU = export_data.get('Adj', 0).astype(np.float64).fillna(0.0)
+    DT_opex = export_data['B_raw'].astype(np.float64)
+    DU_opex = export_data.get('Adj', 0).astype(np.float64).fillna(0.0)
     e_base = export_data['e_base'].astype(np.float64)
     e_scn = export_data['Effkrav_proc'].astype(np.float64)
     
     # Årlig fördelning av NeonAndringar med full precision
-    Delta = DU / 4.0
+    Delta_opex = DU_opex / 4.0
     
-    # Bas för procentberäkning med full precision
-    B = DT + Delta
+    # === METODVAL: OPEX eller TOTEX ===
+    if method == 'OPEX':
+        # Traditionell metod: endast OPEX
+        DT = DT_opex
+        Delta = Delta_opex
+        B = DT + Delta
+        
+    elif method == 'TOTEX':
+        # TOTEX-metod: OPEX + CAPEX
+        CAPEX_periodsumma = export_data['Kapitalkostnad_Total'].astype(np.float64)
+        B_capex = CAPEX_periodsumma / 4.0  # Konvertera till årsbas
+        
+        # Kombinera OPEX och CAPEX
+        DT = DT_opex + B_capex  # Total "startvärde"
+        Delta = Delta_opex      # Neon gäller bara OPEX
+        B = DT + Delta          # Total årsbas för TOTEX
+        
+        # Spara CAPEX-komponenter för diagnostik
+        export_data['CAPEX_periodsumma'] = CAPEX_periodsumma
+        export_data['CAPEX_arsbas'] = B_capex
     
     def calculate_exact_yearly_values(DT_series, DU_series, e_series):
         """Beräknar årsvärden med Excel-exakt precision och avrundning"""
@@ -276,11 +326,15 @@ def calculate_ir_paverkbara_export(
         
         return results
     
-    # SCENARIO-BERÄKNING
-    scn_results = calculate_exact_yearly_values(DT, DU, e_scn)
+    # SCENARIO-BERÄKNING (med vald metod)
+    scn_results = calculate_exact_yearly_values(DT, Delta, e_scn)
     
-    # BASELINE-BERÄKNING
-    base_results = calculate_exact_yearly_values(DT, DU, e_base)
+    # BASELINE-BERÄKNING (med vald metod)
+    if method == 'OPEX':
+        base_results = calculate_exact_yearly_values(DT, Delta, e_base)
+    elif method == 'TOTEX':
+        # För TOTEX baseline: använd samma CAPEX men baseline-krav
+        base_results = calculate_exact_yearly_values(DT, Delta, e_base)
     
     # EXTRAHERA RESULTAT
     # Scenario-värden
@@ -302,6 +356,7 @@ def calculate_ir_paverkbara_export(
     export_data['Paverkbara_Target'] = total_4yr_scn
     export_data['Total_Reduction_tkr'] = total_4yr_base - total_4yr_scn
     export_data['Effektiviseringskrav'] = e_scn
+    export_data['Method'] = method
     
     # Lägg till årsvisa värden
     export_data['Y2024_scenario'] = y2024_scn
@@ -316,7 +371,7 @@ def calculate_ir_paverkbara_export(
     
     # Debug-information med full precision
     export_data['DT_exact'] = DT
-    export_data['DU_exact'] = DU
+    export_data['DU_exact'] = DU_opex if method == 'OPEX' else Delta  # Visa relevanta värden
     export_data['Delta_exact'] = Delta
     export_data['B_exact'] = B
     export_data['e_base_exact'] = e_base
@@ -329,26 +384,34 @@ def calculate_ir_paverkbara_export(
         export_data[f'Inc_{year}_base'] = [r['inc'][i] for r in base_results]
         export_data[f'Avdrag_{year}_base'] = [r['avdrag'][i] for r in base_results]
     
-    export_data['Analysis_Method'] = 'Excel_exact_precision_fixed'
+    export_data['Analysis_Method'] = f'Excel_exact_precision_{method}'
     
     # Metadata för diagnostik
     metadata = {
         'n_dea_input': len(dea_result),
         'n_with_baseline': len(export_data),
         'n_excluded': n_incomplete,
+        'method': method,
         'total_baseline_tkr': float(export_data['Paverkbara_Baseline_4yr'].sum()),
         'total_target_tkr': float(export_data['Paverkbara_Target'].sum()),
         'total_reduction_tkr': float(export_data['Total_Reduction_tkr'].sum()),
         'mean_effkrav_pct': float(export_data['Effektiviseringskrav'].mean() * 100),
-        'analysis_method': 'Excel_exact_precision_fixed'
+        'analysis_method': f'Excel_exact_precision_{method}'
     }
+    
+    # TOTEX-specifik metadata
+    if method == 'TOTEX':
+        metadata['mean_capex_arsbas_tkr'] = float(export_data['CAPEX_arsbas'].mean())
+        metadata['total_capex_period_tkr'] = float(export_data['CAPEX_periodsumma'].sum())
     
     return export_data, metadata
 
 
 def calculate_ir_paverkbara_from_file(
     dea_result: pd.DataFrame,
-    ir_baseline_file: str
+    ir_baseline_file: str,
+    working_df: pd.DataFrame,
+    method: str = 'OPEX'
 ) -> Tuple[pd.DataFrame, dict]:
     """
     Convenience-funktion som laddar baseline OCH beräknar.
@@ -356,9 +419,11 @@ def calculate_ir_paverkbara_from_file(
     Args:
         dea_result: DataFrame med DEA-resultat
         ir_baseline_file: Sökväg till Excel-fil med baseline
+        working_df: DataFrame med aktivt CAPEX-värde
+        method: 'OPEX' eller 'TOTEX'
         
     Returns:
         Samma som calculate_ir_paverkbara_export()
     """
     ir_baseline = load_ir_paverkbara_baseline(ir_baseline_file)
-    return calculate_ir_paverkbara_export(dea_result, ir_baseline)
+    return calculate_ir_paverkbara_export(dea_result, ir_baseline, working_df, method)

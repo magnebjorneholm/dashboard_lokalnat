@@ -1,6 +1,6 @@
 # foretag/view/effektivitet.py
 # Företagsspecifik vy för effektiviseringsanalys
-# Fokus på företagets verkliga behov utan teknisk störning
+# UPPDATERAD: Stöd för TOTEX-metod vid beräkning av påverkbara kostnader
 
 import streamlit as st
 import pandas as pd
@@ -13,7 +13,7 @@ from pathlib import Path
 from effektiviseringskrav.backend.dea_model import run_dea_model
 from effektiviseringskrav.backend.data_loader import merge_capex_scenario, load_data
 from effektiviseringskrav.backend.ir_calculations import calculate_ir_paverkbara_from_file
-from effektiviseringskrav.backend.ir_export import export_ir_paverkbara_scenario
+from effektiviseringskrav.backend.ir_export import export_effektiviseringskrav_scenario  # NYTT: Uppdaterad import
 from effektiviseringskrav.backend.spatial_analysis import calculate_company_neighbor_gap
 
 # Frontend imports
@@ -27,6 +27,9 @@ from foretag.app.kapitalbas_data_loader import (
     get_user_dmu,
     load_reconciliation_foretag_info
 )
+
+# NYTT: För att bygga working_df
+from intaktsram.app.data_loader import load_baseline_data
 
 # Autentisering
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
@@ -152,9 +155,10 @@ def show_foretag_effektivitet():
                     outlier_krav=dea_outlier_krav/100
                 )
                 
-                # Spara senaste körning
+                # NYTT: Spara även DEA-data för senare användning (CAPEX-värden)
                 st.session_state[f'latest_dea_result_{user_dmu}'] = {
                     'result': result,
+                    'dea_data': df,  # KRITISKT: Spara DEA-input-data
                     'params': {
                         'input_cols': input_cols,
                         'output_cols': output_cols,
@@ -228,6 +232,7 @@ def show_dea_results(latest_result, user_dmu, company_name):
     
     result = latest_result['result']
     params = latest_result['params']
+    dea_data = latest_result.get('dea_data')  # NYTT: Hämta DEA-input-data
     
     # Filtrera till företaget
     company_result = result[result['DMU'] == user_dmu]
@@ -280,8 +285,44 @@ def show_dea_results(latest_result, user_dmu, company_name):
         else:
             st.metric("vs grannar", "N/A", help="Geografisk data saknas")
     
-    # === PÅVERKBARA KOSTNADER ===
-    company_paverkbara = calculate_company_paverkbara_costs(company_result)
+    # === PÅVERKBARA KOSTNADER med METODVAL ===
+    st.markdown("---")
+    st.subheader("Påverkbara kostnader")
+    
+    # NYTT: Metodval för påverkbara kostnader
+    col_method, col_info = st.columns([1, 2])
+    
+    with col_method:
+        ir_method = st.radio(
+            "Applicera effektiviseringskrav på:",
+            options=['OPEX', 'TOTEX'],
+            index=0,
+            help=(
+                "OPEX: Endast påverkbara kostnader (traditionell)\n"
+                "TOTEX: Total kostnad inkl. CAPEX (Ei:s förslag 2020)"
+            ),
+            key=f"ir_method_{user_dmu}"
+        )
+    
+    with col_info:
+        if ir_method == 'TOTEX':
+            st.info(
+                "**TOTEX-metod:** Effektiviseringskravet appliceras på summan av "
+                "påverkbara kostnader (OPEX) och kapitalkostnad (CAPEX) från 4-årsperioden."
+            )
+        else:
+            st.info(
+                "**OPEX-metod:** Effektiviseringskravet appliceras endast på "
+                "påverkbara kostnader enligt traditionell metod."
+            )
+    
+    # Beräkna påverkbara kostnader med vald metod
+    company_paverkbara = calculate_company_paverkbara_costs(
+        company_result, 
+        dea_data, 
+        user_dmu,
+        method=ir_method
+    )
     
     if company_paverkbara is not None:
         col1, col2, col3 = st.columns(3)
@@ -295,6 +336,9 @@ def show_dea_results(latest_result, user_dmu, company_name):
             reduction = company_paverkbara.get('reduction_4yr', 0) / 1000
             reduction_pct = (reduction / baseline * 100) if baseline > 0 else 0
             st.metric("Delta", f"{reduction:.1f} MSEK ({reduction_pct:.1f}%)")
+        
+        # Visa metod som användes
+        st.caption(f"Beräknat med **{ir_method}**-metod")
     else:
         st.info("Påverkbara kostnader kunde inte beräknas för ditt företag")
 
@@ -357,20 +401,24 @@ def show_dea_results(latest_result, user_dmu, company_name):
     
     # IR-export (Punkt 6) 
     with col_ir:
-        st.markdown("**Påverkbara kostnader**")
+        st.markdown("**Effektiviseringskrav till IR**")
         if company_paverkbara is not None:
             export_name = st.text_input(
                 "Export-namn", 
                 value=f"DEA_{company_name.replace(' ', '_')}", 
-                key="ir_export_name"
+                key=f"ir_export_name_{user_dmu}"
             )
             
-            if st.button("Exportera till IR-dekomposition"):
+            if st.button("Exportera till IR-dekomposition", key=f"export_ir_{user_dmu}"):
                 try:
-                    export_path = export_paverkbara_to_ir(company_result, export_name)
+                    export_path = export_effkrav_to_ir(
+                        company_result, 
+                        export_name,
+                        method=ir_method  # NYTT: Skicka vald metod
+                    )
                     st.success("Export till IR klar!")
                     st.caption(f"Fil: {export_path}")
-                    st.info("Nu tillgängligt i IR-dekompositionen")
+                    st.info(f"Metod: {ir_method} • Nu tillgängligt i IR-dekompositionen")
                 except Exception as e:
                     st.error(f"Export misslyckades: {e}")
         else:
@@ -399,15 +447,32 @@ def show_waiting_state(df_full, user_dmu, company_name):
                 st.metric("Totalt i analys", len(df_full))
 
 
-def calculate_company_paverkbara_costs(company_result):
-    """Beräknar påverkbara kostnader för företaget"""
+def calculate_company_paverkbara_costs(company_result, dea_data, user_dmu, method='OPEX'):
+    """
+    Beräknar påverkbara kostnader för företaget.
+    
+    UPPDATERAD: Stöd för method-parameter och working_df.
+    """
     
     try:
         ir_baseline_file = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
         if not Path(ir_baseline_file).exists():
             return None
         
-        export_data, metadata = calculate_ir_paverkbara_from_file(company_result, ir_baseline_file)
+        # NYTT: Bygg working_df från DEA-data och baseline
+        working_df = build_working_df_from_dea(dea_data, user_dmu, ir_baseline_file)
+        
+        if working_df is None:
+            st.warning("Kunde inte bygga working_df för CAPEX-värden")
+            return None
+        
+        # Anropa med method och working_df
+        export_data, metadata = calculate_ir_paverkbara_from_file(
+            dea_result=company_result,
+            ir_baseline_file=ir_baseline_file,
+            working_df=working_df,
+            method=method
+        )
         
         if export_data is None or export_data.empty:
             return None
@@ -417,28 +482,75 @@ def calculate_company_paverkbara_costs(company_result):
             'target_4yr': export_data['Paverkbara_Target'].sum(),
             'reduction_4yr': export_data['Total_Reduction_tkr'].sum(),
             'reid_count': len(export_data),
+            'method': method,
             'detailed_data': export_data
         }
         
     except Exception as e:
         st.error(f"Fel vid beräkning av påverkbara kostnader: {e}")
+        import traceback
+        st.error(traceback.format_exc())
         return None
 
 
-def export_paverkbara_to_ir(company_result, scenario_name):
-    """Exporterar påverkbara kostnader till IR"""
+def build_working_df_from_dea(dea_data, user_dmu, ir_baseline_file):
+    """
+    NYTT: Bygger working_df från DEA-data och IR-baseline.
+    
+    Detta behövs för att TOTEX-metoden ska kunna hämta CAPEX-värden.
+    """
     
     try:
-        ir_baseline_file = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
-        export_data, metadata = calculate_ir_paverkbara_from_file(company_result, ir_baseline_file)
+        # Ladda IR baseline för REId-struktur
+        ir_baseline = load_baseline_data(ir_baseline_file)
         
-        if export_data is None or export_data.empty:
-            raise Exception("Ingen export-data kunde beräknas")
+        # Filtrera till företagets REId:s
+        company_reids = ir_baseline[ir_baseline['DMU'] == user_dmu]['REId'].tolist()
+        working_df = ir_baseline[ir_baseline['REId'].isin(company_reids)].copy()
         
-        data_path, meta_path, summary = export_ir_paverkbara_scenario(
-            export_data, 
-            scenario_name,
-            st.session_state  # Session state för org-identifiering
+        # Hämta CAPEX från DEA-data (kan vara scenario eller baseline)
+        if dea_data is not None and user_dmu in dea_data['DMU'].values:
+            company_dea = dea_data[dea_data['DMU'] == user_dmu].iloc[0]
+            
+            # Identifiera vilken CAPEX-kolumn som användes i DEA
+            # Prio: scenario-CAPEX > baseline-CAPEX
+            capex_col = None
+            if 'CAPEX_2024_wacc_0p0475' in company_dea.index and pd.notna(company_dea.get('CAPEX_2024_wacc_0p0475')):
+                capex_col = 'CAPEX_2024_wacc_0p0475'
+            elif 'CAPEX' in company_dea.index:
+                capex_col = 'CAPEX'
+            
+            if capex_col:
+                # Omvandla från årssnitt till 4-årsperiod
+                capex_4yr = company_dea[capex_col] * 4
+                
+                # Applicera på alla företagets REId (fördela jämnt)
+                capex_per_reid = capex_4yr / len(company_reids) if len(company_reids) > 0 else capex_4yr
+                working_df['Kapitalkostnad_Total'] = capex_per_reid
+        
+        return working_df
+        
+    except Exception as e:
+        print(f"Fel vid byggande av working_df: {e}")
+        import traceback
+        print(traceback.format_exc())
+        return None
+
+
+def export_effkrav_to_ir(company_result, scenario_name, method='OPEX'):
+    """
+    Exporterar effektiviseringskrav-procent till IR.
+    
+    UPPDATERAD: Exporterar bara krav-procent, inte beräknade kostnader.
+    IR ansvarar för att applicera kravet enligt vald metod.
+    """
+    
+    try:
+        # UPPDATERAD: Använd nya export-funktionen som bara exporterar krav-procent
+        data_path, meta_path, summary = export_effektiviseringskrav_scenario(
+            dea_result=company_result,
+            scenario_name=scenario_name,
+            session_state=st.session_state
         )
         
         return data_path

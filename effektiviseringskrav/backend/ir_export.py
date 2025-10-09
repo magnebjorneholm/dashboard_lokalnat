@@ -1,15 +1,15 @@
 """
-Backend för export av IR-påverkbara kostnader.
-===============================================
+Backend för export av effektiviseringskrav till IR.
+====================================================
 
-Hanterar filskrivning och metadata-generering för IR-scenarion.
-Använder session_utils för organisationsspecifika kataloger.
+UPPDATERAD VERSION: Exporterar endast effektiviseringskrav-procent.
+Beräkningen av påverkbara kostnader flyttad till IR-modulen.
 
 DESIGN:
+- Exporterar ENDAST: REId, DMU, Företag, Effkrav_proc
+- Ingen beräkning av kostnader här
+- IR ansvarar för att applicera kravet på OPEX eller TOTEX
 - UI-agnostisk: tar session_state som optional parameter
-- Skriver parquet + JSON metadata
-- Returnerar sökvägar för UI-feedback
-- Inga Streamlit/Dash imports
 """
 
 from pathlib import Path
@@ -26,20 +26,29 @@ from core.session_utils import get_user_org, ensure_org_dir
 BASE_EXPORT_DIR = "scenario/effektiviseringskrav/exports_to_ir"
 
 
-def export_ir_paverkbara_scenario(
-    export_data: pd.DataFrame,
+def export_effektiviseringskrav_scenario(
+    dea_result: pd.DataFrame,
     scenario_name: str,
     session_state: Optional[Dict[str, Any]] = None
 ) -> Tuple[str, str, dict]:
     """
-    Exporterar påverkbara kostnader till organisationsspecifik katalog.
+    Exporterar effektiviseringskrav-procent till organisationsspecifik katalog.
+    
+    FÖRENKLAD VERSION: Exporterar endast kravprocenten, inte beräknade kostnader.
+    IR-modulen ansvarar för att applicera kravet på OPEX eller TOTEX.
     
     Skapar två filer:
-    1. Parquet-fil med data
+    1. Parquet-fil med kravprocent per REId/DMU
     2. JSON-fil med metadata
     
     Args:
-        export_data: DataFrame från calculate_ir_paverkbara_export()
+        dea_result: DataFrame från DEA med kolumner:
+            - DMU: DMU-nummer
+            - REId: Redovisningsenhet (kan vara flera per DMU)
+            - Företag: Företagsnamn (optional)
+            - Effkrav_proc: Årligt effektiviseringskrav som decimal (t.ex. 0.0125)
+            - Effektivitet: Effektivitetsmått från DEA (optional, för metadata)
+            - is_outlier: Om företaget är outlier (optional, för metadata)
         scenario_name: Namn på scenariot (används i filnamn)
         session_state: Session state dict (optional, för org-identifiering)
         
@@ -50,17 +59,13 @@ def export_ir_paverkbara_scenario(
         - summary: Dict med sammanfattning för UI-feedback
         
     Raises:
-        ValueError: Om export_data saknar obligatoriska kolumner
+        ValueError: Om dea_result saknar obligatoriska kolumner
     """
-    # Validera input
-    required_cols = [
-        'DMU', 'REId', 'Paverkbara_Baseline_4yr', 
-        'Paverkbara_Target', 'Effektiviseringskrav', 'Total_Reduction_tkr'
-    ]
-    
-    missing_cols = [col for col in required_cols if col not in export_data.columns]
+    # Validera input - endast grundläggande kolumner krävs
+    required_cols = ['DMU', 'REId', 'Effkrav_proc']
+    missing_cols = [col for col in required_cols if col not in dea_result.columns]
     if missing_cols:
-        raise ValueError(f"Export data saknar obligatoriska kolumner: {missing_cols}")
+        raise ValueError(f"DEA-resultat saknar obligatoriska kolumner: {missing_cols}")
     
     # Hämta organisation och skapa export-katalog
     org = get_user_org(session_state)
@@ -72,51 +77,53 @@ def export_ir_paverkbara_scenario(
     if not safe_name:
         safe_name = "unnamed"
     
-    filename = f"ir_paverkbara_{safe_name}_{timestamp}.parquet"
+    filename = f"ir_effkrav_{safe_name}_{timestamp}.parquet"
     filepath = export_dir / filename
     
-    # Förbered final export-data (endast nödvändiga kolumner för IR)
-    export_cols = [
-        'DMU', 'REId', 'Paverkbara_Baseline_4yr', 'Paverkbara_Target', 
-        'Effektiviseringskrav', 'Total_Reduction_tkr'
-    ]
+    # Förbered minimal export-data (endast det som IR behöver)
+    export_cols = ['DMU', 'REId', 'Effkrav_proc']
     
-    # Lägg till Företag om den finns
-    if 'Företag' in export_data.columns:
+    # Lägg till Företag om den finns (hjälpsam för IR-UI)
+    if 'Företag' in dea_result.columns:
         export_cols.insert(2, 'Företag')
     
-    # Lägg till Analysis_Method om den finns
-    if 'Analysis_Method' in export_data.columns:
-        export_cols.append('Analysis_Method')
-    
-    final_export = export_data[export_cols].copy()
+    final_export = dea_result[export_cols].copy()
     
     # Exportera som parquet
     final_export.to_parquet(filepath, index=False)
     
-    # Beräkna sammanfattning
+    # Beräkna sammanfattning för feedback
     summary = {
         "reid_count": len(final_export),
-        "total_baseline_tkr": float(final_export['Paverkbara_Baseline_4yr'].sum()),
-        "total_target_tkr": float(final_export['Paverkbara_Target'].sum()),
-        "total_reduction_tkr": float(final_export['Total_Reduction_tkr'].sum()),
-        "mean_effkrav_pct": float(final_export['Effektiviseringskrav'].mean() * 100),
+        "dmu_count": final_export['DMU'].nunique(),
+        "mean_effkrav_pct": float(final_export['Effkrav_proc'].mean() * 100),
+        "min_effkrav_pct": float(final_export['Effkrav_proc'].min() * 100),
+        "max_effkrav_pct": float(final_export['Effkrav_proc'].max() * 100),
     }
     
     # Skapa metadata-fil
     metadata = {
-        "description": "Påverkbara kostnader baserat på DEA-effektiviseringskrav för IR-dekomposition",
+        "description": "Effektiviseringskrav-procent från DEA för applicering i IR-dekomposition",
         "scenario_name": scenario_name,
         "organization": org,
-        "analysis_method": export_data.get('Analysis_Method', ['DEA_corrected_exact_columns'])[0] 
-                          if 'Analysis_Method' in export_data.columns else "DEA_corrected_exact_columns",
+        "analysis_method": _extract_analysis_method(dea_result),
         "export_timestamp": datetime.now().isoformat(),
-        "price_year": 2022,
-        "unit": "tkr",
-        "level": "REId",
-        "period": "2024-2027",
+        "application_note": "Appliceras i IR på antingen OPEX eller TOTEX enligt användarval",
+        "data_format": {
+            "DMU": "DMU-nummer (integer)",
+            "REId": "Redovisningsenhet ID (string)",
+            "Företag": "Företagsnamn (string, optional)",
+            "Effkrav_proc": "Årligt effektiviseringskrav (decimal, t.ex. 0.0125 = 1.25%)"
+        },
         **summary  # Merge summary into metadata
     }
+    
+    # Lägg till extra DEA-metadata om tillgänglig
+    if 'Effektivitet' in dea_result.columns:
+        metadata['mean_efficiency'] = float(dea_result['Effektivitet'].mean())
+    
+    if 'is_outlier' in dea_result.columns:
+        metadata['outlier_count'] = int(dea_result['is_outlier'].sum())
     
     metadata_path = filepath.with_suffix('.json')
     with open(metadata_path, 'w', encoding='utf-8') as f:
@@ -126,11 +133,20 @@ def export_ir_paverkbara_scenario(
     return str(filepath), str(metadata_path), summary
 
 
+def _extract_analysis_method(dea_result: pd.DataFrame) -> str:
+    """Extraherar analysmetod från DEA-resultat om tillgänglig."""
+    if 'Analysis_Method' in dea_result.columns:
+        return dea_result['Analysis_Method'].iloc[0] if not dea_result.empty else "DEA"
+    return "DEA"
+
+
 def list_available_scenarios(
     session_state: Optional[Dict[str, Any]] = None
 ) -> pd.DataFrame:
     """
-    Listar alla tillgängliga IR-påverkbara scenarion för aktuell organisation.
+    Listar alla tillgängliga effektiviseringskrav-scenarion för aktuell organisation.
+    
+    UPPDATERAD: Letar efter nya filnamn (ir_effkrav_*.parquet)
     
     Args:
         session_state: Session state dict (optional)
@@ -141,7 +157,7 @@ def list_available_scenarios(
         - scenario_name: Scenario-namn från metadata
         - timestamp: Export-tidsstämpel
         - reid_count: Antal REId
-        - total_reduction_msek: Total reduktion i MSEK
+        - mean_effkrav_pct: Medel effektiviseringskrav (%)
         - filepath: Fullständig sökväg
     """
     org = get_user_org(session_state)
@@ -150,30 +166,34 @@ def list_available_scenarios(
     if not export_dir.exists():
         return pd.DataFrame(columns=[
             'filename', 'scenario_name', 'timestamp', 
-            'reid_count', 'total_reduction_msek', 'filepath'
+            'reid_count', 'mean_effkrav_pct', 'filepath'
         ])
     
     scenarios = []
     
-    for parquet_file in sorted(export_dir.glob("ir_paverkbara_*.parquet")):
-        meta_file = parquet_file.with_suffix('.json')
-        
-        if meta_file.exists():
-            try:
-                with open(meta_file, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
-                
-                scenarios.append({
-                    'filename': parquet_file.name,
-                    'scenario_name': metadata.get('scenario_name', 'Unknown'),
-                    'timestamp': metadata.get('export_timestamp', 'Unknown'),
-                    'reid_count': metadata.get('reid_count', 0),
-                    'total_reduction_msek': metadata.get('total_reduction_tkr', 0) / 1000,
-                    'filepath': str(parquet_file)
-                })
-            except Exception:
-                # Skippa filer med korrupt metadata
-                continue
+    # Sök både nya och gamla filnamn för bakåtkompatibilitet
+    pattern_list = ["ir_effkrav_*.parquet", "ir_paverkbara_*.parquet"]
+    
+    for pattern in pattern_list:
+        for parquet_file in sorted(export_dir.glob(pattern)):
+            meta_file = parquet_file.with_suffix('.json')
+            
+            if meta_file.exists():
+                try:
+                    with open(meta_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                    
+                    scenarios.append({
+                        'filename': parquet_file.name,
+                        'scenario_name': metadata.get('scenario_name', 'Unknown'),
+                        'timestamp': metadata.get('export_timestamp', 'Unknown'),
+                        'reid_count': metadata.get('reid_count', 0),
+                        'mean_effkrav_pct': metadata.get('mean_effkrav_pct', 0),
+                        'filepath': str(parquet_file)
+                    })
+                except Exception:
+                    # Skippa filer med korrupt metadata
+                    continue
     
     return pd.DataFrame(scenarios)
 
@@ -182,14 +202,14 @@ def load_scenario(
     filepath: str
 ) -> Tuple[pd.DataFrame, dict]:
     """
-    Laddar ett sparat scenario från parquet + metadata.
+    Laddar ett sparat effektiviseringskrav-scenario.
     
     Args:
         filepath: Sökväg till parquet-fil
         
     Returns:
         Tuple med:
-        - data: DataFrame med scenario-data
+        - data: DataFrame med scenario-data (REId, DMU, Effkrav_proc)
         - metadata: Dict med metadata
         
     Raises:

@@ -12,9 +12,13 @@ from intaktsram.app.data_loader import (
     load_dmu_mapping, 
     detect_scenario_updates,
     load_scenario_data,
-    calculate_intaktsram
+    calculate_intaktsram,
+    apply_effektiviseringskrav_to_working_df
 )
 from core.session_utils import get_user_org, ensure_org_dir
+
+# Import för effektiviseringskrav-beräkningar
+from effektiviseringskrav.backend.ir_calculations import load_ir_paverkbara_baseline
 
 
 def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
@@ -96,7 +100,7 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
     show_main_waterfall_view(entity_data, selected_entity, entity_col)
     
     # === KOMPONENT-KONTROLLER ===
-    show_component_controls(entity_data)
+    show_component_controls(entity_data, df_working)
     
     # === NYA JÄMFÖRELSEVYER ===
     show_comparison_views(df_working)
@@ -187,29 +191,27 @@ def reset_all_components():
 
 
 def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
-    """Hämtar aktuell arbetsdataframe (baseline eller scenario)."""
+    """
+    Hämtar aktuell arbetsdataframe (baseline eller scenario).
+    
+    UPPDATERAD: Korrekt ordningsföljd - kapitalbas FÖRST, sedan effektiviseringskrav.
+    """
     if not st.session_state.current_scenario_name or 'scenario_data' not in st.session_state:
         return baseline_df.copy()
     
     # Börja med baseline
     working_df = st.session_state.scenario_data['baseline'].copy()
     
-    # Applicera scenario-modifikationer
+    # Applicera scenario-modifikationer i KORREKT ORDNING
     modifications = st.session_state.scenario_data.get('modifications', {})
     
-    for component, mod_data in modifications.items():
+    # === STEG 1: KAPITALBAS FÖRST (uppdaterar CAPEX i working_df) ===
+    if 'kapitalkostnad' in modifications:
+        mod_data = modifications['kapitalkostnad']
+        
         if 'values' not in mod_data:
-            continue
-        
-        if component == 'paverkbara':
-            # REId-baserade modifikationer (som tidigare)
-            for reid, new_value in mod_data['values'].items():
-                mask = working_df['REId'] == reid
-                working_df.loc[mask, 'Paverkbara_Kostnader'] = new_value
-                working_df.loc[mask, 'Källa_Paverkbara'] = f"Scenario ({mod_data.get('source', 'manual')})"
-                working_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
-        
-        elif component == 'kapitalkostnad':
+            pass  # Skippa om ingen data
+        else:
             # Kolla om det är DMU-baserat eller REId-baserat
             merge_on = mod_data.get('merge_on', 'REId')
             
@@ -244,7 +246,47 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
                     working_df.loc[mask, 'Källa_Kapitalkostnad'] = f"Scenario ({mod_data.get('source', 'manual')})"
                     working_df.loc[mask, 'Uppdaterad_Kapitalkostnad'] = True
     
-    # Omberäkna total intäktsram
+    # === STEG 2: EFFEKTIVISERINGSKRAV SEDAN (använder uppdaterad CAPEX från steg 1) ===
+    if 'paverkbara' in modifications:
+        mod_data = modifications['paverkbara']
+        
+        if mod_data.get('source') == 'effektiviseringskrav':
+            # NYTT: Applicera effektiviseringskrav med vald metod
+            scenario_file = mod_data.get('file')
+            method = mod_data.get('method', 'OPEX')
+            
+            if scenario_file:
+                try:
+                    # Ladda effektiviseringskrav-data
+                    effkrav_data = pd.read_parquet(scenario_file)
+                    
+                    # Ladda IR baseline för OPEX-beräkning
+                    ir_baseline_file = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
+                    ir_baseline = load_ir_paverkbara_baseline(ir_baseline_file)
+                    
+                    # Applicera med vald metod
+                    # KRITISKT: working_df innehåller nu uppdaterad CAPEX från steg 1!
+                    working_df = apply_effektiviseringskrav_to_working_df(
+                        working_df=working_df,      # HAR scenario-CAPEX!
+                        effkrav_data=effkrav_data,
+                        ir_baseline=ir_baseline,
+                        method=method
+                    )
+                    
+                except Exception as e:
+                    print(f"Fel vid applicering av effektiviseringskrav: {e}")
+                    import traceback
+                    print(traceback.format_exc())
+        
+        elif 'values' in mod_data:
+            # Manuella ändringar (REId-baserade)
+            for reid, new_value in mod_data['values'].items():
+                mask = working_df['REId'] == reid
+                working_df.loc[mask, 'Paverkbara_Kostnader'] = new_value
+                working_df.loc[mask, 'Källa_Paverkbara'] = f"Scenario ({mod_data.get('source', 'manual')})"
+                working_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
+    
+    # === STEG 3: OMBERÄKNA TOTALER ===
     working_df = calculate_intaktsram(working_df)
     
     return working_df
@@ -442,6 +484,318 @@ def calculate_delta_text(current_value: float, baseline_value: Optional[float], 
         return f"{prefix}Δ {delta:+,.0f} ({delta_pct:+.1f}%)"
     else:
         return '✅' if is_updated else '➖'
+
+
+def show_component_controls(entity_data: pd.Series, df_working: pd.DataFrame):
+    """
+    Visar kontroller för att uppdatera komponenter.
+    
+    UPPDATERAD: Stöd för TOTEX-metodval för effektiviseringskrav.
+    """
+    
+    st.sidebar.header("Uppdatera komponenter")
+    
+    if not st.session_state.current_scenario_name:
+        st.sidebar.info("Skapa ett scenario för att kunna uppdatera komponenter")
+        return
+    
+    # Detect scenario updates från andra sektioner  
+    scenario_updates = detect_scenario_updates()
+    
+    # Visa tillgängliga scenarier med filnamn och cache-kontroll
+    st.sidebar.write("**Tillgängliga scenarier:**")
+    for key, value in scenario_updates.items():
+        if value is not None:
+            status = "✅"
+            # Korta av filnamnet för bättre visning
+            short_name = value['name'][:30] + "..." if len(value['name']) > 30 else value['name']
+            st.sidebar.caption(f"{status} **{key}**")
+            st.sidebar.caption(f"   {short_name}")
+            st.sidebar.caption(f"   {value['created']}")
+        else:
+            status = "❌"
+            st.sidebar.caption(f"{status} {key} - Ingen export hittad")
+    
+    # Cache-varning för äldre scenarier
+    if any(scenario_updates.values()):
+        st.sidebar.info("Om problem uppstår, rensa Streamlit cache (Ctrl+Shift+R)")
+    
+    # === PÅVERKBARA KOSTNADER med TOTEX-stöd ===
+    st.sidebar.subheader("Påverkbara kostnader")
+    
+    if scenario_updates['effektiviseringskrav']:
+        st.sidebar.write("**Effektiviseringskrav tillgängligt**")
+        
+        # === NYTT: Metodval (OPEX eller TOTEX) ===
+        method = st.sidebar.radio(
+            "Applicera krav på:",
+            options=['OPEX', 'TOTEX'],
+            index=0,
+            help=(
+                "OPEX: Endast påverkbara kostnader (nuvarande metod)\n"
+                "TOTEX: Total kostnad inkl. CAPEX (Ei:s förslag från 2020)"
+            ),
+            key="effkrav_method"
+        )
+        
+        # === NYTT: Visa nuvarande värden INNAN krav appliceras ===
+        with st.sidebar.expander("📊 Nuvarande värden (4-årsperiod)"):
+            # Hämta baseline OPEX
+            opex_baseline = entity_data.get('Paverkbara_Kostnader_Baseline', 
+                                           entity_data.get('Paverkbara_Kostnader', 0))
+            
+            # Hämta CAPEX (scenario eller baseline)
+            capex_value = entity_data.get('Kapitalkostnad_Total', 0)
+            capex_updated = entity_data.get('Uppdaterad_Kapitalkostnad', False)
+            capex_source = "Scenario" if capex_updated else "Baseline"
+            
+            st.write(f"• **OPEX:** Baseline")
+            st.write(f"  {opex_baseline:,.0f} tkr")
+            
+            st.write(f"• **CAPEX:** {capex_source}")
+            st.write(f"  {capex_value:,.0f} tkr")
+            
+            if method == 'TOTEX':
+                totex = opex_baseline + capex_value
+                st.write(f"• **TOTEX:**")
+                st.write(f"  {totex:,.0f} tkr")
+                st.caption("(OPEX + CAPEX)")
+        
+        # Knapp för att applicera
+        if st.sidebar.button("Hämta från Effektiviseringskrav", use_container_width=True):
+            update_component_from_scenario(
+                component='paverkbara',
+                source='effektiviseringskrav',
+                scenario_file=scenario_updates['effektiviseringskrav']['file'],
+                method=method,
+                df_working=df_working
+            )
+    else:
+        st.sidebar.info("Ingen effektiviseringskrav-export hittades")
+    
+    # Manuell uppdatering
+    current_paverkbara = entity_data.get('Paverkbara_Kostnader', 0)
+    new_paverkbara = st.sidebar.number_input(
+        "Ny nivå (tkr)",
+        value=float(current_paverkbara),
+        key="manual_paverkbara"
+    )
+    if st.sidebar.button("Uppdatera manuellt", key="update_paverkbara"):
+        update_component_manual('paverkbara', entity_data['REId'], new_paverkbara)
+    
+    # === KAPITALKOSTNAD ===
+    st.sidebar.subheader("Kapitalkostnad")
+    if scenario_updates['kapitalbas']:
+        if st.sidebar.button("Hämta från Kapitalbas", use_container_width=True):
+            update_component_from_scenario(
+                component='kapitalkostnad',
+                source='kapitalbas',
+                scenario_file=scenario_updates['kapitalbas']['file'],
+                df_working=df_working
+            )
+    else:
+        st.sidebar.info("Ingen kapitalbas-export hittades")
+    
+    # Manuell uppdatering - stöd för separerade komponenter
+    has_detailed_capital = all(col in entity_data.index for col in ['Avskrivningar', 'Avkastning'])
+    
+    if has_detailed_capital:
+        # Visa separata kontroller för avskrivning och avkastning
+        current_avskrivning = entity_data.get('Avskrivningar', 0)
+        current_avkastning = entity_data.get('Avkastning', 0)
+        
+        new_avskrivning = st.sidebar.number_input(
+            "Avskrivningar (tkr)", 
+            value=float(current_avskrivning),
+            key="manual_avskrivning"
+        )
+        new_avkastning = st.sidebar.number_input(
+            "Avkastning (tkr)", 
+            value=float(current_avkastning),
+            key="manual_avkastning"
+        )
+        
+        if st.sidebar.button("Uppdatera komponenter", key="update_detailed_kapital"):
+            update_component_manual_detailed('kapitalkostnad', entity_data['REId'], 
+                                           new_avskrivning, new_avkastning)
+    else:
+        # Enkel total kapitalkostnad
+        current_kapital = entity_data.get('Kapitalkostnad_Total', 0)
+        new_kapital = st.sidebar.number_input(
+            "Ny nivå (tkr)", 
+            value=float(current_kapital),
+            key="manual_kapital"
+        )
+        if st.sidebar.button("Uppdatera manuellt", key="update_kapital"):
+            update_component_manual('kapitalkostnad', entity_data['REId'], new_kapital)
+    
+    # Återställ enskilda komponenter
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        if st.sidebar.button("Återställ Påverkbara"):
+            reset_component('paverkbara')
+    with col2:
+        if st.sidebar.button("Återställ Kapital"):
+            reset_component('kapitalkostnad')
+
+
+def update_component_from_scenario(
+    component: str, 
+    source: str, 
+    scenario_file: str,
+    df_working: pd.DataFrame,
+    method: str = 'OPEX'
+):
+    """
+    Uppdaterar komponent från scenario-fil.
+    
+    UPPDATERAD: Stöd för method-parameter vid effektiviseringskrav.
+    """
+    
+    try:
+        # Ladda scenario-data från parquet-fil
+        scenario_df = pd.read_parquet(scenario_file)
+        
+        # Försök ladda metadata från JSON-fil (samma namn som parquet men .json)
+        json_metadata = {}
+        json_file = scenario_file.replace('.parquet', '.json')
+        if Path(json_file).exists():
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    json_metadata = json.load(f)
+            except Exception as e:
+                print(f"Kunde inte läsa JSON-metadata från {json_file}: {e}")
+        
+        # SÄKRA SESSION STATE
+        sd = st.session_state.scenario_data
+        sd.setdefault('component_sources', {})
+        sd.setdefault('modifications', {})
+        
+        # Kontrollera att vi har aktivt scenario
+        if not st.session_state.current_scenario_name:
+            st.sidebar.error("Inget aktivt scenario - skapa ett scenario först")
+            return
+        
+        # Förbered modifikationer baserat på komponent-typ
+        if component == 'kapitalkostnad' and source == 'kapitalbas':
+            # Hantera kapitalkostnad från översikt.py export
+            required_cols = ['DMU', 'Kapitalkostnad_Ny']
+            missing_cols = [col for col in required_cols if col not in scenario_df.columns]
+            
+            if missing_cols:
+                st.sidebar.error(f"Scenario-fil saknar kolumner: {missing_cols}")
+                return
+            
+            # Skapa modifikationer per DMU (inte REId)
+            modifications = {}
+            for _, row in scenario_df.iterrows():
+                dmu = str(row['DMU'])  # Konvertera till string som key
+                modification = {
+                    'total': row['Kapitalkostnad_Ny']
+                }
+                
+                # Lägg till separerade komponenter om de finns
+                if 'Avskrivningar_Ny' in row and pd.notna(row['Avskrivningar_Ny']):
+                    modification['avskrivningar'] = row['Avskrivningar_Ny']
+                if 'Avkastning_Ny' in row and pd.notna(row['Avkastning_Ny']):
+                    modification['avkastning'] = row['Avkastning_Ny']
+                
+                modifications[dmu] = modification
+            
+            # Applicera på session state - använd DMU som key
+            sd['modifications'][component] = {
+                'values': modifications,
+                'source': 'kapitalbas',
+                'merge_on': 'DMU',
+                'metadata': json_metadata
+            }
+            
+            # Uppdatera komponent-källor
+            sd['component_sources'][component] = 'kapitalbas'
+            
+            st.sidebar.success(f"Kapitalkostnad uppdaterad från kapitalbas ({len(modifications)} DMU)")
+            
+        elif component == 'paverkbara' and source == 'effektiviseringskrav':
+            # === NYTT: Spara method tillsammans med scenario-data ===
+            # VIKTIGT: Vi sparar bara metadata här - applicering sker i get_working_dataframe()
+            
+            # Validera att scenario-fil har rätt kolumner
+            required_cols = ['REId', 'Effkrav_proc']
+            missing_cols = [col for col in required_cols if col not in scenario_df.columns]
+            
+            if missing_cols:
+                st.sidebar.error(f"Scenario-fil saknar kolumner: {missing_cols}")
+                return
+            
+            # Spara scenario-info med method
+            sd['modifications'][component] = {
+                'file': scenario_file,
+                'source': 'effektiviseringskrav',
+                'method': method,  # KRITISKT: Spara vald metod
+                'metadata': json_metadata
+            }
+            sd['component_sources']['paverkbara'] = 'effektiviseringskrav'
+            
+            st.sidebar.success(f"Effektiviseringskrav laddad med {method}-metod")
+            
+        else:
+            st.sidebar.error(f"Okänd kombination: {component} + {source}")
+            return
+        
+        # Tvinga uppdatering av UI
+        st.rerun()
+        
+    except Exception as e:
+        st.sidebar.error(f"Fel vid uppdatering från {source}: {str(e)}")
+        import traceback
+        print(f"ERROR: {traceback.format_exc()}")
+
+
+def update_component_manual(component: str, reid: str, new_value: float):
+    """Uppdaterar komponent manuellt."""
+    sd = st.session_state.scenario_data
+    sd.setdefault('modifications', {})
+    
+    if component not in sd['modifications']:
+        sd['modifications'][component] = {'values': {}, 'source': 'manual'}
+    
+    sd['modifications'][component]['values'][reid] = new_value
+    st.sidebar.success(f"{component.title()} uppdaterad manuellt")
+    st.rerun()
+
+
+def update_component_manual_detailed(component: str, reid: str, new_avskrivning: float, new_avkastning: float):
+    """Uppdaterar detaljerade kapitalkomponenter manuellt."""
+    sd = st.session_state.scenario_data
+    sd.setdefault('modifications', {})
+    
+    if component not in sd['modifications']:
+        sd['modifications'][component] = {'values': {}, 'source': 'manual'}
+    
+    # Spara som dict för separerade värden
+    sd['modifications'][component]['values'][reid] = {
+        'avskrivningar': new_avskrivning,
+        'avkastning': new_avkastning
+    }
+    
+    st.sidebar.success("Kapitalkomponenter uppdaterade manuellt")
+    st.rerun()
+
+
+def reset_component(component: str):
+    """Återställer en komponent till baseline."""
+    sd = st.session_state.scenario_data
+    
+    if 'modifications' in sd:
+        if component in sd['modifications']:
+            del sd['modifications'][component]
+    
+    # Återställ component_sources
+    sd.setdefault('component_sources', {})
+    sd['component_sources'][component] = 'baseline'
+    
+    st.sidebar.success(f"{component.title()} återställd till baseline")
+    st.rerun()
 
 
 def show_comparison_views(df_working: pd.DataFrame):
@@ -726,271 +1080,14 @@ def show_top_changes_table(df_working: pd.DataFrame):
             st.dataframe(top_decreases, use_container_width=True)
 
 
-def show_component_controls(entity_data: pd.Series):
-    """Visar kontroller för att uppdatera komponenter."""
-    
-    st.sidebar.header("Uppdatera komponenter")
-    
-    if not st.session_state.current_scenario_name:
-        st.sidebar.info("Skapa ett scenario för att kunna uppdatera komponenter")
-        return
-    
-    # Detect scenario updates från andra sektioner  
-    scenario_updates = detect_scenario_updates()
-    
-    # Visa tillgängliga scenarier med filnamn och cache-kontroll
-    st.sidebar.write("**Tillgängliga scenarier:**")
-    for key, value in scenario_updates.items():
-        if value is not None:
-            status = "✅"
-            # Korta av filnamnet för bättre visning
-            short_name = value['name'][:30] + "..." if len(value['name']) > 30 else value['name']
-            st.sidebar.caption(f"{status} **{key}**")
-            st.sidebar.caption(f"   {short_name}")
-            st.sidebar.caption(f"   {value['created']}")
-        else:
-            status = "❌"
-            st.sidebar.caption(f"{status} {key} - Ingen export hittad")
-    
-    # Cache-varning för äldre scenarier
-    if any(scenario_updates.values()):
-        st.sidebar.info("Om problem uppstår, rensa Streamlit cache (Ctrl+Shift+R)")
-    
-    # Påverkbara kostnader
-    st.sidebar.subheader("Påverkbara kostnader")
-    if scenario_updates['effektiviseringskrav']:
-        if st.sidebar.button("Hämta från Effektiviseringskrav"):
-            update_component_from_scenario('paverkbara', 'effektiviseringskrav', scenario_updates['effektiviseringskrav']['file'])
-    else:
-        st.sidebar.info("Ingen effektiviseringskrav-export hittades")
-    
-    # Manuell uppdatering
-    current_paverkbara = entity_data.get('Paverkbara_Kostnader', 0)
-    new_paverkbara = st.sidebar.number_input(
-        "Ny nivå (tkr)",
-        value=float(current_paverkbara),
-        key="manual_paverkbara"
-    )
-    if st.sidebar.button("Uppdatera manuellt", key="update_paverkbara"):
-        update_component_manual('paverkbara', entity_data['REId'], new_paverkbara)
-    
-    # Kapitalkostnad  
-    st.sidebar.subheader("Kapitalkostnad")
-    if scenario_updates['kapitalbas']:
-        if st.sidebar.button("Hämta från Kapitalbas"):
-            update_component_from_scenario('kapitalkostnad', 'kapitalbas', scenario_updates['kapitalbas']['file'])
-    else:
-        st.sidebar.info("Ingen kapitalbas-export hittades")
-    
-    # Manuell uppdatering - stöd för separerade komponenter
-    has_detailed_capital = all(col in entity_data.index for col in ['Avskrivningar', 'Avkastning'])
-    
-    if has_detailed_capital:
-        # Visa separata kontroller för avskrivning och avkastning
-        current_avskrivning = entity_data.get('Avskrivningar', 0)
-        current_avkastning = entity_data.get('Avkastning', 0)
-        
-        new_avskrivning = st.sidebar.number_input(
-            "Avskrivningar (tkr)", 
-            value=float(current_avskrivning),
-            key="manual_avskrivning"
-        )
-        new_avkastning = st.sidebar.number_input(
-            "Avkastning (tkr)", 
-            value=float(current_avkastning),
-            key="manual_avkastning"
-        )
-        
-        if st.sidebar.button("Uppdatera komponenter", key="update_detailed_kapital"):
-            update_component_manual_detailed('kapitalkostnad', entity_data['REId'], 
-                                           new_avskrivning, new_avkastning)
-    else:
-        # Enkel total kapitalkostnad
-        current_kapital = entity_data.get('Kapitalkostnad_Total', 0)
-        new_kapital = st.sidebar.number_input(
-            "Ny nivå (tkr)", 
-            value=float(current_kapital),
-            key="manual_kapital"
-        )
-        if st.sidebar.button("Uppdatera manuellt", key="update_kapital"):
-            update_component_manual('kapitalkostnad', entity_data['REId'], new_kapital)
-    
-    # Återställ enskilda komponenter
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        if st.sidebar.button("Återställ Påverkbara"):
-            reset_component('paverkbara')
-    with col2:
-        if st.sidebar.button("Återställ Kapital"):
-            reset_component('kapitalkostnad')
-
-
-def update_component_from_scenario(component: str, source: str, scenario_file: str):
-    """Uppdaterar komponent från scenario-fil."""
-    
-    try:
-        # Ladda scenario-data från parquet-fil
-        scenario_df = pd.read_parquet(scenario_file)
-        
-        # Försök ladda metadata från JSON-fil (samma namn som parquet men .json)
-        json_metadata = {}
-        json_file = scenario_file.replace('.parquet', '.json')
-        if Path(json_file).exists():
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    json_metadata = json.load(f)
-            except Exception as e:
-                print(f"Kunde inte läsa JSON-metadata från {json_file}: {e}")
-        
-        # SÄKRA SESSION STATE
-        sd = st.session_state.scenario_data
-        sd.setdefault('component_sources', {})
-        sd.setdefault('modifications', {})
-        
-        # Kontrollera att vi har aktivt scenario
-        if not st.session_state.current_scenario_name:
-            st.sidebar.error("Inget aktivt scenario - skapa ett scenario först")
-            return
-        
-        # Förbered modifikationer baserat på komponent-typ
-        if component == 'kapitalkostnad' and source == 'kapitalbas':
-            # Hantera kapitalkostnad från översikt.py export
-            required_cols = ['DMU', 'Kapitalkostnad_Ny']
-            missing_cols = [col for col in required_cols if col not in scenario_df.columns]
-            
-            if missing_cols:
-                st.sidebar.error(f"Scenario-fil saknar kolumner: {missing_cols}")
-                return
-            
-            # Skapa modifikationer per DMU (inte REId)
-            modifications = {}
-            for _, row in scenario_df.iterrows():
-                dmu = str(row['DMU'])  # Konvertera till string som key
-                modification = {
-                    'total': row['Kapitalkostnad_Ny']
-                }
-                
-                # Lägg till separerade komponenter om de finns
-                if 'Avskrivningar_Ny' in row and pd.notna(row['Avskrivningar_Ny']):
-                    modification['avskrivningar'] = row['Avskrivningar_Ny']
-                if 'Avkastning_Ny' in row and pd.notna(row['Avkastning_Ny']):
-                    modification['avkastning'] = row['Avkastning_Ny']
-                
-                modifications[dmu] = modification
-            
-            # Applicera på session state - använd DMU som key
-            sd['modifications'][component] = {
-                'values': modifications,
-                'source': 'kapitalbas',
-                'merge_on': 'DMU',
-                'metadata': json_metadata
-            }
-            
-            # Uppdatera komponent-källor
-            sd['component_sources'][component] = 'kapitalbas'
-            
-            st.sidebar.success(f"Kapitalkostnad uppdaterad från kapitalbas ({len(modifications)} DMU)")
-            
-        elif component == 'paverkbara' and source == 'effektiviseringskrav':
-            # Läs DEA-export: förväntar 'REId' och 'Paverkbara_Target' (eller fallback)
-            required_id = 'REId'
-            if required_id not in scenario_df.columns:
-                st.sidebar.error("Scenario-fil saknar REId")
-                return
-
-            candidate_cols = [c for c in ['Paverkbara_Target', 'Paverkbara_Nya'] if c in scenario_df.columns]
-            if not candidate_cols:
-                st.sidebar.error("Scenario-fil saknar kolumnerna 'Paverkbara_Target'/'Paverkbara_Nya'")
-                return
-            value_col = candidate_cols[0]
-
-            # Bygg modifikationer per REId (IR arbetar per REId i vyn)
-            modifications = {}
-            for _, row in scenario_df[[required_id, value_col]].dropna().iterrows():
-                reid = row[required_id]
-                new_val = float(row[value_col])
-                modifications[str(reid)] = new_val
-
-            if not modifications:
-                st.sidebar.warning("Ingen rad att applicera (saknar värden i exporten)")
-                return
-
-            # Spara i session state
-            sd['modifications'][component] = {
-                'values': modifications,
-                'source': 'effektiviseringskrav',
-                'metadata': json_metadata
-            }
-            sd['component_sources']['paverkbara'] = 'effektiviseringskrav'
-
-            st.sidebar.success(f"Påverkbara uppdaterade från Effektiviseringskrav ({len(modifications)} REId)")
-            
-        else:
-            st.sidebar.error(f"Okänd kombination: {component} + {source}")
-            return
-        
-        # Tvinga uppdatering av UI
-        st.rerun()
-        
-    except Exception as e:
-        st.sidebar.error(f"Fel vid uppdatering från {source}: {str(e)}")
-        import traceback
-        print(f"ERROR: {traceback.format_exc()}")
-
-
-def update_component_manual(component: str, reid: str, new_value: float):
-    """Uppdaterar komponent manuellt."""
-    sd = st.session_state.scenario_data
-    sd.setdefault('modifications', {})
-    
-    if component not in sd['modifications']:
-        sd['modifications'][component] = {'values': {}, 'source': 'manual'}
-    
-    sd['modifications'][component]['values'][reid] = new_value
-    st.sidebar.success(f"{component.title()} uppdaterad manuellt")
-    st.rerun()
-
-
-def update_component_manual_detailed(component: str, reid: str, new_avskrivning: float, new_avkastning: float):
-    """Uppdaterar detaljerade kapitalkomponenter manuellt."""
-    sd = st.session_state.scenario_data
-    sd.setdefault('modifications', {})
-    
-    if component not in sd['modifications']:
-        sd['modifications'][component] = {'values': {}, 'source': 'manual'}
-    
-    # Spara som dict för separerade värden
-    sd['modifications'][component]['values'][reid] = {
-        'avskrivningar': new_avskrivning,
-        'avkastning': new_avkastning
-    }
-    
-    st.sidebar.success("Kapitalkomponenter uppdaterade manuellt")
-    st.rerun()
-
-
-def reset_component(component: str):
-    """Återställer en komponent till baseline."""
-    sd = st.session_state.scenario_data
-    
-    if 'modifications' in sd:
-        if component in sd['modifications']:
-            del sd['modifications'][component]
-    
-    # Återställ component_sources
-    sd.setdefault('component_sources', {})
-    sd['component_sources'][component] = 'baseline'
-    
-    st.sidebar.success(f"{component.title()} återställd till baseline")
-    st.rerun()
-
-
 def show_scenario_loader():
-    """Visar dialog för att ladda tidigare sparade scenarier."""
-    scenario_dir = Path("scenario/saved")
+    """Visar dialog för att ladda tidigare sparade scenarier från organisationsspecifik katalog."""
+    base_scenario_dir = "scenario/saved"
+    org = get_user_org()
+    scenario_dir = Path(base_scenario_dir) / org
     
     if not scenario_dir.exists():
-        st.sidebar.error("Inga sparade scenarier finns ännu")
+        st.sidebar.error(f"Inga sparade scenarier finns ännu för {org}")
         if st.sidebar.button("Stäng", key="close_empty_loader"):
             st.session_state.show_scenario_loader = False
             st.rerun()
@@ -1000,7 +1097,7 @@ def show_scenario_loader():
     scenario_files = list(scenario_dir.glob("ir_scenario_*.parquet"))
     
     if not scenario_files:
-        st.sidebar.error("Inga sparade scenarier hittades")
+        st.sidebar.error(f"Inga sparade scenarier hittades för {org}")
         if st.sidebar.button("Stäng", key="close_no_files"):
             st.session_state.show_scenario_loader = False
             st.rerun()
@@ -1011,7 +1108,7 @@ def show_scenario_loader():
     
     # Visa scenario-loader persistent i sidebar
     st.sidebar.markdown("---")
-    st.sidebar.subheader("Ladda tidigare scenario")
+    st.sidebar.subheader(f"Ladda tidigare scenario ({org})")
     
     # Skapa dropdown med scenario-filer
     file_names = [f.name.replace("ir_scenario_", "").replace(".parquet", "").replace("_", " ") 
@@ -1146,16 +1243,25 @@ def show_export_section(df_working: pd.DataFrame):
             if modifications:
                 for comp, mod_data in modifications.items():
                     source = mod_data.get('source', 'okänd')
-                    num_changes = len(mod_data.get('values', {}))
-                    st.write(f"- **{comp}**: {num_changes} enheter ändrade (källa: {source})")
+                    
+                    if comp == 'paverkbara' and source == 'effektiviseringskrav':
+                        method = mod_data.get('method', 'OPEX')
+                        st.write(f"- **{comp}**: {source} (metod: {method})")
+                    elif 'values' in mod_data:
+                        num_changes = len(mod_data.get('values', {}))
+                        st.write(f"- **{comp}**: {num_changes} enheter ändrade (källa: {source})")
+                    else:
+                        st.write(f"- **{comp}**: {source}")
                     
                     # Visa detaljerad metadata från JSON-filer om tillgänglig
                     metadata = mod_data.get('metadata', {})
                     if metadata:
                         if source == 'effektiviseringskrav':
                             st.write(f"  - Metod: {metadata.get('analysis_method', 'N/A')}")
-                            st.write(f"  - Period: {metadata.get('period', 'N/A')}")
-                            st.write(f"  - Total reduktion: {metadata.get('total_reduction_tkr', 'N/A'):,} tkr")
+                            if 'period' in metadata:
+                                st.write(f"  - Period: {metadata.get('period', 'N/A')}")
+                            if 'total_reduction_tkr' in metadata:
+                                st.write(f"  - Total reduktion: {metadata.get('total_reduction_tkr', 'N/A'):,} tkr")
                         elif source == 'kapitalbas':
                             wacc_old = metadata.get('wacc_old', 'N/A')
                             wacc_new = metadata.get('wacc_new', 'N/A')
@@ -1169,9 +1275,7 @@ def show_export_section(df_working: pd.DataFrame):
 
 
 def save_scenario_to_file(scenario_name: str, df_data: pd.DataFrame):
-    """
-    UPPDATERAD: Sparar scenario till organisationsspecifik fil för framtida användning.
-    """
+    """Sparar scenario till organisationsspecifik fil för framtida användning."""
     base_scenario_dir = "scenario/saved"
     scenario_dir = Path(ensure_org_dir(base_scenario_dir))
     
@@ -1193,72 +1297,6 @@ def save_scenario_to_file(scenario_name: str, df_data: pd.DataFrame):
     df_data.to_parquet(filepath)
     
     return str(filepath)
-
-
-def show_scenario_loader():
-    """
-    UPPDATERAD: Visar dialog för att ladda tidigare sparade scenarier från organisationsspecifik katalog.
-    """
-    base_scenario_dir = "scenario/saved"
-    org = get_user_org()
-    scenario_dir = Path(base_scenario_dir) / org
-    
-    if not scenario_dir.exists():
-        st.sidebar.error(f"Inga sparade scenarier finns ännu för {org}")
-        if st.sidebar.button("Stäng", key="close_empty_loader"):
-            st.session_state.show_scenario_loader = False
-            st.rerun()
-        return
-    
-    # Leta efter sparade scenario-filer
-    scenario_files = list(scenario_dir.glob("ir_scenario_*.parquet"))
-    
-    if not scenario_files:
-        st.sidebar.error(f"Inga sparade scenarier hittades för {org}")
-        if st.sidebar.button("Stäng", key="close_no_files"):
-            st.session_state.show_scenario_loader = False
-            st.rerun()
-        return
-    
-    # Sortera efter modifierad tid (nyast först)
-    scenario_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-    
-    # Visa scenario-loader persistent i sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.subheader(f"Ladda tidigare scenario ({org})")
-    
-    # Skapa dropdown med scenario-filer
-    file_names = [f.name.replace("ir_scenario_", "").replace(".parquet", "").replace("_", " ") 
-                  for f in scenario_files]
-    
-    selected_index = st.sidebar.selectbox(
-        "Välj scenario att ladda:",
-        options=range(len(scenario_files)),
-        format_func=lambda i: file_names[i],
-        key="scenario_selection"
-    )
-    
-    selected_file = scenario_files[selected_index]
-    
-    # Info om valt scenario
-    file_info = selected_file.stat()
-    st.sidebar.caption(f"Skapad: {datetime.fromtimestamp(file_info.st_mtime).strftime('%Y-%m-%d %H:%M')}")
-    
-    # Knappar för att ladda eller avbryta
-    col_load, col_cancel = st.sidebar.columns(2)
-    
-    with col_load:
-        if st.button("Ladda scenario", key="load_scenario_btn"):
-            load_scenario_from_file(selected_file)
-            st.session_state.show_scenario_loader = False
-            st.rerun()
-    
-    with col_cancel:
-        if st.button("Avbryt", key="cancel_load_btn"):
-            st.session_state.show_scenario_loader = False
-            st.rerun()
-    
-    st.sidebar.markdown("---")
 
 
 def create_excel_export(df_data: pd.DataFrame) -> io.BytesIO:
