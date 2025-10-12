@@ -188,7 +188,7 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
     
     # Visa resultat om steg är slutfört
     if 5 in steps_state['completed_steps']:
-        st.success("✅ Steg 5 slutfört")
+        st.success(" Steg 5 slutfört")
         result_data = steps_state['step_data'][5]
         
         # Sammanfattning för företaget
@@ -254,7 +254,7 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
     
     # Visa resultat
     if 6 in steps_state['completed_steps']:
-        st.success("✅ Steg 6 slutfört")
+        st.success(" Steg 6 slutfört")
         result_data = steps_state['step_data'][6]
         
         # KPI för företaget
@@ -409,9 +409,9 @@ def run_company_wacc_calculator(company_name: str):
     # Visa nuvarande värde som kommer användas i Steg 7
     current_r_new = st.session_state.get("r_new", R_OLD)
     if abs(current_r_new - Wr) > 1e-6:
-        st.info(f"📌 Aktuell WACC för Steg 7: {current_r_new:.4f} (klicka 'Använd denna kalkylränta' för att uppdatera)")
+        st.info(f" Aktuell WACC för Steg 7: {current_r_new:.4f} (klicka 'Använd denna kalkylränta' för att uppdatera)")
     else:
-        st.success(f"✅ Denna WACC ({Wr:.4f}) kommer användas i Steg 7")
+        st.success(f" Denna WACC ({Wr:.4f}) kommer användas i Steg 7")
 
     # Metodikruta (importerad från översikt.py)
     _render_methodology_info()
@@ -476,7 +476,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
     
     # Visa resultat
     if 7 in steps_state['completed_steps']:
-        st.success("✅ Steg 7 slutfört")
+        st.success(" Steg 7 slutfört")
         result_data = steps_state['step_data'][7]
         used_wacc = result_data.get('used_wacc', R_OLD)
         
@@ -520,7 +520,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
     
     # Visa resultat
     if 8 in steps_state['completed_steps']:
-        st.success("✅ Steg 8 slutfört")
+        st.success(" Steg 8 slutfört")
         result_data = steps_state['step_data'][8]
         
         # Beräkna KPIs
@@ -632,7 +632,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
         st.caption("Använder beräknad WACC från Steg 7")
         
         # Export-förhandsvisning
-        if st.button("🔍 Förhandsgranska IR-export", type="secondary"):
+        if st.button(" Förhandsgranska IR-export", type="secondary"):
             try:
                 ir_preview = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
                 
@@ -646,7 +646,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
         # Export-knapp
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("📊 Exportera till IR-dekomposition", type="primary"):
+            if st.button(" Exportera till IR-dekomposition", type="primary"):
                 try:
                     ir_data = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
                     ir_path = execute_ir_export(ir_data, company_name)
@@ -665,7 +665,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                         st.code(traceback.format_exc())
         
         with col2:
-            st.info("💡 Tips: Använd DEA-export tab för att exportera WACC-scenarier för alla företag")
+            st.info(" Tips: Använd DEA-export tab för att exportera WACC-scenarier för alla företag")
 
 
 def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
@@ -695,7 +695,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
     )
     
     # Förhandsvisning
-    if st.button("🔍 Förhandsgranska DEA-export", type="secondary"):
+    if st.button(" Förhandsgranska DEA-export", type="secondary"):
         with st.spinner("Förbereder förhandsvisning..."):
             try:
                 preview_data = prepare_dea_export_preview(dea_wacc, dmu_id)
@@ -721,7 +721,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
     
     # Export-knapp
     st.markdown("---")
-    if st.button("📈 Exportera DEA-scenario (alla företag)", type="primary"):
+    if st.button(" Exportera DEA-scenario (alla företag)", type="primary"):
         with st.spinner("Exporterar DEA-scenario för alla företag..."):
             try:
                 dea_data, dea_tag = prepare_dea_export_all_companies(dea_wacc, dmu_id)
@@ -739,7 +739,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                 with col3:
                     st.metric("Metod", "WACC-skalning")
                 
-                st.info("🔬 Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
+                st.info(" Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
                 
                 with st.expander("Export-detaljer"):
                     st.write("**Exporterad data (första 10 rader):**")

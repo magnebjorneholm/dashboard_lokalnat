@@ -1,4 +1,18 @@
 import streamlit as st
+from pathlib import Path
+
+# CSS-laddning
+def load_css():
+    """Laddar custom CSS för professionellt utseende"""
+    css_file = Path("styles.css")
+    if css_file.exists():
+        with open(css_file) as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    else:
+        st.warning("styles.css hittades inte.")
+
+# Ladda CSS direkt när appen startar
+load_css()
 
 # === Rollbaserad autentisering ===
 if "access_granted" not in st.session_state:
@@ -77,29 +91,21 @@ if not st.session_state.access_granted:
 
 # === NAVIGATION (endast när inloggad) ===
 if st.session_state.user_role == "regulator":
-    pages = {
-        "Start": [
-            st.Page("pages/hem_regulator.py", title="Hem")
-        ],
-        "Sidor": [
-            st.Page("pages/regulator/regulator_effektivitet.py", title="DEA och påverkbara kostnader"),
-            st.Page("pages/kapitalbas.py", title="Kapitalbas"),
-            st.Page("pages/kapitalbas_beräkningskedja.py", title="Beräkningskedja"),
-            st.Page("pages/ir_dekomposition.py", title="IR-dekomposition")
-        ]
-    }
+    pages = [
+        st.Page("pages/hem_regulator.py", title="Hem"),
+        st.Page("pages/regulator/regulator_effektivitet.py", title="DEA och påverkbara kostnader"),
+        st.Page("pages/kapitalbas.py", title="Kapitalbas"),
+        st.Page("pages/kapitalbas_beräkningskedja.py", title="Beräkningskedja"),
+        st.Page("pages/ir_dekomposition.py", title="IR-dekomposition")
+    ]
     
 elif st.session_state.user_role == "company":
-    pages = {
-        "Start": [
-            st.Page("pages/hem_foretag.py", title="Hem")
-        ],
-        "Sidor": [
-            st.Page("pages/foretag/foretag_intaktsram.py", title="Intäktsram"),
-            st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
-            st.Page("pages/foretag/foretag_effektivitet.py", title="DEA och påverkbara kostnader")
-        ]
-    }
+    pages = [
+    st.Page("pages/hem_foretag.py", title="Hem"),
+    st.Page("pages/foretag/foretag_intaktsram.py", title="Intäktsram"),
+    st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
+    st.Page("pages/foretag/foretag_effektivitet.py", title="DEA och påverkbara kostnader")
+    ]
 
 else:
     st.error("Okänd användarroll. Kontakta administratör.")

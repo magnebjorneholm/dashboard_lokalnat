@@ -229,9 +229,9 @@ def render_data_source_selector():
                 uploaded_df, error = load_uploaded_file(uploaded_file)
                 
                 if error:
-                    st.error(f"❌ {error}")
+                    st.error(f" {error}")
                 else:
-                    st.success(f"✅ Fil inläst: {len(uploaded_df)} rader, {len(uploaded_df.columns)} kolumner")
+                    st.success(f" Fil inläst: {len(uploaded_df)} rader, {len(uploaded_df.columns)} kolumner")
     
     return data_source, uploaded_df
 
@@ -243,25 +243,25 @@ def render_validation_results(validation: Dict):
     st.markdown("### 2. Datavalidering")
     
     if validation['is_valid']:
-        st.success("✅ Data kan användas för beräkning!")
+        st.success(" Data kan användas för beräkning!")
     else:
-        st.error("❌ Data kan INTE användas för beräkning")
+        st.error(" Data kan INTE användas för beräkning")
     
     # Show errors
     if validation['errors']:
-        st.markdown("#### ⚠️ Fel som måste åtgärdas:")
+        st.markdown("####  Fel som måste åtgärdas:")
         for error in validation['errors']:
             st.error(f"• {error}")
     
     # Show warnings
     if validation['warnings']:
-        st.markdown("#### ⚠️ Varningar:")
+        st.markdown("####  Varningar:")
         for warning in validation['warnings']:
             st.warning(f"• {warning}")
     
     # Show info
     if validation['info']:
-        with st.expander("ℹ️ Information om dataset"):
+        with st.expander("ℹ Information om dataset"):
             for info in validation['info']:
                 st.info(f"• {info}")
 
@@ -272,7 +272,7 @@ def render_data_preview(df: pd.DataFrame):
     """
     st.markdown("### 3. Input/grund-data för beräkning")
     
-    with st.expander("📊 Visa input-data som används i beräkningen", expanded=False):
+    with st.expander(" Visa input-data som används i beräkningen", expanded=False):
         st.markdown("#### Alla kolumner i capbase_a:")
         st.dataframe(df, use_container_width=True, height=400)
         
@@ -290,7 +290,7 @@ def render_required_columns_info():
     """
     Renders information about required columns in expander.
     """
-    with st.expander("📋 Vilka kolumner krävs i datasetet?"):
+    with st.expander(" Vilka kolumner krävs i datasetet?"):
         st.markdown("""
         **Obligatoriska kolumner för capbase_a:**
         
@@ -348,22 +348,22 @@ def get_validated_data_for_berakningskedja(default_loader_func):
             render_data_preview(uploaded_df)
             return uploaded_df, True
         else:
-            st.warning("⚠️ Korrigera felen innan du kan fortsätta med beräkningen")
+            st.warning(" Korrigera felen innan du kan fortsätta med beräkningen")
             return None, True
             
     elif is_custom_data and uploaded_df is None:
-        st.info("👆 Ladda upp en fil för att fortsätta")
+        st.info(" Ladda upp en fil för att fortsätta")
         return None, True
         
     else:
         # Use baseline data
-        st.info("✅ Använder baseline-data från systemet")
+        st.info(" Använder baseline-data från systemet")
         baseline_df = default_loader_func()
         
         # Optional: Validate baseline too (should always pass)
         validation = validate_uploaded_data(baseline_df)
         if not validation['is_valid']:
-            st.error("⚠️ Baseline-data är ogiltig! Kontakta systemadministratör.")
+            st.error(" Baseline-data är ogiltig! Kontakta systemadministratör.")
             render_validation_results(validation)
             return None, False
         
@@ -378,10 +378,10 @@ def apply_lifetime_scenario(capbase_data: pd.DataFrame) -> pd.DataFrame:
     Returns modified dataframe with scenario adjustments
     """
     
-    st.markdown("#### 📊 Scenarioanalys - Justera livslängder")
+    st.markdown("####  Scenarioanalys - Justera livslängder")
     
     with st.expander("Justera ekonomisk/maximal livslängd", expanded=False):
-        st.info("💡 För scenarioanalys: Testa hur ändringar i regulatoriska livslängder påverkar kapitalkostnaden")
+        st.info(" För scenarioanalys: Testa hur ändringar i regulatoriska livslängder påverkar kapitalkostnaden")
         
         # Check required columns
         required_cols = ['cat_encode', 'ekdep', 'maxdep']
@@ -488,7 +488,7 @@ def apply_lifetime_scenario(capbase_data: pd.DataFrame) -> pd.DataFrame:
             # Validate all rows
             invalid_rows = edited_df[edited_df['Maximal livslängd'] < edited_df['Ekonomisk livslängd']]
             if not invalid_rows.empty:
-                st.error(f"⚠️ {len(invalid_rows)} rad(er) har maximal livslängd < ekonomisk livslängd. Detta måste korrigeras.")
+                st.error(f" {len(invalid_rows)} rad(er) har maximal livslängd < ekonomisk livslängd. Detta måste korrigeras.")
             
             # Show what changed
             st.markdown("**Ändringar som kommer appliceras:**")
@@ -547,7 +547,7 @@ def apply_lifetime_scenario(capbase_data: pd.DataFrame) -> pd.DataFrame:
         # Show active adjustments status if they exist
         if 'lifetime_adjustments' in st.session_state and st.session_state.lifetime_adjustments:
             st.markdown("---")
-            st.markdown("### ✅ Aktiva justeringar (används i beräkningen)")
+            st.markdown("###  Aktiva justeringar (används i beräkningen)")
             
             adjustments = st.session_state.lifetime_adjustments
             level_text = "subkategorinivå" if adjustments['level'] == 'subcat' else "kategorinivå"
@@ -567,12 +567,12 @@ def apply_lifetime_scenario(capbase_data: pd.DataFrame) -> pd.DataFrame:
             available_cols = [col for col in display_cols if col in changes_df.columns]
             st.dataframe(changes_df[available_cols], use_container_width=True, hide_index=True)
             
-            st.warning("⚠️ **OBS:** Detta är ett scenario för intern analys, inte officiella regulatoriska värden")
+            st.warning(" **OBS:** Detta är ett scenario för intern analys, inte officiella regulatoriska värden")
         
         # Reset button if adjustments exist
         if 'lifetime_adjustments' in st.session_state and st.session_state.lifetime_adjustments:
             st.markdown("---")
-            if st.button("🔄 Återställ till originalvärden"):
+            if st.button(" Återställ till originalvärden"):
                 st.session_state.lifetime_adjustments = {}
                 st.rerun()
     

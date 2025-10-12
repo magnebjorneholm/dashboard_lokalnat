@@ -180,7 +180,7 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
     
     # Visa resultat om steg är slutfört
     if 5 in steps_state['completed_steps']:
-        st.success("✅ Steg 5 slutfört")
+        st.success(" Steg 5 slutfört")
         result_data = steps_state['step_data'][5]
         
         # Sammanfattning för företaget
@@ -295,31 +295,31 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
                 # Kontrollera negativa åldrar
                 negative_ages = (result_data['age_component_229'] < 0).sum()
                 if negative_ages > 0:
-                    quality_issues.append(f"⚠️ {negative_ages} komponenter har negativ ålder")
+                    quality_issues.append(f" {negative_ages} komponenter har negativ ålder")
                 
                 # Kontrollera extremt gamla komponenter
                 very_old = (result_data['age_component_229'] > 50).sum()
                 if very_old > 0:
-                    quality_issues.append(f"ℹ️ {very_old} komponenter är äldre än 50 år")
+                    quality_issues.append(f"ℹ {very_old} komponenter är äldre än 50 år")
                 
                 # Kontrollera komponenter utan NUAV
                 zero_nuav = 0
                 if 'nuav_ord_229' in result_data.columns and 'nuav_tail_229' in result_data.columns:
                     zero_nuav = ((result_data['nuav_ord_229'] == 0) & (result_data['nuav_tail_229'] == 0)).sum()
                     if zero_nuav > 0:
-                        quality_issues.append(f"⚠️ {zero_nuav} komponenter har ingen NUAV-värdering")
+                        quality_issues.append(f" {zero_nuav} komponenter har ingen NUAV-värdering")
                 
                 # Kontrollera livslängdskonsistens
                 if 'ekdep' in result_data.columns and 'maxdep' in result_data.columns:
                     inconsistent_life = (result_data['ekdep'] > result_data['maxdep']).sum()
                     if inconsistent_life > 0:
-                        quality_issues.append(f"⚠️ {inconsistent_life} komponenter har ekdep > maxdep")
+                        quality_issues.append(f" {inconsistent_life} komponenter har ekdep > maxdep")
                 
                 if quality_issues:
                     for issue in quality_issues:
                         st.write(issue)
                 else:
-                    st.success("✅ Inga kvalitetsproblem identifierade")
+                    st.success(" Inga kvalitetsproblem identifierade")
 
 
 def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name: str):
@@ -358,7 +358,7 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
     
     # Visa resultat
     if 6 in steps_state['completed_steps']:
-        st.success("✅ Steg 6 slutfört")
+        st.success(" Steg 6 slutfört")
         result_data = steps_state['step_data'][6]
         
         # KPI för företaget
@@ -633,9 +633,9 @@ def run_company_wacc_calculator(company_name: str):
     # Visa nuvarande värde som kommer användas i Steg 7
     current_r_new = st.session_state.get("r_new", R_OLD)
     if abs(current_r_new - Wr) > 1e-6:
-        st.info(f"📌 Aktuell WACC för Steg 7: {current_r_new:.4f} (klicka 'Använd denna kalkylränta' för att uppdatera)")
+        st.info(f" Aktuell WACC för Steg 7: {current_r_new:.4f} (klicka 'Använd denna kalkylränta' för att uppdatera)")
     else:
-        st.success(f"✅ Denna WACC ({Wr:.4f}) kommer användas i Steg 7")
+        st.success(f" Denna WACC ({Wr:.4f}) kommer användas i Steg 7")
 
     # Metodikruta (importerad från översikt.py)
     _render_methodology_info()
@@ -702,7 +702,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
     
     # Visa resultat
     if 7 in steps_state['completed_steps']:
-        st.success("✅ Steg 7 slutfört")
+        st.success(" Steg 7 slutfört")
         result_data = steps_state['step_data'][7]
         used_wacc = result_data.get('used_wacc', R_OLD)
         
@@ -877,7 +877,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
     
     # Visa resultat och automatisk validering
     if 8 in steps_state['completed_steps']:
-        st.success("✅ Steg 8 slutfört")
+        st.success(" Steg 8 slutfört")
         result_data = steps_state['step_data'][8]
         
         # Beräkna alla KPIs
@@ -988,7 +988,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
         st.caption("Använder beräknad WACC från Steg 7")
         
         # Export-förhandsvisning (utan WACC-input)
-        if st.button("🔍 Förhandsgranska IR-export", type="secondary"):
+        if st.button(" Förhandsgranska IR-export", type="secondary"):
             try:
                 ir_preview = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
                 
@@ -1002,7 +1002,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
         # Export-knapp (förenklad)
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("📊 Exportera till IR-dekomposition", type="primary"):
+            if st.button(" Exportera till IR-dekomposition", type="primary"):
                 try:
                     ir_data = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
                     ir_path = execute_ir_export(ir_data, company_name)
@@ -1021,7 +1021,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                         st.code(traceback.format_exc())
         
         with col2:
-            st.info("💡 Tips: Använd DEA-export tab för att exportera WACC-scenarier för alla företag")
+            st.info(" Tips: Använd DEA-export tab för att exportera WACC-scenarier för alla företag")
 
 
 def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
@@ -1056,20 +1056,20 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
             "Fullständig omberäkning av alla DMU", 
             value=False,
             help="""
-            - ✅ Markerad: Kör hela beräkningskedjan för alla DMU (exakt men långsam)
-            - ❌ Ej markerad: Skala bara WACC på befintliga resultat (snabb men approximativ)
+            -  Markerad: Kör hela beräkningskedjan för alla DMU (exakt men långsam)
+            -  Ej markerad: Skala bara WACC på befintliga resultat (snabb men approximativ)
             """
         )
         
         if full_recalc:
-            st.warning("⚠️ Fullständig omberäkning kan ta flera minuter för alla DMU")
+            st.warning(" Fullständig omberäkning kan ta flera minuter för alla DMU")
             st.caption("Rekommenderas när andra parametrar än WACC ändrats i framtiden")
         else:
-            st.info("ℹ️ Snabb WACC-skalning - avskrivningar förblir oförändrade")
+            st.info("ℹ Snabb WACC-skalning - avskrivningar förblir oförändrade")
             st.caption("Lämplig för nuvarande läge där bara WACC är justerbar")
     
     # Förhandsvisning
-    if st.button("🔍 Förhandsgranska DEA-export", type="secondary"):
+    if st.button(" Förhandsgranska DEA-export", type="secondary"):
         with st.spinner("Förbereder förhandsvisning..."):
             try:
                 preview_data = prepare_dea_export_preview(dea_wacc, full_recalc, dmu_id)
@@ -1097,7 +1097,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
     
     # Export-knapp
     st.markdown("---")
-    if st.button("📈 Exportera DEA-scenario (alla företag)", type="primary"):
+    if st.button(" Exportera DEA-scenario (alla företag)", type="primary"):
         with st.spinner("Exporterar DEA-scenario för alla företag..."):
             try:
                 dea_data = prepare_dea_export_all_companies(
@@ -1121,7 +1121,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                     method = "Fullständig omberäkning" if full_recalc else "WACC-skalning"
                     st.metric("Metod", method)
                 
-                st.info("🔬 Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
+                st.info(" Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
                 
                 with st.expander("Export-detaljer"):
                     st.write("**Exporterad data (första 10 rader):**")

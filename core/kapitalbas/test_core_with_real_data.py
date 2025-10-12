@@ -39,11 +39,11 @@ from export_writers import (
 def compare_dataframes(df1, df2, name1="DF1", name2="DF2", tolerance=1e-3):
     """Jämför två DataFrames och rapporterar skillnader."""
     if df1.empty and df2.empty:
-        print(f"  ✓ Båda DataFrames är tomma")
+        print(f"   Båda DataFrames är tomma")
         return True
     
     if len(df1) != len(df2):
-        print(f"  ✗ Olika antal rader: {name1}={len(df1)}, {name2}={len(df2)}")
+        print(f"   Olika antal rader: {name1}={len(df1)}, {name2}={len(df2)}")
         return False
     
     # Jämför numeriska kolumner
@@ -56,11 +56,11 @@ def compare_dataframes(df1, df2, name1="DF1", name2="DF2", tolerance=1e-3):
         
         diff = (df1[col] - df2[col]).abs()
         if diff.max() > tolerance:
-            print(f"  ✗ Skillnad i kolumn '{col}': max diff = {diff.max():.6f}")
+            print(f"   Skillnad i kolumn '{col}': max diff = {diff.max():.6f}")
             all_close = False
     
     if all_close:
-        print(f"  ✓ Numeriska värden matchar (tolerance={tolerance})")
+        print(f"   Numeriska värden matchar (tolerance={tolerance})")
     
     return all_close
 
@@ -78,21 +78,21 @@ def test_1_load_real_data():
     # Ladda facit
     facit_path = "kapitalbas/datafiler/slutdata/capcost_a_3_Sheet1.parquet"
     if not Path(facit_path).exists():
-        print(f"✗ Fil saknas: {facit_path}")
+        print(f" Fil saknas: {facit_path}")
         return None
     
     df_facit = pd.read_parquet(facit_path)
-    print(f"✓ Laddade capcost_a: {len(df_facit):,} rader")
+    print(f" Laddade capcost_a: {len(df_facit):,} rader")
     print(f"  - Unika id_network: {df_facit['id_network'].nunique()}")
     print(f"  - Tidsperioder: {sorted(df_facit['time'].unique())}")
     
     # Verifiera DMU 121 / id_network 886
     df_121 = df_facit[df_facit['id_network'] == 886]
     if df_121.empty:
-        print(f"✗ id_network 886 (DMU 121) hittades inte i data")
+        print(f" id_network 886 (DMU 121) hittades inte i data")
         return None
     
-    print(f"✓ id_network 886: {len(df_121)} rader")
+    print(f" id_network 886: {len(df_121)} rader")
     print(f"  - Tidsperioder: {sorted(df_121['time'].unique())}")
     print(f"  - Total capcost_sum (2024): {df_121[df_121['time'].isin([229,230])]['capcost_sum'].sum():,.0f} tkr")
     
@@ -107,28 +107,28 @@ def test_2_reconciliation():
     
     recon_path = "effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv"
     if not Path(recon_path).exists():
-        print(f"✗ Fil saknas: {recon_path}")
+        print(f" Fil saknas: {recon_path}")
         return None
     
     rec = read_reconciliation(recon_path)
-    print(f"✓ Laddade reconciliation: {len(rec)} mappningar")
+    print(f" Laddade reconciliation: {len(rec)} mappningar")
     print(f"  - Unika DMU: {rec['DMU'].nunique()}")
     print(f"  - Unika id_network: {rec['id_network'].nunique()}")
     
     # Verifiera DMU 121 mappning
     rec_121 = rec[rec['DMU'] == 121]
     if rec_121.empty:
-        print(f"✗ DMU 121 hittades inte i reconciliation")
+        print(f" DMU 121 hittades inte i reconciliation")
         return None
     
     networks_121 = rec_121['id_network'].tolist()
-    print(f"✓ DMU 121 mappar till {len(networks_121)} id_network: {networks_121}")
+    print(f" DMU 121 mappar till {len(networks_121)} id_network: {networks_121}")
     
     if 886 not in networks_121:
-        print(f"✗ id_network 886 finns inte i DMU 121:s mappning")
+        print(f" id_network 886 finns inte i DMU 121:s mappning")
         return None
     
-    print(f"✓ id_network 886 bekräftad i DMU 121:s mappning")
+    print(f" id_network 886 bekräftad i DMU 121:s mappning")
     
     return rec
 
@@ -145,17 +145,17 @@ def test_3_dmu_aggregation(df_facit):
         filter_regional=True
     )
     
-    print(f"✓ Aggregerade till DMU-nivå: {len(df_dmu):,} rader")
+    print(f" Aggregerade till DMU-nivå: {len(df_dmu):,} rader")
     print(f"  - Unika DMU: {df_dmu['DMU'].nunique()}")
     print(f"  - Tidsperioder: {sorted(df_dmu['time'].unique())}")
     
     # Verifiera DMU 121
     df_121 = df_dmu[df_dmu['DMU'] == 121]
     if df_121.empty:
-        print(f"✗ DMU 121 hittades inte efter aggregering")
+        print(f" DMU 121 hittades inte efter aggregering")
         return None
     
-    print(f"✓ DMU 121: {len(df_121)} rader")
+    print(f" DMU 121: {len(df_121)} rader")
     
     # Jämför med original id_network 886
     df_886_original = df_facit[df_facit['id_network'] == 886]
@@ -170,9 +170,9 @@ def test_3_dmu_aggregation(df_facit):
     print(f"  - Differens: {diff:,.0f} tkr")
     
     if diff > 1.0:
-        print(f"⚠ Differens > 1 tkr kan indikera att DMU 121 har flera id_network")
+        print(f" Differens > 1 tkr kan indikera att DMU 121 har flera id_network")
     else:
-        print(f"✓ Aggregering matchar för DMU 121")
+        print(f" Aggregering matchar för DMU 121")
     
     return df_dmu
 
@@ -193,9 +193,9 @@ def test_4_wacc_calculation():
     
     # Verifiera att Wr matchar R_OLD
     if abs(Wr - R_OLD) < 0.0001:
-        print(f"✓ WACC matchar R_OLD (0.0453)")
+        print(f" WACC matchar R_OLD (0.0453)")
     else:
-        print(f"✗ WACC matchar INTE R_OLD: {Wr:.4f} vs {R_OLD:.4f}")
+        print(f" WACC matchar INTE R_OLD: {Wr:.4f} vs {R_OLD:.4f}")
         return False
     
     return True
@@ -214,7 +214,7 @@ def test_5_scenario_calculation(df_dmu):
     ]
     
     if df_121_2024.empty:
-        print("✗ Ingen data för DMU 121 2024")
+        print(" Ingen data för DMU 121 2024")
         return None
     
     print(f"Baseline data för DMU 121 2024:")
@@ -237,9 +237,9 @@ def test_5_scenario_calculation(df_dmu):
     # Verifiera att avskrivningar är oförändrade
     dep_unchanged = (df_scenario['dep_ord'] == df_121_2024['dep_ord']).all()
     if dep_unchanged:
-        print(f"✓ Avskrivningar oförändrade (som förväntat)")
+        print(f" Avskrivningar oförändrade (som förväntat)")
     else:
-        print(f"✗ Avskrivningar ändrades (FEL!)")
+        print(f" Avskrivningar ändrades (FEL!)")
         return None
     
     return df_scenario
@@ -265,7 +265,7 @@ def test_6_dea_export(df_dmu):
         exclude_missing_dmus=True
     )
     
-    print(f"✓ DEA-export skapad:")
+    print(f" DEA-export skapad:")
     print(f"  - Inkluderade DMU: {len(df_dea)}")
     print(f"  - Exkluderade DMU: {len(df_excl)}")
     print(f"  - WACC-tag: {tag}")
@@ -273,12 +273,12 @@ def test_6_dea_export(df_dmu):
     # Kontrollera DMU 121
     if 121 in df_dea['DMU'].values:
         dmu121 = df_dea[df_dea['DMU'] == 121].iloc[0]
-        print(f"\n✓ DMU 121 i export:")
+        print(f"\n DMU 121 i export:")
         print(f"  - CAPEX_2024_tkr (baseline): {dmu121['CAPEX_2024_tkr']:,.0f}")
         print(f"  - CAPEX_2024_wacc_{tag}_tkr: {dmu121[f'CAPEX_2024_wacc_{tag}_tkr']:,.0f}")
         print(f"  - delta_tkr: {dmu121['delta_tkr']:,.3f}")
     else:
-        print(f"✗ DMU 121 saknas i DEA-export")
+        print(f" DMU 121 saknas i DEA-export")
         return None
     
     return df_dea
@@ -298,14 +298,14 @@ def test_7_ir_export(df_dmu):
         apply_concessions=True
     )
     
-    print(f"✓ IR-export skapad:")
+    print(f" IR-export skapad:")
     print(f"  - Totalt DMU: {len(df_ir)}")
     print(f"  - WACC-tag: {tag}")
     
     # Kontrollera DMU 121
     if 121 in df_ir['DMU'].values:
         dmu121 = df_ir[df_ir['DMU'] == 121].iloc[0]
-        print(f"\n✓ DMU 121 i IR-export (2024-2027 totalt):")
+        print(f"\n DMU 121 i IR-export (2024-2027 totalt):")
         print(f"  - Kapitalkostnad_Baseline: {dmu121['Kapitalkostnad_Baseline']:,.0f} tkr")
         print(f"  - Kapitalkostnad_Ny: {dmu121['Kapitalkostnad_Ny']:,.0f} tkr")
         print(f"  - Avskrivningar_Ny: {dmu121['Avskrivningar_Ny']:,.0f} tkr")
@@ -315,9 +315,9 @@ def test_7_ir_export(df_dmu):
         # Verifiera koncessionsjusteringar
         adjustments = get_concession_adjustments()
         if 121 in adjustments['dep_adjustments']:
-            print(f"  ✓ Koncessionsjusteringar applicerade för DMU 121")
+            print(f"   Koncessionsjusteringar applicerade för DMU 121")
     else:
-        print(f"✗ DMU 121 saknas i IR-export")
+        print(f" DMU 121 saknas i IR-export")
         return None
     
     return df_ir
@@ -341,18 +341,18 @@ def test_8_file_export(df_dea, df_ir):
                 org="test_validation",
                 base_dir=tmpdir
             )
-            print(f"✓ DEA-export skriven:")
+            print(f" DEA-export skriven:")
             print(f"  - Data: {dea_path}")
             print(f"  - Meta: {dea_meta}")
             
             # Verifiera läsning
             df_read = pd.read_parquet(dea_path)
             if len(df_read) == len(df_dea):
-                print(f"  ✓ Data kan läsas tillbaka korrekt")
+                print(f"   Data kan läsas tillbaka korrekt")
             else:
-                print(f"  ✗ Fel vid tillbakaläsning")
+                print(f"   Fel vid tillbakaläsning")
         except Exception as e:
-            print(f"✗ DEA-export misslyckades: {e}")
+            print(f" DEA-export misslyckades: {e}")
             return False
         
         # Test IR-export
@@ -363,18 +363,18 @@ def test_8_file_export(df_dea, df_ir):
                 org="test_validation",
                 base_dir=tmpdir
             )
-            print(f"\n✓ IR-export skriven:")
+            print(f"\n IR-export skriven:")
             print(f"  - Data: {ir_path}")
             print(f"  - Meta: {ir_meta}")
             
             # Verifiera läsning
             df_read = pd.read_parquet(ir_path)
             if len(df_read) == len(df_ir):
-                print(f"  ✓ Data kan läsas tillbaka korrekt")
+                print(f"   Data kan läsas tillbaka korrekt")
             else:
-                print(f"  ✗ Fel vid tillbakaläsning")
+                print(f"   Fel vid tillbakaläsning")
         except Exception as e:
-            print(f"✗ IR-export misslyckades: {e}")
+            print(f" IR-export misslyckades: {e}")
             return False
     
     return True
@@ -394,56 +394,56 @@ def main():
     # Test 1: Ladda data
     df_facit = test_1_load_real_data()
     if df_facit is None:
-        print("\n✗ AVBRYTER: Kunde inte ladda produktionsdata")
+        print("\n AVBRYTER: Kunde inte ladda produktionsdata")
         return False
     
     # Test 2: Reconciliation
     rec = test_2_reconciliation()
     if rec is None:
-        print("\n✗ AVBRYTER: Reconciliation misslyckades")
+        print("\n AVBRYTER: Reconciliation misslyckades")
         return False
     
     # Test 3: DMU-aggregering
     df_dmu = test_3_dmu_aggregation(df_facit)
     if df_dmu is None:
-        print("\n✗ AVBRYTER: DMU-aggregering misslyckades")
+        print("\n AVBRYTER: DMU-aggregering misslyckades")
         return False
     
     # Test 4: WACC-beräkning
     if not test_4_wacc_calculation():
-        print("\n✗ AVBRYTER: WACC-beräkning misslyckades")
+        print("\n AVBRYTER: WACC-beräkning misslyckades")
         return False
     
     # Test 5: Scenarioberäkning
     df_scenario = test_5_scenario_calculation(df_dmu)
     if df_scenario is None:
-        print("\n✗ AVBRYTER: Scenarioberäkning misslyckades")
+        print("\n AVBRYTER: Scenarioberäkning misslyckades")
         return False
     
     # Test 6: DEA-export
     df_dea = test_6_dea_export(df_dmu)
     if df_dea is None:
-        print("\n✗ AVBRYTER: DEA-export misslyckades")
+        print("\n AVBRYTER: DEA-export misslyckades")
         return False
     
     # Test 7: IR-export
     df_ir = test_7_ir_export(df_dmu)
     if df_ir is None:
-        print("\n✗ AVBRYTER: IR-export misslyckades")
+        print("\n AVBRYTER: IR-export misslyckades")
         return False
     
     # Test 8: Fil-export
     if not test_8_file_export(df_dea, df_ir):
-        print("\n✗ AVBRYTER: Fil-export misslyckades")
+        print("\n AVBRYTER: Fil-export misslyckades")
         return False
     
     # Sammanfattning
     print("\n" + "#"*70)
     print("# SAMMANFATTNING")
     print("#"*70)
-    print("✓ Alla tester genomförda framgångsrikt!")
-    print("✓ Core-moduler är redo att ersätta översikt.py funktioner")
-    print("✓ DMU 121 (id_network 886) validerad genom hela kedjan")
+    print(" Alla tester genomförda framgångsrikt!")
+    print(" Core-moduler är redo att ersätta översikt.py funktioner")
+    print(" DMU 121 (id_network 886) validerad genom hela kedjan")
     print("\nNästa steg:")
     print("1. Uppdatera översikt.py att importera från core/")
     print("2. Uppdatera foretag_berakningskedja.py att importera från core/")

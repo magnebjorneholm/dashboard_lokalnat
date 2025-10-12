@@ -48,12 +48,12 @@ def analysera_sample_vs_full(final_df, sample_df):
         results[nat_id] = result
 
         # === Utskrifter ===
-        print(f"🔸 Inaktiva i sample: {len(sample_neg)} st, total nuav: {sample_neg['nuav'].sum():,.0f} SEK")
-        print(f"🔹 Inaktiva i full:   {len(full_neg)} st, total nuav: {full_neg['nuav'].sum():,.0f} SEK")
-        print("\n🧾 Balansposter i full_df (positivt nuav i samma kategorier):")
+        print(f" Inaktiva i sample: {len(sample_neg)} st, total nuav: {sample_neg['nuav'].sum():,.0f} SEK")
+        print(f" Inaktiva i full:   {len(full_neg)} st, total nuav: {full_neg['nuav'].sum():,.0f} SEK")
+        print("\n Balansposter i full_df (positivt nuav i samma kategorier):")
         print(result["balancing_summary"].sort_values("sum", ascending=False).to_string(index=False))
 
-        print("\n🔍 Exempel från sample med negativt nuav eller maxdep:")
+        print("\n Exempel från sample med negativt nuav eller maxdep:")
         print(sample_neg[["id_component", "cat", "nuav", "maxdep", "time_to"]].head(10).to_string(index=False))
         print("\n")
 

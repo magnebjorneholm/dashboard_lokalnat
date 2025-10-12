@@ -477,7 +477,7 @@ def show_component_table(entity_data: pd.Series, components: List[tuple], has_de
             # Opåverkbara: tvinga alltid baseline, Δ=0
             källa = 'Baseline'
             uppdaterad = False
-            uppdaterad_text = '➖'
+            uppdaterad_text = ''
             
         elif 'påverkbara' in name_lower:
             # Påverkbara: kan komma från scenario (DEA)
@@ -511,7 +511,7 @@ def show_component_table(entity_data: pd.Series, components: List[tuple], has_de
             # Övriga (Flex, Avbrottsersättning m.m.): baseline
             källa = 'Baseline'
             uppdaterad = False
-            uppdaterad_text = '➖'
+            uppdaterad_text = ''
 
         table_data.append({
             'Komponent': name,
@@ -557,11 +557,11 @@ def calculate_delta_text(current_value: float, baseline_value: Optional[float], 
     
     # Applicera tröskel - om absoluta deltat är under tröskeln, behandla som noll
     if abs(delta) > threshold:
-        prefix = "✅ " if is_updated else ""
+        prefix = " " if is_updated else ""
         return f"{prefix}Δ {delta:+,.3f} ({delta_pct:+.3f}%)"  # Behåll decimaler
     else:
         # Delta under tröskel - visa som noll men explicit
-        prefix = "✅ " if is_updated else ""
+        prefix = " " if is_updated else ""
         return f"{prefix}Δ 0.000 (0.000%)"
 
 
@@ -585,14 +585,14 @@ def show_component_controls(entity_data: pd.Series, df_working: pd.DataFrame):
     st.sidebar.write("**Tillgängliga scenarier:**")
     for key, value in scenario_updates.items():
         if value is not None:
-            status = "✅"
+            status = ""
             # Korta av filnamnet för bättre visning
             short_name = value['name'][:30] + "..." if len(value['name']) > 30 else value['name']
             st.sidebar.caption(f"{status} **{key}**")
             st.sidebar.caption(f"   {short_name}")
             st.sidebar.caption(f"   {value['created']}")
         else:
-            status = "❌"
+            status = ""
             st.sidebar.caption(f"{status} {key} - Ingen export hittad")
     
     # Cache-varning för äldre scenarier
@@ -618,7 +618,7 @@ def show_component_controls(entity_data: pd.Series, df_working: pd.DataFrame):
         )
         
         # === NYTT: Visa nuvarande värden INNAN krav appliceras ===
-        with st.sidebar.expander("📊 Nuvarande värden (4-årsperiod)"):
+        with st.sidebar.expander(" Nuvarande värden (4-årsperiod)"):
             # Hämta baseline OPEX
             opex_baseline = entity_data.get('Paverkbara_Kostnader_Baseline', 
                                            entity_data.get('Paverkbara_Kostnader', 0))

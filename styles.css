@@ -1,0 +1,623 @@
+/* ============================================================================
+   STYLES.CSS - Professionell styling för elmarknadsanalytiker
+   Färgschema: "Energi & Stabilitet" (Alternativ 1)
+   ============================================================================ */
+
+/* ============================================================================
+   FÄRGVARIABLER
+   ============================================================================ */
+:root {
+    /* Primärfärger */
+    --primary-blue: #1E3A5F;
+    --accent-blue: #0066CC;
+    --electric-blue: #0088FF;
+    
+    /* Bakgrunder */
+    --bg-light: #F5F7FA;
+    --bg-white: #FFFFFF;
+    --bg-dark: #2C3E50;
+    
+    /* Text */
+    --text-primary: #2C3E50;
+    --text-secondary: #64748B;
+    --text-light: #94A3B8;
+    
+    /* Status */
+    --success: #10B981;
+    --warning: #F59E0B;
+    --error: #DC2626;
+    --info: #0066CC;
+    
+    /* Borders */
+    --border-light: #E2E8F0;
+    --border-medium: #CBD5E1;
+}
+
+/* ============================================================================
+   GLOBAL RESET & BASE
+   ============================================================================ */
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Main app container */
+.main {
+    background-color: var(--bg-light);
+    padding: 1.5rem 2rem;
+}
+
+/* Kompaktare spacing */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    max-width: 100%;
+}
+
+/* ============================================================================
+   TYPOGRAFI
+   ============================================================================ */
+
+/* Headers */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--primary-blue);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 1rem;
+}
+
+h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    border-bottom: 3px solid var(--accent-blue);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+h2 {
+    font-size: 1.5rem;
+    margin-top: 2rem;
+}
+
+h3 {
+    font-size: 1.25rem;
+    color: var(--text-primary);
+}
+
+/* Body text */
+p, .stMarkdown {
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+/* Mindre text */
+.caption, small {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* ============================================================================
+   SIDEBAR
+   ============================================================================ */
+section[data-testid="stSidebar"] {
+    background-color: var(--primary-blue);
+    border-right: 1px solid var(--border-medium);
+}
+
+section[data-testid="stSidebar"] > div {
+    background-color: var(--primary-blue);
+    padding: 2rem 1rem;
+}
+
+/* Sidebar text */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] .stMarkdown {
+    color: #FFFFFF !important;
+}
+
+/* Sidebar subheaders */
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 0.5rem;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Sidebar dividers */
+section[data-testid="stSidebar"] hr {
+    border-color: rgba(255, 255, 255, 0.2);
+    margin: 1.5rem 0;
+}
+
+/* ============================================================================
+   NAVIGATION - Sidebar menylänkar (Fungerar med både list och dict)
+   ============================================================================ */
+
+/* Alla navigationslänkar - bred selector för alla varianter */
+section[data-testid="stSidebar"] nav a,
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a,
+section[data-testid="stSidebar"] a[href] {
+    color: #FFFFFF !important;
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    padding: 0.85rem 1rem !important;
+    border-radius: 6px !important;
+    margin: 0.35rem 0 !important;
+    display: block !important;
+    transition: all 0.2s ease !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    font-weight: 500 !important;
+    text-decoration: none !important;
+}
+
+/* Hover state */
+section[data-testid="stSidebar"] nav a:hover,
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a:hover,
+section[data-testid="stSidebar"] a[href]:hover {
+    background-color: rgba(255, 255, 255, 0.22) !important;
+    border-color: rgba(255, 255, 255, 0.45) !important;
+    transform: translateX(3px) !important;
+}
+
+/* Aktiv sida */
+section[data-testid="stSidebar"] nav a[aria-current="page"],
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a[aria-current="page"],
+section[data-testid="stSidebar"] a[href][aria-current="page"] {
+    background-color: var(--electric-blue) !important;
+    border-color: var(--electric-blue) !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 8px rgba(0, 136, 255, 0.3) !important;
+}
+
+/* Text i länkarna - mycket bred selector */
+section[data-testid="stSidebar"] a span,
+section[data-testid="stSidebar"] nav span,
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] span {
+    color: #FFFFFF !important;
+}
+
+/* Lista styling */
+section[data-testid="stSidebar"] nav ul,
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] ul {
+    list-style: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+section[data-testid="stSidebar"] nav li,
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] li {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* ============================================================================
+   KNAPPAR
+   ============================================================================ */
+
+/* Primary button */
+.stButton > button[kind="primary"],
+.stButton > button:not([kind]) {
+    background-color: var(--accent-blue);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.stButton > button[kind="primary"]:hover,
+.stButton > button:not([kind]):hover {
+    background-color: #0052A3;
+    box-shadow: 0 2px 6px rgba(0, 102, 204, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Secondary button */
+.stButton > button[kind="secondary"] {
+    background-color: transparent;
+    color: var(--accent-blue);
+    border: 1px solid var(--accent-blue);
+    border-radius: 4px;
+    padding: 0.5rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.stButton > button[kind="secondary"]:hover {
+    background-color: rgba(0, 102, 204, 0.1);
+}
+
+/* Sidebar buttons */
+section[data-testid="stSidebar"] .stButton > button {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    width: 100%;
+}
+
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ============================================================================
+   INPUT FIELDS
+   ============================================================================ */
+
+/* Text inputs */
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stSelectbox > div > div > div {
+    border-radius: 4px;
+    border: 1px solid var(--border-medium);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+}
+
+.stTextInput > div > div > input:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
+/* Sidebar inputs */
+section[data-testid="stSidebar"] .stTextInput > div > div > input,
+section[data-testid="stSidebar"] .stNumberInput > div > div > input,
+section[data-testid="stSidebar"] .stSelectbox > div > div {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+section[data-testid="stSidebar"] .stTextInput > div > div > input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* ============================================================================
+   DATATABELLER
+   ============================================================================ */
+
+/* DataFrame styling */
+.stDataFrame {
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* Table headers */
+.stDataFrame thead tr th {
+    background-color: var(--primary-blue) !important;
+    color: white !important;
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--accent-blue);
+    text-align: left;
+}
+
+/* Table rows */
+.stDataFrame tbody tr {
+    border-bottom: 1px solid var(--border-light);
+    transition: background-color 0.2s ease;
+}
+
+.stDataFrame tbody tr:nth-child(even) {
+    background-color: #F8FAFC;
+}
+
+.stDataFrame tbody tr:hover {
+    background-color: rgba(0, 102, 204, 0.05);
+}
+
+/* Table cells */
+.stDataFrame tbody tr td {
+    padding: 0.6rem 1rem;
+    color: var(--text-primary);
+}
+
+/* Numeric columns med monospace */
+.stDataFrame tbody tr td[data-type="numeric"],
+.stDataFrame tbody tr td:has(> .numeric) {
+    font-family: 'Roboto Mono', 'IBM Plex Mono', monospace;
+    text-align: right;
+    font-size: 0.9rem;
+}
+
+/* ============================================================================
+   METRICS & KPI-KORT
+   ============================================================================ */
+
+/* Metric containers */
+[data-testid="stMetric"] {
+    background-color: white;
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Metric label */
+[data-testid="stMetricLabel"] {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Metric value */
+[data-testid="stMetricValue"] {
+    color: var(--primary-blue);
+    font-size: 1.75rem;
+    font-weight: 700;
+    font-family: 'Roboto Mono', monospace;
+}
+
+/* Metric delta */
+[data-testid="stMetricDelta"] {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* ============================================================================
+   MEDDELANDEN (SUCCESS, ERROR, WARNING, INFO)
+   ============================================================================ */
+
+/* Success messages */
+.stSuccess {
+    background-color: rgba(16, 185, 129, 0.1);
+    border-left: 4px solid var(--success);
+    padding: 1rem;
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+/* Error messages */
+.stError {
+    background-color: rgba(220, 38, 38, 0.1);
+    border-left: 4px solid var(--error);
+    padding: 1rem;
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+/* Warning messages */
+.stWarning {
+    background-color: rgba(245, 158, 11, 0.1);
+    border-left: 4px solid var(--warning);
+    padding: 1rem;
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+/* Info messages */
+.stInfo {
+    background-color: rgba(0, 102, 204, 0.1);
+    border-left: 4px solid var(--info);
+    padding: 1rem;
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+/* ============================================================================
+   TABS
+   ============================================================================ */
+
+/* Tab container */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.5rem;
+    background-color: white;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-light);
+}
+
+/* Individual tabs */
+.stTabs [data-baseweb="tab"] {
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    background-color: rgba(0, 102, 204, 0.05);
+    color: var(--accent-blue);
+}
+
+/* Active tab */
+.stTabs [aria-selected="true"] {
+    background-color: var(--accent-blue);
+    color: white;
+}
+
+/* ============================================================================
+   EXPANDER
+   ============================================================================ */
+
+.streamlit-expanderHeader {
+    background-color: white;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    padding: 0.75rem 1rem;
+    font-weight: 500;
+    color: var(--primary-blue);
+    transition: all 0.2s ease;
+}
+
+.streamlit-expanderHeader:hover {
+    background-color: rgba(0, 102, 204, 0.05);
+    border-color: var(--accent-blue);
+}
+
+/* ============================================================================
+   PROGRESS BAR
+   ============================================================================ */
+
+.stProgress > div > div > div {
+    background-color: var(--accent-blue);
+    border-radius: 4px;
+}
+
+/* ============================================================================
+   SPINNER
+   ============================================================================ */
+
+.stSpinner > div {
+    border-top-color: var(--accent-blue) !important;
+}
+
+/* ============================================================================
+   SELECTBOX & MULTISELECT
+   ============================================================================ */
+
+/* Selectbox dropdown */
+[data-baseweb="select"] > div {
+    border-radius: 4px;
+    border-color: var(--border-medium);
+}
+
+[data-baseweb="select"]:hover > div {
+    border-color: var(--accent-blue);
+}
+
+/* Multiselect tags */
+[data-baseweb="tag"] {
+    background-color: var(--accent-blue);
+    color: white;
+    border-radius: 3px;
+    font-size: 0.875rem;
+}
+
+/* ============================================================================
+   CHECKBOX & RADIO
+   ============================================================================ */
+
+/* Checkbox */
+.stCheckbox > label > div[role="checkbox"] {
+    border-color: var(--border-medium);
+    border-radius: 3px;
+}
+
+.stCheckbox > label > div[role="checkbox"][aria-checked="true"] {
+    background-color: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+/* Radio buttons */
+.stRadio > label > div[role="radiogroup"] > label > div:first-child {
+    border-color: var(--border-medium);
+}
+
+.stRadio > label > div[role="radiogroup"] > label > div:first-child[data-checked="true"] {
+    background-color: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+/* ============================================================================
+   SCROLLBAR
+   ============================================================================ */
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-light);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-medium);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* ============================================================================
+   PLOTLY CHARTS
+   ============================================================================ */
+
+/* Plotly container */
+.js-plotly-plot {
+    border-radius: 6px;
+    background-color: white;
+    padding: 1rem;
+    border: 1px solid var(--border-light);
+}
+
+/* ============================================================================
+   FILE UPLOADER
+   ============================================================================ */
+
+[data-testid="stFileUploader"] {
+    border: 2px dashed var(--border-medium);
+    border-radius: 6px;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+[data-testid="stFileUploader"]:hover {
+    border-color: var(--accent-blue);
+    background-color: rgba(0, 102, 204, 0.02);
+}
+
+/* ============================================================================
+   COLUMNS
+   ============================================================================ */
+
+/* Column gap */
+[data-testid="column"] {
+    padding: 0 0.75rem;
+}
+
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================ */
+
+/* Text alignment */
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+/* Monospace */
+.monospace {
+    font-family: 'Roboto Mono', 'IBM Plex Mono', monospace;
+}
+
+/* Kompakt spacing */
+.compact {
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+}
+
+/* ============================================================================
+   RESPONSIVITET
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .block-container {
+        padding: 1rem;
+    }
+    
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    [data-testid="stMetricValue"] {
+        font-size: 1.25rem;
+    }
+}

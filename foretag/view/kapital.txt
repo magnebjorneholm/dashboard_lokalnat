@@ -477,7 +477,7 @@ def show_scenario_and_export(df_company: pd.DataFrame, filter_func, year_choice:
         col_ir, col_dea, col_both = st.columns(3)
         
         with col_ir:
-            if st.button("🏢 Exportera till IR-dekomposition", help="Exporterar detaljerad kapitalkostnad för DITT företag"):
+            if st.button(" Exportera till IR-dekomposition", help="Exporterar detaljerad kapitalkostnad för DITT företag"):
                 try:
                     path_data, path_meta = write_company_ir_export(df_ir_export, ir_tag)
                     st.success("IR-export klar!")
@@ -487,18 +487,18 @@ def show_scenario_and_export(df_company: pd.DataFrame, filter_func, year_choice:
                     st.error(f"IR-export misslyckades: {e}")
         
         with col_dea:
-            if st.button("📊 Exportera till DEA/Effektivitet", help="Exporterar WACC-scenario för ALLA företag (metodologiskt korrekt)"):
+            if st.button(" Exportera till DEA/Effektivitet", help="Exporterar WACC-scenario för ALLA företag (metodologiskt korrekt)"):
                 try:
                     path_data, path_meta = write_dea_export_all_companies(df_dea_export, dea_tag)
                     st.success("DEA-export klar!")
                     st.caption(f"Data: {path_data}")
                     st.caption(f"Metadata: {path_meta}")
-                    st.info("🔬 Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
+                    st.info(" Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
                 except Exception as e:
                     st.error(f"DEA-export misslyckades: {e}")
         
         with col_both:
-            if st.button("🚀 Exportera båda", help="Exporterar både IR (ditt företag) och DEA (alla företag)"):
+            if st.button(" Exportera båda", help="Exporterar både IR (ditt företag) och DEA (alla företag)"):
                 try:
                     ir_path_data, ir_path_meta = write_company_ir_export(df_ir_export, ir_tag)
                     dea_path_data, dea_path_meta = write_dea_export_all_companies(df_dea_export, dea_tag)

@@ -331,7 +331,7 @@ if __name__ == "__main__":
     # Test 1: format_wacc_tag
     print("\nTest 1: WACC-taggformatering")
     tag = format_wacc_tag(0.0475)
-    print(f"0.0475 → '{tag}' (förväntat: '0p0475'): {'✓' if tag == '0p0475' else '✗'}")
+    print(f"0.0475 → '{tag}' (förväntat: '0p0475'): {'' if tag == '0p0475' else ''}")
     
     # Test 2: DEA-export
     print("\nTest 2: DEA-export")
@@ -359,21 +359,21 @@ if __name__ == "__main__":
             # Verifiera att filer skapades
             data_exists = Path(data_path).exists()
             meta_exists = Path(meta_path).exists()
-            print(f"Data-fil skapad: {'✓' if data_exists else '✗'}")
-            print(f"Meta-fil skapad: {'✓' if meta_exists else '✗'}")
+            print(f"Data-fil skapad: {'' if data_exists else ''}")
+            print(f"Meta-fil skapad: {'' if meta_exists else ''}")
             
             # Verifiera att data kan läsas tillbaka
             df_read = pd.read_parquet(data_path)
-            print(f"Data kan läsas tillbaka: {'✓' if len(df_read) == 2 else '✗'}")
+            print(f"Data kan läsas tillbaka: {'' if len(df_read) == 2 else ''}")
             
             # Verifiera metadata
             with open(meta_path, 'r') as f:
                 meta = json.load(f)
-            print(f"Metadata innehåller organization: {'✓' if 'organization' in meta else '✗'}")
-            print(f"Metadata WACC-värde korrekt: {'✓' if abs(meta['wacc_new'] - 0.0475) < 0.0001 else '✗'}")
+            print(f"Metadata innehåller organization: {'' if 'organization' in meta else ''}")
+            print(f"Metadata WACC-värde korrekt: {'' if abs(meta['wacc_new'] - 0.0475) < 0.0001 else ''}")
             
         except Exception as e:
-            print(f"✗ Fel vid DEA-export: {e}")
+            print(f" Fel vid DEA-export: {e}")
     
     # Test 3: IR-export
     print("\nTest 3: IR-export")
@@ -406,17 +406,17 @@ if __name__ == "__main__":
             
             data_exists = Path(data_path).exists()
             meta_exists = Path(meta_path).exists()
-            print(f"Data-fil skapad: {'✓' if data_exists else '✗'}")
-            print(f"Meta-fil skapad: {'✓' if meta_exists else '✗'}")
+            print(f"Data-fil skapad: {'' if data_exists else ''}")
+            print(f"Meta-fil skapad: {'' if meta_exists else ''}")
             
             # Verifiera metadata har period-info
             with open(meta_path, 'r') as f:
                 meta = json.load(f)
             has_period = 'period' in meta and 'start' in meta['period']
-            print(f"Metadata innehåller period-info: {'✓' if has_period else '✗'}")
+            print(f"Metadata innehåller period-info: {'' if has_period else ''}")
             
         except Exception as e:
-            print(f"✗ Fel vid IR-export: {e}")
+            print(f" Fel vid IR-export: {e}")
     
     print("\n" + "=" * 60)
     print("Alla tester slutförda.")

@@ -328,7 +328,7 @@ if __name__ == "__main__":
     print(f"Rd (nominell, före skatt):  {Rd:.4f} ({Rd*100:.2f}%)")
     print(f"WACC (nominell, före skatt): {Wn:.4f} ({Wn*100:.2f}%)")
     print(f"WACC (real, före skatt):     {Wr:.4f} ({Wr*100:.2f}%)")
-    print(f"Förväntat Wr ≈ 0.0453 (R_OLD): {'✓' if abs(Wr - R_OLD) < 0.0001 else '✗'}")
+    print(f"Förväntat Wr ≈ 0.0453 (R_OLD): {'' if abs(Wr - R_OLD) < 0.0001 else ''}")
     
     # Test 2: Scenarioberäkning
     print("\nTest 2: Scenarioberäkning")
@@ -343,7 +343,7 @@ if __name__ == "__main__":
     scale_expected = r_new / R_OLD
     print(f"Skalningsfaktor: {scale_expected:.4f}")
     print(f"return_ord_new[0]: {result['return_ord_new'].iloc[0]:.2f} (förväntat: {100.0 * scale_expected:.2f})")
-    print(f"dep_ord oförändrad: {'✓' if result['dep_ord'].iloc[0] == 300.0 else '✗'}")
+    print(f"dep_ord oförändrad: {'' if result['dep_ord'].iloc[0] == 300.0 else ''}")
     
     # Test 3: Periodfiltrering
     print("\nTest 3: Periodfiltrering")

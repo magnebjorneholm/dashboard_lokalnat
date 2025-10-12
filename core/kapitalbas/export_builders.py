@@ -440,20 +440,20 @@ if __name__ == "__main__":
         
         print(f"Export skapad: {len(df_export)} DMU")
         print(f"WACC-tag: '{tag}' (förväntat: '0p0500')")
-        print(f"Har baseline-kolumn: {'✓' if 'CAPEX_2024_tkr' in df_export.columns else '✗'}")
-        print(f"Har scenario-kolumn: {'✓' if f'CAPEX_2024_wacc_{tag}_tkr' in df_export.columns else '✗'}")
+        print(f"Har baseline-kolumn: {'' if 'CAPEX_2024_tkr' in df_export.columns else ''}")
+        print(f"Har scenario-kolumn: {'' if f'CAPEX_2024_wacc_{tag}_tkr' in df_export.columns else ''}")
         
         # Verifiera att aggregering skedde (2 halvår → 1 rad per DMU)
-        print(f"Aggregering korrekt: {'✓' if len(df_export) == 2 else '✗'}")
+        print(f"Aggregering korrekt: {'' if len(df_export) == 2 else ''}")
         
         # Verifiera att DMU 1 har summan av halvåren
         if 1 in df_export['DMU'].values:
             dmu1_baseline = df_export[df_export['DMU'] == 1]['CAPEX_2024_tkr'].iloc[0]
             expected_baseline = 500 + 520  # H1 + H2
-            print(f"DMU 1 baseline korrekt: {'✓' if abs(dmu1_baseline - expected_baseline) < 1 else '✗'}")
+            print(f"DMU 1 baseline korrekt: {'' if abs(dmu1_baseline - expected_baseline) < 1 else ''}")
         
     except Exception as e:
-        print(f"✗ Fel: {e}")
+        print(f" Fel: {e}")
     
     # Test 2: IR-export builder
     print("\nTest 2: IR-export builder")
@@ -478,18 +478,18 @@ if __name__ == "__main__":
         )
         
         print(f"Export skapad: {len(df_export)} DMU")
-        print(f"Har Kapitalkostnad_Ny: {'✓' if 'Kapitalkostnad_Ny' in df_export.columns else '✗'}")
-        print(f"Har Avskrivningar_Ny: {'✓' if 'Avskrivningar_Ny' in df_export.columns else '✗'}")
-        print(f"Har Avkastning_Ny: {'✓' if 'Avkastning_Ny' in df_export.columns else '✗'}")
+        print(f"Har Kapitalkostnad_Ny: {'' if 'Kapitalkostnad_Ny' in df_export.columns else ''}")
+        print(f"Har Avskrivningar_Ny: {'' if 'Avskrivningar_Ny' in df_export.columns else ''}")
+        print(f"Har Avkastning_Ny: {'' if 'Avkastning_Ny' in df_export.columns else ''}")
         
         # Verifiera periodsummering (8 halvår → 1 rad)
         if len(df_export) == 1:
             total_avskr = df_export['Avskrivningar_Ny'].iloc[0]
             expected_avskr = (100 + 20) * 8  # 8 halvår
-            print(f"Periodsummering korrekt: {'✓' if abs(total_avskr - expected_avskr) < 1 else '✗'}")
+            print(f"Periodsummering korrekt: {'' if abs(total_avskr - expected_avskr) < 1 else ''}")
         
     except Exception as e:
-        print(f"✗ Fel: {e}")
+        print(f" Fel: {e}")
     
     # Test 3: Koncessionsjusteringar
     print("\nTest 3: Koncessionsjusteringar")
@@ -514,15 +514,15 @@ if __name__ == "__main__":
         dmu115_avskr = df_adjusted[df_adjusted['DMU'] == 115]['Avskrivningar_Ny'].iloc[0]
         expected_avskr = 1000.0 + adjustments['dep_adjustments'][115]
         adjustment_applied = abs(dmu115_avskr - expected_avskr) < 0.1
-        print(f"Justeringar applicerade på DMU 115: {'✓' if adjustment_applied else '✗'}")
+        print(f"Justeringar applicerade på DMU 115: {'' if adjustment_applied else ''}")
         
         # Verifiera att DMU 999 inte påverkades
         dmu999_avskr = df_adjusted[df_adjusted['DMU'] == 999]['Avskrivningar_Ny'].iloc[0]
         no_adjustment = abs(dmu999_avskr - 2000.0) < 0.1
-        print(f"DMU 999 opåverkad: {'✓' if no_adjustment else '✗'}")
+        print(f"DMU 999 opåverkad: {'' if no_adjustment else ''}")
         
     except Exception as e:
-        print(f"✗ Fel: {e}")
+        print(f" Fel: {e}")
     
     print("\n" + "=" * 60)
     print("Alla tester slutförda.")

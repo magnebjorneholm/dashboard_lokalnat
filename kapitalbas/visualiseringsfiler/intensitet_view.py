@@ -102,9 +102,9 @@ def _scenario_controls() -> Tuple[bool, Optional[float]]:
 def _render_merge_quality(quality_report) -> None:
     """Visa kvalitetsrapport för datasammanfogning."""
     if quality_report.merge_coverage_pct < 90:
-        st.warning(f"⚠️ Låg merge-täckning: {quality_report.merge_coverage_pct:.1f}%")
+        st.warning(f" Låg merge-täckning: {quality_report.merge_coverage_pct:.1f}%")
     else:
-        st.success(f"✅ God merge-täckning: {quality_report.merge_coverage_pct:.1f}%")
+        st.success(f" God merge-täckning: {quality_report.merge_coverage_pct:.1f}%")
     
     col1, col2, col3 = st.columns(3)
     
@@ -202,7 +202,7 @@ def _render_ranking_tables(
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### 🔴 Högsta intensitet")
+        st.markdown("####  Högsta intensitet")
         if len(top_networks) > 0:
             display_cols = ["ranking", "DMU", intensity_col]
             
@@ -424,7 +424,7 @@ def show_intensity_analysis(
     st.caption("Analyserar kapitalkostnader relativt nätens storlek och aktivitetsnivå (tkr-basis, 2022 års prisnivå)")
     
     # Informationsruta om datastruktur
-    with st.expander("ℹ️ Om datastruktur och nät-företag-mappning", expanded=False):
+    with st.expander("ℹ Om datastruktur och nät-företag-mappning", expanded=False):
         st.markdown("""
         **Viktigt att förstå: Nät-nivå vs Företag-nivå**
         
@@ -517,7 +517,7 @@ def show_intensity_analysis(
             st.error(f"Fel vid scenario-beräkning: {e}")
     
     # Detaljdata (expanderbar)
-    with st.expander("🗃️ Detaljdata (alla DMU)"):
+    with st.expander(" Detaljdata (alla DMU)"):
         display_cols = [
             "DMU", "MWh_total", "CU", 
             "capcost_sum", intensity_metric

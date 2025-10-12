@@ -369,9 +369,9 @@ if __name__ == "__main__":
     
     try:
         rec = read_reconciliation(test_csv_path)
-        print(f"Läste {len(rec)} rader: {'✓' if len(rec) == 4 else '✗'}")
-        print(f"Har kolumn 'DMU': {'✓' if 'DMU' in rec.columns else '✗'}")
-        print(f"Har kolumn 'REId': {'✓' if 'REId' in rec.columns else '✗'}")
+        print(f"Läste {len(rec)} rader: {'' if len(rec) == 4 else ''}")
+        print(f"Har kolumn 'DMU': {'' if 'DMU' in rec.columns else ''}")
+        print(f"Har kolumn 'REId': {'' if 'REId' in rec.columns else ''}")
     finally:
         os.unlink(test_csv_path)
     
@@ -399,14 +399,14 @@ if __name__ == "__main__":
         )
         
         print(f"Original id_networks: 4, Efter filtrering: {df_agg['DMU'].nunique()} DMU")
-        print(f"Regionnät (RER) filtrerat: {'✓' if len(df_agg) < len(test_facit) else '✗'}")
-        print(f"Data aggregerad: {'✓' if 'capcost_sum' in df_agg.columns else '✗'}")
+        print(f"Regionnät (RER) filtrerat: {'' if len(df_agg) < len(test_facit) else ''}")
+        print(f"Data aggregerad: {'' if 'capcost_sum' in df_agg.columns else ''}")
         
         # Kontrollera att DMU 100 har summan av id_network 1 och 2
         if 100 in df_agg['DMU'].values:
             dmu100_sum = df_agg[df_agg['DMU'] == 100]['capcost_sum'].sum()
             expected = 100 + 110 + 200 + 220  # Summa för id_network 1 och 2
-            print(f"DMU 100 totalsumma korrekt: {'✓' if abs(dmu100_sum - expected) < 0.1 else '✗'}")
+            print(f"DMU 100 totalsumma korrekt: {'' if abs(dmu100_sum - expected) < 0.1 else ''}")
         
     finally:
         os.unlink(test_csv_path)
@@ -425,7 +425,7 @@ if __name__ == "__main__":
     
     print(f"Kompletta DMU: {len(df_complete['DMU'].unique())} (förväntat: 2)")
     print(f"Inkompletta DMU: {len(df_incomplete)} (förväntat: 1)")
-    print(f"Inkomplett DMU är 2: {'✓' if 2 in df_incomplete['DMU'].values else '✗'}")
+    print(f"Inkomplett DMU är 2: {'' if 2 in df_incomplete['DMU'].values else ''}")
     
     print("\n" + "=" * 60)
     print("Alla tester slutförda.")

@@ -315,7 +315,7 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
         match_stats: Dict från merge_dea_with_geodata()
         metadata: Dict från load_shapes_for_dea()
     """
-    st.write("### 📊 Shapefile-information")
+    st.write("###  Shapefile-information")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -344,7 +344,7 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
     for net_type, count in metadata["kept_by_type"].items():
         st.write(f"  - {net_type}: {count} REId")
     
-    st.write("### 🔗 REId-matchning (Geodata ↔ DEA-resultat)")
+    st.write("###  REId-matchning (Geodata ↔ DEA-resultat)")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -364,7 +364,7 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
     if expected_missing:
         n = len(expected_missing)
         st.error(
-            f"❌ **{n} REId förväntas ha DEA-data men saknar det**\n\n"
+            f" **{n} REId förväntas ha DEA-data men saknar det**\n\n"
             f"Dessa har `in_data_modeller=True` i reconciliation-filen.\n\n"
             f"Exempel: {', '.join(expected_missing[:5])}"
         )
@@ -379,7 +379,7 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
         rer_missing = [r for r in ok_missing if r.startswith("RER")]
         ret_missing = [r for r in ok_missing if r.startswith("RET")]
         
-        status_icon = "✅" if n == len(rer_missing) + len(ret_missing) else "⚠️"
+        status_icon = "" if n == len(rer_missing) + len(ret_missing) else ""
         
         st.info(
             f"{status_icon} **{n} REId saknar DEA-data (förväntat)**\n\n"
@@ -399,7 +399,7 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
     if no_geo:
         n = len(no_geo)
         st.warning(
-            f"⚠️ **{n} REId har DEA-data men saknar geografi**\n\n"
+            f" **{n} REId har DEA-data men saknar geografi**\n\n"
             f"Dessa kan inte visualiseras på kartan.\n\n"
             f"Exempel: {', '.join(no_geo[:5])}"
         )
@@ -410,11 +410,11 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
     
     # Sammanfattning
     if not expected_missing and match_stats["match_rate"] >= 0.85:
-        st.success("✅ Utmärkt matchning - alla förväntade REId har DEA-data")
+        st.success(" Utmärkt matchning - alla förväntade REId har DEA-data")
     elif not expected_missing:
-        st.info("✓ Matchning OK - alla förväntade REId har DEA-data")
+        st.info(" Matchning OK - alla förväntade REId har DEA-data")
     else:
-        st.warning("⚠️ Problem - vissa förväntade REId saknar DEA-data")
+        st.warning(" Problem - vissa förväntade REId saknar DEA-data")
 
 
 # ============================================================================

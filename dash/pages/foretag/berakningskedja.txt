@@ -747,7 +747,7 @@ def run_step5(n_clicks, steps_data):
         steps_data = state_management.update_store_step_completion(steps_data, 5)
         
         # Skapa resultat-visning
-        status_alert = dbc.Alert("✅ Steg 5 slutfört!", color="success")
+        status_alert = dbc.Alert(" Steg 5 slutfört!", color="success")
         
         results = html.Div([
             html.H4("Resultat", className="mt-3"),
@@ -836,7 +836,7 @@ def run_step6(n_clicks, steps_data):
         dep_tail_total = sum(step6_dict.get(f'dep_tail_{t}', 0) for t in range(229, 237))
         
         # Resultat-visning
-        status_alert = dbc.Alert("✅ Steg 6 slutfört!", color="success")
+        status_alert = dbc.Alert(" Steg 6 slutfört!", color="success")
         
         results = html.Div([
             html.H4("Resultat", className="mt-3"),
@@ -1011,7 +1011,7 @@ def use_wacc_in_step7(n_clicks, wacc_results, steps_data):
         steps_data = state_management.save_wacc_for_step7(steps_data, wacc_real)
         
         return (
-            dbc.Alert(f"✅ WACC {wacc_real:.4f} sparad för Step 7", color="success"),
+            dbc.Alert(f" WACC {wacc_real:.4f} sparad för Step 7", color="success"),
             steps_data
         )
     except:
@@ -1121,7 +1121,7 @@ def run_step7(n_clicks, wacc_value, steps_data):
         
         # Resultat-visning
         status_alert = dbc.Alert([
-            html.Strong("✅ Steg 7 slutfört!"),
+            html.Strong(" Steg 7 slutfört!"),
             html.Br(),
             html.Small(f"Beräknat med WACC: {wacc_value:.4f}")
         ], color="success")
@@ -1221,7 +1221,7 @@ def run_step8(n_clicks, steps_data):
         except:
             facit_available = False
         
-        status_alert = dbc.Alert("✅ Steg 8 slutfört!", color="success")
+        status_alert = dbc.Alert(" Steg 8 slutfört!", color="success")
         
         # Resultat med eller utan facit
         if facit_available:
