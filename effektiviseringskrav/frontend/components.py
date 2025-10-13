@@ -230,7 +230,7 @@ def _display_outliers_table(result: pd.DataFrame):
     df_outliers["Effkrav_proc"] = df_outliers["Effkrav_proc"].round(4)
     
     with st.expander("Visa outliers"):
-        st.dataframe(df_outliers, use_container_width=True)
+        st.dataframe(df_outliers, width='stretch')
 
 
 def display_dea_results_table(result: pd.DataFrame):
@@ -250,7 +250,7 @@ def display_dea_results_table(result: pd.DataFrame):
         "is_outlier": "Outlier"
     })
     
-    st.dataframe(display_result, use_container_width=True)
+    st.dataframe(display_result, width='stretch')
 
 
 def display_efficiency_histogram(data: pd.Series, title: str = "Effektivitet"):
@@ -462,7 +462,7 @@ def display_ir_export_controls(
         ].copy()
         preview_data['Effektiviseringskrav'] = (preview_data['Effektiviseringskrav'] * 100).round(2)
         preview_data = preview_data.rename(columns={'Effektiviseringskrav': 'Årligt krav (%)'})
-        st.dataframe(preview_data, use_container_width=True)
+        st.dataframe(preview_data, width='stretch')
     
     # Export-kontroller
     export_name = st.text_input(

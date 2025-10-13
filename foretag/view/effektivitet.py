@@ -375,7 +375,7 @@ def show_dea_results(latest_result, user_dmu, company_name):
             df_outliers = result[result["is_outlier"] == True][["Företag", "DMU", "Effektivitet", "Effkrav_proc"]]
             df_outliers["Effkrav_proc"] = (df_outliers["Effkrav_proc"] * 100).round(2)
             df_outliers = df_outliers.rename(columns={"Effkrav_proc": "Årligt krav (%)"})
-            st.dataframe(df_outliers, use_container_width=True)
+            st.dataframe(df_outliers, width='stretch')
 
     # === GEOGRAFISK ANALYS (NYTT) ===
     st.markdown("---")

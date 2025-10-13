@@ -208,7 +208,7 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
                     nbins=20
                 )
                 fig_age.update_layout(height=400)
-                st.plotly_chart(fig_age, use_container_width=True)
+                st.plotly_chart(fig_age, width='stretch')
                 
                 # Andel ordinarie vs svans per kategori (kombinerat för hela 2024)
                 if all(col in result_data.columns for col in ['nuav_ord_229', 'nuav_tail_229', 'nuav_ord_230', 'nuav_tail_230']):
@@ -242,7 +242,7 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
                             color_discrete_map={'andel_ordinarie': '#2E8B57', 'andel_svans': '#FF6347'}
                         )
                         fig_share.update_layout(height=400, barmode='stack')
-                        st.plotly_chart(fig_share, use_container_width=True)
+                        st.plotly_chart(fig_share, width='stretch')
                         
                         # Förklarande text
                         st.caption("Ordinarie (grön) = komponenter inom ekonomisk livslängd. Svans (röd) = komponenter utanför ekonomisk livslängd men inom maximal livslängd. Data för hela 2024 (H1+H2).")
@@ -282,7 +282,7 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
                             markers=True
                         )
                         fig_trend.update_layout(height=400)
-                        st.plotly_chart(fig_trend, use_container_width=True)
+                        st.plotly_chart(fig_trend, width='stretch')
                         
                         st.caption("Visar hur stor andel av kapitalet som befinner sig i svansperiod över tiden. Stigande linjer indikerar åldrande komponentportfölj.")
                 
@@ -435,7 +435,7 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
                             color_discrete_map={'andel_ordinarie': '#4CAF50', 'andel_svans': '#FF9800'}
                         )
                         fig_dep_share.update_layout(height=400, barmode='stack')
-                        st.plotly_chart(fig_dep_share, use_container_width=True)
+                        st.plotly_chart(fig_dep_share, width='stretch')
                         
                         st.caption("Ordinarie (grön) = avskrivning av komponenter inom ekonomisk livslängd. Svans (orange) = avskrivning av komponenter utanför ekonomisk livslängd.")
                 
@@ -486,7 +486,7 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
                         markers=True
                     )
                     fig_dep_trend.update_layout(height=400)
-                    st.plotly_chart(fig_dep_trend, use_container_width=True)
+                    st.plotly_chart(fig_dep_trend, width='stretch')
                     
                     st.caption("Visar hur total avskrivning (ordinarie + svans) utvecklas över regleringsperioden per komponentkategori.")
 
@@ -803,7 +803,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
                         color_discrete_map={'andel_ordinarie': '#1E88E5', 'andel_svans': '#FFC107'}
                     )
                     fig_ret_share.update_layout(height=400, barmode='stack')
-                    st.plotly_chart(fig_ret_share, use_container_width=True)
+                    st.plotly_chart(fig_ret_share, width='stretch')
                     
                     st.caption("Ordinarie (blå) = avkastning på komponenter inom ekonomisk livslängd. Svans (gul) = avkastning på komponenter utanför ekonomisk livslängd.")
                 
@@ -828,7 +828,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
                             markers=True
                         )
                         fig_cap_trend.update_layout(height=400)
-                        st.plotly_chart(fig_cap_trend, use_container_width=True)
+                        st.plotly_chart(fig_cap_trend, width='stretch')
                         
                         st.caption("Visar hur mycket kapital som är bundet i varje komponentkategori över tiden. Minskande kapitalbindning = åldrande komponenter.")
                         
@@ -843,7 +843,7 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
                             markers=True
                         )
                         fig_ret_trend.update_layout(height=400)
-                        st.plotly_chart(fig_ret_trend, use_container_width=True)
+                        st.plotly_chart(fig_ret_trend, width='stretch')
                         
                         st.caption(f"Visar hur avkastningen utvecklas över regleringsperioden (WACC: {used_wacc:.4f}). Avkastning = WACC × Kapitalbindning ÷ 2.")
 
@@ -914,7 +914,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
             st.info(f"Facit-data är inte tillgänglig för DMU {dmu_id} i demonstrationsversionen")
             
             with st.expander("Breakdown per tidsperiod"):
-                st.dataframe(result_data, use_container_width=True)
+                st.dataframe(result_data, width='stretch')
         
         else:
             # Automatisk validering med facit
@@ -994,7 +994,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                 
                 st.markdown("**Förhandsvisning av IR-export:**")
                 display_cols = ['DMU', 'Företag', 'Kapitalkostnad_Ny', 'Avskrivningar_Ny', 'Avkastning_Ny', 'r_new']
-                st.dataframe(ir_preview[display_cols], use_container_width=True, hide_index=True)
+                st.dataframe(ir_preview[display_cols], width='stretch', hide_index=True)
                 
             except Exception as e:
                 st.error(f"Förhandsvisning misslyckades: {e}")
@@ -1012,7 +1012,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                     
                     with st.expander("Export-detaljer"):
                         st.write("**Exporterad data:**")
-                        st.dataframe(ir_data, use_container_width=True, hide_index=True)
+                        st.dataframe(ir_data, width='stretch', hide_index=True)
                     
                 except Exception as e:
                     st.error(f"IR-export misslyckades: {e}")
@@ -1090,7 +1090,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                     st.markdown("**Sample data (första 10 rader):**")
                     display_cols = ['DMU', 'Företag', 'CAPEX_2024_tkr', f'CAPEX_2024_wacc_{int(dea_wacc*10000)}_tkr', 'delta_tkr']
                     available_cols = [col for col in display_cols if col in preview_data.columns]
-                    st.dataframe(preview_data[available_cols].head(10), use_container_width=True, hide_index=True)
+                    st.dataframe(preview_data[available_cols].head(10), width='stretch', hide_index=True)
                 
             except Exception as e:
                 st.error(f"Förhandsvisning misslyckades: {e}")
@@ -1125,7 +1125,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                 
                 with st.expander("Export-detaljer"):
                     st.write("**Exporterad data (första 10 rader):**")
-                    st.dataframe(dea_data.head(10), use_container_width=True, hide_index=True)
+                    st.dataframe(dea_data.head(10), width='stretch', hide_index=True)
                     
                     if len(dea_data) > 10:
                         st.caption(f"Visar 10 av {len(dea_data)} exporterade rader")

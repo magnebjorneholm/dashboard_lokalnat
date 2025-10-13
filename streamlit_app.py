@@ -1,19 +1,6 @@
 import streamlit as st
 from pathlib import Path
 
-# CSS-laddning
-def load_css():
-    """Laddar custom CSS för professionellt utseende"""
-    css_file = Path("styles.css")
-    if css_file.exists():
-        with open(css_file) as f:
-            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-    else:
-        st.warning("styles.css hittades inte.")
-
-# Ladda CSS direkt när appen startar
-load_css()
-
 # === Rollbaserad autentisering ===
 if "access_granted" not in st.session_state:
     st.session_state.access_granted = False

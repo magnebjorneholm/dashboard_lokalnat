@@ -169,7 +169,7 @@ def _main_chart(year_tbl: pd.DataFrame, show_split: bool, scenario_year: Optiona
             ),
             tooltip=["year", "serie_label", alt.Tooltip("msek:Q", format=".1f")],
         )
-        st.altair_chart(chart.interactive().properties(height=340), use_container_width=True)
+        st.altair_chart(chart.interactive().properties(height=340), width='stretch')
         return
 
     # --- SCENARIO AV: behåll nuvarande beteende ---
@@ -190,7 +190,7 @@ def _main_chart(year_tbl: pd.DataFrame, show_split: bool, scenario_year: Optiona
                         scale=alt.Scale(scheme="tableau10")),
         tooltip=["year", "serie_label", alt.Tooltip("msek:Q", format=".1f")],
     )
-    st.altair_chart(chart.interactive().properties(height=340), use_container_width=True)
+    st.altair_chart(chart.interactive().properties(height=340), width='stretch')
 
 
 
@@ -204,7 +204,7 @@ def _delta_panel(year_tbl: pd.DataFrame):
     peak_val = float(delta.loc[delta["year"] == peak_year, "d_total"].values[0]) if peak_year else np.nan
 
     st.subheader("Årsvis förändring (Δ)")
-    st.dataframe(delta.rename(columns={"d_dep": "Δ Dep (MSEK)", "d_return": "Δ Ränta (MSEK)", "d_total": "Δ Total (MSEK)"}), use_container_width=True)
+    st.dataframe(delta.rename(columns={"d_dep": "Δ Dep (MSEK)", "d_return": "Δ Ränta (MSEK)", "d_total": "Δ Total (MSEK)"}), width='stretch')
 
     if not math.isnan(peak_val):
         driver = "dep" if abs(float(delta.loc[delta["year"] == peak_year, "d_dep"])) >= abs(float(delta.loc[delta["year"] == peak_year, "d_return"])) else "ränta"
@@ -218,7 +218,7 @@ def _tail_chart(year_tbl: pd.DataFrame):
     chart = alt.Chart(share).mark_line(point=True).encode(
         x=alt.X("year:O", title="År"), y=alt.Y("tail_share_pct:Q", title="%"), tooltip=["year", "tail_share_pct"],
     )
-    st.altair_chart(chart.properties(height=260), use_container_width=True)
+    st.altair_chart(chart.properties(height=260), width='stretch')
     if peak_row is not None and np.isfinite(peak_row["tail_share_pct"]):
         st.caption(f"Peak tail-andel: {int(peak_row['year'])} ({float(peak_row['tail_share_pct']):.1f}%).")
 

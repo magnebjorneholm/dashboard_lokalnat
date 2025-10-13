@@ -122,14 +122,14 @@ def _render_merge_quality(quality_report) -> None:
             missing_df = pd.DataFrame({
                 "DMU": quality_report.networks_missing_volumes
             })
-            st.dataframe(missing_df, use_container_width=True)
+            st.dataframe(missing_df, width='stretch')
     
     if quality_report.networks_with_zero_volumes:
         with st.expander(f"DMU med noll-volym ({len(quality_report.networks_with_zero_volumes)})"):
             zero_df = pd.DataFrame({
                 "DMU": quality_report.networks_with_zero_volumes
             })
-            st.dataframe(zero_df, use_container_width=True)
+            st.dataframe(zero_df, width='stretch')
 
 def _render_statistics_overview(stats, intensity_col: str, unit: str) -> None:
     """Visa statistisk översikt för intensitetsmått."""
@@ -184,7 +184,7 @@ def _render_distribution_chart(df: pd.DataFrame, intensity_col: str, unit: str) 
         title=f"Fördelning av {intensity_col.replace('_', ' ')}"
     )
     
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width='stretch')
 
 def _render_ranking_tables(
     top_networks: pd.DataFrame, 
@@ -219,7 +219,7 @@ def _render_ranking_tables(
                     intensity_col: st.column_config.TextColumn(f"Intensitet ({unit})", width="medium")
                 },
                 hide_index=True,
-                use_container_width=True
+                width='stretch'
             )
         else:
             st.info("Ingen data tillgänglig.")
@@ -242,7 +242,7 @@ def _render_ranking_tables(
                     intensity_col: st.column_config.TextColumn(f"Intensitet ({unit})", width="medium")
                 },
                 hide_index=True,
-                use_container_width=True
+                width='stretch'
             )
         else:
             st.info("Ingen data tillgänglig.")
@@ -276,7 +276,7 @@ def _render_outlier_analysis(df: pd.DataFrame, intensity_col: str, unit: str) ->
                 high_display[intensity_col] = high_display[intensity_col].apply(
                     lambda x: _fmt_number(x, decimals=1, unit=unit)
                 )
-                st.dataframe(high_display, use_container_width=True, hide_index=True)
+                st.dataframe(high_display, width='stretch', hide_index=True)
             
             if len(outliers_low) > 0:
                 st.write(f"**Låga värden ({len(outliers_low)}):**")
@@ -284,7 +284,7 @@ def _render_outlier_analysis(df: pd.DataFrame, intensity_col: str, unit: str) ->
                 low_display[intensity_col] = low_display[intensity_col].apply(
                     lambda x: _fmt_number(x, decimals=1, unit=unit)
                 )
-                st.dataframe(low_display, use_container_width=True, hide_index=True)
+                st.dataframe(low_display, width='stretch', hide_index=True)
                 
         except Exception as e:
             st.error(f"Fel vid outlier-analys: {e}").selectbox(
@@ -313,7 +313,7 @@ def _render_outlier_analysis(df: pd.DataFrame, intensity_col: str, unit: str) ->
                 high_display[intensity_col] = high_display[intensity_col].apply(
                     lambda x: _fmt_number(x, unit=unit)
                 )
-                st.dataframe(high_display, use_container_width=True, hide_index=True)
+                st.dataframe(high_display, width='stretch', hide_index=True)
             
             if len(outliers_low) > 0:
                 st.write(f"**Låga värden ({len(outliers_low)}):**")
@@ -321,7 +321,7 @@ def _render_outlier_analysis(df: pd.DataFrame, intensity_col: str, unit: str) ->
                 low_display[intensity_col] = low_display[intensity_col].apply(
                     lambda x: _fmt_number(x, unit=unit)
                 )
-                st.dataframe(low_display, use_container_width=True, hide_index=True)
+                st.dataframe(low_display, width='stretch', hide_index=True)
                 
         except Exception as e:
             st.error(f"Fel vid outlier-analys: {e}")
@@ -384,7 +384,7 @@ def _render_scenario_comparison(
             title=f"Fördelning av intensitetsförändring (WACC: {r_old:.2%} → {r_new:.2%})"
         )
         
-        st.altair_chart(delta_chart, use_container_width=True)
+        st.altair_chart(delta_chart, width='stretch')
     
     # Största vinnare och förlorare
     col1, col2 = st.columns(2)
@@ -396,7 +396,7 @@ def _render_scenario_comparison(
         winners_display[delta_col] = winners_display[delta_col].apply(
             lambda x: _fmt_delta(x, unit=unit)
         )
-        st.dataframe(winners_display, use_container_width=True, hide_index=True)
+        st.dataframe(winners_display, width='stretch', hide_index=True)
     
     with col2:
         st.write("**Störst försämring (högre intensitet):**")
@@ -405,7 +405,7 @@ def _render_scenario_comparison(
         losers_display[delta_col] = losers_display[delta_col].apply(
             lambda x: _fmt_delta(x, unit=unit)
         )
-        st.dataframe(losers_display, use_container_width=True, hide_index=True)
+        st.dataframe(losers_display, width='stretch', hide_index=True)
 
 def show_intensity_analysis(
     capcost_df: pd.DataFrame,
@@ -539,6 +539,6 @@ def show_intensity_analysis(
                 "capcost_sum": st.column_config.NumberColumn("Kapkostnad (tkr)", format="%.0f"),
                 intensity_metric: st.column_config.NumberColumn(f"Intensitet ({unit})", format="%.1f")
             },
-            use_container_width=True,
+            width='stretch',
             hide_index=True
         )

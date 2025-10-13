@@ -352,7 +352,7 @@ def _display_neighborhood_analysis(gdf_agg, selected_indicator: str):
                         cmap="RdYlGn",
                         subset=["eff_gap"]
                     ),
-                    use_container_width=True
+                    width='stretch'
                 )
                 
                 # Export

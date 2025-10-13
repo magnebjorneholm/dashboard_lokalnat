@@ -203,35 +203,28 @@ def render_data_source_selector():
     """
     st.markdown("### 1. Välj datakälla")
     
-    data_source = st.radio(
-        "Välj vilken data du vill använda:",
-        options=["Baseline (befintlig data)", "Ladda upp egen data"],
-        key="data_source_choice",
-        help="""
-        - **Baseline**: Använder färdig data från systemet
-        - **Egen data**: Ladda upp din egen capbase_a fil i parquet eller Excel-format
-        """
+    # Ta bort radio buttons - visa file uploader direkt
+    st.caption("Lämna tom för att använda standarddata från systemet")
+    
+    uploaded_file = st.file_uploader(
+        "Ladda upp egen data (valfritt)", 
+        type=['parquet', 'xlsx', 'xls'],
+        help="Ladda upp egen capbase_a-fil för scenarioanalys. Lämna tom för baseline-data."
     )
     
     uploaded_df = None
+    data_source = "Baseline (befintlig data)"  # Default
     
-    if data_source == "Ladda upp egen data":
-        st.markdown("#### Ladda upp capbase_a dataset")
+    if uploaded_file is not None:
+        data_source = "Ladda upp egen data"
         
-        uploaded_file = st.file_uploader(
-            "Välj fil (parquet eller Excel)",
-            type=['parquet', 'xlsx', 'xls'],
-            help="Filen måste innehålla alla obligatoriska kolumner enligt specifikationen"
-        )
-        
-        if uploaded_file is not None:
-            with st.spinner("Läser in fil..."):
-                uploaded_df, error = load_uploaded_file(uploaded_file)
-                
-                if error:
-                    st.error(f" {error}")
-                else:
-                    st.success(f" Fil inläst: {len(uploaded_df)} rader, {len(uploaded_df.columns)} kolumner")
+        with st.spinner("Läser in fil..."):
+            uploaded_df, error = load_uploaded_file(uploaded_file)
+            
+            if error:
+                st.error(f"⚠ {error}")
+            else:
+                st.success(f"✓ Fil inläst: {len(uploaded_df)} rader, {len(uploaded_df.columns)} kolumner")
     
     return data_source, uploaded_df
 
@@ -274,7 +267,7 @@ def render_data_preview(df: pd.DataFrame):
     
     with st.expander(" Visa input-data som används i beräkningen", expanded=False):
         st.markdown("#### Alla kolumner i capbase_a:")
-        st.dataframe(df, use_container_width=True, height=400)
+        st.dataframe(df, width='stretch', height=400)
         
         st.markdown("#### Datatyper:")
         dtype_info = pd.DataFrame({
@@ -283,7 +276,7 @@ def render_data_preview(df: pd.DataFrame):
             'Antal icke-null': [df[col].notna().sum() for col in df.columns],
             'Antal null': [df[col].isna().sum() for col in df.columns]
         })
-        st.dataframe(dtype_info, use_container_width=True, hide_index=True)
+        st.dataframe(dtype_info, width='stretch', hide_index=True)
 
 
 def render_required_columns_info():
@@ -445,7 +438,7 @@ def apply_lifetime_scenario(capbase_data: pd.DataFrame) -> pd.DataFrame:
         
         # Show current values
         st.markdown("**Nuvarande värden:**")
-        st.dataframe(current_values, use_container_width=True, hide_index=True)
+        st.dataframe(current_values, width='stretch', hide_index=True)
         
         # Create editable copy for adjustments
         st.markdown("---")
@@ -458,7 +451,7 @@ def apply_lifetime_scenario(capbase_data: pd.DataFrame) -> pd.DataFrame:
         # Use data_editor for interactive editing
         edited_df = st.data_editor(
             editable_df,
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             num_rows="fixed",
             disabled=['Kod'] if group_text is None else ['Kod', 'Beskrivning'],
@@ -510,7 +503,7 @@ def apply_lifetime_scenario(capbase_data: pd.DataFrame) -> pd.DataFrame:
                 display_cols.extend(['Ekonomisk livslängd', 'Ekdep (ny)', 'Ekdep Δ', 
                                    'Maximal livslängd', 'Maxdep (ny)', 'Maxdep Δ'])
                 
-                st.dataframe(changed_rows[display_cols], use_container_width=True, hide_index=True)
+                st.dataframe(changed_rows[display_cols], width='stretch', hide_index=True)
                 
                 # Apply button
                 if not invalid_rows.empty:
@@ -565,7 +558,7 @@ def apply_lifetime_scenario(capbase_data: pd.DataFrame) -> pd.DataFrame:
                                'Maximal livslängd', 'Maxdep (ny)', 'Maxdep Δ'])
             
             available_cols = [col for col in display_cols if col in changes_df.columns]
-            st.dataframe(changes_df[available_cols], use_container_width=True, hide_index=True)
+            st.dataframe(changes_df[available_cols], width='stretch', hide_index=True)
             
             st.warning(" **OBS:** Detta är ett scenario för intern analys, inte officiella regulatoriska värden")
         

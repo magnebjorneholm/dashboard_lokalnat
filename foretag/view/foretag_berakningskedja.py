@@ -216,7 +216,7 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
                     nbins=20
                 )
                 fig_age.update_layout(height=400)
-                st.plotly_chart(fig_age, use_container_width=True)
+                st.plotly_chart(fig_age, width='stretch')
 
 
 def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name: str):
@@ -558,7 +558,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
             st.info(f"Facit-data är inte tillgänglig för DMU {dmu_id} i demonstrationsversionen")
             
             with st.expander("Breakdown per tidsperiod"):
-                st.dataframe(result_data, use_container_width=True)
+                st.dataframe(result_data, width='stretch')
         
         else:
             # Automatisk validering med facit
@@ -638,7 +638,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                 
                 st.markdown("**Förhandsvisning av IR-export:**")
                 display_cols = ['DMU', 'Företag', 'Kapitalkostnad_Ny', 'Avskrivningar_Ny', 'Avkastning_Ny', 'r_new']
-                st.dataframe(ir_preview[display_cols], use_container_width=True, hide_index=True)
+                st.dataframe(ir_preview[display_cols], width='stretch', hide_index=True)
                 
             except Exception as e:
                 st.error(f"Förhandsvisning misslyckades: {e}")
@@ -656,7 +656,7 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
                     
                     with st.expander("Export-detaljer"):
                         st.write("**Exporterad data:**")
-                        st.dataframe(ir_data, use_container_width=True, hide_index=True)
+                        st.dataframe(ir_data, width='stretch', hide_index=True)
                     
                 except Exception as e:
                     st.error(f"IR-export misslyckades: {e}")
@@ -714,7 +714,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                 # Visa sample data
                 if len(preview_data) > 0:
                     st.markdown("**Sample data (första 10 rader):**")
-                    st.dataframe(preview_data.head(10), use_container_width=True, hide_index=True)
+                    st.dataframe(preview_data.head(10), width='stretch', hide_index=True)
                 
             except Exception as e:
                 st.error(f"Förhandsvisning misslyckades: {e}")
@@ -743,7 +743,7 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                 
                 with st.expander("Export-detaljer"):
                     st.write("**Exporterad data (första 10 rader):**")
-                    st.dataframe(dea_data.head(10), use_container_width=True, hide_index=True)
+                    st.dataframe(dea_data.head(10), width='stretch', hide_index=True)
                     
                     if len(dea_data) > 10:
                         st.caption(f"Visar 10 av {len(dea_data)} exporterade rader")

@@ -50,4 +50,4 @@ def show_tidsserie(capcost_df):
         color='Typ:N'
     ).properties(width=700, height=400)
 
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width='stretch')

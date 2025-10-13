@@ -55,7 +55,7 @@ def show_kapitalbas_berakningslogik():
     
     # === Visa grunddata ===
     with st.expander("Grunddata (capbase_a)"):
-        st.dataframe(capbase_data, use_container_width=True)
+        st.dataframe(capbase_data, width='stretch')
         
         # Enkel statistik
         col1, col2, col3 = st.columns(3)
@@ -217,7 +217,7 @@ def run_step_5_ages_nuav(capbase_data: pd.DataFrame, dmu_id: int, steps_state: d
             )
             
             if display_cols:
-                st.dataframe(result_data[display_cols], use_container_width=True)
+                st.dataframe(result_data[display_cols], width='stretch')
         
         # Visualisering
         with st.expander("Visualisering - Åldersfördelning"):
@@ -228,7 +228,7 @@ def run_step_5_ages_nuav(capbase_data: pd.DataFrame, dmu_id: int, steps_state: d
                     title='Åldersfördelning komponenter 2024H1',
                     nbins=30
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
 
 
 def run_step_6_depreciation(dmu_id: int, steps_state: dict):
@@ -292,7 +292,7 @@ def run_step_6_depreciation(dmu_id: int, steps_state: dict):
                     'Total (tkr)': dep_ord + dep_tail
                 })
             
-            st.dataframe(pd.DataFrame(periods_data), use_container_width=True)
+            st.dataframe(pd.DataFrame(periods_data), width='stretch')
 
 
 def run_step_7_returns(dmu_id: int, steps_state: dict):
@@ -399,7 +399,7 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
         with st.expander("Breakdown per tidsperiod"):
             # Formatera för att visa fler decimaler
             display_data = result_data.copy()
-            st.dataframe(display_data, use_container_width=True)
+            st.dataframe(display_data, width='stretch')
         
         # Visualisering
         with st.expander("Visualisering - Kapitalkostnad över tid"):
@@ -417,7 +417,7 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
                 title='Kapitalkostnad per halvår',
                 labels={'capcost_sum': 'Kapitalkostnad (tkr)', 'period_label': 'Period'}
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
         # Detaljerad uppdelning med full precision
         with st.expander("Detaljerad uppdelning per komponent"):
@@ -436,7 +436,7 @@ def run_step_8_compile(dmu_id: int, steps_state: dict):
                 })
             
             breakdown_df = pd.DataFrame(breakdown_data)
-            st.dataframe(breakdown_df, use_container_width=True)
+            st.dataframe(breakdown_df, width='stretch')
 
 
 def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
@@ -491,7 +491,7 @@ def run_step_9_compare_facit(dmu_id: int, steps_state: dict):
             if 'comparison_df' in comparison:
                 # Visa med full precision
                 display_df = comparison['comparison_df'].copy()
-                st.dataframe(display_df, use_container_width=True)
+                st.dataframe(display_df, width='stretch')
         
         # Toleransanalys med högre precision
         tolerance_tkr = st.number_input("Tolerans (tkr)", min_value=0.0, value=0.1, step=0.01, format="%.6f")

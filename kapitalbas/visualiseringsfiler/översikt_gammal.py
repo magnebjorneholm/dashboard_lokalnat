@@ -621,7 +621,7 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
             st.caption("Korten visar MSEK (avrundat). Underliggande tabell visar tkr.")
             with st.expander("Visa underlag (tkr)"):
                 tmp = filt_df.copy(); tmp["time_label"] = tmp["time"].map(CODE_TO_TIME_LABEL)
-                st.dataframe(tmp, use_container_width=True, hide_index=True)
+                st.dataframe(tmp, width='stretch', hide_index=True)
         
         with st.expander("DMU-mappning: vilka nätverk tillhör varje DMU"):
             rec = _read_reconciliation(RECON_CSV)
@@ -643,7 +643,7 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
                 display_df = dmu_networks[['DMU', 'Företag', 'antal_nätverk', 'nätverk_lista']].copy()
                 display_df.columns = ['DMU', 'Företag', 'Antal nätverk', 'id_network lista']
                 
-                st.dataframe(display_df, use_container_width=True)
+                st.dataframe(display_df, width='stretch')
             else:
                 st.error("Kunde inte ladda reconciliation-data för mappningstabell")
 
@@ -805,16 +805,16 @@ def show_capcost(df_facit: pd.DataFrame) -> None:
         
         with col1:
             st.markdown(f"**DEA-export förhandsvisning (WACC_tag = {dea_tag})**")
-            st.dataframe(df_dea_export, use_container_width=True, hide_index=True)
+            st.dataframe(df_dea_export, width='stretch', hide_index=True)
             
             if not df_dea_excl.empty:
                 with st.expander(f"Exkluderas från DEA (saknas i DEA-bas): {len(df_dea_excl)} DMU"):
-                    st.dataframe(df_dea_excl, use_container_width=True, hide_index=True)
+                    st.dataframe(df_dea_excl, width='stretch', hide_index=True)
 
         with col2:
             st.markdown(f"**IR-export (SUMMA 2024–2027) · WACC_tag = {ir_tag}**")
             st.dataframe(df_ir_export[['DMU', 'Företag', 'Kapitalkostnad_Ny', 'Avskrivningar_Ny', 'Avkastning_Ny']], 
-                        use_container_width=True, hide_index=True)
+                        width='stretch', hide_index=True)
 
         # Export-knappar
         st.markdown("---")

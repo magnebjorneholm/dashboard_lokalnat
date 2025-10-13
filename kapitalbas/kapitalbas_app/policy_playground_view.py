@@ -70,7 +70,7 @@ def show_policy_playground(capcost_df):
             x=alt.X("year:O", title="År"),
             y=alt.Y("Kapitalkostnad:Q", title="MSEK"),
             color=alt.Color("Scenario:N", title="Scenario")
-        ).properties(width=700, height=400), use_container_width=True)
+        ).properties(width=700, height=400), width='stretch')
 
 
     # === TAB 2: KPI-simulering ===
@@ -127,7 +127,7 @@ def show_policy_playground(capcost_df):
                 y=alt.Y("Tailandel Kapitalbas (%):Q", scale=alt.Scale(domain=[0, 100])),
                 tooltip=["Nät", alt.Tooltip("Tailandel Kapitalbas (%):Q", format=".1f")]
             ).properties(width=600, height=300),
-            use_container_width=True
+            width='stretch'
         )
 
         # Diagram: Avskrivning
@@ -138,7 +138,7 @@ def show_policy_playground(capcost_df):
                 y=alt.Y("Tailandel Avskrivning (%):Q", scale=alt.Scale(domain=[0, 100])),
                 tooltip=["Nät", alt.Tooltip("Tailandel Avskrivning (%):Q", format=".1f")]
             ).properties(width=600, height=300),
-            use_container_width=True
+            width='stretch'
         )
 
         # ===== Avvikelse från medel – Kapitalbas =====

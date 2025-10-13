@@ -104,13 +104,13 @@ def show_foretag_ir_dekomposition():
     )
     
     # Vertikala knappar (3×1 layout)
-    if st.sidebar.button("Nytt scenario", use_container_width=True):
+    if st.sidebar.button("Nytt scenario", width='stretch'):
         create_new_scenario(scenario_name, df_baseline_filtered, company_reids)
     
-    if st.sidebar.button("Ladda scenario", use_container_width=True):
+    if st.sidebar.button("Ladda scenario", width='stretch'):
         st.session_state.show_scenario_loader = True
     
-    if st.sidebar.button("Återställ allt", use_container_width=True):
+    if st.sidebar.button("Återställ allt", width='stretch'):
         reset_all_components()
     
     # Visa scenario-loader om aktiverad
@@ -393,7 +393,7 @@ def show_main_waterfall_view(entity_data: pd.Series, selected_reid: str, company
     
     # Skapa waterfall-chart
     fig = create_waterfall_chart(components, entity_data, detailed_capital=has_detailed_capital)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Komponent-tabell under grafen
     show_component_table(entity_data, components, has_detailed_capital)
@@ -539,7 +539,7 @@ def show_component_table(entity_data: pd.Series, components: List[tuple], has_de
     })
 
     df_table = pd.DataFrame(table_data)
-    st.dataframe(df_table, use_container_width=True)
+    st.dataframe(df_table, width='stretch')
 
 DELTA_THRESHOLD = 1.0
 
@@ -641,7 +641,7 @@ def show_component_controls(entity_data: pd.Series, df_working: pd.DataFrame):
                 st.caption("(OPEX + CAPEX)")
         
         # Knapp för att applicera
-        if st.sidebar.button("Hämta från Effektiviseringskrav", use_container_width=True):
+        if st.sidebar.button("Hämta från Effektiviseringskrav", width='stretch'):
             update_component_from_scenario(
                 component='paverkbara',
                 source='effektiviseringskrav',
@@ -666,7 +666,7 @@ def show_component_controls(entity_data: pd.Series, df_working: pd.DataFrame):
     # === KAPITALKOSTNAD ===
     st.sidebar.subheader("Kapitalkostnad")
     if scenario_updates['kapitalbas']:
-        if st.sidebar.button("Hämta från Kapitalbas", use_container_width=True):
+        if st.sidebar.button("Hämta från Kapitalbas", width='stretch'):
             update_component_from_scenario(
                 component='kapitalkostnad',
                 source='kapitalbas',

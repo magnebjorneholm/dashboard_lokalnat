@@ -40,13 +40,13 @@ def show_ir_dekomposition_view(df_baseline: pd.DataFrame):
     )
     
     # Vertikala knappar (3×1 layout)
-    if st.sidebar.button("Nytt scenario", use_container_width=True):
+    if st.sidebar.button("Nytt scenario", width='stretch'):
         create_new_scenario(scenario_name, df_baseline_filtered)
     
-    if st.sidebar.button("Ladda scenario", use_container_width=True):
+    if st.sidebar.button("Ladda scenario", width='stretch'):
         st.session_state.show_scenario_loader = True
     
-    if st.sidebar.button("Återställ allt", use_container_width=True):
+    if st.sidebar.button("Återställ allt", width='stretch'):
         reset_all_components()
     
     # Visa scenario-loader om aktiverad
@@ -324,7 +324,7 @@ def show_main_waterfall_view(entity_data: pd.Series, selected_entity: str, entit
     
     # Skapa waterfall-chart
     fig = create_waterfall_chart(components, entity_data, detailed_capital=has_detailed_capital)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Komponent-tabell under grafen
     show_component_table(entity_data, components, has_detailed_capital)
@@ -464,7 +464,7 @@ def show_component_table(entity_data: pd.Series, components: List[tuple], has_de
     })
 
     df_table = pd.DataFrame(table_data)
-    st.dataframe(df_table, use_container_width=True)
+    st.dataframe(df_table, width='stretch')
 
 
 def calculate_delta_text(current_value: float, baseline_value: Optional[float], is_updated: bool) -> str:
@@ -562,7 +562,7 @@ def show_component_controls(entity_data: pd.Series, df_working: pd.DataFrame):
                 st.caption("(OPEX + CAPEX)")
         
         # Knapp för att applicera
-        if st.sidebar.button("Hämta från Effektiviseringskrav", use_container_width=True):
+        if st.sidebar.button("Hämta från Effektiviseringskrav", width='stretch'):
             update_component_from_scenario(
                 component='paverkbara',
                 source='effektiviseringskrav',
@@ -586,7 +586,7 @@ def show_component_controls(entity_data: pd.Series, df_working: pd.DataFrame):
     # === KAPITALKOSTNAD ===
     st.sidebar.subheader("Kapitalkostnad")
     if scenario_updates['kapitalbas']:
-        if st.sidebar.button("Hämta från Kapitalbas", use_container_width=True):
+        if st.sidebar.button("Hämta från Kapitalbas", width='stretch'):
             update_component_from_scenario(
                 component='kapitalkostnad',
                 source='kapitalbas',
@@ -909,7 +909,7 @@ def show_aggregated_comparison(df_working: pd.DataFrame):
                 'Delta (%)': f"{(values['delta'] / values['baseline'] * 100):+.2f}%" if values['baseline'] != 0 else "N/A"
             })
         
-        st.dataframe(pd.DataFrame(agg_data), use_container_width=True)
+        st.dataframe(pd.DataFrame(agg_data), width='stretch')
 
 
 def show_delta_histograms(df_working: pd.DataFrame):
@@ -981,7 +981,7 @@ def show_delta_histograms(df_working: pd.DataFrame):
         height=400
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Visa statistik för varje komponent
     with st.expander("Statistik per komponent"):
@@ -997,7 +997,7 @@ def show_delta_histograms(df_working: pd.DataFrame):
                 'Std (%)': f"{delta_series.std():.2f}"
             })
         
-        st.dataframe(pd.DataFrame(stats_data), use_container_width=True)
+        st.dataframe(pd.DataFrame(stats_data), width='stretch')
 
 
 def show_top_changes_table(df_working: pd.DataFrame):
@@ -1069,7 +1069,7 @@ def show_top_changes_table(df_working: pd.DataFrame):
             top_increases['Delta_pct'] = top_increases['Delta_pct'].round(2)
             top_increases['Delta_tkr'] = top_increases['Delta_tkr'].round(0)
             top_increases.columns = ['Företag', 'DMU', 'Δ (%)', 'Δ (tkr)']
-            st.dataframe(top_increases, use_container_width=True)
+            st.dataframe(top_increases, width='stretch')
         
         with col2:
             st.write(f"**Top 10 minskningar - {selected_comp}**")
@@ -1077,7 +1077,7 @@ def show_top_changes_table(df_working: pd.DataFrame):
             top_decreases['Delta_pct'] = top_decreases['Delta_pct'].round(2)
             top_decreases['Delta_tkr'] = top_decreases['Delta_tkr'].round(0)
             top_decreases.columns = ['Företag', 'DMU', 'Δ (%)', 'Δ (tkr)']
-            st.dataframe(top_decreases, use_container_width=True)
+            st.dataframe(top_decreases, width='stretch')
 
 
 def show_scenario_loader():
