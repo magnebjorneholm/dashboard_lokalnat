@@ -218,7 +218,6 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
                                 working_df.loc[mask, 'Källa_Paverkbara'] = f"Scenario (effektiviseringskrav - {method})"
                                 working_df.loc[mask, 'Uppdaterad_Paverkbara'] = True
                         
-                        # KRITISK FIX: Spara beräkningsresultat för breakdown
                         mod_data['last_calculation'] = {
                             'export_data': export_data,
                             'metadata': metadata,
@@ -236,41 +235,149 @@ def get_working_dataframe(baseline_df: pd.DataFrame) -> pd.DataFrame:
     return working_df
 
 
-def prepare_diagram_data(entity_data: pd.Series, df_baseline: pd.DataFrame) -> Dict[str, float]:
+def prepare_diagram_data(entity_data: pd.Series, df_baseline: pd.DataFrame) -> Dict[str, dict]:
     """
-    Förbereder data för diagrammet från entity_data.
+    Förbereder data för diagrammet med modifieringsinformation.
+    
+    Returns:
+        Dict där varje komponent har struktur:
+        {
+            'value': float,
+            'baseline': float,
+            'is_directly_modified': bool,
+            'source': str
+        }
     """
     baseline_row = df_baseline[df_baseline['REId'] == entity_data['REId']]
     
+    # Hämta baseline-värden
     if not baseline_row.empty:
         baseline_paverkbara = float(baseline_row.iloc[0].get('Paverkbara_Kostnader', 0) or 0)
-        baseline_kapitalkostnad = float(baseline_row.iloc[0].get('Kapitalkostnad_Total', 0) or 0)
+        baseline_opaverkbara = float(baseline_row.iloc[0].get('Opaverkbara_Kostnader', 0) or 0)
+        baseline_avskrivningar = float(baseline_row.iloc[0].get('Avskrivningar', 0) or 0)
+        baseline_avkastning = float(baseline_row.iloc[0].get('Avkastning', 0) or 0)
+        baseline_kvalitet = float(baseline_row.iloc[0].get('Flexibilitetstjanster', 0) or 0)
     else:
-        baseline_paverkbara = 0
-        baseline_kapitalkostnad = 0
+        baseline_paverkbara = baseline_opaverkbara = 0
+        baseline_avskrivningar = baseline_avkastning = baseline_kvalitet = 0
     
+    # Hämta aktuella värden
     paverkbara = float(entity_data.get('Paverkbara_Kostnader', 0) or 0)
-    kapitalkostnad_total = float(entity_data.get('Kapitalkostnad_Total', 0) or 0)
+    ej_paverkbara = float(entity_data.get('Opaverkbara_Kostnader', 0) or 0)
+    avskrivningar = float(entity_data.get('Avskrivningar', 0) or 0)
+    avkastning = float(entity_data.get('Avkastning', 0) or 0)
+    kvalitet = float(entity_data.get('Flexibilitetstjanster', 0) or 0)
     
+    # Hämta modifieringsflaggor
+    is_paverkbara_modified = bool(entity_data.get('Uppdaterad_Paverkbara', False))
+    is_kapital_modified = bool(entity_data.get('Uppdaterad_Kapitalkostnad', False))
+    
+    source_paverkbara = str(entity_data.get('Källa_Paverkbara', 'Baseline'))
+    source_kapitalkostnad = str(entity_data.get('Källa_Kapitalkostnad', 'Baseline'))
+    
+    # Beräkna effektivisering
     effektivisering = paverkbara - baseline_paverkbara
     
-    avkastning = float(entity_data.get('Avkastning', 0) or 0)
-    
+    # Beräkna kapitalbas
     kapitalbas = 0
+    baseline_kapitalbas = 0
     scenario_metadata = get_scenario_metadata()
-    if scenario_metadata and avkastning > 0:
-        wacc = scenario_metadata.get('wacc_new', 0.0453)
-        if wacc > 0:
-            kapitalbas = avkastning / wacc
+    
+    if avkastning > 0:
+        wacc = 0.0453
+        if scenario_metadata and scenario_metadata.get('wacc_new'):
+            wacc = scenario_metadata.get('wacc_new')
+        kapitalbas = avkastning / wacc if wacc > 0 else 0
+    
+    if baseline_avkastning > 0:
+        wacc_baseline = 0.0453
+        if scenario_metadata and scenario_metadata.get('wacc_old'):
+            wacc_baseline = scenario_metadata.get('wacc_old')
+        baseline_kapitalbas = baseline_avkastning / wacc_baseline if wacc_baseline > 0 else 0
+    
+    # Tolerans för avrundningsskillnader
+    TOLERANCE = 1.0  # 1 tkr = 1000 kronor
+    
+    effektivisering_active = is_paverkbara_modified and abs(effektivisering) > TOLERANCE
+    
+    # ENDAST KÄLLOR blir orange (förenklade regler)
+    paverkbara_direct = False  # Aldrig orange
+    kapitalbas_direct = is_kapital_modified  # Orange vid kapitalbas-scenario
+    effektivisering_direct = effektivisering_active  # Orange vid effektiviseringskrav
+    avskrivningar_direct = False  # Aldrig orange
+    avkastning_direct = False  # Aldrig orange
+    
+    # Beräkna summor för tooltip-delta
+    lopande_value = paverkbara + ej_paverkbara - abs(effektivisering)
+    lopande_baseline = baseline_paverkbara + baseline_opaverkbara
+    
+    kapitalkostnader_value = avskrivningar + avkastning + kvalitet
+    kapitalkostnader_baseline = baseline_avskrivningar + baseline_avkastning + baseline_kvalitet
+    
+    intaktsram_value = lopande_value + kapitalkostnader_value
+    intaktsram_baseline = lopande_baseline + kapitalkostnader_baseline
     
     return {
-        'paverkbara': baseline_paverkbara,
-        'ej_paverkbara': float(entity_data.get('Opaverkbara_Kostnader', 0) or 0),
-        'kapitalbas': kapitalbas,
-        'effektivisering': effektivisering,
-        'avskrivningar': float(entity_data.get('Avskrivningar', 0) or 0),
-        'avkastning': avkastning,
-        'kvalitet': float(entity_data.get('Flexibilitetstjanster', 0) or 0)
+        'paverkbara': {
+            'value': paverkbara,
+            'baseline': baseline_paverkbara,
+            'is_directly_modified': paverkbara_direct,
+            'source': source_paverkbara
+        },
+        'ej_paverkbara': {
+            'value': ej_paverkbara,
+            'baseline': baseline_opaverkbara,
+            'is_directly_modified': False,
+            'source': 'Baseline'
+        },
+        'kapitalbas': {
+            'value': kapitalbas,
+            'baseline': baseline_kapitalbas,
+            'is_directly_modified': kapitalbas_direct,
+            'source': 'Beräknad från avkastning' if kapitalbas_direct else 'Baseline'
+        },
+        'effektivisering': {
+            'value': abs(effektivisering),
+            'baseline': 0,
+            'is_directly_modified': effektivisering_direct,
+            'source': source_paverkbara if effektivisering_direct else 'Ingen'
+        },
+        'avskrivningar': {
+            'value': avskrivningar,
+            'baseline': baseline_avskrivningar,
+            'is_directly_modified': avskrivningar_direct,
+            'source': source_kapitalkostnad if is_kapital_modified else 'Baseline'
+        },
+        'avkastning': {
+            'value': avkastning,
+            'baseline': baseline_avkastning,
+            'is_directly_modified': avkastning_direct,
+            'source': source_kapitalkostnad if is_kapital_modified else 'Baseline'
+        },
+        'kvalitet': {
+            'value': kvalitet,
+            'baseline': baseline_kvalitet,
+            'is_directly_modified': False,
+            'source': 'Baseline'
+        },
+        'lopande': {
+            'value': lopande_value,
+            'baseline': lopande_baseline,
+            'is_directly_modified': False,
+            'source': 'Beräknad summa'
+        },
+        'kapitalkostnader': {
+            'value': kapitalkostnader_value,
+            'baseline': kapitalkostnader_baseline,
+            'is_directly_modified': False,
+            'source': 'Beräknad summa'
+        },
+        'intaktsram': {
+            'value': intaktsram_value,
+            'baseline': intaktsram_baseline,
+            'is_directly_modified': False,
+            'source': 'Slutlig summa'
+        }
     }
 
 

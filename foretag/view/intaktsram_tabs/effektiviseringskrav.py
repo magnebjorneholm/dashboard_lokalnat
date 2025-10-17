@@ -39,7 +39,7 @@ def show_effektiviseringskrav_tab(entity_data: pd.Series, df_company: pd.DataFra
         if källa and källa != 'Baseline':
             st.caption(f"Källa: {källa}")
     else:
-        st.caption("Visar baseline-värden (inget effektiviseringskrav applicerat)")
+        st.caption("Visar referensperiod (inget effektiviseringskrav applicerat)")
     
     st.markdown("---")
     
@@ -180,10 +180,9 @@ def show_effektiviseringskrav_tab(entity_data: pd.Series, df_company: pd.DataFra
             }
             st.switch_page("pages/foretag/foretag_effektivitet.py")
     
-    # BREAKDOWN
-    if is_modified and effkrav_mod.get('source') == 'effektiviseringskrav':
-        st.markdown("---")
-        show_effkrav_breakdown(entity_data, effkrav_mod)
+    # ÅRSVISA PÅVERKBARA KOSTNADER - VISAS ALLTID
+    st.markdown("---")
+    show_yearly_paverkbara_table(entity_data, effkrav_mod)
     
     # INFO-EXPANDER
     if not is_modified:
@@ -207,143 +206,78 @@ def show_effektiviseringskrav_tab(entity_data: pd.Series, df_company: pd.DataFra
             """)
 
 
-def show_effkrav_breakdown(entity_data: pd.Series, effkrav_mod: dict):
+def show_yearly_paverkbara_table(entity_data: pd.Series, effkrav_mod: dict):
     """
-    Visar detaljerad breakdown av effektiviseringskrav-beräkning.
-    Använder sparad beräkningsdata från calculate_ir_paverkbara_export().
+    Visar tabell med årsvisa påverkbara kostnader.
+    Visas alltid, oavsett om scenario är aktivt eller inte.
     """
-    st.write("**Värden:**")
+    last_calc = effkrav_mod.get('last_calculation') if effkrav_mod else None
     
-    method = effkrav_mod.get('method', 'OPEX')
-    
-    last_calc = effkrav_mod.get('last_calculation')
-    
-    if last_calc is None:
-        st.warning(
-            "Beräkningsdata inte tillgänglig. "
-            "Detta kan inträffa om scenariot inte har laddats korrekt."
-        )
-        return
-    
-    export_data = last_calc.get('export_data')
-    metadata = last_calc.get('metadata')
-    
-    if export_data is None or export_data.empty:
-        st.warning("Ingen beräkningsdata tillgänglig")
-        return
-    
-    reid = entity_data['REId']
-    entity_calc = export_data[export_data['REId'] == reid]
-    
-    if entity_calc.empty:
-        st.warning(f"Ingen beräkningsdata hittades för REId {reid}")
-        return
-    
-    row = entity_calc.iloc[0]
-    
-    baseline_4yr = row.get('Paverkbara_Baseline_4yr', 0)
-    target_4yr = row.get('Paverkbara_Target', 0)
-    reduction_total = row.get('Total_Reduction_tkr', 0)
-    effkrav_pct = row.get('Effektiviseringskrav', 0)
-    
-    y2024_base = row.get('Y2024_baseline', 0)
-    y2025_base = row.get('Y2025_baseline', 0)
-    y2026_base = row.get('Y2026_baseline', 0)
-    y2027_base = row.get('Y2027_baseline', 0)
-    
-    y2024_scn = row.get('Y2024_scenario', 0)
-    y2025_scn = row.get('Y2025_scenario', 0)
-    y2026_scn = row.get('Y2026_scenario', 0)
-    y2027_scn = row.get('Y2027_scenario', 0)
-    
-    if method == 'OPEX':    
-        # Årsvisa värden i tabell
-        with st.expander("Påverkbara löpande kostnader efter avdrag för effektiviseringskrav"):
-            yearly_data = pd.DataFrame({
-                'År': [2024, 2025, 2026, 2027],
-                'Nuvarande reglering (tkr)': [
-                    f"{y2024_base:,.0f}".replace(",", " "),
-                    f"{y2025_base:,.0f}".replace(",", " "),
-                    f"{y2026_base:,.0f}".replace(",", " "),
-                    f"{y2027_base:,.0f}".replace(",", " ")
-                ],
-                'Scenario (tkr)': [
-                    f"{y2024_scn:,.0f}".replace(",", " "),
-                    f"{y2025_scn:,.0f}".replace(",", " "),
-                    f"{y2026_scn:,.0f}".replace(",", " "),
-                    f"{y2027_scn:,.0f}".replace(",", " ")
-                ],
-                'Skillnad (tkr)': [
-                    f"{(y2024_base - y2024_scn):+,.0f}".replace(",", " "),
-                    f"{(y2025_base - y2025_scn):+,.0f}".replace(",", " "),
-                    f"{(y2026_base - y2026_scn):+,.0f}".replace(",", " "),
-                    f"{(y2027_base - y2027_scn):+,.0f}".replace(",", " ")
-                ]
-            })
-
-            st.dataframe(yearly_data, use_container_width=True, hide_index=True)
-
-    else:
-        st.write("**TOTEX-metod:** Effektiviseringskrav applicerat på OPEX + CAPEX")
+    # Om vi har beräkningsdata från scenario
+    if last_calc is not None:
+        export_data = last_calc.get('export_data')
         
-        if 'CAPEX_periodsumma' in row:
-            capex_total = row.get('CAPEX_periodsumma', 0)
-            capex_per_year = row.get('CAPEX_arsbas', 0)
+        if export_data is not None and not export_data.empty:
+            reid = entity_data['REId']
+            entity_calc = export_data[export_data['REId'] == reid]
             
-            baseline_opex_4yr = baseline_4yr - capex_total
-            baseline_totex = baseline_4yr
-            
-            target_totex = target_4yr
-            target_opex = target_totex - capex_total
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**Innan avdrag (4 år):**")
-                st.write(f"OPEX: {baseline_opex_4yr:,.0f} tkr".replace(",", " "))
-                st.write(f"CAPEX: {capex_total:,.0f} tkr".replace(",", " "))
-                st.write(f"**TOTEX:** {baseline_totex:,.0f} tkr".replace(",", " "))
-                st.write(f"Effektiviseringskrav: {effkrav_pct*100:.2f}%")
-            
-            with col2:
-                st.write("**Efter avdrag (4 år):**")
-                st.write(f"TOTEX efter avdrag: {target_totex:,.0f} tkr".replace(",", " "))
-                st.write(f"CAPEX (oförändrat): {capex_total:,.0f} tkr".replace(",", " "))
-                st.write(f"**Nya OPEX:** {target_opex:,.0f} tkr".replace(",", " "))
-                st.write(f"Total reduktion: {reduction_total:,.0f} tkr".replace(",", " "))
-            
-            capex_updated = entity_data.get('Uppdaterad_Kapitalkostnad', False)
-            if capex_updated:
-                st.info(
-                    "Kapitalkostnad har uppdaterats från scenario. "
-                    "OPEX har automatiskt omberäknats för att bibehålla TOTEX-krav."
-                )
-        else:
-            st.warning("CAPEX-komponenter saknas i beräkningen")
+            if not entity_calc.empty:
+                row = entity_calc.iloc[0]
+                
+                # Hämta årsvisa värden
+                y2024_base = row.get('Y2024_baseline', 0)
+                y2025_base = row.get('Y2025_baseline', 0)
+                y2026_base = row.get('Y2026_baseline', 0)
+                y2027_base = row.get('Y2027_baseline', 0)
+                
+                y2024_scn = row.get('Y2024_scenario', 0)
+                y2025_scn = row.get('Y2025_scenario', 0)
+                y2026_scn = row.get('Y2026_scenario', 0)
+                y2027_scn = row.get('Y2027_scenario', 0)
+                
+                # Bygg komplett tabell med alla kolumner
+                with st.expander("Årsvisa påverkbara kostnader efter avdrag"):
+                    yearly_data = pd.DataFrame({
+                        'År': [2024, 2025, 2026, 2027],
+                        'Ei baseline (tkr)': [
+                            f"{y2024_base:,.0f}".replace(",", " "),
+                            f"{y2025_base:,.0f}".replace(",", " "),
+                            f"{y2026_base:,.0f}".replace(",", " "),
+                            f"{y2027_base:,.0f}".replace(",", " ")
+                        ],
+                        'Scenario (tkr)': [
+                            f"{y2024_scn:,.0f}".replace(",", " "),
+                            f"{y2025_scn:,.0f}".replace(",", " "),
+                            f"{y2026_scn:,.0f}".replace(",", " "),
+                            f"{y2027_scn:,.0f}".replace(",", " ")
+                        ],
+                        'Skillnad (tkr)': [
+                            f"{(y2024_base - y2024_scn):+,.0f}".replace(",", " "),
+                            f"{(y2025_base - y2025_scn):+,.0f}".replace(",", " "),
+                            f"{(y2026_base - y2026_scn):+,.0f}".replace(",", " "),
+                            f"{(y2027_base - y2027_scn):+,.0f}".replace(",", " ")
+                        ],
+                        'Inkrement (tkr)': [
+                            f"{row.get('Inc_2024_scn', 0):,.0f}".replace(",", " "),
+                            f"{row.get('Inc_2025_scn', 0):,.0f}".replace(",", " "),
+                            f"{row.get('Inc_2026_scn', 0):,.0f}".replace(",", " "),
+                            f"{row.get('Inc_2027_scn', 0):,.0f}".replace(",", " ")
+                        ],
+                        'Kumulativt avdrag (tkr)': [
+                            f"{row.get('Avdrag_2024_scn', 0):,.0f}".replace(",", " "),
+                            f"{row.get('Avdrag_2025_scn', 0):,.0f}".replace(",", " "),
+                            f"{row.get('Avdrag_2026_scn', 0):,.0f}".replace(",", " "),
+                            f"{row.get('Avdrag_2027_scn', 0):,.0f}".replace(",", " ")
+                        ]
+                    })
+                    
+                    st.dataframe(yearly_data, use_container_width=True, hide_index=True)
+                    st.caption("Alla värden är för perioden 2024-2027 (4 år totalt)")
+                return
     
-    with st.expander("Avdrag för effektiviseringskrav (Beräknat som avdrag från medelvärdet)"):
-        df_avdrag = pd.DataFrame({
-            'År': [2024, 2025, 2026, 2027],
-            'Inkrement (tkr)': [row[f'Inc_{y}_scn'] for y in [2024, 2025, 2026, 2027]],
-            'Kumulativt avdrag (tkr)': [row[f'Avdrag_{y}_scn'] for y in [2024, 2025, 2026, 2027]]
-        })
-        st.dataframe(df_avdrag, use_container_width=True)
+    # Om inget scenario: visa bara info
+    st.info("Importera effektiviseringskrav från DEA för att se årsvisa värden")
     
-    with st.expander("Tekniska detaljer"):
-        
-        tech_params = {
-            'Medelvärde 2018-2021 påverkbara kostnader': row.get('DT_exact', 0),
-            'Justering där nätföretagets inte separerat yrkandet på vart och ett av åren 2018-2021 (2022 års prisnivå) (Δ)': row.get('Delta_exact', 0),
-            'Årsbas (B)': row.get('B_exact', 0),
-            'Nuvarande krav (e₀)': row.get('e_base_exact', 0),
-            'Scenariokrav (e)': row.get('e_scn_exact', 0)
-        }
-        
-        for param, value in tech_params.items():
-            if value != 0 or param in ['e_baseline', 'e_scenario']:
-                st.write(f"- {param}: {value:,.4f}".replace(",", " "))
-        
-
 
 def list_available_effkrav_exports() -> pd.DataFrame:
     """

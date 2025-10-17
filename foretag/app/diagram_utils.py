@@ -6,31 +6,65 @@ Genererar interaktivt HTML-diagram för intäktsram-dekomposition
 from typing import Dict
 
 
-def create_interactive_diagram_html(data: Dict[str, float]) -> str:
+def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
     """
     Skapar interaktiv HTML-visualisering enligt Ei-struktur.
     
     Args:
-        data: Dict med komponenter (paverkbara, ej_paverkbara, kapitalbas, etc.)
-        
-    Returns:
-        HTML-sträng för rendering med components.html()
+        data: Dict med komponenter där varje komponent har:
+              {'value': float, 'baseline': float, 'is_directly_modified': bool, 'source': str}
     """
     
-    paverkbara = data.get('paverkbara', 0)
-    ej_paverkbara = data.get('ej_paverkbara', 0)
-    kapitalbas = data.get('kapitalbas', 0)
-    effektivisering = abs(data.get('effektivisering', 0))
-    avskrivningar = data.get('avskrivningar', 0)
-    avkastning = data.get('avkastning', 0)
-    kvalitet = data.get('kvalitet', 0)
+    def get_component_data(key: str):
+        """Hämtar komponentdata med fallback."""
+        comp = data.get(key, {})
+        return {
+            'value': comp.get('value', 0),
+            'baseline': comp.get('baseline', 0),
+            'is_modified': comp.get('is_directly_modified', False),
+            'source': comp.get('source', 'Baseline')
+        }
     
-    lopande = paverkbara + ej_paverkbara - effektivisering
-    kapitalkostnader = avskrivningar + avkastning + kvalitet
-    intaktsram = lopande + kapitalkostnader
+    # Extrahera alla komponenter
+    paverkbara = get_component_data('paverkbara')
+    ej_paverkbara = get_component_data('ej_paverkbara')
+    kapitalbas = get_component_data('kapitalbas')
+    effektivisering = get_component_data('effektivisering')
+    avskrivningar = get_component_data('avskrivningar')
+    avkastning = get_component_data('avkastning')
+    kvalitet = get_component_data('kvalitet')
+    lopande = get_component_data('lopande')
+    kapitalkostnader = get_component_data('kapitalkostnader')
+    intaktsram = get_component_data('intaktsram')
     
     def fmt(val):
+        """Formaterar tal med mellanslag som tusentalsavgränsare."""
         return f"{val:,.0f}".replace(",", " ")
+    
+    def create_tooltip(name: str, comp: dict) -> str:
+        """
+        Skapar tooltip-text.
+        - Scenario (har delta): Visa endast delta
+        - Baseline (inget delta): Inget tooltip (tom sträng)
+        """
+        TOLERANCE = 1.0  # 1 tkr tolerans för avrundningsskillnader
+        delta = comp['value'] - comp['baseline']
+        
+        # Om det finns signifikant delta
+        if abs(delta) > TOLERANCE:
+            if comp['baseline'] != 0:
+                delta_pct = (delta / comp['baseline'] * 100)
+                sign = "+" if delta >= 0 else ""
+                return f"{name} | Δ {sign}{fmt(delta)} tkr ({sign}{delta_pct:.1f}%)"
+            else:
+                return f"{name} | {fmt(comp['value'])} tkr"
+        else:
+            # Baseline eller försumbar skillnad: Inget tooltip
+            return ""
+    
+    def get_box_class(comp: dict) -> str:
+        """Returnerar CSS-klass baserat på om komponenten är direktmodifierad."""
+        return "box-modified" if comp['is_modified'] else ""
     
     html = """
     <!DOCTYPE html>
@@ -68,28 +102,39 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
                 transform: translateY(-3px) scale(1.02);
                 box-shadow: 0 8px 24px rgba(0,102,204,0.4);
                 z-index: 100;
-                border-color: #0088FF !important;
             }
             
             .box-input {
-                border-color: #0066CC !important;
-                background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%) !important;
+                border-color: #0066CC;
+                background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%);
             }
             
             .box-calculation {
-                border-color: #4A5F7F !important;
-                background: linear-gradient(135deg, #ffffff 0%, #f5f6f8 100%) !important;
+                border-color: #4A5F7F;
+                background: linear-gradient(135deg, #ffffff 0%, #f5f6f8 100%);
             }
             
             .box-intermediate {
-                border-color: #1E3A5F !important;
-                background: linear-gradient(135deg, #ffffff 0%, #eef2f7 100%) !important;
+                border-color: #1E3A5F;
+                background: linear-gradient(135deg, #ffffff 0%, #eef2f7 100%);
             }
             
             .box-result {
-                border-color: #0066CC !important;
-                background: linear-gradient(135deg, #d4e9ff 0%, #eef6ff 100%) !important;
-                border-width: 4px !important;
+                border-color: #0066CC;
+                background: linear-gradient(135deg, #d4e9ff 0%, #eef6ff 100%);
+                border-width: 4px;
+            }
+            
+            /* DIREKT MODIFIERAD - Orange */
+            .box-modified {
+                border-color: #FF8800 !important;
+                background: linear-gradient(135deg, #FFF8F0 0%, #FFEDD5 100%) !important;
+                box-shadow: 0 3px 10px rgba(255, 136, 0, 0.3);
+            }
+            
+            .box-modified:hover {
+                border-color: #FF8800 !important;
+                box-shadow: 0 8px 24px rgba(255, 136, 0, 0.5) !important;
             }
             
             .box-title {
@@ -154,9 +199,18 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
                 box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             }
             
+            .box-modified::after {
+                background: #FF8800;
+            }
+            
             .box:hover::after {
                 opacity: 1;
                 transform: translateX(-50%) translateY(-5px);
+            }
+            
+            /* Dölj tom tooltip */
+            .box[data-tooltip=""]::after {
+                display: none;
             }
         </style>
         <script>
@@ -220,12 +274,14 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
                     boxes.forEach(box => {
                         box.addEventListener('mouseenter', function() {
                             const conn = connections[boxClass];
+                            const isModified = box.classList.contains('box-modified');
+                            const hoverColor = isModified ? '#FF8800' : '#0088FF';
                             
                             conn.boxes.forEach(targetClass => {
                                 document.querySelectorAll('.' + targetClass).forEach(el => {
-                                    el.style.borderColor = conn.color;
-                                    el.style.boxShadow = `0 0 24px rgba(0, 136, 255, 0.5)`;
-                                    el.style.background = 'linear-gradient(135deg, #E3F2FF 0%, #F0F9FF 100%)';
+                                    el.style.borderColor = hoverColor;
+                                    const shadowColor = isModified ? 'rgba(255, 136, 0, 0.5)' : 'rgba(0, 136, 255, 0.5)';
+                                    el.style.boxShadow = `0 0 24px ${shadowColor}`;
                                 });
                             });
                             
@@ -233,7 +289,7 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
                                 document.querySelectorAll('.' + lineClass).forEach(line => {
                                     line.style.opacity = '1';
                                     line.style.borderLeftWidth = '4px';
-                                    line.style.borderLeftColor = conn.color;
+                                    line.style.borderLeftColor = hoverColor;
                                     line.style.borderLeftStyle = 'solid';
                                 });
                             });
@@ -246,7 +302,6 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
                                 document.querySelectorAll('.' + targetClass).forEach(el => {
                                     el.style.borderColor = '';
                                     el.style.boxShadow = '';
-                                    el.style.background = '';
                                 });
                             });
                             
@@ -280,26 +335,27 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
     x_mid_right = 488
     x_right = 698
     
+    # RAD 1: INPUT-KOMPONENTER
     html += f"""
-        <div class="box box-input box-paverkbara" style="left: {x_left}px; top: {y1}px; width: 173px;" 
-             data-tooltip="Påverkar: Effektiviseringskrav, Löpande kostnader">
+        <div class="box box-input box-paverkbara {get_box_class(paverkbara)}" style="left: {x_left}px; top: {y1}px; width: 173px;" 
+             data-tooltip="{create_tooltip('Påverkbara kostnader', paverkbara)}">
             <div class="badge">1</div>
             <div class="box-title">Påverkbara<br>kostnader</div>
-            <div class="box-value">{fmt(paverkbara)} tkr</div>
+            <div class="box-value">{fmt(paverkbara['value'])} tkr</div>
         </div>
         
-        <div class="box box-input box-ej-paverkbara" style="left: {x_mid_left}px; top: {y1}px; width: 188px;"
-             data-tooltip="Påverkar: Löpande kostnader">
+        <div class="box box-input box-ej-paverkbara {get_box_class(ej_paverkbara)}" style="left: {x_mid_left}px; top: {y1}px; width: 188px;"
+             data-tooltip="{create_tooltip('Ej påverkbara kostnader', ej_paverkbara)}">
             <div class="badge">2</div>
             <div class="box-title">Ej påverkbara<br>kostnader</div>
-            <div class="box-value">{fmt(ej_paverkbara)} tkr</div>
+            <div class="box-value">{fmt(ej_paverkbara['value'])} tkr</div>
         </div>
         
-        <div class="box box-input box-kapitalbas" style="left: {x_mid_right}px; top: {y1}px; width: 398px;"
-             data-tooltip="Påverkar: Avskrivningar, Avkastning">
+        <div class="box box-input box-kapitalbas {get_box_class(kapitalbas)}" style="left: {x_mid_right}px; top: {y1}px; width: 398px;"
+             data-tooltip="{create_tooltip('Kapitalbas', kapitalbas)}">
             <div class="badge">3</div>
             <div class="box-title">Kapitalbas</div>
-            <div class="box-value">{fmt(kapitalbas)} tkr</div>
+            <div class="box-value">{fmt(kapitalbas['value'])} tkr</div>
         </div>
     """
     
@@ -308,26 +364,27 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
     html += f'<div class="flow-line line-kapitalbas-1" style="left: {x_mid_right + 98}px; top: {y1 + 65}px; height: {y2 - y1 - 65}px;"></div>'
     html += f'<div class="flow-line line-kapitalbas-2" style="left: {x_mid_right + 293}px; top: {y1 + 65}px; height: {y2 - y1 - 65}px;"></div>'
     
+    # RAD 2: BERÄKNINGS-KOMPONENTER
     html += f"""
-        <div class="box box-calculation box-effektivisering" style="left: {x_left}px; top: {y2}px; width: 263px;"
-             data-tooltip="Påverkar: Löpande kostnader (minskning)">
+        <div class="box box-calculation box-effektivisering {get_box_class(effektivisering)}" style="left: {x_left}px; top: {y2}px; width: 263px;"
+             data-tooltip="{create_tooltip('Effektiviseringskrav', effektivisering)}">
             <div class="badge">4</div>
             <div class="box-title">Effektiviseringskrav</div>
-            <div class="box-value">-{fmt(effektivisering)} tkr</div>
+            <div class="box-value">-{fmt(effektivisering['value'])} tkr</div>
         </div>
         
-        <div class="box box-calculation box-avskrivningar" style="left: {x_mid_right}px; top: {y2}px; width: 180px;"
-             data-tooltip="Påverkar: Kapitalkostnader">
+        <div class="box box-calculation box-avskrivningar {get_box_class(avskrivningar)}" style="left: {x_mid_right}px; top: {y2}px; width: 180px;"
+             data-tooltip="{create_tooltip('Avskrivningar', avskrivningar)}">
             <div class="badge">5</div>
             <div class="box-title">Avskrivningar</div>
-            <div class="box-value">{fmt(avskrivningar)} tkr</div>
+            <div class="box-value">{fmt(avskrivningar['value'])} tkr</div>
         </div>
         
-        <div class="box box-calculation box-avkastning" style="left: {x_right}px; top: {y2}px; width: 188px;"
-             data-tooltip="Påverkar: Kvalitetsjustering">
+        <div class="box box-calculation box-avkastning {get_box_class(avkastning)}" style="left: {x_right}px; top: {y2}px; width: 188px;"
+             data-tooltip="{create_tooltip('Avkastning (WACC)', avkastning)}">
             <div class="badge">6</div>
             <div class="box-title">Avkastning<br>(WACC)</div>
-            <div class="box-value">{fmt(avkastning)} tkr</div>
+            <div class="box-value">{fmt(avkastning['value'])} tkr</div>
         </div>
     """
     
@@ -335,39 +392,42 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
     html += f'<div class="flow-line line-avskrivningar" style="left: {x_mid_right + 90}px; top: {y2 + 65}px; height: {y4 - y2 - 65}px;"></div>'
     html += f'<div class="flow-line line-avkastning" style="left: {x_right + 94}px; top: {y2 + 65}px; height: {y3 - y2 - 65}px;"></div>'
     
+    # RAD 3: KVALITET
     html += f"""
-        <div class="box box-calculation box-kvalitet" style="left: {x_right - 83}px; top: {y3}px; width: 270px;"
-             data-tooltip="Påverkar: Kapitalkostnader">
+        <div class="box box-calculation box-kvalitet {get_box_class(kvalitet)}" style="left: {x_right - 83}px; top: {y3}px; width: 270px;"
+             data-tooltip="{create_tooltip('Justering kvalitet', kvalitet)}">
             <div class="badge">7</div>
             <div class="box-title">Justering med avseende<br>på kvalitet</div>
-            <div class="box-value">{fmt(kvalitet)} tkr</div>
+            <div class="box-value">{fmt(kvalitet['value'])} tkr</div>
         </div>
     """
     
     html += f'<div class="flow-line line-kvalitet" style="left: {x_right + 41}px; top: {y3 + 65}px; height: {y4 - y3 - 65}px;"></div>'
     
+    # RAD 4: INTERMEDIATE
     html += f"""
-        <div class="box box-intermediate box-lopande" style="left: {x_left}px; top: {y4}px; width: 398px;"
-             data-tooltip="Påverkar: Justering tidigare perioder, Intäktsram">
+        <div class="box box-intermediate box-lopande {get_box_class(lopande)}" style="left: {x_left}px; top: {y4}px; width: 398px;"
+             data-tooltip="{create_tooltip('Löpande kostnader', lopande)}">
             <div class="badge">8</div>
             <div class="box-title">Löpande kostnader</div>
-            <div class="box-value">{fmt(lopande)} tkr</div>
+            <div class="box-value">{fmt(lopande['value'])} tkr</div>
         </div>
         
-        <div class="box box-intermediate box-kapitalkostnader" style="left: {x_mid_right}px; top: {y4}px; width: 398px;"
-             data-tooltip="Påverkar: Justering tidigare perioder, Intäktsram">
+        <div class="box box-intermediate box-kapitalkostnader {get_box_class(kapitalkostnader)}" style="left: {x_mid_right}px; top: {y4}px; width: 398px;"
+             data-tooltip="{create_tooltip('Kapitalkostnader', kapitalkostnader)}">
             <div class="badge">9</div>
             <div class="box-title">Kapitalkostnader</div>
-            <div class="box-value">{fmt(kapitalkostnader)} tkr</div>
+            <div class="box-value">{fmt(kapitalkostnader['value'])} tkr</div>
         </div>
     """
     
     html += f'<div class="flow-line line-lopande" style="left: {x_left + 199}px; top: {y4 + 65}px; height: {y5 - y4 - 65}px;"></div>'
     html += f'<div class="flow-line line-kapitalkostnader" style="left: {x_mid_right + 199}px; top: {y4 + 65}px; height: {y5 - y4 - 65}px;"></div>'
     
+    # RAD 5: JUSTERING
     html += f"""
         <div class="box box-intermediate box-justering" style="left: {x_left + 75}px; top: {y5}px; width: 638px;"
-             data-tooltip="Påverkar: Intäktsram (slutlig justering)">
+             data-tooltip="">
             <div class="badge">10</div>
             <div class="box-title">Justering för tidigare perioders över-<br>respektive underdebitering</div>
         </div>
@@ -375,12 +435,13 @@ def create_interactive_diagram_html(data: Dict[str, float]) -> str:
     
     html += f'<div class="flow-line line-justering" style="left: 450px; top: {y5 + 65}px; height: {y6 - y5 - 65}px;"></div>'
     
+    # RAD 6: RESULTAT
     html += f"""
-        <div class="box box-result box-intaktsram" style="left: 225px; top: {y6}px; width: 450px;"
-             data-tooltip="Slutlig intäktsram för perioden">
+        <div class="box box-result box-intaktsram {get_box_class(intaktsram)}" style="left: 225px; top: {y6}px; width: 450px;"
+             data-tooltip="{create_tooltip('Intäktsram', intaktsram)}">
             <div class="badge">11</div>
             <div class="box-title" style="font-size: 16px; font-weight: 700;">Intäktsram</div>
-            <div class="box-value" style="font-size: 14px;">{fmt(intaktsram)} tkr</div>
+            <div class="box-value" style="font-size: 14px;">{fmt(intaktsram['value'])} tkr</div>
         </div>
     """
     

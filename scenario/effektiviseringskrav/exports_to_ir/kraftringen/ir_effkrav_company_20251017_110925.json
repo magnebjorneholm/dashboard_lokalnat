@@ -1,0 +1,18 @@
+{
+  "description": "Effektiviseringskrav för företagsanvändning. Innehåller endast effektiviseringskrav-procent. Metod (OPEX/TOTEX) väljs vid import. IR-baseline laddas lokalt i intäktsramen.",
+  "organization": "kraftringen",
+  "export_type": "company_use",
+  "period": {
+    "start": 2024,
+    "end": 2027
+  },
+  "price_year": 2022,
+  "unit": "procent för Effkrav_proc",
+  "export_timestamp": "2025-10-17T11:09:25.370702",
+  "reid_count": 1,
+  "dmu_count": 1,
+  "mean_effkrav_pct": 0.9999997573524544,
+  "file_format": "parquet",
+  "data_file": "ir_effkrav_company_20251017_110925.parquet",
+  "usage": "Importera i företagsvy, välj OPEX/TOTEX. Beräkning sker automatiskt mot IR-baseline och aktuell kapitalkostnad."
+}
