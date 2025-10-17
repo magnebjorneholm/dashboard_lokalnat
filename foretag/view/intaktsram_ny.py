@@ -250,23 +250,43 @@ def prepare_diagram_data(entity_data: pd.Series, df_baseline: pd.DataFrame) -> D
     """
     baseline_row = df_baseline[df_baseline['REId'] == entity_data['REId']]
     
-    # Hämta baseline-värden
+    # Hämta baseline-värden från Excel (EFTER Ei:s baseline-avdrag)
     if not baseline_row.empty:
-        baseline_paverkbara = float(baseline_row.iloc[0].get('Paverkbara_Kostnader', 0) or 0)
+        baseline_paverkbara_efter_avdrag = float(baseline_row.iloc[0].get('Paverkbara_Kostnader', 0) or 0)
         baseline_opaverkbara = float(baseline_row.iloc[0].get('Opaverkbara_Kostnader', 0) or 0)
         baseline_avskrivningar = float(baseline_row.iloc[0].get('Avskrivningar', 0) or 0)
         baseline_avkastning = float(baseline_row.iloc[0].get('Avkastning', 0) or 0)
-        baseline_kvalitet = float(baseline_row.iloc[0].get('Flexibilitetstjanster', 0) or 0)
+        baseline_flexibilitetstjanster = float(baseline_row.iloc[0].get('Flexibilitetstjanster', 0) or 0)
+        baseline_avbrottsersattning = float(baseline_row.iloc[0].get('Avbrottsersattning_12_24h', 0) or 0)
+        
+        # Läs Ei:s baseline-avdrag direkt från Excel kolumn DZ
+        baseline_totalt_avdrag_excel = 0
+        try:
+            excel_path = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
+            df_avdrag = pd.read_excel(excel_path, sheet_name="Påverkbara", engine="openpyxl")
+            # Kolumn DZ är index 129
+            if len(df_avdrag.columns) > 129:
+                # Hitta rätt rad för detta REId
+                reid_col = df_avdrag.iloc[:, 0]  # Kolumn A
+                matching_rows = df_avdrag[reid_col == entity_data['REId']]
+                if not matching_rows.empty:
+                    avdrag_value = matching_rows.iloc[0, 129]
+                    baseline_totalt_avdrag_excel = float(avdrag_value) if pd.notna(avdrag_value) else 0
+        except Exception as e:
+            pass  # Tyst fallback till 0
     else:
-        baseline_paverkbara = baseline_opaverkbara = 0
-        baseline_avskrivningar = baseline_avkastning = baseline_kvalitet = 0
+        baseline_paverkbara_efter_avdrag = baseline_opaverkbara = 0
+        baseline_avskrivningar = baseline_avkastning = 0
+        baseline_flexibilitetstjanster = baseline_avbrottsersattning = 0
+        baseline_totalt_avdrag_excel = 0
     
-    # Hämta aktuella värden
-    paverkbara = float(entity_data.get('Paverkbara_Kostnader', 0) or 0)
+    # Hämta aktuella värden (scenario)
+    paverkbara_scenario = float(entity_data.get('Paverkbara_Kostnader', 0) or 0)
     ej_paverkbara = float(entity_data.get('Opaverkbara_Kostnader', 0) or 0)
     avskrivningar = float(entity_data.get('Avskrivningar', 0) or 0)
     avkastning = float(entity_data.get('Avkastning', 0) or 0)
-    kvalitet = float(entity_data.get('Flexibilitetstjanster', 0) or 0)
+    flexibilitetstjanster = float(entity_data.get('Flexibilitetstjanster', 0) or 0)
+    avbrottsersattning = float(entity_data.get('Avbrottsersattning_12_24h', 0) or 0)
     
     # Hämta modifieringsflaggor
     is_paverkbara_modified = bool(entity_data.get('Uppdaterad_Paverkbara', False))
@@ -275,8 +295,48 @@ def prepare_diagram_data(entity_data: pd.Series, df_baseline: pd.DataFrame) -> D
     source_paverkbara = str(entity_data.get('Källa_Paverkbara', 'Baseline'))
     source_kapitalkostnad = str(entity_data.get('Källa_Kapitalkostnad', 'Baseline'))
     
-    # Beräkna effektivisering
-    effektivisering = paverkbara - baseline_paverkbara
+    # === FIX PROBLEM 1 & 2: HÄMTA BASELINE- OCH SCENARIO-AVDRAG ===
+    baseline_totalt_avdrag = baseline_totalt_avdrag_excel  # Från Excel kolumn DZ
+    scenario_totalt_avdrag = 0
+    
+    if 'scenario_data' in st.session_state:
+        modifications = st.session_state.scenario_data.get('modifications', {})
+        effkrav_mod = modifications.get('paverkbara', {})
+        last_calc = effkrav_mod.get('last_calculation')
+        
+        if last_calc:
+            export_data = last_calc.get('export_data')
+            if export_data is not None and not export_data.empty:
+                entity_calc = export_data[export_data['REId'] == entity_data['REId']]
+                if not entity_calc.empty:
+                    row = entity_calc.iloc[0]
+                    
+                    # BASELINE-AVDRAG från beräkning (mer exakt än Excel om tillgänglig)
+                    baseline_totalt_avdrag = sum([
+                        float(row.get('Avdrag_2024_base', 0)),
+                        float(row.get('Avdrag_2025_base', 0)),
+                        float(row.get('Avdrag_2026_base', 0)),
+                        float(row.get('Avdrag_2027_base', 0))
+                    ])
+                    
+                    # SCENARIO-AVDRAG (importerat från DEA)
+                    scenario_totalt_avdrag = sum([
+                        float(row.get('Avdrag_2024_scn', 0)),
+                        float(row.get('Avdrag_2025_scn', 0)),
+                        float(row.get('Avdrag_2026_scn', 0)),
+                        float(row.get('Avdrag_2027_scn', 0))
+                    ])
+    
+    # FIX PROBLEM 1: Påverkbara kostnader FÖRE alla avdrag
+    baseline_paverkbara_fore_avdrag = baseline_paverkbara_efter_avdrag + baseline_totalt_avdrag
+    
+    # FIX PROBLEM 2: Box 4 visar ALLTID effektiviseringskrav
+    # - Baseline-läge: Visa Ei:s baseline-avdrag (blå)
+    # - Scenario-läge: Visa scenario-avdrag (orange)
+    if is_paverkbara_modified:
+        effektivisering_value = scenario_totalt_avdrag
+    else:
+        effektivisering_value = baseline_totalt_avdrag
     
     # Beräkna kapitalbas
     kapitalbas = 0
@@ -295,32 +355,36 @@ def prepare_diagram_data(entity_data: pd.Series, df_baseline: pd.DataFrame) -> D
             wacc_baseline = scenario_metadata.get('wacc_old')
         baseline_kapitalbas = baseline_avkastning / wacc_baseline if wacc_baseline > 0 else 0
     
-    # Tolerans för avrundningsskillnader
-    TOLERANCE = 1.0  # 1 tkr = 1000 kronor
+    TOLERANCE = 1.0
     
-    effektivisering_active = is_paverkbara_modified and abs(effektivisering) > TOLERANCE
+    effektivisering_active = is_paverkbara_modified and abs(effektivisering_value) > TOLERANCE
     
-    # ENDAST KÄLLOR blir orange (förenklade regler)
-    paverkbara_direct = False  # Aldrig orange
-    kapitalbas_direct = is_kapital_modified  # Orange vid kapitalbas-scenario
-    effektivisering_direct = effektivisering_active  # Orange vid effektiviseringskrav
-    avskrivningar_direct = False  # Aldrig orange
-    avkastning_direct = False  # Aldrig orange
+    # Endast källor blir orange
+    paverkbara_direct = False
+    kapitalbas_direct = is_kapital_modified
+    effektivisering_direct = effektivisering_active
+    avskrivningar_direct = False
+    avkastning_direct = False
     
-    # Beräkna summor för tooltip-delta
-    lopande_value = paverkbara + ej_paverkbara - abs(effektivisering)
-    lopande_baseline = baseline_paverkbara + baseline_opaverkbara
+    # Beräkna summor för tooltip och flöde
+    lopande_value = baseline_paverkbara_fore_avdrag + ej_paverkbara - abs(effektivisering_value)
+    lopande_baseline = baseline_paverkbara_efter_avdrag + baseline_opaverkbara
     
-    kapitalkostnader_value = avskrivningar + avkastning + kvalitet
-    kapitalkostnader_baseline = baseline_avskrivningar + baseline_avkastning + baseline_kvalitet
+    # Box 9: Kapitalkostnader (endast Avskrivningar + Avkastning)
+    kapitalkostnader_value = avskrivningar + avkastning
+    kapitalkostnader_baseline = baseline_avskrivningar + baseline_avkastning
     
-    intaktsram_value = lopande_value + kapitalkostnader_value
-    intaktsram_baseline = lopande_baseline + kapitalkostnader_baseline
+    # Box 11: Intäktsram inkluderar även Flexibilitetstjänster och Avbrottsersättning
+    intaktsram_value = (lopande_value + kapitalkostnader_value + 
+                        flexibilitetstjanster + avbrottsersattning)
+    intaktsram_baseline = (lopande_baseline + kapitalkostnader_baseline + 
+                           baseline_flexibilitetstjanster + baseline_avbrottsersattning)
     
     return {
+        # BOX 1: Påverkbara kostnader FÖRE avdrag
         'paverkbara': {
-            'value': paverkbara,
-            'baseline': baseline_paverkbara,
+            'value': baseline_paverkbara_fore_avdrag,
+            'baseline': baseline_paverkbara_fore_avdrag,
             'is_directly_modified': paverkbara_direct,
             'source': source_paverkbara
         },
@@ -336,8 +400,9 @@ def prepare_diagram_data(entity_data: pd.Series, df_baseline: pd.DataFrame) -> D
             'is_directly_modified': kapitalbas_direct,
             'source': 'Beräknad från avkastning' if kapitalbas_direct else 'Baseline'
         },
+        # BOX 4: Totalt kumulativt avdrag från scenario
         'effektivisering': {
-            'value': abs(effektivisering),
+            'value': abs(effektivisering_value),
             'baseline': 0,
             'is_directly_modified': effektivisering_direct,
             'source': source_paverkbara if effektivisering_direct else 'Ingen'
@@ -353,12 +418,6 @@ def prepare_diagram_data(entity_data: pd.Series, df_baseline: pd.DataFrame) -> D
             'baseline': baseline_avkastning,
             'is_directly_modified': avkastning_direct,
             'source': source_kapitalkostnad if is_kapital_modified else 'Baseline'
-        },
-        'kvalitet': {
-            'value': kvalitet,
-            'baseline': baseline_kvalitet,
-            'is_directly_modified': False,
-            'source': 'Baseline'
         },
         'lopande': {
             'value': lopande_value,
