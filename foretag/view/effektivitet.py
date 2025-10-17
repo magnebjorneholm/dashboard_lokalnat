@@ -1,6 +1,6 @@
 # foretag/view/effektivitet.py
 # Företagsspecifik vy för effektiviseringsanalys
-# UPPDATERAD: Stöd för TOTEX-metod vid beräkning av påverkbara kostnader
+# RENAD VERSION: Fokus på DEA-körning, resultat, geografisk analys och export
 
 import streamlit as st
 import pandas as pd
@@ -9,27 +9,18 @@ import io
 from datetime import datetime
 from pathlib import Path
 
-# Backend imports
 from effektiviseringskrav.backend.dea_model import run_dea_model
 from effektiviseringskrav.backend.data_loader import merge_capex_scenario, load_data
-from effektiviseringskrav.backend.ir_calculations import calculate_ir_paverkbara_from_file
-from effektiviseringskrav.backend.ir_export import export_effektiviseringskrav_scenario  # NYTT: Uppdaterad import
+from effektiviseringskrav.backend.ir_export import export_effektiviseringskrav_scenario
 from effektiviseringskrav.backend.spatial_analysis import calculate_company_neighbor_gap
-
-# Frontend imports
 from effektiviseringskrav.frontend.components import (
     display_efficiency_histogram,
     display_company_geographic_analysis
 )
-
-# Företagsspecifika funktioner
 from foretag.app.kapitalbas_data_loader import (
     get_user_dmu,
     load_reconciliation_foretag_info
 )
-
-# NYTT: För att bygga working_df
-from intaktsram.app.data_loader import load_baseline_data
 
 # Autentisering
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
@@ -43,7 +34,6 @@ if st.session_state.user_role != "company":
 def show_foretag_effektivitet():
     """Huvudfunktion för företagsspecifik effektivitetsanalys"""
     
-    # Hämta företagsinformation
     user_dmu = get_user_dmu()
     company_info = load_reconciliation_foretag_info()
     
@@ -61,21 +51,19 @@ def show_foretag_effektivitet():
         st.error(f"Kunde inte ladda DEA-data: {e}")
         return
     
-    # Kontrollera att företaget finns i DEA-data
     if user_dmu not in df_full['DMU'].values:
         st.error(f"DMU {user_dmu} hittades inte i DEA-data")
         st.info("Detta kan betyda att ditt företag inte ingår i den aktuella effektivitetsanalysen")
         return
     
-    # === HEADER ===
     st.header(f"Effektivitetsanalys - {company_name}")
-    st.caption(f"DMU {user_dmu} • Analysera ditt företags effektivitet och beräkna påverkbara kostnader")
+    st.caption(f"DMU {user_dmu} • Analysera ditt företags effektivitet och exportera till Intäktsram")
     
     # === DEA-PARAMETRAR ===
-    df = df_full  # Använd full dataset för DEA-beräkningar
+    df = df_full
     
     st.sidebar.subheader("DEA-parametrar")
-  
+    
     # Försök merga CAPEX-scenario från Kapitalbas
     df, scen_info = merge_capex_scenario(df)
 
@@ -108,7 +96,6 @@ def show_foretag_effektivitet():
         default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs]
     )
 
-    # Validering av input-kombinationer
     if not validate_input_combinations(input_cols, scen_info, df):
         return
 
@@ -136,7 +123,6 @@ def show_foretag_effektivitet():
     # === KÖR DEA ===
     run_model = st.sidebar.button("Kör DEA", type="primary")
 
-    # Framtidssäker session state för punkt 3 (jämförelsetabell)
     session_key = f'dea_runs_{user_dmu}'
     if session_key not in st.session_state:
         st.session_state[session_key] = []
@@ -155,10 +141,10 @@ def show_foretag_effektivitet():
                     outlier_krav=dea_outlier_krav/100
                 )
                 
-                # NYTT: Spara även DEA-data för senare användning (CAPEX-värden)
+                # Spara DEA-resultat för senare användning
                 st.session_state[f'latest_dea_result_{user_dmu}'] = {
                     'result': result,
-                    'dea_data': df,  # KRITISKT: Spara DEA-input-data
+                    'dea_data': df,
                     'params': {
                         'input_cols': input_cols,
                         'output_cols': output_cols,
@@ -189,7 +175,6 @@ def show_foretag_effektivitet():
 def validate_input_combinations(input_cols, scen_info, df):
     """Validerar input-kombinationer enligt DEA-regler"""
     
-    # Analysera vald input
     has_capex_std = "CAPEX" in input_cols
     has_capex_scen = any(col.startswith("CAPEX_2024_wacc_") for col in input_cols)
     has_opexp = "OPEXp" in input_cols
@@ -199,7 +184,6 @@ def validate_input_combinations(input_cols, scen_info, df):
     capex_any = has_capex_std or has_capex_scen
     totex_any = has_totex_std or has_totex_scen
 
-    # Exklusivitetsregler
     if totex_any and (capex_any or has_opexp):
         st.error("Välj antingen TOTEX ELLER CAPEX/OPEXp, inte båda.")
         return False
@@ -208,7 +192,6 @@ def validate_input_combinations(input_cols, scen_info, df):
         st.error("Välj antingen baseline- ELLER scenario-variant inom samma familj.")
         return False
 
-    # Kontrollera scenario-fullständighet
     if scen_info.get("found"):
         capex_wacc_col = scen_info.get("capex_col")
         totex_wacc_col = scen_info.get("totex_col")
@@ -232,20 +215,19 @@ def show_dea_results(latest_result, user_dmu, company_name):
     
     result = latest_result['result']
     params = latest_result['params']
-    dea_data = latest_result.get('dea_data')  # NYTT: Hämta DEA-input-data
     
-    # Filtrera till företaget
-    company_result = result[result['DMU'] == user_dmu]
-    if company_result.empty:
+    # Filtrera till företaget (DMU-nivå)
+    company_result_dmu = result[result['DMU'] == user_dmu]
+    if company_result_dmu.empty:
         st.error("Ditt företag hittades inte i DEA-resultatet")
         return
     
-    company_row = company_result.iloc[0]
+    company_row = company_result_dmu.iloc[0]
     
-    # BERÄKNA GRANNGAP (för metric)
+    # Beräkna granngap
     neighbor_gap = calculate_company_neighbor_gap(result, user_dmu)
     
-    # === PUNKT 2: FÖRETAGETS RESULTAT (5 METRICS) ===
+    # === FÖRETAGETS RESULTAT (5 METRICS) ===
     st.subheader("Ditt företags resultat")
     
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -263,7 +245,6 @@ def show_dea_results(latest_result, user_dmu, company_name):
         st.metric("Outlier", "Ja" if is_outlier else "Nej")
     
     with col4:
-        # Ranking
         valid_results = result[result['Effektivitet'].notna() & ~result['is_outlier']]
         if not valid_results.empty and not pd.isna(eff_val) and not company_row['is_outlier']:
             ranked = valid_results.sort_values('Effektivitet', ascending=False).reset_index(drop=True)
@@ -274,7 +255,6 @@ def show_dea_results(latest_result, user_dmu, company_name):
             st.metric("Ranking", "N/A")
     
     with col5:
-        # NYA METRIKEN: vs Grannar
         if neighbor_gap is not None:
             st.metric(
                 "vs grannar",
@@ -285,68 +265,10 @@ def show_dea_results(latest_result, user_dmu, company_name):
         else:
             st.metric("vs grannar", "N/A", help="Geografisk data saknas")
     
-    # === PÅVERKBARA KOSTNADER med METODVAL ===
-    st.markdown("---")
-    st.subheader("Påverkbara kostnader")
-    
-    # NYTT: Metodval för påverkbara kostnader
-    col_method, col_info = st.columns([1, 2])
-    
-    with col_method:
-        ir_method = st.radio(
-            "Applicera effektiviseringskrav på:",
-            options=['OPEX', 'TOTEX'],
-            index=0,
-            help=(
-                "OPEX: Endast påverkbara kostnader (traditionell)\n"
-                "TOTEX: Total kostnad inkl. CAPEX (Ei:s förslag 2020)"
-            ),
-            key=f"ir_method_{user_dmu}"
-        )
-    
-    with col_info:
-        if ir_method == 'TOTEX':
-            st.info(
-                "**TOTEX-metod:** Effektiviseringskravet appliceras på summan av "
-                "påverkbara kostnader (OPEX) och kapitalkostnad (CAPEX) från 4-årsperioden."
-            )
-        else:
-            st.info(
-                "**OPEX-metod:** Effektiviseringskravet appliceras endast på "
-                "påverkbara kostnader enligt traditionell metod."
-            )
-    
-    # Beräkna påverkbara kostnader med vald metod
-    company_paverkbara = calculate_company_paverkbara_costs(
-        company_result, 
-        dea_data, 
-        user_dmu,
-        method=ir_method
-    )
-    
-    if company_paverkbara is not None:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            baseline = company_paverkbara.get('baseline_4yr', 0) / 1000
-            st.metric("Baseline 4-år", f"{baseline:.1f} MSEK")
-        with col2:
-            target = company_paverkbara.get('target_4yr', 0) / 1000  
-            st.metric("Efter effektiviseringskrav", f"{target:.1f} MSEK")
-        with col3:
-            reduction = company_paverkbara.get('reduction_4yr', 0) / 1000
-            reduction_pct = (reduction / baseline * 100) if baseline > 0 else 0
-            st.metric("Delta", f"{reduction:.1f} MSEK ({reduction_pct:.1f}%)")
-        
-        # Visa metod som användes
-        st.caption(f"Beräknat med **{ir_method}**-metod")
-    else:
-        st.info("Påverkbara kostnader kunde inte beräknas för ditt företag")
-
-    # === PUNKT 4: BRANSCHKONTEXT ===
+    # === BRANSCHKONTEXT ===
     st.markdown("---")
     st.subheader("Branschkontext")
     
-    # Enkel statistik
     n_total = len(result)
     n_outliers = result['is_outlier'].sum()
     avg_eff = result[~result["is_outlier"]]["Effektivitet"].mean()
@@ -358,7 +280,6 @@ def show_dea_results(latest_result, user_dmu, company_name):
     col3.metric("Medeleffektivitet", f"{avg_eff:.3f}")
     col4.metric("Genomsnittligt krav", f"{avg_krav:.2f}%")
 
-    # Enkla histogram
     st.markdown("#### Fördelningar")
     col_hist1, col_hist2 = st.columns(2)
     
@@ -369,29 +290,29 @@ def show_dea_results(latest_result, user_dmu, company_name):
     with col_hist2:
         display_efficiency_histogram(df_plot["Effkrav_proc"] * 100, title="Årligt effektiviseringskrav (%)")
 
-    # Visa outliers om det finns
     if n_outliers > 0:
         with st.expander(f"Visa outliers ({n_outliers} företag)"):
             df_outliers = result[result["is_outlier"] == True][["Företag", "DMU", "Effektivitet", "Effkrav_proc"]]
             df_outliers["Effkrav_proc"] = (df_outliers["Effkrav_proc"] * 100).round(2)
             df_outliers = df_outliers.rename(columns={"Effkrav_proc": "Årligt krav (%)"})
-            st.dataframe(df_outliers, width='stretch')
+            st.dataframe(df_outliers, use_container_width=True)
 
-    # === GEOGRAFISK ANALYS (NYTT) ===
+    # === GEOGRAFISK ANALYS ===
     st.markdown("---")
     st.header("Geografisk analys")
     display_company_geographic_analysis(result, user_dmu, company_name)
 
-    # === PUNKT 5 & 6: EXPORT ===
+    # === EXPORT ===
     st.markdown("---")
     st.subheader("Export")
     
     col_excel, col_ir = st.columns(2)
     
-    # Excel-export (Punkt 5)
+    # Excel-export
     with col_excel:
         st.markdown("**DEA-resultat**")
-        buffer = create_excel_export(result, company_result, company_name)
+        st.caption("Ladda ned som Excel för egen analys")
+        buffer = create_excel_export(result, company_result_dmu, company_name)
         st.download_button(
             label="Ladda ned som Excel",
             data=buffer.getvalue(),
@@ -399,30 +320,39 @@ def show_dea_results(latest_result, user_dmu, company_name):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     
-    # IR-export (Punkt 6) 
+    # IR-export
     with col_ir:
-        st.markdown("**Effektiviseringskrav till IR**")
-        if company_paverkbara is not None:
-            export_name = st.text_input(
-                "Export-namn", 
-                value=f"DEA_{company_name.replace(' ', '_')}", 
-                key=f"ir_export_name_{user_dmu}"
-            )
-            
-            if st.button("Exportera till IR-dekomposition", key=f"export_ir_{user_dmu}"):
-                try:
-                    export_path = export_effkrav_to_ir(
-                        company_result, 
-                        export_name,
-                        method=ir_method  # NYTT: Skicka vald metod
+        st.markdown("**Export till Intäktsram**")
+        st.caption("Exporterar effektiviseringskrav för användning i Intäktsram-dekomposition")
+        
+        export_name = st.text_input(
+            "Export-namn", 
+            value=f"DEA_{company_name.replace(' ', '_')}", 
+            key=f"ir_export_name_{user_dmu}"
+        )
+        
+        st.info(
+            "Metod (OPEX/TOTEX) väljs vid import i Intäktsram-tabben. "
+            "Effektiviseringskravet beräknas automatiskt mot aktuell kapitalkostnad."
+        )
+        
+        if st.button("Exportera till Intäktsram", key=f"export_ir_{user_dmu}"):
+            try:
+                success, message = export_to_ir(company_result_dmu)
+                
+                if success:
+                    st.success(message)
+                    st.info(
+                        "Nu tillgängligt i Intäktsram → Effektiviseringskrav-tab → Importera från DEA. "
+                        "Välj OPEX eller TOTEX vid import."
                     )
-                    st.success("Export till IR klar!")
-                    st.caption(f"Fil: {export_path}")
-                    st.info(f"Metod: {ir_method} • Nu tillgängligt i IR-dekompositionen")
-                except Exception as e:
-                    st.error(f"Export misslyckades: {e}")
-        else:
-            st.info("Inga påverkbara kostnader att exportera")
+                else:
+                    st.error(message)
+                    
+            except Exception as e:
+                st.error(f"Export misslyckades: {e}")
+                import traceback
+                st.error(traceback.format_exc())
 
 
 def show_waiting_state(df_full, user_dmu, company_name):
@@ -430,7 +360,6 @@ def show_waiting_state(df_full, user_dmu, company_name):
     
     st.info("Välj parametrar och klicka på 'Kör DEA' för att analysera ditt företags effektivitet")
     
-    # Visa företagsinformation
     with st.expander("Företagsinformation"):
         company_data = df_full[df_full['DMU'] == user_dmu]
         if not company_data.empty:
@@ -447,116 +376,41 @@ def show_waiting_state(df_full, user_dmu, company_name):
                 st.metric("Totalt i analys", len(df_full))
 
 
-def calculate_company_paverkbara_costs(company_result, dea_data, user_dmu, method='OPEX'):
+def export_to_ir(company_result):
     """
-    Beräknar påverkbara kostnader för företaget.
+    Exporterar effektiviseringskrav till Intäktsram.
     
-    UPPDATERAD: Stöd för method-parameter och working_df.
+    ENKEL VERSION: Exporterar bara DMU, REId, Effkrav_proc.
+    Metod (OPEX/TOTEX) väljs vid import i Intäktsram-tabben.
+    IR-baseline laddas lokalt i intäktsramen när beräkning sker.
+    
+    Args:
+        company_result: DataFrame med DEA-resultat för företaget (DMU + REId + Effkrav_proc)
+        
+    Returns:
+        Tuple (success: bool, message: str)
     """
-    
     try:
-        ir_baseline_file = "intaktsram/data/Löpande kostnader från SDF 2024-27.xlsx"
-        if not Path(ir_baseline_file).exists():
-            return None
+        # Verifiera att vi har nödvändiga kolumner
+        required_cols = ['DMU', 'REId', 'Effkrav_proc']
+        missing_cols = [col for col in required_cols if col not in company_result.columns]
         
-        # NYTT: Bygg working_df från DEA-data och baseline
-        working_df = build_working_df_from_dea(dea_data, user_dmu, ir_baseline_file)
+        if missing_cols:
+            return False, f"DEA-resultat saknar kolumner: {missing_cols}"
         
-        if working_df is None:
-            st.warning("Kunde inte bygga working_df för CAPEX-värden")
-            return None
+        if company_result['REId'].isna().all():
+            return False, "Alla REId är None i DEA-resultat"
         
-        # Anropa med method och working_df
-        export_data, metadata = calculate_ir_paverkbara_from_file(
-            dea_result=company_result,
-            ir_baseline_file=ir_baseline_file,
-            working_df=working_df,
-            method=method
+        # Exportera med ENKEL metod (bara effektiviseringskrav)
+        data_path, meta_path = export_effektiviseringskrav_scenario(
+            dea_result=company_result
         )
         
-        if export_data is None or export_data.empty:
-            return None
-        
-        return {
-            'baseline_4yr': export_data['Paverkbara_Baseline_4yr'].sum(),
-            'target_4yr': export_data['Paverkbara_Target'].sum(),
-            'reduction_4yr': export_data['Total_Reduction_tkr'].sum(),
-            'reid_count': len(export_data),
-            'method': method,
-            'detailed_data': export_data
-        }
+        filename = Path(data_path).name
+        return True, f"✅ Export klar! Fil: {filename}"
         
     except Exception as e:
-        st.error(f"Fel vid beräkning av påverkbara kostnader: {e}")
-        import traceback
-        st.error(traceback.format_exc())
-        return None
-
-
-def build_working_df_from_dea(dea_data, user_dmu, ir_baseline_file):
-    """
-    NYTT: Bygger working_df från DEA-data och IR-baseline.
-    
-    Detta behövs för att TOTEX-metoden ska kunna hämta CAPEX-värden.
-    """
-    
-    try:
-        # Ladda IR baseline för REId-struktur
-        ir_baseline = load_baseline_data(ir_baseline_file)
-        
-        # Filtrera till företagets REId:s
-        company_reids = ir_baseline[ir_baseline['DMU'] == user_dmu]['REId'].tolist()
-        working_df = ir_baseline[ir_baseline['REId'].isin(company_reids)].copy()
-        
-        # Hämta CAPEX från DEA-data (kan vara scenario eller baseline)
-        if dea_data is not None and user_dmu in dea_data['DMU'].values:
-            company_dea = dea_data[dea_data['DMU'] == user_dmu].iloc[0]
-            
-            # Identifiera vilken CAPEX-kolumn som användes i DEA
-            # Prio: scenario-CAPEX > baseline-CAPEX
-            capex_col = None
-            if 'CAPEX_2024_wacc_0p0475' in company_dea.index and pd.notna(company_dea.get('CAPEX_2024_wacc_0p0475')):
-                capex_col = 'CAPEX_2024_wacc_0p0475'
-            elif 'CAPEX' in company_dea.index:
-                capex_col = 'CAPEX'
-            
-            if capex_col:
-                # Omvandla från årssnitt till 4-årsperiod
-                capex_4yr = company_dea[capex_col] * 4
-                
-                # Applicera på alla företagets REId (fördela jämnt)
-                capex_per_reid = capex_4yr / len(company_reids) if len(company_reids) > 0 else capex_4yr
-                working_df['Kapitalkostnad_Total'] = capex_per_reid
-        
-        return working_df
-        
-    except Exception as e:
-        print(f"Fel vid byggande av working_df: {e}")
-        import traceback
-        print(traceback.format_exc())
-        return None
-
-
-def export_effkrav_to_ir(company_result, scenario_name, method='OPEX'):
-    """
-    Exporterar effektiviseringskrav-procent till IR.
-    
-    UPPDATERAD: Exporterar bara krav-procent, inte beräknade kostnader.
-    IR ansvarar för att applicera kravet enligt vald metod.
-    """
-    
-    try:
-        # UPPDATERAD: Använd nya export-funktionen som bara exporterar krav-procent
-        data_path, meta_path, summary = export_effektiviseringskrav_scenario(
-            dea_result=company_result,
-            scenario_name=scenario_name,
-            session_state=st.session_state
-        )
-        
-        return data_path
-        
-    except Exception as e:
-        raise Exception(f"Export misslyckades: {e}")
+        return False, f"Export misslyckades: {str(e)}"
 
 
 def create_excel_export(result, company_result, company_name):
@@ -574,14 +428,14 @@ def create_excel_export(result, company_result, company_name):
         all_results['Mitt_företag'] = all_results['DMU'].isin(company_result['DMU'])
         all_results.to_excel(writer, sheet_name="Alla_företag", index=False)
         
-        # Enkel sammanfattning
+        # Sammanfattning
         summary_data = {
-            'Mått': ['Företag totalt', 'Mitt företags ranking', 'Medeleffektivitet', 'Mitt företags effektivitet'],
+            'Mått': ['Företag totalt', 'Medeleffektivitet', 'Mitt företags effektivitet', 'Mitt företags krav'],
             'Värde': [
                 len(result),
-                "N/A",  # Behöver beräknas från ranking-logiken
                 f"{result[~result['is_outlier']]['Effektivitet'].mean():.3f}",
-                f"{company_result.iloc[0]['Effektivitet']:.3f}"
+                f"{company_result.iloc[0]['Effektivitet']:.3f}",
+                f"{company_result.iloc[0]['Effkrav_proc']*100:.2f}%"
             ]
         }
         pd.DataFrame(summary_data).to_excel(writer, sheet_name="Sammanfattning", index=False)
@@ -589,7 +443,6 @@ def create_excel_export(result, company_result, company_name):
     return buffer
 
 
-# Huvudfunktion som kallas från pages
 if __name__ == "__main__":
     show_foretag_effektivitet()
 

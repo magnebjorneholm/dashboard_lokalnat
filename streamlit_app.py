@@ -91,7 +91,8 @@ elif st.session_state.user_role == "company":
     st.Page("pages/hem_foretag.py", title="Hem"),
     st.Page("pages/foretag/foretag_intaktsram.py", title="Intäktsram"),
     st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
-    st.Page("pages/foretag/foretag_effektivitet.py", title="DEA och påverkbara kostnader")
+    st.Page("pages/foretag/foretag_effektivitet.py", title="DEA och påverkbara kostnader"),
+    st.Page("pages/foretag/ny_foretag_IR.py", title="IR-dekomposition")
     ]
 
 else:

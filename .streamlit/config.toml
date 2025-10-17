@@ -1,85 +1,53 @@
 # .streamlit/config.toml
+# Giltig konfiguration för Streamlit - professionell mörkblå profil för elmarknadsanalys
+# Innehåller ENDAST färger som stöds av Streamlit
 
-# ============================================================================
-# THEME - HUVUDTEMA
-# ============================================================================
 [theme]
-# === BAS-TEMA ===
 base = "light"
 
-# === FÄRGER ===
-primaryColor = "#0066CC"
-backgroundColor = "#F5F7FA"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#2C3E50"
+# === GRUNDFÄRGER (ALLA DESSA FUNGERAR) ===
+primaryColor = "#0066CC"              # Primär blå för länkar och interaktiva element
+backgroundColor = "#F5F7FA"           # Ljus huvudbakgrund
+secondaryBackgroundColor = "#FFFFFF"  # Vit för innehållscontainers
+textColor = "#2C3E50"                 # Mörkgrå text för läsbarhet
 
-# === LINKS ===
-linkColor = "#0066CC"
-linkUnderline = false
-
-# === TYPOGRAFI ===
+# Typografi (endast font stöds)
 font = "sans-serif"
-baseFontSize = 16
-baseFontWeight = 400
 
-headingFont = "sans-serif"
-headingFontWeights = [700, 600, 600, 600, 600, 600]
-
-codeFont = "monospace"
-codeBackgroundColor = "#F0F2F6"
-
-# === BORDERS & RADIER ===
-baseRadius = "4px"
-buttonRadius = "4px"
-borderColor = "#E2E8F0"
-dataframeBorderColor = "#CBD5E1"
-dataframeHeaderBackgroundColor = "#1E3A5F"
-showWidgetBorder = true
-showSidebarBorder = true
-
-# === FÄRGPALETT ===
-greenColor = "#10B981"
-yellowColor = "#F59E0B"
-redColor = "#DC2626"
-
-# === CHART-FÄRGER ===
-chartCategoricalColors = [
-    "#0066CC",
-    "#0088FF",
-    "#10B981",
-    "#F59E0B",
-    "#DC2626"
-]
-
-# ============================================================================
-# THEME.SIDEBAR - SIDEBAR-TEMA (Separat sektion!)
-# ============================================================================
+# Sidebar
 [theme.sidebar]
-backgroundColor = "#1E3A5F"
+backgroundColor = "#1E3A5F"        # Mörkblå sidebar
 secondaryBackgroundColor = "#2C3E50"
-textColor = "#FFFFFF"
-primaryColor = "#0088FF"
-linkColor = "#FFFFFF"
+textColor = "#FFFFFF"              # Vit text i sidebar
+primaryColor = "#0088FF"           # Ljusare blå för länkar i sidebar
 
-# ============================================================================
-# SERVER - ENDAST EN GÅNG!
-# ============================================================================
+# Server
 [server]
 port = 8501
+headless = false
 runOnSave = false
-maxUploadSize = 200
 fileWatcherType = "poll"
+maxUploadSize = 200
+maxMessageSize = 200
+enableCORS = true
+enableXsrfProtection = true
+enableWebsocketCompression = false
 
-# ============================================================================
-# CLIENT
-# ============================================================================
 [client]
+showErrorDetails = true
 toolbarMode = "auto"
 showSidebarNavigation = true
 
-# ============================================================================
-# RUNNER
-# ============================================================================
+[browser]
+serverAddress = "localhost"
+serverPort = 8501
+gatherUsageStats = false
+
 [runner]
 magicEnabled = true
 fastReruns = true
+enforceSerializableSessionState = false
+
+[logger]
+level = "info"
+messageFormat = "%(asctime)s %(message)s"

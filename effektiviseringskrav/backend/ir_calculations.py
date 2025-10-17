@@ -327,14 +327,14 @@ def calculate_ir_paverkbara_export(
         return results
     
     # SCENARIO-BERÄKNING (med vald metod)
-    scn_results = calculate_exact_yearly_values(DT, Delta, e_scn)
+    scn_results = calculate_exact_yearly_values(DT, DU_opex, e_scn)
     
     # BASELINE-BERÄKNING (med vald metod)
     if method == 'OPEX':
-        base_results = calculate_exact_yearly_values(DT, Delta, e_base)
+        base_results = calculate_exact_yearly_values(DT, DU_opex, e_base)
     elif method == 'TOTEX':
         # För TOTEX baseline: använd samma CAPEX men baseline-krav
-        base_results = calculate_exact_yearly_values(DT, Delta, e_base)
+        base_results = calculate_exact_yearly_values(DT, DU_opex, e_base)
     
     # EXTRAHERA RESULTAT
     # Scenario-värden
