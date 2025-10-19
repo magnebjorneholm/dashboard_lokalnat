@@ -10,14 +10,7 @@ import numpy as np
 from pathlib import Path
 from typing import Optional, Dict, Any
 from pandas.api.types import is_categorical_dtype
-import psutil
 import os
-
-
-def get_memory_usage():
-    """Returnerar minnesanvändning i MB"""
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / 1024 / 1024
 
 
 def load_dmu_capbase_a(dmu_id: int) -> pd.DataFrame:
@@ -61,8 +54,6 @@ def calculate_ages_and_nuav(df: pd.DataFrame) -> pd.DataFrame:
     Beräknar åldrar och NUAV för alla tidsperioder (229-236).
     Refaktoriserad version av 5_ages_and_nuav.py
     """
-    mem_start = get_memory_usage()
-    print(f"[MINNE] Före ages_and_nuav: {mem_start:.1f} MB")
     
     result_df = df.copy()
     
@@ -71,9 +62,6 @@ def calculate_ages_and_nuav(df: pd.DataFrame) -> pd.DataFrame:
         result_df = process_time_period(result_df, time)
     
     result_df = result_df.copy()
-    
-    mem_end = get_memory_usage()
-    print(f"[MINNE] Efter ages_and_nuav: {mem_end:.1f} MB (Δ: {mem_end-mem_start:+.1f} MB)")
     
     return result_df
 
@@ -150,8 +138,6 @@ def calculate_depreciation_single_dmu(df: pd.DataFrame) -> Dict[str, float]:
     Refaktoriserad version av 6_deprecation.py
     OPTIMERAD: Batch-tillägg av kolumner för bättre prestanda
     """
-    mem_start = get_memory_usage()
-    print(f"[MINNE] Före depreciation: {mem_start:.1f} MB")
     
     results = {}
     new_cols = {}  # Samla alla nya kolumner här
@@ -210,9 +196,6 @@ def calculate_depreciation_single_dmu(df: pd.DataFrame) -> Dict[str, float]:
         else:
             results[f'dep_tail_{t}'] = 0
     
-    mem_end = get_memory_usage()
-    print(f"[MINNE] Efter depreciation: {mem_end:.1f} MB (Δ: {mem_end-mem_start:+.1f} MB)")
-    
     return results
 
 
@@ -222,8 +205,6 @@ def calculate_returns_single_dmu(df: pd.DataFrame, interest_rate: float = 0.0453
     Refaktoriserad version av 7_returns.py
     OPTIMERAD: Batch-tillägg av kolumner för bättre prestanda
     """
-    mem_start = get_memory_usage()
-    print(f"[MINNE] Före returns: {mem_start:.1f} MB")
     
     results = {}
     
@@ -285,9 +266,6 @@ def calculate_returns_single_dmu(df: pd.DataFrame, interest_rate: float = 0.0453
         if ret_tail in df.columns:
             ret_tail_total = df.groupby(['cat_encode', 'id_network'])[ret_tail].sum().sum() / 1000
             results[ret_tail] = ret_tail_total
-
-    mem_end = get_memory_usage()
-    print(f"[MINNE] Efter returns: {mem_end:.1f} MB (Δ: {mem_end-mem_start:+.1f} MB)")
     
     return results
 
