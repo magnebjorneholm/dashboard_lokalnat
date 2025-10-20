@@ -21,6 +21,8 @@ from foretag.app.kapitalbas_data_loader import (
     validate_company_data
 )
 
+from intaktsram.app.data_loader import get_company_display_name
+
 from kapitalbas.beräkningsfiler.Beräkningskedja_capcost.data_upload_validator import (
     get_validated_data_for_berakningskedja, 
     apply_lifetime_scenario
@@ -69,21 +71,16 @@ if st.session_state.user_role != "company":
 def show_foretag_berakningskedja():
     """Huvudfunktion för företagsspecifik beräkningskedja"""
     
-    st.set_page_config(page_title="Mitt företag - Beräkningskedja", layout="wide")
-    st.title("Mitt företag - Beräkningskedja för kapitalkostnader")
-    
     # Hämta företagsinformation
     user_dmu = get_user_dmu()
     company_info = load_reconciliation_foretag_info()
+    company_name = company_info.get('company_name', 'Ditt företag')
     
     if user_dmu is None:
         st.error("Ingen DMU hittades för inloggad användare")
         return
     
-    company_name = company_info.get('company_name', 'Ditt företag')
-    
-    st.markdown(f"### Stegvis beräkning för {company_name} (DMU {user_dmu})")
-    st.markdown("Går igenom beräkningskedjan med exakt samma logik som huvudversionen.")
+    st.markdown(f"### Beräkningskedja för kapitalkostnader som går in i intäktsramen")
     
     # Validera data
     validation = validate_company_data()
@@ -105,40 +102,36 @@ def show_foretag_berakningskedja():
     steps_state = st.session_state[session_key]
     
     # Huvudtabs för beräkningssteg
-    st.header("Beräkningssteg")
-    
     step_tabs = st.tabs([
-        "Steg 5: Åldrar & NUAV",
-        "Steg 6: Avskrivningar", 
+        "Steg 1: Åldrar & NUAV",
+        "Steg 2: Avskrivningar", 
         "WACC-kalkylator",
-        "Steg 7: Avkastning",
-        "Steg 8: Sammanställning",
+        "Steg 3: Avkastning",
+        "Steg 4: Sammanställning",
         "DEA-export"
     ])
     
     with step_tabs[0]:
-        run_company_step_5_ages_nuav(user_dmu, steps_state, company_name)
+        run_company_step_1_ages_nuav(user_dmu, steps_state, company_name)
 
     with step_tabs[1]:
-        run_company_step_6_depreciation(user_dmu, steps_state, company_name)
+        run_company_step_2_depreciation(user_dmu, steps_state, company_name)
     
     with step_tabs[2]:
         run_company_wacc_calculator(company_name)
     
     with step_tabs[3]:
-        run_company_step_7_returns(user_dmu, steps_state, company_name)
+        run_company_step_3_returns(user_dmu, steps_state, company_name)
     
     with step_tabs[4]:
-        run_company_step_8_compile_and_validate(user_dmu, steps_state, company_name)
+        run_company_step_4_compile_and_validate(user_dmu, steps_state, company_name)
     
     with step_tabs[5]:
         run_company_dea_export(user_dmu, steps_state, company_name)
 
 
-def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 5: Beräkna åldrar och NUAV-värden för företaget"""
-    
-    st.subheader(f"Steg 5: Åldrar och NUAV-värden för {company_name}")
+def run_company_step_1_ages_nuav(dmu_id: int, steps_state: dict, company_name: str):
+    """Steg 1: Beräkna åldrar och NUAV-värden för företaget"""
     st.write("Beräknar komponenternas ålder och nuanskaffningsvärden för varje tidsperiod (229-236)")
 
     capbase_data, is_custom_data = get_validated_data_for_berakningskedja(
@@ -149,47 +142,24 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
 
     capbase_data = apply_lifetime_scenario(capbase_data)
     
-    # Visa indata-sammanfattning
-    with st.expander("Indata-översikt för ditt företag"):
-        st.write("**Viktiga kolumner från capbase_a:**")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("- `time_from`: Komponentens startår")
-            st.write("- `time_invest`: Investeringsår (för nya komponenter)")
-            st.write("- `capbase_existing`: 1=befintlig, 0=ny investering")
-        with col2:
-            st.write("- `ekdep`: Ekonomisk livslängd")
-            st.write("- `maxdep`: Maximal livslängd")
-            st.write("- `nuav_2022`: Nuanskaffningsvärde 2022")
-        
-        validation = validate_input_data(capbase_data)
-        if not validation['valid']:
-            st.warning("Problem med indata:")
-            for error in validation['errors']:
-                st.error(f"• {error}")
-        
-        if validation['warnings']:
-            for warning in validation['warnings']:
-                st.warning(f"• {warning}")
-    
     # Kör beräkning
-    if st.button("Kör Steg 5: Åldrar & NUAV", key=f"step5_button_{dmu_id}"):
+    if st.button("Kör Steg 1: Åldrar & NUAV", key=f"step1_button_{dmu_id}"):
         with st.spinner("Beräknar åldrar och NUAV för ditt företag..."):
             try:
                 result_data = calculate_ages_and_nuav(capbase_data)
-                steps_state['step_data'][5] = result_data
-                steps_state['completed_steps'].add(5)
-                steps_state['current_step'] = max(steps_state['current_step'], 5)
-                st.success("Steg 5 slutfört!")
+                steps_state['step_data'][1] = result_data
+                steps_state['completed_steps'].add(1)
+                steps_state['current_step'] = max(steps_state['current_step'], 1)
+                st.success("Steg 1 slutfört!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Fel i steg 5: {e}")
+                st.error(f"Fel i steg 1: {e}")
                 st.exception(e)
     
     # Visa resultat om steg är slutfört
-    if 5 in steps_state['completed_steps']:
-        st.success(" Steg 5 slutfört")
-        result_data = steps_state['step_data'][5]
+    if 1 in steps_state['completed_steps']:
+        st.success("✓ Steg 1 slutfört")
+        result_data = steps_state['step_data'][1]
         
         # Sammanfattning för företaget
         col1, col2, col3 = st.columns(3)
@@ -201,32 +171,15 @@ def run_company_step_5_ages_nuav(dmu_id: int, steps_state: dict, company_name: s
         with col3:
             nuav_229 = result_data.get('nuav_ord_229', pd.Series(0)).sum()
             st.metric("NUAV ordinarie 2024H1 (tkr)", f"{nuav_229:,.0f}")
-        
-        # Visualiseringar
-        with st.expander("Analys - åldersfördelning för ditt företag"):
-            if 'age_component_229' in result_data.columns and 'cat_encode' in result_data.columns:
-                
-                # Histogram över åldersfördelning per kategori
-                fig_age = px.histogram(
-                    result_data, 
-                    x='age_component_229', 
-                    color='cat_encode',
-                    title=f'Åldersfördelning per komponentkategori 2024 - {company_name}',
-                    labels={'age_component_229': 'Ålder (år)', 'count': 'Antal komponenter'},
-                    nbins=20
-                )
-                fig_age.update_layout(height=400)
-                st.plotly_chart(fig_age, width='stretch')
 
-
-def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 6: Beräkna avskrivningar för företaget"""
+def run_company_step_2_depreciation(dmu_id: int, steps_state: dict, company_name: str):
+    """Steg 2: Beräkna avskrivningar för företaget"""
     
-    st.subheader(f"Steg 6: Avskrivningar för {company_name}")
+    st.subheader(f"Steg 2: Avskrivningar för {company_name}")
     st.write("Beräknar ordinarie och svansavskrivningar baserat på åldrar och livslängder")
     
-    if 5 not in steps_state['completed_steps']:
-        st.warning("Slutför först Steg 5")
+    if 1 not in steps_state['completed_steps']:
+        st.warning("Slutför steg 1 först")
         return
     
     # Visa metodik
@@ -238,24 +191,24 @@ def run_company_step_6_depreciation(dmu_id: int, steps_state: dict, company_name
         st.write("Där age_reg justeras för udda åldrar")
     
     # Kör beräkning
-    if st.button("Kör Steg 6: Avskrivningar", key=f"step6_button_{dmu_id}"):
+    if st.button("Kör Steg 2: Avskrivningar", key=f"step2_button_{dmu_id}"):
         with st.spinner(f"Beräknar avskrivningar för {company_name}..."):
             try:
-                input_data = steps_state['step_data'][5]
+                input_data = steps_state['step_data'][1]
                 result_data = calculate_depreciation_single_dmu(input_data)
-                steps_state['step_data'][6] = result_data
-                steps_state['completed_steps'].add(6)
-                steps_state['current_step'] = max(steps_state['current_step'], 6)
-                st.success("Steg 6 slutfört!")
+                steps_state['step_data'][2] = result_data
+                steps_state['completed_steps'].add(2)
+                steps_state['current_step'] = max(steps_state['current_step'], 2)
+                st.success("Steg 2 slutfört!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Fel i steg 6: {e}")
+                st.error(f"Fel i steg 2: {e}")
                 st.exception(e)
     
     # Visa resultat
-    if 6 in steps_state['completed_steps']:
-        st.success(" Steg 6 slutfört")
-        result_data = steps_state['step_data'][6]
+    if 2 in steps_state['completed_steps']:
+        st.success("✓ Steg 2 slutfört")
+        result_data = steps_state['step_data'][2]
         
         # KPI för företaget
         col1, col2 = st.columns(2)
@@ -271,7 +224,7 @@ def run_company_wacc_calculator(company_name: str):
     """WACC-kalkylator (importerad från översikt.py)"""
     
     st.subheader(f"WACC-kalkylator för {company_name}")
-    st.write("Beräkna kalkylränta från grundparametrar enligt Ei:s metodik")
+    st.write("Beräkna kalkylränta från grundparametrar enligt CAPM")
     
     # Använd samma defaults som i översikt.py
     defaults = {
@@ -389,7 +342,7 @@ def run_company_wacc_calculator(company_name: str):
     k1.metric("Re (nominell, efter skatt)", f"{Re*100:.2f} %")
     k2.metric("Rd (nominell, före skatt)", f"{Rd*100:.2f} %")
     k3.metric("WACC (nominell, före skatt)", f"{Wn*100:.2f} %")
-    k4.metric("WACC (real, före skatt)", f"{Wr*100:.2f} %", help="Detta värde används i Steg 7")
+    k4.metric("WACC (real, före skatt)", f"{Wr*100:.2f} %", help="Detta värde används i Steg 3")
 
     # Kontrollknappar
     def _reset_ei_defaults():
@@ -399,32 +352,32 @@ def run_company_wacc_calculator(company_name: str):
 
     cc1, cc2 = st.columns([1, 1])
     with cc1:
-        if st.button("Använd denna kalkylränta i Steg 7", type="primary"):
+        if st.button("Använd denna kalkylränta i Steg 3", type="primary"):
             st.session_state["r_new"] = round(float(Wr), 4)
-            st.success(f"Satt r_new = {st.session_state['r_new']:.4f} för användning i Steg 7")
+            st.success(f"Satt r_new = {st.session_state['r_new']:.4f} för användning i Steg 3")
     
     with cc2:
         st.button("Återställ till Ei-standard", on_click=_reset_ei_defaults)
 
-    # Visa nuvarande värde som kommer användas i Steg 7
+    # Visa nuvarande värde som kommer användas i Steg 3
     current_r_new = st.session_state.get("r_new", R_OLD)
     if abs(current_r_new - Wr) > 1e-6:
-        st.info(f" Aktuell WACC för Steg 7: {current_r_new:.4f} (klicka 'Använd denna kalkylränta' för att uppdatera)")
+        st.info(f"Aktuell WACC för Steg 3: {current_r_new:.4f} (klicka 'Använd denna kalkylränta' för att uppdatera)")
     else:
-        st.success(f" Denna WACC ({Wr:.4f}) kommer användas i Steg 7")
+        st.success(f"✓ Denna WACC ({Wr:.4f}) kommer användas i Steg 3")
 
     # Metodikruta (importerad från översikt.py)
     _render_methodology_info()
 
 
-def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 7: Beräkna avkastning för företaget"""
+def run_company_step_3_returns(dmu_id: int, steps_state: dict, company_name: str):
+    """Steg 3: Beräkna avkastning för företaget"""
     
-    st.subheader(f"Steg 7: Avkastning för {company_name}")
+    st.subheader(f"Steg 3: Avkastning för {company_name}")
     st.write("Beräknar kapitalavkastning baserat på åldersjusterad kapitalbas")
     
-    if 6 not in steps_state['completed_steps']:
-        st.warning("Slutför först Steg 6")
+    if 2 not in steps_state['completed_steps']:
+        st.warning("Slutför steg 2 först")
         return
 
     # WACC-input
@@ -459,25 +412,25 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
         st.latex(r"return\_tail = WACC \times capbase\_left\_tail / 2")
     
     # Kör avkastningsberäkning
-    if st.button("Kör Steg 7: Avkastning", key=f"step7_button_{dmu_id}"):
+    if st.button("Kör Steg 3: Avkastning", key=f"step3_button_{dmu_id}"):
         with st.spinner(f"Beräknar avkastning för {company_name} med WACC {current_wacc:.4f}..."):
             try:
-                input_data = steps_state['step_data'][5]
+                input_data = steps_state['step_data'][1]
                 result_data = calculate_returns_single_dmu(input_data, interest_rate=current_wacc)
-                steps_state['step_data'][7] = result_data
-                steps_state['step_data'][7]['used_wacc'] = current_wacc
-                steps_state['completed_steps'].add(7)
-                steps_state['current_step'] = max(steps_state['current_step'], 7)
-                st.success("Steg 7 slutfört!")
+                steps_state['step_data'][3] = result_data
+                steps_state['step_data'][3]['used_wacc'] = current_wacc
+                steps_state['completed_steps'].add(3)
+                steps_state['current_step'] = max(steps_state['current_step'], 3)
+                st.success("Steg 3 slutfört!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Fel i steg 7: {e}")
+                st.error(f"Fel i steg 3: {e}")
                 st.exception(e)
     
     # Visa resultat
-    if 7 in steps_state['completed_steps']:
-        st.success(" Steg 7 slutfört")
-        result_data = steps_state['step_data'][7]
+    if 3 in steps_state['completed_steps']:
+        st.success("✓ Steg 3 slutfört")
+        result_data = steps_state['step_data'][3]
         used_wacc = result_data.get('used_wacc', R_OLD)
         
         st.info(f"Beräkning genomförd med WACC: {used_wacc:.4f}")
@@ -492,36 +445,36 @@ def run_company_step_7_returns(dmu_id: int, steps_state: dict, company_name: str
             st.metric("Total svansavkastning (tkr)", f"{ret_tail_total:,.0f}")
 
 
-def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, company_name: str):
-    """Steg 8: Sammanställ kapitalkostnad och validera mot facit + IR-export"""
+def run_company_step_4_compile_and_validate(dmu_id: int, steps_state: dict, company_name: str):
+    """Steg 4: Sammanställ kapitalkostnad och validera mot facit + IR-export"""
     
-    st.subheader(f"Steg 8: Sammanställning för {company_name}")
+    st.subheader(f"Steg 4: Sammanställning för {company_name}")
     st.write("Kombinerar avskrivningar och avkastning till total kapitalkostnad")
     
-    if not (6 in steps_state['completed_steps'] and 7 in steps_state['completed_steps']):
-        st.warning("Slutför först Steg 6 och 7")
+    if not (2 in steps_state['completed_steps'] and 3 in steps_state['completed_steps']):
+        st.warning("Slutför steg 1, 2 och 3 först")
         return
     
     # Kör beräkning
-    if st.button("Kör Steg 8: Sammanställning", key=f"step8_button_{dmu_id}"):
+    if st.button("Kör Steg 4: Sammanställning", key=f"step4_button_{dmu_id}"):
         with st.spinner(f"Sammanställer kapitalkostnad för {company_name}..."):
             try:
-                dep_data = steps_state['step_data'][6]
-                ret_data = steps_state['step_data'][7]
+                dep_data = steps_state['step_data'][2]
+                ret_data = steps_state['step_data'][3]
                 result_data = compile_capcost_single_dmu(dep_data, ret_data, dmu_id)
-                steps_state['step_data'][8] = result_data
-                steps_state['completed_steps'].add(8)
-                steps_state['current_step'] = max(steps_state['current_step'], 8)
-                st.success("Steg 8 slutfört!")
+                steps_state['step_data'][4] = result_data
+                steps_state['completed_steps'].add(4)
+                steps_state['current_step'] = max(steps_state['current_step'], 4)
+                st.success("Steg 4 slutfört!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Fel i steg 8: {e}")
+                st.error(f"Fel i steg 4: {e}")
                 st.exception(e)
     
     # Visa resultat
-    if 8 in steps_state['completed_steps']:
-        st.success(" Steg 8 slutfört")
-        result_data = steps_state['step_data'][8]
+    if 4 in steps_state['completed_steps']:
+        st.success("✓ Steg 4 slutfört")
+        result_data = steps_state['step_data'][4]
         
         # Beräkna KPIs
         calculated_kpis = {
@@ -531,7 +484,6 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
             'return_ord': result_data['return_ord'].sum(),
             'return_tail': result_data['return_tail'].sum()
         }
-        
         
         # Härledda KPIs
         calculated_kpis['total_kapitalforslitning'] = calculated_kpis['dep_ord'] + calculated_kpis['dep_tail']
@@ -555,10 +507,8 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
             with col3:
                 st.metric("Total kapitalförslitning (tkr)", f"{calculated_kpis['total_kapitalforslitning']:,.0f}")
             
-            st.info(f"Facit-data är inte tillgänglig för DMU {dmu_id} i demonstrationsversionen")
-            
-            with st.expander("Breakdown per tidsperiod"):
-                st.dataframe(result_data, width='stretch')
+            st.info(f"Hittar inte facit, visar endast beräknade värden för {company_name}")
+    
         
         else:
             # Automatisk validering med facit
@@ -627,76 +577,58 @@ def run_company_step_8_compile_and_validate(dmu_id: int, steps_state: dict, comp
         
         # IR-EXPORT SEKTION
         st.markdown("---")
-        st.markdown("#### IR-export (endast ditt företag)")
-        st.write("Exportera detaljerad kapitalkostnad för IR-dekomposition")
-        st.caption("Använder beräknad WACC från Steg 7")
+        st.markdown("#### Exportera kapitalkostnader till IR-dekomposition" )
         
         # Export-förhandsvisning
-        if st.button(" Förhandsgranska IR-export", type="secondary"):
+        if st.button("Förhandsgranska IR-export", type="secondary"):
             try:
                 ir_preview = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
                 
                 st.markdown("**Förhandsvisning av IR-export:**")
                 display_cols = ['DMU', 'Företag', 'Kapitalkostnad_Ny', 'Avskrivningar_Ny', 'Avkastning_Ny', 'r_new']
-                st.dataframe(ir_preview[display_cols], width='stretch', hide_index=True)
+                st.dataframe(ir_preview[display_cols], use_container_width=True, hide_index=True)
                 
             except Exception as e:
                 st.error(f"Förhandsvisning misslyckades: {e}")
         
-        # Export-knapp
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(" Exportera till IR-dekomposition", type="primary"):
-                try:
-                    ir_data = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
-                    ir_path = execute_ir_export(ir_data, company_name)
-                    
-                    st.success("IR-export slutförd!")
-                    st.caption(f"Exporterat till: {ir_path}")
-                    
-                    with st.expander("Export-detaljer"):
-                        st.write("**Exporterad data:**")
-                        st.dataframe(ir_data, width='stretch', hide_index=True)
-                    
-                except Exception as e:
-                    st.error(f"IR-export misslyckades: {e}")
-                    import traceback
-                    with st.expander("Teknisk felinfo"):
-                        st.code(traceback.format_exc())
         
-        with col2:
-            st.info(" Tips: Använd DEA-export tab för att exportera WACC-scenarier för alla företag")
+        if st.button("Exportera till IR-dekomposition", type="primary"):
+            try:
+                ir_data = prepare_ir_export_from_berakningskedja(steps_state, dmu_id, company_name)
+                ir_path = execute_ir_export(ir_data, company_name)
+                st.success("IR-export slutförd!")
+                st.caption(f"Exporterat till: {ir_path}")
+                    
+                with st.expander("Export-detaljer"):
+                    st.write("**Exporterad data:**")
+                    st.dataframe(ir_data, use_container_width=True, hide_index=True)
+                    
+            except Exception as e:
+                st.error(f"IR-export misslyckades: {e}")
+                import traceback
+                with st.expander("Teknisk felinfo"):
+                    st.code(traceback.format_exc())
+        
 
 
 def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
     """DEA-export för alla företag med metodologisk korrekthet"""
     
     st.subheader(f"DEA-export (alla företag)")
-    st.write("Exportera WACC-scenarier för ALLA företag för metodologiskt korrekt effektivitetsanalys")
-    
-    # Förklaring
-    st.info("""
-    **Metodologisk viktighet:** DEA-analysen kräver att alla DMU:er justeras med samma WACC 
-    för rättvis jämförelse. Om bara ditt företag får ny WACC medan andra behåller 4.53%, 
-    blir effektivitetsjämförelsen snedvriden.
-    """)
-    
-    # WACC-input
-    st.markdown("#### WACC-scenario för alla företag")
+    st.write("Exportera WACC-scenarier för alla företag för att undvika snedvriden DEA")
     
     dea_wacc = st.number_input(
-        "WACC för DEA-scenario (appliceras på ALLA DMU)",
+        "Ange WACC (real, före skatt) för DEA-scenario",
         min_value=0.0,
         max_value=0.15,
         value=float(st.session_state.get("r_new", R_OLD)),
         step=0.0001,
         format="%.4f",
-        help="Denna WACC appliceras på alla DMU:er för rättvis jämförelse"
     )
     
     # Förhandsvisning
-    if st.button(" Förhandsgranska DEA-export", type="secondary"):
-        with st.spinner("Förbereder förhandsvisning..."):
+    if st.button("Förhandsgranska DEA-export", type="secondary"):
+        with st.spinner("Förbereder förhandsgranskning..."):
             try:
                 preview_data = prepare_dea_export_preview(dea_wacc, dmu_id)
                 
@@ -714,14 +646,14 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                 # Visa sample data
                 if len(preview_data) > 0:
                     st.markdown("**Sample data (första 10 rader):**")
-                    st.dataframe(preview_data.head(10), width='stretch', hide_index=True)
+                    st.dataframe(preview_data.head(10), use_container_width=True, hide_index=True)
                 
             except Exception as e:
                 st.error(f"Förhandsvisning misslyckades: {e}")
     
     # Export-knapp
     st.markdown("---")
-    if st.button(" Exportera DEA-scenario (alla företag)", type="primary"):
+    if st.button("Exportera DEA-scenario (alla företag)", type="primary"):
         with st.spinner("Exporterar DEA-scenario för alla företag..."):
             try:
                 dea_data, dea_tag = prepare_dea_export_all_companies(dea_wacc, dmu_id)
@@ -739,11 +671,10 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
                 with col3:
                     st.metric("Metod", "WACC-skalning")
                 
-                st.info(" Nu kan DEA jämföra alla företag under samma WACC-förutsättningar")
                 
                 with st.expander("Export-detaljer"):
                     st.write("**Exporterad data (första 10 rader):**")
-                    st.dataframe(dea_data.head(10), width='stretch', hide_index=True)
+                    st.dataframe(dea_data.head(10), use_container_width=True, hide_index=True)
                     
                     if len(dea_data) > 10:
                         st.caption(f"Visar 10 av {len(dea_data)} exporterade rader")
@@ -760,14 +691,14 @@ def run_company_dea_export(dmu_id: int, steps_state: dict, company_name: str):
 def prepare_ir_export_from_berakningskedja(steps_state: dict, dmu_id: int, company_name: str) -> pd.DataFrame:
     """Förbereder IR-export från beräkningskedjans resultat"""
     
-    if 8 not in steps_state['completed_steps']:
-        raise ValueError("Steg 8 måste vara slutfört för export")
+    if 4 not in steps_state['completed_steps']:
+        raise ValueError("Steg 4 måste vara slutfört för export")
     
-    if 7 not in steps_state['completed_steps']:
-        raise ValueError("Steg 7 måste vara slutfört för att få WACC-värde")
+    if 3 not in steps_state['completed_steps']:
+        raise ValueError("Steg 3 måste vara slutfört för att få WACC-värde")
     
-    result_data = steps_state['step_data'][8]
-    used_wacc = steps_state['step_data'][7].get('used_wacc', R_OLD)
+    result_data = steps_state['step_data'][4]
+    used_wacc = steps_state['step_data'][3].get('used_wacc', R_OLD)
     
     # Aggregera över hela perioden 2024-2027
     total_deps_ord = result_data['dep_ord'].sum()

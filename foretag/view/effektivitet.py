@@ -1,6 +1,6 @@
 # foretag/view/effektivitet.py
 # Företagsspecifik vy för effektiviseringsanalys
-# RENAD VERSION: Fokus på DEA-körning, resultat, geografisk analys och export
+# UI-VERSION: Parametrar i huvudskärmen, professionell mörkblå profil
 
 import streamlit as st
 import pandas as pd
@@ -21,6 +21,7 @@ from foretag.app.kapitalbas_data_loader import (
     get_user_dmu,
     load_reconciliation_foretag_info
 )
+from intaktsram.app.data_loader import get_company_display_name
 
 # Autentisering
 if "access_granted" not in st.session_state or not st.session_state.access_granted:
@@ -34,6 +35,7 @@ if st.session_state.user_role != "company":
 def show_foretag_effektivitet():
     """Huvudfunktion för företagsspecifik effektivitetsanalys"""
     
+    # FLYTTA TILLBAKA HIT
     user_dmu = get_user_dmu()
     company_info = load_reconciliation_foretag_info()
     
@@ -42,6 +44,7 @@ def show_foretag_effektivitet():
         return
     
     company_name = company_info.get('company_name', 'Ditt företag')
+    company_display = get_company_display_name(user_dmu, company_name)
     
     # Ladda DEA-dataset
     try:
@@ -56,21 +59,23 @@ def show_foretag_effektivitet():
         st.info("Detta kan betyda att ditt företag inte ingår i den aktuella effektivitetsanalysen")
         return
     
-    st.header(f"Effektivitetsanalys - {company_name}")
-    st.caption(f"DMU {user_dmu} • Analysera ditt företags effektivitet och exportera till Intäktsram")
+    st.title(f"DEA och effektiviseringskrav - {company_display}")
+    st.markdown("Välj parametrar för DEA-analys och beräkna effektiviseringskrav för export till Intäktsram")
     
-    # === DEA-PARAMETRAR ===
+    st.markdown("---")
+    
+    # === DEA-PARAMETRAR I HUVUDSKÄRMEN ===
     df = df_full
     
-    st.sidebar.subheader("DEA-parametrar")
+    st.subheader("DEA-parametrar")
     
     # Försök merga CAPEX-scenario från Kapitalbas
     df, scen_info = merge_capex_scenario(df)
 
     if scen_info.get("found"):
-        st.sidebar.success(f"WACC-scenario: {scen_info['tag'].replace('p','.')} • täckning {scen_info['coverage']:.0%}")
+        st.success(f"WACC-scenario aktivt: {scen_info['tag'].replace('p','.')} - täckning {scen_info['coverage']:.0%}")
     else:
-        st.sidebar.info("Inget CAPEX-scenario från Kapitalbas")
+        st.info("Inget CAPEX-scenario från Kapitalbas")
 
     # Input/Output val
     base_inputs = ["CAPEX", "OPEXp", "TOTEX"]
@@ -83,45 +88,79 @@ def show_foretag_effektivitet():
         totex_wacc_col = scen_info.get("totex_col")
         all_inputs += [c for c in [capex_wacc_col, totex_wacc_col] if c and c in df.columns]
 
-    st.sidebar.caption(
-        "**Input-alternativ:**\n"
-        "• CAPEX + OPEXp: separata kostnadstyper\n"
-        "• TOTEX: totalkostnad\n"
-        "• _wacc_: scenario från Kapitalbas"
-    )
-
-    input_cols = st.sidebar.multiselect(
-        "Välj inputvariabler", 
-        all_inputs, 
-        default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs]
-    )
+    # Layout: Två kolumner för parametrar
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Variabler**")
+        input_cols = st.multiselect(
+            "Inputvariabler", 
+            all_inputs, 
+            default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs],
+            help="Välj kostnadsvariabler som ska ingå i analysen"
+        )
+        
+        output_cols = st.multiselect(
+            "Outputvariabler", 
+            all_outputs, 
+            default=all_outputs,
+            help="Välj outputvariabler som beskriver nätets storlek och aktivitet"
+        )
+    
+    with col2:
+        st.markdown("**Modellinställningar**")
+        dea_rts = st.selectbox(
+            "Skalavkastning", 
+            ["crs", "vrs"], 
+            index=0,
+            help="CRS = Constant Returns to Scale, VRS = Variable Returns to Scale"
+        )
+        
+        use_outlier_filter = st.checkbox(
+            "Filtrera bort outliers före beräkning", 
+            value=True,
+            help="Exkluderar extremvärden från analysen"
+        )
 
     if not validate_input_combinations(input_cols, scen_info, df):
         return
-
-    output_cols = st.sidebar.multiselect("Välj outputvariabler", all_outputs, default=all_outputs)
-    use_outlier_filter = st.sidebar.checkbox("Filtrera bort outliers före beräkning", value=True)
 
     if not input_cols or not output_cols:
         st.warning("Välj minst en input och en output för att köra modellen.")
         return
 
-    # RTS och trunkering
-    st.sidebar.caption("**Skalavkastning (RTS):**")
-    dea_rts = st.sidebar.selectbox("RTS", ["crs", "vrs"], index=0, help="crs: Konstant, vrs: Variabel skalavkastning")
+    # Trunkering och krav för outliers i en egen sektion
+    st.markdown("**Trunkering och krav för outliers**")
+    col3, col4, col5 = st.columns(3)
+    
+    with col3:
+        dea_trunk_min = st.slider(
+            "Minsta trunkering", 
+            0.0, 0.3, 0.162416, 
+            step=0.005,
+            help="Lägsta effektivitetsgräns för trunkeringsintervallet"
+        )
+    
+    with col4:
+        dea_trunk_max = st.slider(
+            "Högsta trunkering", 
+            0.1, 0.5, 0.3, 
+            step=0.005,
+            help="Högsta effektivitetsgräns för trunkeringsintervallet"
+        )
+    
+    with col5:
+        dea_outlier_krav = st.slider(
+            "Årligt krav för outliers (%)",
+            1.0, 1.82, 1.0, 0.01,
+            help="Fast effektiviseringskrav för företag klassade som outliers"
+        )
 
-    st.sidebar.caption("**Trunkering av intäktsreduktion:**")
-    dea_trunk_min = st.sidebar.slider("Minsta trunkering", 0.0, 0.3, 0.162416, step=0.005)
-    dea_trunk_max = st.sidebar.slider("Högsta trunkering", 0.1, 0.5, 0.3, step=0.005)
-
-    dea_outlier_krav = st.sidebar.slider(
-        "Årligt krav för outliers (%)",
-        1.0, 1.82, 1.0, 0.01,
-        help="Fast krav för företag som klassas som outliers"
-    )
-
-    # === KÖR DEA ===
-    run_model = st.sidebar.button("Kör DEA", type="primary")
+    # Körknapp centrerad
+    st.markdown("")
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
+    with col_btn2:
+        run_model = st.button("Kör DEA-analys", type="primary", use_container_width=True)
 
     session_key = f'dea_runs_{user_dmu}'
     if session_key not in st.session_state:
@@ -158,7 +197,7 @@ def show_foretag_effektivitet():
                     'timestamp': datetime.now().isoformat()
                 }
                 
-                st.success("DEA-analys slutförd!")
+                st.success("DEA-analys slutförd")
                 
             except Exception as e:
                 st.error(f"DEA-analys misslyckades: {e}")
@@ -167,9 +206,8 @@ def show_foretag_effektivitet():
     # === VISA RESULTAT ===
     latest_key = f'latest_dea_result_{user_dmu}'
     if latest_key in st.session_state:
-        show_dea_results(st.session_state[latest_key], user_dmu, company_name)
-    else:
-        show_waiting_state(df_full, user_dmu, company_name)
+        st.markdown("---")
+        show_dea_results(st.session_state[latest_key], user_dmu, company_display)  # FIXAT: använd company_display
 
 
 def validate_input_combinations(input_cols, scen_info, df):
@@ -210,7 +248,7 @@ def validate_input_combinations(input_cols, scen_info, df):
     return True
 
 
-def show_dea_results(latest_result, user_dmu, company_name):
+def show_dea_results(latest_result, user_dmu, company_name):  # company_name innehåller nu company_display!
     """Visar DEA-resultat med fokus på företaget"""
     
     result = latest_result['result']
@@ -227,8 +265,8 @@ def show_dea_results(latest_result, user_dmu, company_name):
     # Beräkna granngap
     neighbor_gap = calculate_company_neighbor_gap(result, user_dmu)
     
-    # === FÖRETAGETS RESULTAT (5 METRICS) ===
-    st.subheader("Ditt företags resultat")
+    # === FÖRETAGETS RESULTAT ===
+    st.subheader(f"Outputs för {company_name}")  # FIXAT: använd f-string och company_name
     
     col1, col2, col3, col4, col5 = st.columns(5)
     
@@ -258,17 +296,13 @@ def show_dea_results(latest_result, user_dmu, company_name):
         if neighbor_gap is not None:
             st.metric(
                 "vs grannar",
-                f"{neighbor_gap:+.3f}",
-                delta=f"{neighbor_gap:+.3f}",
-                help="Skillnad mot 4 närmaste grannar (KNN). Positivt = bättre än grannar."
+                 f"{neighbor_gap*100:+.2f}%",
+                help="Skillnad (procentenhet) mot 4 närmaste grannar (KNN). Positivt = bättre än grannar."
             )
         else:
             st.metric("vs grannar", "N/A", help="Geografisk data saknas")
     
-    # === BRANSCHKONTEXT ===
-    st.markdown("---")
-    st.subheader("Branschkontext")
-    
+    # === ÖVERGRIPANDE STATISTIK OCH FÖRDELNINGAR ===
     n_total = len(result)
     n_outliers = result['is_outlier'].sum()
     avg_eff = result[~result["is_outlier"]]["Effektivitet"].mean()
@@ -290,16 +324,9 @@ def show_dea_results(latest_result, user_dmu, company_name):
     with col_hist2:
         display_efficiency_histogram(df_plot["Effkrav_proc"] * 100, title="Årligt effektiviseringskrav (%)")
 
-    if n_outliers > 0:
-        with st.expander(f"Visa outliers ({n_outliers} företag)"):
-            df_outliers = result[result["is_outlier"] == True][["Företag", "DMU", "Effektivitet", "Effkrav_proc"]]
-            df_outliers["Effkrav_proc"] = (df_outliers["Effkrav_proc"] * 100).round(2)
-            df_outliers = df_outliers.rename(columns={"Effkrav_proc": "Årligt krav (%)"})
-            st.dataframe(df_outliers, use_container_width=True)
-
     # === GEOGRAFISK ANALYS ===
     st.markdown("---")
-    st.header("Geografisk analys")
+    st.subheader("Geografisk analys")
     display_company_geographic_analysis(result, user_dmu, company_name)
 
     # === EXPORT ===
@@ -316,8 +343,9 @@ def show_dea_results(latest_result, user_dmu, company_name):
         st.download_button(
             label="Ladda ned som Excel",
             data=buffer.getvalue(),
-            file_name=f"dea_resultat_{company_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            file_name=f"dea_resultat_{company_name.replace(' ', '_').replace('(', '').replace(')', '')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
         )
     
     # IR-export
@@ -325,18 +353,8 @@ def show_dea_results(latest_result, user_dmu, company_name):
         st.markdown("**Export till Intäktsram**")
         st.caption("Exporterar effektiviseringskrav för användning i Intäktsram-dekomposition")
         
-        export_name = st.text_input(
-            "Export-namn", 
-            value=f"DEA_{company_name.replace(' ', '_')}", 
-            key=f"ir_export_name_{user_dmu}"
-        )
-        
-        st.info(
-            "Metod (OPEX/TOTEX) väljs vid import i Intäktsram-tabben. "
-            "Effektiviseringskravet beräknas automatiskt mot aktuell kapitalkostnad."
-        )
-        
-        if st.button("Exportera till Intäktsram", key=f"export_ir_{user_dmu}"):
+        # Ta bort user_dmu från key eftersom det kan vara utanför scope
+        if st.button("Exportera till Intäktsram", key=f"export_ir_{user_dmu}", use_container_width=True):
             try:
                 success, message = export_to_ir(company_result_dmu)
                 
@@ -355,43 +373,11 @@ def show_dea_results(latest_result, user_dmu, company_name):
                 st.error(traceback.format_exc())
 
 
-def show_waiting_state(df_full, user_dmu, company_name):
-    """Visar info medan användaren inte kört DEA än"""
-    
-    st.info("Välj parametrar och klicka på 'Kör DEA' för att analysera ditt företags effektivitet")
-    
-    with st.expander("Företagsinformation"):
-        company_data = df_full[df_full['DMU'] == user_dmu]
-        if not company_data.empty:
-            company_row = company_data.iloc[0]
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("DMU", user_dmu)
-            with col2:
-                st.metric("CAPEX (tkr)", f"{company_row['CAPEX']:,.0f}")
-            with col3:
-                st.metric("OPEXp (tkr)", f"{company_row['OPEXp']:,.0f}")
-            with col4:
-                st.metric("Totalt i analys", len(df_full))
-
-
 def export_to_ir(company_result):
     """
     Exporterar effektiviseringskrav till Intäktsram.
-    
-    ENKEL VERSION: Exporterar bara DMU, REId, Effkrav_proc.
-    Metod (OPEX/TOTEX) väljs vid import i Intäktsram-tabben.
-    IR-baseline laddas lokalt i intäktsramen när beräkning sker.
-    
-    Args:
-        company_result: DataFrame med DEA-resultat för företaget (DMU + REId + Effkrav_proc)
-        
-    Returns:
-        Tuple (success: bool, message: str)
     """
     try:
-        # Verifiera att vi har nödvändiga kolumner
         required_cols = ['DMU', 'REId', 'Effkrav_proc']
         missing_cols = [col for col in required_cols if col not in company_result.columns]
         
@@ -401,13 +387,12 @@ def export_to_ir(company_result):
         if company_result['REId'].isna().all():
             return False, "Alla REId är None i DEA-resultat"
         
-        # Exportera med ENKEL metod (bara effektiviseringskrav)
         data_path, meta_path = export_effektiviseringskrav_scenario(
             dea_result=company_result
         )
         
         filename = Path(data_path).name
-        return True, f"✅ Export klar! Fil: {filename}"
+        return True, f"Export klar - Fil: {filename}"
         
     except Exception as e:
         return False, f"Export misslyckades: {str(e)}"

@@ -428,3 +428,43 @@ def calculate_intaktsram(df: pd.DataFrame) -> pd.DataFrame:
         result_df['Delta_Procent'] = (result_df['Delta_Intaktsram'] / result_df['Intaktsram_Total'] * 100).round(2)
     
     return result_df
+
+def get_company_display_name(dmu: int, company_name: str = None) -> str:
+    """
+    Returnerar företagsnamn med tillhörande id_network.
+    """
+    from core.dmu_aggregation import read_reconciliation
+    
+    try:
+        rec = read_reconciliation(
+            "effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv"
+        )
+        
+        if rec is None or rec.empty:
+            return company_name or f"Företag DMU {dmu}"
+        
+        # Filtrera på DMU och lokalnät
+        company_data = rec[
+            (rec['DMU'] == dmu) & 
+            (rec['REId'].astype(str).str.startswith('REL', na=False))
+        ]
+        
+        if company_data.empty:
+            return company_name or f"Företag DMU {dmu}"
+        
+        # Använd företagsnamn från reconciliation-fil eller parameter
+        name = company_data.iloc[0].get('Företag', company_name or f"Företag DMU {dmu}")
+        
+        # Lägg till id_network
+        if 'id_network' in company_data.columns:
+            networks = sorted(company_data['id_network'].dropna().unique())
+            if len(networks) == 1:
+                return f"{name} (nät: {int(networks[0])})"
+            elif len(networks) > 1:
+                network_str = ', '.join(map(str, [int(n) for n in networks]))
+                return f"{name} (nät: {network_str})"
+        
+        return name
+        
+    except Exception as e:
+        return company_name or f"Företag DMU {dmu}"

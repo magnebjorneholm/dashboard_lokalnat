@@ -12,7 +12,8 @@ from pathlib import Path
 
 from intaktsram.app.data_loader import (
     load_baseline_data,
-    calculate_intaktsram
+    calculate_intaktsram,
+    get_company_display_name
 )
 from core.session_utils import get_user_role, get_user_dmu, get_user_org
 from effektiviseringskrav.backend.ir_calculations import (
@@ -38,7 +39,7 @@ def show_foretag_ir_dekomposition_ny():
     Hanterar autentisering, data-laddning och tab-struktur.
     """
     
-    st.set_page_config(page_title="Din Intäktsram", layout="wide")
+    st.set_page_config(page_title="Dekomposition intäktsram", layout="wide")
     
     if "access_granted" not in st.session_state or not st.session_state.access_granted:
         st.error("Åtkomst nekad")
@@ -63,19 +64,12 @@ def show_foretag_ir_dekomposition_ny():
     
     show_sidebar_scenario_controls(df_company)
     
-    company_name = df_company.iloc[0].get('Företag', f'Företag DMU {user_dmu}')
-    st.title(f"Din Intäktsram - {company_name}")
-    st.caption(f"DMU {user_dmu} • Interaktiv visualisering med scenario-stöd")
+    base_name = df_company.iloc[0].get('Företag', f'Företag DMU {user_dmu}')
+    company_name = get_company_display_name(user_dmu, base_name)
+    st.title(f"Intäktsramen för {company_name}")
     
     df_working = get_working_dataframe(df_company)
-    
-    if len(df_working) > 1:
-        reid_options = df_working['REId'].tolist()
-        selected_reid = st.selectbox("Välj lokalnät", reid_options)
-        entity_data = df_working[df_working['REId'] == selected_reid].iloc[0]
-    else:
-        entity_data = df_working.iloc[0]
-        selected_reid = entity_data['REId']
+    entity_data = df_working.iloc[0]
     
     diagram_data = prepare_diagram_data(entity_data, df_company)
     html_content = create_interactive_diagram_html(diagram_data)

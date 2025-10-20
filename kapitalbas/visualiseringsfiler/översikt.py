@@ -62,7 +62,7 @@ KPI_LABEL = {
 
 # ========= Metodikruta (UI-specifik) =========
 def _render_methodology_info():
-    with st.expander("Metodik, information och definitioner (Ei)", expanded=False):
+    with st.expander("Metodik, information och definitioner", expanded=False):
         st.markdown(
             """
             **Vad är kalkylräntan (WACC)?** Vägt genomsnitt av kapitalkostnaden för eget kapital och skuld.

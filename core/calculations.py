@@ -100,7 +100,7 @@ def _hamada(beta_a: float, S: float, T: float) -> float:
 
 def ei_wacc_real_pre_tax(inp: EiWaccInputs) -> Tuple[float, float, float, float]:
     """
-    Beräknar WACC enligt Energimarknadsinspektionens metodik.
+    Beräknar WACC.
     
     Beräkningskedja:
     1. CAPM för eget kapital (nominell, efter skatt)

@@ -253,9 +253,29 @@ def display_dea_results_table(result: pd.DataFrame):
     st.dataframe(display_result, width='stretch')
 
 
+# effektiviseringskrav/frontend/components.py
+# Uppdaterad display_efficiency_histogram funktion med Plotly
+
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from typing import Dict, List, Optional, Tuple
+
+
+# effektiviseringskrav/frontend/components.py
+# Uppdaterad display_efficiency_histogram funktion med Plotly
+
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from typing import Dict, List, Optional, Tuple
+
+
 def display_efficiency_histogram(data: pd.Series, title: str = "Effektivitet"):
     """
-    Visar histogram för effektivitetsfördelning.
+    Visar histogram för effektivitetsfördelning med Plotly.
     
     Args:
         data: Serie med effektivitetsvärden
@@ -264,15 +284,51 @@ def display_efficiency_histogram(data: pd.Series, title: str = "Effektivitet"):
     # Filtrera till numeriska värden
     data_clean = pd.to_numeric(data, errors="coerce").dropna()
     
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.hist(data_clean, bins=15, edgecolor='black')
-    ax.set_title(title)
-    ax.set_xlabel("Värde")
-    ax.set_ylabel("Antal företag")
-    ax.grid(True)
+    if data_clean.empty:
+        st.warning("Ingen data att visa")
+        return
     
-    st.pyplot(fig)
-    plt.close()
+    # Skapa Plotly histogram
+    fig = go.Figure()
+    
+    fig.add_trace(go.Histogram(
+        x=data_clean,
+        nbinsx=15,
+        marker=dict(
+            color='#0066CC',
+            line=dict(color='#2C3E50', width=1)
+        ),
+        hovertemplate='Värde: %{x}<br>Antal: %{y}<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        title=dict(
+            text=title,
+            font=dict(size=14, color='#2C3E50')
+        ),
+        xaxis=dict(
+            title="Värde",
+            gridcolor='#E5E5E5',
+            showgrid=True,
+            showline=False,
+            zeroline=False
+        ),
+        yaxis=dict(
+            title="Antal företag",
+            gridcolor='#E5E5E5',
+            showgrid=True,
+            showline=False,
+            zeroline=False
+        ),
+        plot_bgcolor='#F5F7FA',
+        paper_bgcolor='#F5F7FA',
+        height=400,
+        margin=dict(l=50, r=20, t=50, b=50),
+        font=dict(family="sans-serif", size=12, color='#2C3E50'),
+        bargap=0.1
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def display_efficiency_distributions(result: pd.DataFrame):
@@ -299,7 +355,6 @@ def display_efficiency_distributions(result: pd.DataFrame):
             df_plot["Effkrav_proc"] * 100, 
             title="Årligt effektiviseringskrav (%) (exkl. outliers)"
         )
-
 
 # ============================================================================
 # DIAGNOSTIK-KOMPONENTER (GEOGRAFISK ANALYS)

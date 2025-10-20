@@ -88,11 +88,10 @@ if st.session_state.user_role == "regulator":
     
 elif st.session_state.user_role == "company":
     pages = [
-    st.Page("pages/hem_foretag.py", title="Hem"),
-    st.Page("pages/foretag/foretag_intaktsram.py", title="Intäktsram"),
-    st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
-    st.Page("pages/foretag/foretag_effektivitet.py", title="DEA och påverkbara kostnader"),
-    st.Page("pages/foretag/ny_foretag_IR.py", title="IR-dekomposition")
+        st.Page("pages/foretag/ny_foretag_IR.py", title="IR-dekomposition"),
+        st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
+        st.Page("pages/foretag/foretag_effektivitet.py", title="DEA och påverkbara kostnader"),
+        st.Page("pages/hem_foretag.py", title="Information"),
     ]
 
 else:
