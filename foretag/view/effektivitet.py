@@ -73,7 +73,7 @@ def show_foretag_effektivitet():
     df, scen_info = merge_capex_scenario(df)
 
     if scen_info.get("found"):
-        st.success(f"WACC-scenario aktivt: {scen_info['tag'].replace('p','.')} - täckning {scen_info['coverage']:.0%}")
+        st.success(f"WACC-scenario aktivt: {scen_info['tag'].replace('p','.')} - täckning {scen_info['coverage']:.0%} - Se inputs för scenario-variabler")
     else:
         st.info("Inget CAPEX-scenario från Kapitalbas")
 
@@ -159,7 +159,7 @@ def show_foretag_effektivitet():
     # Körknapp centrerad
     st.markdown("")
     col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-    with col_btn2:
+    with col_btn1:
         run_model = st.button("Kör DEA-analys", type="primary", use_container_width=True)
 
     session_key = f'dea_runs_{user_dmu}'
@@ -327,7 +327,14 @@ def show_dea_results(latest_result, user_dmu, company_name):  # company_name inn
     # === GEOGRAFISK ANALYS ===
     st.markdown("---")
     st.subheader("Geografisk analys")
-    display_company_geographic_analysis(result, user_dmu, company_name)
+    value_choice = st.radio(
+        "Välj värde för kartvisualisering",
+        ["Effektivitet", "Supereffektivitet"],
+        index=0,
+        horizontal=True,
+        help="Supereffektivitet ger större spridning mellan företag")
+
+    display_company_geographic_analysis(result, user_dmu, company_name, value_column=value_choice)
 
     # === EXPORT ===
     st.markdown("---")

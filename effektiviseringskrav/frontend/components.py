@@ -1,20 +1,11 @@
 """
 Frontend Streamlit-komponenter för DEA-analys.
-================================================
-
-Återanvändbara UI-komponenter som tar data och parametrar,
-renderar dem i Streamlit.
-
-DESIGN:
-- Varje funktion ansvarar för EN UI-komponent
-- Tar input (DataFrames, configs), returnerar user input eller None
-- Inga backend-beräkningar här
-- Streamlit-specifik kod (kommer bytas ut vid Dash-migration)
 """
 
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import plotly.express as px
 from typing import Dict, List, Optional, Tuple
 
 
@@ -28,31 +19,13 @@ def display_dea_parameters(
 ) -> Optional[Dict]:
     """
     Visar DEA-parametrar i sidebar och returnerar användarens val.
-    
-    Args:
-        df: DataFrame med DEA-data (för att identifiera tillgängliga kolumner)
-        scenario_info: Dict från data_loader med info om CAPEX-scenario
-        
-    Returns:
-        Dict med valda parametrar eller None om användaren inte klickat "Kör DEA"
-        {
-            'input_cols': List[str],
-            'output_cols': List[str],
-            'rts': str,
-            'trunkering_min': float,
-            'trunkering_max': float,
-            'outlier_filter': bool,
-            'outlier_krav': float (decimal)
-        }
     """
     st.sidebar.subheader("DEA-parametrar")
     
-    # Kolumnval
     base_inputs = ["CAPEX", "OPEXp", "TOTEX"]
     all_inputs = [c for c in base_inputs if c in df.columns]
     all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
     
-    # Scenario-kolumner
     capex_wacc_col = None
     totex_wacc_col = None
     if scenario_info.get("found"):
@@ -79,13 +52,11 @@ def display_dea_parameters(
         default=[c for c in ["CAPEX", "OPEXp"] if c in all_inputs]
     )
     
-    # Validera exklusivitetsregler
     error_msg = _validate_input_exclusivity(input_cols)
     if error_msg:
         st.error(error_msg)
         return None
     
-    # Scenario-specifik validering
     if scenario_info.get("found"):
         chosen_scen_cols = [c for c in [capex_wacc_col, totex_wacc_col] if c and c in input_cols]
         if chosen_scen_cols:
@@ -113,7 +84,6 @@ def display_dea_parameters(
         value=True
     )
     
-    # RTS och trunkering
     st.sidebar.caption(
         "**Skalavkastning (RTS)**\n"
         "• crs: Konstant skalavkastning\n"
@@ -142,7 +112,6 @@ def display_dea_parameters(
         help="Vilket fast krav (i procent) ska ges till företag som klassas som outliers?"
     )
     
-    # Körknapp
     run_model = st.sidebar.button("Kör DEA", type="primary")
     
     if not run_model:
@@ -155,16 +124,13 @@ def display_dea_parameters(
         'trunkering_min': dea_trunk_min,
         'trunkering_max': dea_trunk_max,
         'outlier_filter': use_outlier_filter,
-        'outlier_krav': dea_outlier_krav / 100  # Konvertera till decimal
+        'outlier_krav': dea_outlier_krav / 100
     }
 
 
 def _validate_input_exclusivity(input_cols: List[str]) -> Optional[str]:
     """
     Validerar exklusivitetsregler för input-kolumner.
-    
-    Returns:
-        Felmeddelande (str) eller None om OK
     """
     has_capex_std = "CAPEX" in input_cols
     has_capex_scen = any(col.startswith("CAPEX_2024_wacc_") for col in input_cols)
@@ -191,10 +157,6 @@ def _validate_input_exclusivity(input_cols: List[str]) -> Optional[str]:
 def display_dea_results_summary(result: pd.DataFrame, outlier_krav_pct: float):
     """
     Visar sammanfattande metrics för DEA-resultat.
-    
-    Args:
-        result: DataFrame med DEA-resultat
-        outlier_krav_pct: Fast krav för outliers (i procent, t.ex. 1.0)
     """
     st.subheader("DEA-resultat")
     
@@ -236,9 +198,6 @@ def _display_outliers_table(result: pd.DataFrame):
 def display_dea_results_table(result: pd.DataFrame):
     """
     Visar huvudresultat-tabell för DEA.
-    
-    Args:
-        result: DataFrame med DEA-resultat
     """
     display_result = result[
         ["DMU", "Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc", "is_outlier"]
@@ -253,50 +212,24 @@ def display_dea_results_table(result: pd.DataFrame):
     st.dataframe(display_result, width='stretch')
 
 
-# effektiviseringskrav/frontend/components.py
-# Uppdaterad display_efficiency_histogram funktion med Plotly
-
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-from typing import Dict, List, Optional, Tuple
-
-
-# effektiviseringskrav/frontend/components.py
-# Uppdaterad display_efficiency_histogram funktion med Plotly
-
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-from typing import Dict, List, Optional, Tuple
-
-
 def display_efficiency_histogram(data: pd.Series, title: str = "Effektivitet"):
     """
     Visar histogram för effektivitetsfördelning med Plotly.
-    
-    Args:
-        data: Serie med effektivitetsvärden
-        title: Titel för histogram
     """
-    # Filtrera till numeriska värden
     data_clean = pd.to_numeric(data, errors="coerce").dropna()
     
     if data_clean.empty:
         st.warning("Ingen data att visa")
         return
     
-    # Skapa Plotly histogram
     fig = go.Figure()
     
     fig.add_trace(go.Histogram(
         x=data_clean,
         nbinsx=15,
         marker=dict(
-            color='#0066CC',
-            line=dict(color='#2C3E50', width=1)
+            color='#1976D2',
+            line=dict(color='#0D3B66', width=1)
         ),
         hovertemplate='Värde: %{x}<br>Antal: %{y}<extra></extra>'
     ))
@@ -304,7 +237,7 @@ def display_efficiency_histogram(data: pd.Series, title: str = "Effektivitet"):
     fig.update_layout(
         title=dict(
             text=title,
-            font=dict(size=14, color='#2C3E50')
+            font=dict(size=14, color='#1E3A5F')
         ),
         xaxis=dict(
             title="Värde",
@@ -334,9 +267,6 @@ def display_efficiency_histogram(data: pd.Series, title: str = "Effektivitet"):
 def display_efficiency_distributions(result: pd.DataFrame):
     """
     Visar två histogram: effektivitet och årligt krav.
-    
-    Args:
-        result: DataFrame med DEA-resultat
     """
     st.subheader("Fördelningar")
     
@@ -356,21 +286,63 @@ def display_efficiency_distributions(result: pd.DataFrame):
             title="Årligt effektiviseringskrav (%) (exkl. outliers)"
         )
 
+
 # ============================================================================
-# DIAGNOSTIK-KOMPONENTER (GEOGRAFISK ANALYS)
+# GEOGRAFISK ANALYS
+# ============================================================================
+
+def display_company_geographic_analysis(
+    result: pd.DataFrame, 
+    user_dmu: int, 
+    company_name: str,
+    value_column: str
+):
+    """
+    Visar företagsspecifik geografisk karta med företaget markerat.
+    
+    Args:
+        result: DEA-resultat (alla företag)
+        user_dmu: Företagets DMU
+        company_name: Företagsnamn
+        value_column: Kolumn att visualisera (t.ex. "Effektivitet" eller "Supereffektivitet")
+    """
+    from effektiviseringskrav.backend.spatial_analysis import get_company_geographic_context
+    from effektiviseringskrav.backend.map_vizualization import plot_efficiency_map_plotly
+    
+    with st.spinner("Laddar geografisk karta..."):
+        context = get_company_geographic_context(result, user_dmu, value_column)
+    
+    if context is None:
+        st.warning("Geografisk data saknas för ditt företag")
+        return
+    
+    try:
+        fig = plot_efficiency_map_plotly(
+            context['all_data'],
+            company_geoms=context['company_data'],
+            value_column=value_column,
+            title=f"{value_column} per verksamhetsområde - {company_name} markerat",
+            height=700,
+            dark_theme=False
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+    except Exception as e:
+        st.error(f"Kunde inte visa karta: {e}")
+        import traceback
+        st.error(traceback.format_exc())
+
+
+# ============================================================================
+# DIAGNOSTIK-KOMPONENTER
 # ============================================================================
 
 def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
     """
     Visar transparent matchningsdiagnostik för geografisk data.
-    
-    Porterad från heatmap_utils.display_matching_diagnostics med minimal förändring.
-    
-    Args:
-        match_stats: Dict från merge_dea_with_geodata()
-        metadata: Dict från load_shapes_for_dea()
     """
-    st.write("###  Shapefile-information")
+    st.write("### 📊 Shapefile-information")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -380,7 +352,6 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
     with col3:
         st.metric("Giltiga REId (reconciliation)", metadata["n_valid_remaining"])
     
-    # Visa vad som exkluderades
     if metadata["n_filtered_out"] > 0:
         st.write(f"**Exkluderade från shapefile (ej i reconciliation):** {metadata['n_filtered_out']} rader")
         
@@ -394,12 +365,11 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
             with st.expander(f"Visa alla {len(metadata['excluded_reid'])} exkluderade REId"):
                 st.write(metadata["excluded_reid"])
     
-    # Visa vad som behölls
     st.write("**Behållna nättyper:**")
     for net_type, count in metadata["kept_by_type"].items():
         st.write(f"  - {net_type}: {count} REId")
     
-    st.write("###  REId-matchning (Geodata ↔ DEA-resultat)")
+    st.write("### 🔗 REId-matchning (Geodata ↔ DEA-resultat)")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -410,16 +380,14 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
         match_pct = match_stats["match_rate"] * 100
         st.metric("Matchning", f"{match_pct:.1f}%")
     
-    # Intelligent kategorisering av saknade
     expected_missing = match_stats["expected_but_missing"]
     ok_missing = match_stats["ok_to_miss"]
     no_geo = match_stats["only_in_dea"]
     
-    # Problematiska saknade
     if expected_missing:
         n = len(expected_missing)
         st.error(
-            f" **{n} REId förväntas ha DEA-data men saknar det**\n\n"
+            f"⚠️ **{n} REId förväntas ha DEA-data men saknar det**\n\n"
             f"Dessa har `in_data_modeller=True` i reconciliation-filen.\n\n"
             f"Exempel: {', '.join(expected_missing[:5])}"
         )
@@ -428,13 +396,12 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
             with st.expander(f"Visa alla {n} problematiska REId"):
                 st.write(expected_missing)
     
-    # OK saknade
     if ok_missing:
         n = len(ok_missing)
         rer_missing = [r for r in ok_missing if r.startswith("RER")]
         ret_missing = [r for r in ok_missing if r.startswith("RET")]
         
-        status_icon = "" if n == len(rer_missing) + len(ret_missing) else ""
+        status_icon = "✓" if n == len(rer_missing) + len(ret_missing) else "ℹ️"
         
         st.info(
             f"{status_icon} **{n} REId saknar DEA-data (förväntat)**\n\n"
@@ -450,11 +417,10 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
             with st.expander(f"Visa alla {n} REId utan DEA-data (OK)"):
                 st.write(ok_missing)
     
-    # REId med data men utan geografi
     if no_geo:
         n = len(no_geo)
         st.warning(
-            f" **{n} REId har DEA-data men saknar geografi**\n\n"
+            f"⚠️ **{n} REId har DEA-data men saknar geografi**\n\n"
             f"Dessa kan inte visualiseras på kartan.\n\n"
             f"Exempel: {', '.join(no_geo[:5])}"
         )
@@ -463,13 +429,12 @@ def display_matching_diagnostics(match_stats: Dict, metadata: Dict):
             with st.expander(f"Visa alla {n} icke-visualiserbara REId"):
                 st.write(no_geo)
     
-    # Sammanfattning
     if not expected_missing and match_stats["match_rate"] >= 0.85:
-        st.success(" Utmärkt matchning - alla förväntade REId har DEA-data")
+        st.success("✓ Utmärkt matchning - alla förväntade REId har DEA-data")
     elif not expected_missing:
-        st.info(" Matchning OK - alla förväntade REId har DEA-data")
+        st.info("✓ Matchning OK - alla förväntade REId har DEA-data")
     else:
-        st.warning(" Problem - vissa förväntade REId saknar DEA-data")
+        st.warning("⚠️ Problem - vissa förväntade REId saknar DEA-data")
 
 
 # ============================================================================
@@ -482,18 +447,10 @@ def display_ir_export_controls(
 ) -> Optional[Tuple[str, bool]]:
     """
     Visar export-kontroller för IR-påverkbara kostnader.
-    
-    Args:
-        export_data: DataFrame med beräknade påverkbara kostnader
-        metadata: Metadata från calculate_ir_paverkbara_export
-        
-    Returns:
-        Tuple med (scenario_name, export_clicked) eller None
     """
     st.subheader("Export till Intäktsram-dekomposition")
     st.caption("Beräknar påverkbara kostnader för 2024-2027 perioden baserat på Ei:s verkliga beräkningsmetod")
     
-    # Visa metrics
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -509,7 +466,6 @@ def display_ir_export_controls(
         reduction_pct = (total_reduction / total_baseline) * 100 if total_baseline > 0 else 0
         st.metric("Total reduktion", f"{total_reduction:.1f} MSEK ({reduction_pct:.1f}%)")
     
-    # Förhandsvisning
     with st.expander("Förhandsvisning av export-data"):
         preview_data = export_data[
             ['DMU', 'REId', 'Företag', 'Paverkbara_Baseline_4yr', 
@@ -519,7 +475,6 @@ def display_ir_export_controls(
         preview_data = preview_data.rename(columns={'Effektiviseringskrav': 'Årligt krav (%)'})
         st.dataframe(preview_data, width='stretch')
     
-    # Export-kontroller
     export_name = st.text_input(
         "Export-namn (valfritt)", 
         placeholder="t.ex. 'DEA_CRS_2024'"
@@ -536,10 +491,6 @@ def display_ir_export_controls(
 def display_export_success(data_path: str, meta_path: str):
     """
     Visar framgångsmeddelande efter export.
-    
-    Args:
-        data_path: Sökväg till exporterad data-fil
-        meta_path: Sökväg till metadata-fil
     """
     st.success("Export klar!")
     st.caption(f"Data: {data_path}")
@@ -550,12 +501,6 @@ def display_export_success(data_path: str, meta_path: str):
 def display_standard_excel_export(result: pd.DataFrame) -> bytes:
     """
     Skapar Excel-export för DEA-resultat och returnerar bytes.
-    
-    Args:
-        result: DataFrame med DEA-resultat
-        
-    Returns:
-        Excel-fil som bytes (för st.download_button)
     """
     import io
     
@@ -564,44 +509,3 @@ def display_standard_excel_export(result: pd.DataFrame) -> bytes:
         result.to_excel(writer, sheet_name="Resultat", index=False)
     
     return buffer.getvalue()
-
-def display_company_geographic_analysis(result: pd.DataFrame, user_dmu: int, company_name: str):
-    """
-    Visar företagsspecifik geografisk karta med företaget markerat.
-    
-    Args:
-        result: DEA-resultat (alla företag)
-        user_dmu: Företagets DMU
-        company_name: Företagsnamn
-    """
-    from effektiviseringskrav.backend.spatial_analysis import get_company_geographic_context
-    from effektiviseringskrav.backend.heatmap_utils import plot_efficiency_map
-    
-    with st.spinner("Laddar geografisk karta..."):
-        context = get_company_geographic_context(result, user_dmu)
-    
-    if context is None:
-        st.warning("Geografisk data saknas för ditt företag")
-        return
-    
-    try:
-        fig = plot_efficiency_map(
-            context['all_data'],
-            value_column="Effektivitet",
-            title="Effektivitet per verksamhetsområde"
-        )
-        
-        # Markera företagets områden
-        ax = fig.axes[0]
-        context['company_data'].boundary.plot(
-            ax=ax,
-            edgecolor='red',
-            linewidth=3,
-            label=company_name
-        )
-        ax.legend(loc='upper right')
-        
-        st.pyplot(fig)
-        
-    except Exception as e:
-        st.error(f"Kunde inte visa karta: {e}")

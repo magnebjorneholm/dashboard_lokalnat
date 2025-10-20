@@ -240,7 +240,7 @@ def calculate_company_neighbor_gap(result: pd.DataFrame, user_dmu: int) -> Optio
         return None
 
 
-def get_company_geographic_context(result: pd.DataFrame, user_dmu: int) -> Optional[dict]:
+def get_company_geographic_context(result: pd.DataFrame, user_dmu: int, value_column: str) -> Optional[dict]:
     """
     Hämtar full geografisk kontext för företaget (för visualisering).
     Fast k=4 KNN, ingen parametrisering.
@@ -261,16 +261,16 @@ def get_company_geographic_context(result: pd.DataFrame, user_dmu: int) -> Optio
         )
         
         gdf_shapes, _ = load_shapes_for_dea()
-        gdf_merged, _ = merge_dea_with_geodata(gdf_shapes, result, value_column="Effektivitet")
-        gdf_agg = aggregate_to_unique_geometries(gdf_merged, value_column="Effektivitet")
-        gdf_for_spatial = gdf_agg[gdf_agg["Effektivitet"].notna()].copy()
-        
+        gdf_merged, _ = merge_dea_with_geodata(gdf_shapes, result, value_column=value_column)
+        gdf_agg = aggregate_to_unique_geometries(gdf_merged, value_column=value_column)
+        gdf_for_spatial = gdf_agg[gdf_agg[value_column].notna()].copy()
+
         if len(gdf_for_spatial) < 5:
             return None
         
         gdf_spatial = lägg_till_grannsnitt(
             gdf_for_spatial,
-            indikator="Effektivitet",
+            indikator=value_column,
             method="knn",
             k=4,
             avståndsviktning=False
@@ -291,9 +291,9 @@ def get_company_geographic_context(result: pd.DataFrame, user_dmu: int) -> Optio
                     company_gaps.extend(matching['eff_gap'].dropna().tolist())
                 if 'grannsnitt' in matching.columns:
                     company_neighbor_means.extend(matching['grannsnitt'].dropna().tolist())
-                if 'Effektivitet' in matching.columns:
-                    company_effs.extend(matching['Effektivitet'].dropna().tolist())
-        
+                if value_column in matching.columns:
+                    company_effs.extend(matching[value_column].dropna().tolist())
+
         if not company_gaps:
             return None
         
