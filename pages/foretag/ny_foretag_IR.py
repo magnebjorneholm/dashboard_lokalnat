@@ -1,5 +1,5 @@
 """
-pages/foretag/foretag_intaktsram_ny.py
+pages/foretag/ny_foretag_IR.py
 Entry point för ny intäktsram-dekomposition (företag)
 """
 
