@@ -1,6 +1,6 @@
 """
 foretag/view/intaktsram_tabs/kapitalkostnad.py
-Kapitalkostnad-tab harmoniserad med effektiviseringskrav-tab
+Kapitalkostnad-tab med utökad metadata-visning för justeringar
 """
 
 import streamlit as st
@@ -15,7 +15,7 @@ from foretag.app.scenario_utils import list_available_kapitalbas_scenarios
 def show_kapitalkostnad_tab(entity_data: pd.Series, scenario_metadata: Optional[dict] = None):
     """
     Visar kapitalkostnad-tab med status, komponenter och navigation.
-    Harmoniserad med effektiviseringskrav-tab.
+    Inkluderar utökad visning av parameterjusteringar.
     
     Args:
         entity_data: Series med data för vald entitet (lokalnät)
@@ -31,13 +31,43 @@ def show_kapitalkostnad_tab(entity_data: pd.Series, scenario_metadata: Optional[
     modifications = scenario_data.get('modifications', {})
     kapital_mod = modifications.get('kapitalkostnad', {})
     
-    # Statusmeddelande (matchar effektiviseringskrav-stil)
+    # Statusmeddelande med utökad information
     if is_modified and kapital_mod.get('source') == 'kapitalbas':
+        status_parts = []
+        
+        # WACC-info
         if scenario_metadata and 'wacc_new' in scenario_metadata:
             wacc_new = scenario_metadata['wacc_new'] * 100
-            st.info(f"Kapitalkostnad baseras på scenario från Kapitalbas (WACC: **{wacc_new:.2f}%**)")
+            wacc_old = scenario_metadata.get('wacc_old', 0.0453) * 100
+            status_parts.append(f"WACC: {wacc_old:.2f}% → **{wacc_new:.2f}%**")
+        
+        # Parameterjusteringar
+        param_adj = scenario_metadata.get('parameter_adjustments', {}) if scenario_metadata else {}
+        
+        if param_adj.get('has_normvalue_adjustments'):
+            norm_info = param_adj.get('normvalue_adjustments', {})
+            count = norm_info.get('count', 0)
+            level = norm_info.get('level', 'kategori')
+            level_text = 'subkategorinivå' if level == 'subcat' else 'kategorinivå'
+            status_parts.append(f"Normvärden: {count} ändringar på {level_text}")
+        
+        if param_adj.get('has_lifetime_adjustments'):
+            life_info = param_adj.get('lifetime_adjustments', {})
+            count = life_info.get('count', 0)
+            level = life_info.get('level', 'kategori')
+            level_text = 'subkategorinivå' if level == 'subcat' else 'kategorinivå'
+            status_parts.append(f"Livslängder: {count} ändringar på {level_text}")
+        
+        # Visa statusinfo
+        if status_parts:
+            st.info(f"Kapitalkostnad baseras på scenario från Kapitalbas:\n\n" + "\n\n".join(f"• {part}" for part in status_parts))
         else:
-            st.info(f"Kapitalkostnad baseras på scenario från Kapitalbas")
+            st.info("Kapitalkostnad baseras på scenario från Kapitalbas")
+        
+        # Visa detaljerad justeringsinformation om den finns
+        if param_adj.get('has_normvalue_adjustments') or param_adj.get('has_lifetime_adjustments'):
+            with st.expander("Visa detaljerade justeringar"):
+                show_detailed_adjustments(param_adj)
         
         if källa and källa != 'Baseline':
             st.caption(f"Källa: {källa}")
@@ -55,7 +85,7 @@ def show_kapitalkostnad_tab(entity_data: pd.Series, scenario_metadata: Optional[
     
     has_detailed_capital = avskrivningar is not None and avkastning is not None
     
-    # METRICS (3 kolumner som effektiviseringskrav)
+    # METRICS (3 kolumner)
     if has_detailed_capital:
         col1, col2, col3 = st.columns(3)
         
@@ -110,7 +140,7 @@ def show_kapitalkostnad_tab(entity_data: pd.Series, scenario_metadata: Optional[
                     f"{andel:.1f}%"
                 )
     
-    # IMPORTERA FRÅN KAPITALBAS (direkt synlig selectbox som effektiviseringskrav)
+    # IMPORTERA FRÅN KAPITALBAS
     st.markdown("---")
     
     available_scenarios = list_available_kapitalbas_scenarios()
@@ -131,12 +161,13 @@ def show_kapitalkostnad_tab(entity_data: pd.Series, scenario_metadata: Optional[
         selected_export = available_scenarios[available_scenarios['display'] == selected_display].iloc[0]
     else:
         st.info(
-            "Inga Kapitalbas-exports hittades. Gå till Beräkningskedja för att "
+            "Inga Kapitalbas-exports hittades. "
+            "Gå till Beräkningskedja för att "
             "beräkna och exportera kapitalkostnader."
         )
         selected_export = None
     
-    # KNAPPAR (2 st som effektiviseringskrav, samma ordning)
+    # KNAPPAR
     col1, col2 = st.columns(2)
     
     with col1:
@@ -165,11 +196,11 @@ def show_kapitalkostnad_tab(entity_data: pd.Series, scenario_metadata: Optional[
             }
             st.switch_page("pages/foretag/foretag_berakningskedja.py")
     
-    # ÅRSVISA KAPITALKOSTNADER (som effektiviseringskrav har årstabell)
+    # ÅRSVISA KAPITALKOSTNADER
     st.markdown("---")
     show_yearly_kapitalkostnad_breakdown(entity_data, has_detailed_capital, kapital_mod)
     
-    # INFO-EXPANDER (utan emoji, samma villkor som effektiviseringskrav)
+    # INFO-EXPANDER
     if not is_modified:
         st.markdown("---")
         with st.expander("Om kapitalkostnad"):
@@ -182,7 +213,7 @@ def show_kapitalkostnad_tab(entity_data: pd.Series, scenario_metadata: Optional[
             Dessa beräknas utifrån:
             - Nuanskaffningsvärde (NUAV) för varje anläggningstillgång
             - Ekonomiska livslängder enligt Ei:s normvärdeslista
-            - WACC-ränta faställd av Ei för tillsynsperioden
+            - WACC-ränta fastställd av Ei för tillsynsperioden
             
             **Processen:**
             1. Gå till Beräkningskedja (knapp ovan)
@@ -194,10 +225,67 @@ def show_kapitalkostnad_tab(entity_data: pd.Series, scenario_metadata: Optional[
             """)
 
 
+def show_detailed_adjustments(param_adj: dict):
+    """
+    Visar detaljerad information om parameterjusteringar
+    
+    Args:
+        param_adj: Dictionary med justeringsmetadata
+    """
+    
+    # Normvärdejusteringar
+    if param_adj.get('has_normvalue_adjustments'):
+        st.markdown("#### Normvärdejusteringar")
+        norm_info = param_adj.get('normvalue_adjustments', {})
+        level = norm_info.get('level', 'kategori')
+        level_text = 'Subkategorinivå' if level == 'subcat' else 'Kategorinivå'
+        
+        st.write(f"**Nivå:** {level_text}")
+        st.write(f"**Antal ändringar:** {norm_info.get('count', 0)}")
+        
+        details = norm_info.get('details', [])
+        if details:
+            df_details = pd.DataFrame(details)
+            
+            # Välj relevanta kolumner beroende på vad som finns
+            display_cols = []
+            for col in ['Kod', 'Beskrivning', 'Justering (%)', 'Ny NUAV (tkr)', 'Förändring (tkr)']:
+                if col in df_details.columns:
+                    display_cols.append(col)
+            
+            if display_cols:
+                st.dataframe(df_details[display_cols], use_container_width=True, hide_index=True)
+    
+    # Livslängdsjusteringar
+    if param_adj.get('has_lifetime_adjustments'):
+        if param_adj.get('has_normvalue_adjustments'):
+            st.markdown("---")
+        
+        st.markdown("#### Livslängdsjusteringar")
+        life_info = param_adj.get('lifetime_adjustments', {})
+        level = life_info.get('level', 'kategori')
+        level_text = 'Subkategorinivå' if level == 'subcat' else 'Kategorinivå'
+        
+        st.write(f"**Nivå:** {level_text}")
+        st.write(f"**Antal ändringar:** {life_info.get('count', 0)}")
+        
+        details = life_info.get('details', [])
+        if details:
+            df_details = pd.DataFrame(details)
+            
+            # Välj relevanta kolumner
+            display_cols = []
+            for col in ['Kod', 'Beskrivning', 'Ekonomisk livslängd (år)', 'Maximal livslängd (år)']:
+                if col in df_details.columns:
+                    display_cols.append(col)
+            
+            if display_cols:
+                st.dataframe(df_details[display_cols], use_container_width=True, hide_index=True)
+
+
 def show_yearly_kapitalkostnad_breakdown(entity_data: pd.Series, has_detailed: bool, kapital_mod: dict):
     """
     Visar breakdown av kapitalkostnader per år.
-    Matchar strukturen från effektiviseringskrav-tabben.
     """
     if not has_detailed:
         return

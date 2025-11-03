@@ -1,6 +1,6 @@
 """
 foretag/view/intaktsram_tabs/oversikt.py
-Översikt-tab för intäktsram-dekomposition med komplett sammanställning
+Översikt-tab med utökad modifieringsinformation
 """
 
 import streamlit as st
@@ -24,7 +24,7 @@ def show_oversikt_tab(entity_data: pd.Series):
     modifications = scenario_data.get('modifications', {})
     has_active_scenario = bool(st.session_state.get('current_scenario_name'))
     
-    # SCENARIO-STATUSRUTA (om aktivt)
+    # SCENARIO-STATUSRUTA
     if has_active_scenario:
         show_scenario_status(modifications)
         st.markdown("---")
@@ -34,12 +34,12 @@ def show_oversikt_tab(entity_data: pd.Series):
     
     st.markdown("---")
     
-    # ÅRSVISA PÅVERKBARA KOSTNADER (exakt duplicerad från effektiviseringskrav)
+    # ÅRSVISA PÅVERKBARA KOSTNADER
     show_yearly_paverkbara_table(entity_data, modifications)
     
     st.markdown("---")
     
-    # KAPITALKOSTNADER PER PERIOD (placeholder)
+    # KAPITALKOSTNADER PER PERIOD
     show_yearly_kapitalkostnad_placeholder()
     
     # EXPORT-FUNKTIONALITET
@@ -48,22 +48,51 @@ def show_oversikt_tab(entity_data: pd.Series):
 
 
 def show_scenario_status(modifications: dict):
-    """Visar status för aktivt scenario."""
+    """
+    Visar status för aktivt scenario med utökad modifieringsinformation
+    """
     scenario_name = st.session_state.get('current_scenario_name', 'Namnlöst scenario')
     
     st.info(f"**Aktivt scenario:** {scenario_name}")
     
-    # Lista modifierade komponenter
+    # Lista modifierade komponenter med detaljerad info
     modified_components = []
     
     if 'kapitalkostnad' in modifications:
         kapital_mod = modifications['kapitalkostnad']
         source = kapital_mod.get('source', 'manuell')
+        
         if source == 'kapitalbas':
             metadata = kapital_mod.get('metadata', {})
+            
+            # Bygga kapitalkostnad-info
+            info_parts = []
+            
+            # WACC
             wacc = metadata.get('wacc_new')
             if wacc:
-                modified_components.append(f"• Kapitalkostnad (WACC: {wacc*100:.2f}%)")
+                wacc_old = metadata.get('wacc_old', 0.0453)
+                info_parts.append(f"WACC: {wacc_old*100:.2f}% → {wacc*100:.2f}%")
+            
+            # Parameterjusteringar
+            param_adj = metadata.get('parameter_adjustments', {})
+            
+            if param_adj.get('has_normvalue_adjustments'):
+                norm_info = param_adj.get('normvalue_adjustments', {})
+                count = norm_info.get('count', 0)
+                level = norm_info.get('level', 'kategori')
+                level_text = 'subkat' if level == 'subcat' else 'kat'
+                info_parts.append(f"Normvärden: {count} ändr. ({level_text})")
+            
+            if param_adj.get('has_lifetime_adjustments'):
+                life_info = param_adj.get('lifetime_adjustments', {})
+                count = life_info.get('count', 0)
+                level = life_info.get('level', 'kategori')
+                level_text = 'subkat' if level == 'subcat' else 'kat'
+                info_parts.append(f"Livslängder: {count} ändr. ({level_text})")
+            
+            if info_parts:
+                modified_components.append(f"• Kapitalkostnad: {', '.join(info_parts)}")
             else:
                 modified_components.append(f"• Kapitalkostnad")
         else:
@@ -76,9 +105,9 @@ def show_scenario_status(modifications: dict):
             dea_result = effkrav_mod.get('dea_result')
             if dea_result is not None and not dea_result.empty:
                 effkrav_pct = dea_result.iloc[0].get('Effkrav_proc', 0) * 100
-                modified_components.append(f"• Påverkbara kostnader (från DEA, {method}-metod, -{effkrav_pct:.2f}%)")
+                modified_components.append(f"• Påverkbara kostnader: DEA {method}-metod, -{effkrav_pct:.2f}%")
             else:
-                modified_components.append(f"• Påverkbara kostnader (från DEA, {method}-metod)")
+                modified_components.append(f"• Påverkbara kostnader: DEA {method}-metod")
     
     if modified_components:
         st.write("**Modifieringar:**")
@@ -162,7 +191,7 @@ def get_detailed_source(component_name: str, col: str, entity_data: pd.Series, m
                 dea_result = effkrav_mod.get('dea_result')
                 if dea_result is not None and not dea_result.empty:
                     effkrav_pct = dea_result.iloc[0].get('Effkrav_proc', 0) * 100
-                    return f"Effektiviseringskrav {effkrav_pct:.2f}% på {method}"
+                    return f"Eff. krav {effkrav_pct:.2f}% på {method}"
                 return f"Effektiviseringskrav ({method})"
         return "Referens"
     
@@ -197,256 +226,128 @@ def get_detailed_source(component_name: str, col: str, entity_data: pd.Series, m
 
 def show_yearly_paverkbara_table(entity_data: pd.Series, modifications: dict):
     """
-    Visar årsvisa påverkbara kostnader (EXAKT duplicerad från effektiviseringskrav).
+    Visar årsvisa påverkbara kostnader
     """
-    effkrav_mod = modifications.get('paverkbara', {}) if modifications else {}
-    last_calc = effkrav_mod.get('last_calculation') if effkrav_mod else None
+    st.markdown("### Påverkbara kostnader per år")
     
-    # Om vi har beräkningsdata från scenario
-    if last_calc is not None:
-        export_data = last_calc.get('export_data')
+    # Kontrollera om vi har årsvis data
+    has_yearly = all(
+        entity_data.get(f'Paverkbara_{year}', None) is not None 
+        for year in [2024, 2025, 2026, 2027]
+    )
+    
+    if not has_yearly:
+        st.info("Årsvis data för påverkbara kostnader är inte tillgänglig")
+        return
+    
+    years = [2024, 2025, 2026, 2027]
+    rows = []
+    
+    for year in years:
+        scenario_val = entity_data.get(f'Paverkbara_{year}', 0)
+        baseline_val = entity_data.get(f'Paverkbara_{year}_Baseline', scenario_val)
+        delta = scenario_val - baseline_val
+        delta_pct = (delta / baseline_val * 100) if baseline_val != 0 else 0
         
-        if export_data is not None and not export_data.empty:
-            reid = entity_data['REId']
-            entity_calc = export_data[export_data['REId'] == reid]
-            
-            if not entity_calc.empty:
-                row = entity_calc.iloc[0]
-                
-                # Hämta årsvisa värden
-                y2024_base = row.get('Y2024_baseline', 0)
-                y2025_base = row.get('Y2025_baseline', 0)
-                y2026_base = row.get('Y2026_baseline', 0)
-                y2027_base = row.get('Y2027_baseline', 0)
-                
-                y2024_scn = row.get('Y2024_scenario', 0)
-                y2025_scn = row.get('Y2025_scenario', 0)
-                y2026_scn = row.get('Y2026_scenario', 0)
-                y2027_scn = row.get('Y2027_scenario', 0)
-                
-                st.write("**Årsvisa påverkbara kostnader:**")
-                
-                yearly_data = pd.DataFrame({
-                    'År': [2024, 2025, 2026, 2027],
-                    'Ei baseline (tkr)': [
-                        f"{y2024_base:,.0f}".replace(",", " "),
-                        f"{y2025_base:,.0f}".replace(",", " "),
-                        f"{y2026_base:,.0f}".replace(",", " "),
-                        f"{y2027_base:,.0f}".replace(",", " ")
-                    ],
-                    'Scenario (tkr)': [
-                        f"{y2024_scn:,.0f}".replace(",", " "),
-                        f"{y2025_scn:,.0f}".replace(",", " "),
-                        f"{y2026_scn:,.0f}".replace(",", " "),
-                        f"{y2027_scn:,.0f}".replace(",", " ")
-                    ],
-                    'Skillnad (tkr)': [
-                        f"{(y2024_base - y2024_scn):+,.0f}".replace(",", " "),
-                        f"{(y2025_base - y2025_scn):+,.0f}".replace(",", " "),
-                        f"{(y2026_base - y2026_scn):+,.0f}".replace(",", " "),
-                        f"{(y2027_base - y2027_scn):+,.0f}".replace(",", " ")
-                    ],
-                    'Inkrement (tkr)': [
-                        f"{row.get('Inc_2024_scn', 0):,.0f}".replace(",", " "),
-                        f"{row.get('Inc_2025_scn', 0):,.0f}".replace(",", " "),
-                        f"{row.get('Inc_2026_scn', 0):,.0f}".replace(",", " "),
-                        f"{row.get('Inc_2027_scn', 0):,.0f}".replace(",", " ")
-                    ],
-                    'Kumulativt avdrag (tkr)': [
-                        f"{row.get('Avdrag_2024_scn', 0):,.0f}".replace(",", " "),
-                        f"{row.get('Avdrag_2025_scn', 0):,.0f}".replace(",", " "),
-                        f"{row.get('Avdrag_2026_scn', 0):,.0f}".replace(",", " "),
-                        f"{row.get('Avdrag_2027_scn', 0):,.0f}".replace(",", " ")
-                    ]
-                })
-                
-                st.dataframe(yearly_data, use_container_width=True, hide_index=True)
-                st.caption("Alla värden är för perioden 2024-2027 (4 år totalt)")
-                return
+        rows.append({
+            'År': year,
+            'Scenario (tkr)': f"{scenario_val:,.0f}".replace(",", " "),
+            'Baseline (tkr)': f"{baseline_val:,.0f}".replace(",", " "),
+            'Förändring (tkr)': f"{delta:+,.0f}".replace(",", " ") if abs(delta) > 1 else "—",
+            'Förändring (%)': f"{delta_pct:+.1f}%" if abs(delta) > 1 else "—"
+        })
     
-    # Om inget scenario: visa info
-    st.info("Importera effektiviseringskrav från DEA för att se årsvisa värden")
+    df_yearly = pd.DataFrame(rows)
+    st.dataframe(df_yearly, use_container_width=True, hide_index=True)
 
 
 def show_yearly_kapitalkostnad_placeholder():
     """
-    Placeholder för kapitalkostnader per period (kommer snart).
+    Placeholder för årsvisa kapitalkostnader
     """
-    st.write("**Kapitalkostnader per period:**")
-    
-    # Visa tom tabell-struktur för att visa hur det kommer se ut
-    placeholder_data = pd.DataFrame({
-        'År': [2024, 2025, 2026, 2027],
-        'Avskrivningar (tkr)': ['—', '—', '—', '—'],
-        'Avkastning (tkr)': ['—', '—', '—', '—'],
-        'Total kapitalkostnad (tkr)': ['—', '—', '—', '—']
-    })
-    
-    st.dataframe(placeholder_data, use_container_width=True, hide_index=True)
-    st.info("Kommer snart")
+    st.markdown("### Kapitalkostnad per period")
+    st.info("Detaljerad periodvis kapitalkostnad implementeras i nästa fas")
 
 
 def show_export_section(entity_data: pd.Series, modifications: dict):
-    """Visar export-funktionalitet."""
-    st.write("**Export:**")
+    """
+    Visar export-funktionalitet
+    """
+    st.markdown("### Exportera scenario")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Excel-export
-        buffer = create_comprehensive_excel_export(entity_data, modifications)
-        
-        scenario_name = st.session_state.get('current_scenario_name', 'baseline')
-        reid = entity_data.get('REId', 'unknown')
-        filename = f"oversikt_{reid}_{scenario_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-        
-        st.download_button(
-            label="Ladda ned som Excel",
-            data=buffer.getvalue(),
-            file_name=filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+        if st.button("Exportera till Excel", use_container_width=True):
+            try:
+                excel_data = create_excel_export(entity_data, modifications)
+                st.download_button(
+                    label="Ladda ner Excel-fil",
+                    data=excel_data,
+                    file_name=f"intaktsram_scenario_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            except Exception as e:
+                st.error(f"Export misslyckades: {e}")
     
     with col2:
-        st.caption("Exporterar komplett översikt med alla tillgängliga data")
+        if st.button("Skapa rapport (PDF)", use_container_width=True):
+            st.info("PDF-rapport implementeras i nästa fas")
 
 
-def create_comprehensive_excel_export(entity_data: pd.Series, modifications: dict) -> io.BytesIO:
-    """Skapar omfattande Excel-export med all tillgänglig data."""
-    buffer = io.BytesIO()
+def create_excel_export(entity_data: pd.Series, modifications: dict) -> bytes:
+    """
+    Skapar Excel-export av scenario
+    """
+    output = io.BytesIO()
     
-    # Hämta baseline för jämförelse
-    baseline_df = st.session_state.scenario_data.get('baseline') if 'scenario_data' in st.session_state else None
-    baseline_row = None
-    
-    if baseline_df is not None and not baseline_df.empty:
-        baseline_match = baseline_df[baseline_df['REId'] == entity_data['REId']]
-        if not baseline_match.empty:
-            baseline_row = baseline_match.iloc[0]
-    
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-        # Sheet 1: Komponenter med full jämförelse
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Skapa översikt-sheet
+        overview_data = {
+            'Komponent': [],
+            'Scenario (tkr)': [],
+            'Baseline (tkr)': [],
+            'Förändring (tkr)': [],
+            'Förändring (%)': []
+        }
+        
         components = [
-            ('Påverkbara kostnader', 'Paverkbara_Kostnader'),
-            ('Opåverkbara kostnader', 'Opaverkbara_Kostnader'),
+            ('Löpande kostnader', 'Lopande_Total'),
+            ('Påverkbara kostnader', 'Paverkbara_Total'),
+            ('Ej påverkbara kostnader', 'Opaverkbara_Total'),
             ('Kapitalkostnad', 'Kapitalkostnad_Total'),
-            ('Avskrivningar', 'Avskrivningar'),
-            ('Avkastning', 'Avkastning'),
-            ('Flexibilitetstjänster', 'Flexibilitetstjanster'),
-            ('Avbrottsersättning 12-24h', 'Avbrottsersattning_12_24h'),
+            ('Flexibilitetstjänster', 'Flexibilitetstjanster_Total'),
+            ('Avbrottsersättning', 'Avbrottsersattning_Total'),
             ('Total intäktsram', 'Intaktsram_Total')
         ]
         
-        comp_data = []
-        for name, col in components:
-            current_val = entity_data.get(col, 0) or 0
-            ref_val = baseline_row.get(col, 0) if baseline_row is not None else current_val
-            diff = current_val - ref_val
-            diff_pct = (diff / ref_val * 100) if ref_val > 0 else 0
-            source = get_detailed_source(name, col, entity_data, modifications)
+        for name, key in components:
+            value = entity_data.get(key, 0)
+            baseline = entity_data.get(f'{key}_Baseline', value)
+            delta = value - baseline
+            delta_pct = (delta / baseline * 100) if baseline != 0 else 0
             
-            comp_data.append({
-                'Komponent': name,
-                'Aktivt värde (tkr)': current_val,
-                'Referensvärde (tkr)': ref_val,
-                'Skillnad (tkr)': diff,
-                'Skillnad (%)': diff_pct,
-                'Källa': source
-            })
+            overview_data['Komponent'].append(name)
+            overview_data['Scenario (tkr)'].append(value)
+            overview_data['Baseline (tkr)'].append(baseline)
+            overview_data['Förändring (tkr)'].append(delta)
+            overview_data['Förändring (%)'].append(delta_pct)
         
-        df_components = pd.DataFrame(comp_data)
-        df_components.to_excel(writer, sheet_name='Komponenter', index=False)
+        df_overview = pd.DataFrame(overview_data)
+        df_overview.to_excel(writer, sheet_name='Översikt', index=False)
         
-        # Sheet 2: Årsvisa påverkbara (om tillgängliga)
-        effkrav_mod = modifications.get('paverkbara', {}) if modifications else {}
-        last_calc = effkrav_mod.get('last_calculation')
-        
-        if last_calc:
-            export_data = last_calc.get('export_data')
-            if export_data is not None and not export_data.empty:
-                reid = entity_data['REId']
-                entity_calc = export_data[export_data['REId'] == reid]
-                
-                if not entity_calc.empty:
-                    row = entity_calc.iloc[0]
-                    
-                    yearly_data = {
-                        'År': [2024, 2025, 2026, 2027],
-                        'Ei baseline (tkr)': [
-                            row.get('Y2024_baseline', 0),
-                            row.get('Y2025_baseline', 0),
-                            row.get('Y2026_baseline', 0),
-                            row.get('Y2027_baseline', 0)
-                        ],
-                        'Scenario (tkr)': [
-                            row.get('Y2024_scenario', 0),
-                            row.get('Y2025_scenario', 0),
-                            row.get('Y2026_scenario', 0),
-                            row.get('Y2027_scenario', 0)
-                        ],
-                        'Skillnad (tkr)': [
-                            row.get('Y2024_baseline', 0) - row.get('Y2024_scenario', 0),
-                            row.get('Y2025_baseline', 0) - row.get('Y2025_scenario', 0),
-                            row.get('Y2026_baseline', 0) - row.get('Y2026_scenario', 0),
-                            row.get('Y2027_baseline', 0) - row.get('Y2027_scenario', 0)
-                        ],
-                        'Inkrement (tkr)': [
-                            row.get('Inc_2024_scn', 0),
-                            row.get('Inc_2025_scn', 0),
-                            row.get('Inc_2026_scn', 0),
-                            row.get('Inc_2027_scn', 0)
-                        ],
-                        'Kumulativt avdrag (tkr)': [
-                            row.get('Avdrag_2024_scn', 0),
-                            row.get('Avdrag_2025_scn', 0),
-                            row.get('Avdrag_2026_scn', 0),
-                            row.get('Avdrag_2027_scn', 0)
-                        ]
-                    }
-                    
-                    df_yearly = pd.DataFrame(yearly_data)
-                    df_yearly.to_excel(writer, sheet_name='Årsvisa_påverkbara', index=False)
-        
-        # Sheet 3: Metadata och scenario-info
-        scenario_name = st.session_state.get('current_scenario_name', 'Baseline')
-        
-        metadata_rows = [
-            ('REId', entity_data.get('REId', '')),
-            ('DMU', entity_data.get('DMU', '')),
-            ('Företag', entity_data.get('Företag', '')),
-            ('', ''),
-            ('Scenario', scenario_name),
-            ('Exportdatum', datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
-            ('', ''),
-        ]
-        
-        # Lägg till modifieringsinformation
-        if 'kapitalkostnad' in modifications:
-            kapital_mod = modifications['kapitalkostnad']
-            metadata = kapital_mod.get('metadata', {})
-            wacc = metadata.get('wacc_new')
-            if wacc:
-                metadata_rows.append(('Kapitalkostnad WACC', f"{wacc*100:.4f}%"))
-            metadata_rows.append(('Kapitalkostnad källa', kapital_mod.get('source', 'okänd')))
-        
-        if 'paverkbara' in modifications:
-            effkrav_mod = modifications['paverkbara']
-            if effkrav_mod.get('source') == 'effektiviseringskrav':
-                method = effkrav_mod.get('method', 'OPEX')
-                metadata_rows.append(('Effektiviseringskrav metod', method))
-                dea_result = effkrav_mod.get('dea_result')
-                if dea_result is not None and not dea_result.empty:
-                    effkrav_pct = dea_result.iloc[0].get('Effkrav_proc', 0) * 100
-                    metadata_rows.append(('Effektiviseringskrav %', f"{effkrav_pct:.2f}%"))
-        
-        df_metadata = pd.DataFrame(metadata_rows, columns=['Parameter', 'Värde'])
+        # Skapa metadata-sheet
+        metadata = {
+            'Parameter': ['Scenario-namn', 'Exportdatum', 'Företag', 'DMU'],
+            'Värde': [
+                st.session_state.get('current_scenario_name', 'Namnlöst'),
+                datetime.now().strftime('%Y-%m-%d %H:%M'),
+                entity_data.get('Företag', 'N/A'),
+                entity_data.get('DMU', 'N/A')
+            ]
+        }
+        df_metadata = pd.DataFrame(metadata)
         df_metadata.to_excel(writer, sheet_name='Metadata', index=False)
-        
-        # Sheet 4: Rådata (alla kolumner från entity_data för power users)
-        raw_data = pd.DataFrame([entity_data]).T
-        raw_data.columns = ['Värde']
-        raw_data.to_excel(writer, sheet_name='Rådata')
     
-    buffer.seek(0)
-    return buffer
+    output.seek(0)
+    return output.read()
