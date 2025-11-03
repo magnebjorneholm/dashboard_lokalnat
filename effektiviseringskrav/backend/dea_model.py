@@ -6,15 +6,18 @@ from effektiviseringskrav.backend.run_logger import save_run
 def run_dea_model(
     df: pd.DataFrame,
     rts: str = "crs",
-    trunkering_min: float = 0.162416,
-    trunkering_max: float = 0.3,
     input_cols: list = ["CAPEX", "OPEXp"],
     output_cols: list = ["CU", "MW", "NS", "MWhl", "MWhh"],
     outlier_filter: bool = True,
-    outlier_krav: float = 0.01 
+    q_lower: float = 25.0,
+    q_upper: float = 75.0,
+    multiplier: float = 2.0
 ) -> pd.DataFrame:
     """
-    Kör DEA med eller utan outlierfiltrering enligt EI:s metod.
+    Kör DEA med konfigurerbar outlier-identifikation enligt EI:s metod.
+    Beräknar effektivitet, supereffektivitet och potential.
+    Identifierar outliers baserat på användarens val av kvartilar och multiplikator.
+    Effektiviseringskrav beräknas senare i intäktsram-tabben.
     """
     df = df.copy()
     df[input_cols] = df[input_cols].apply(pd.to_numeric, errors="coerce")
@@ -59,9 +62,10 @@ def run_dea_model(
     df["supereff1"] = eff1
 
     theta_valid = [e for e in eff1 if isinstance(e, (int, float)) and not np.isnan(e)]
-    q75 = np.percentile(theta_valid, 75)
-    q25 = np.percentile(theta_valid, 25)
-    threshold = q75 + 2 * (q75 - q25)
+    q_low = np.percentile(theta_valid, q_lower)
+    q_high = np.percentile(theta_valid, q_upper)
+    iqr = q_high - q_low
+    threshold = q_high + multiplier * iqr
     df["is_outlier"] = [e > threshold if isinstance(e, (int, float)) else True for e in eff1]
 
     # === Andra körning (exkludera outliers) ===
@@ -73,7 +77,6 @@ def run_dea_model(
     result_effektivitet = []
     result_supereffektivitet = []
     result_potential = []
-    result_effkrav_proc = []
 
     j = 0
     for i, is_outlier in enumerate(df["is_outlier"]):
@@ -81,34 +84,28 @@ def run_dea_model(
                 result_effektivitet.append(min(eff1[i], 1))
                 result_supereffektivitet.append(eff1[i])     
                 result_potential.append(1.0)
-                result_effkrav_proc.append(outlier_krav)
         else:
             theta = eff2[j]
             if isinstance(theta, (int, float)) and not np.isnan(theta):
                 effektivitet = min(theta, 1)
                 revred = 1 - effektivitet
-                revred_compress = np.clip(revred, trunkering_min, trunkering_max)
-                revred_compress_yearly = ((1 + revred_compress / 4) ** 0.25) - 1
 
                 result_effektivitet.append(effektivitet)
                 result_supereffektivitet.append(theta)
                 result_potential.append(revred)
-                result_effkrav_proc.append(revred_compress_yearly)
             else:
                 result_effektivitet.append(np.nan)
                 result_supereffektivitet.append(np.nan)
                 result_potential.append(np.nan)
-                result_effkrav_proc.append(np.nan)
             j += 1
 
     df["Effektivitet"] = result_effektivitet
     df["Supereffektivitet"] = result_supereffektivitet
     df["potential"] = result_potential
-    df["Effkrav_proc"] = result_effkrav_proc
 
     # Konvertera OUTLIER till NaN inför loggning (för pyarrow/feather-kompatibilitet)
     df_for_loggning = df.copy()
-    for col in ["supereff1", "Effektivitet", "Supereffektivitet", "Effkrav_proc", "potential"]:
+    for col in ["supereff1", "Effektivitet", "Supereffektivitet", "potential"]:
         if col in df_for_loggning.columns:
             df_for_loggning[col] = pd.to_numeric(df_for_loggning[col], errors="coerce")
 
@@ -116,9 +113,10 @@ def run_dea_model(
         "rts": rts,
         "input_cols": input_cols,
         "output_cols": output_cols,
-        "trunkering_min": trunkering_min,
-        "trunkering_max": trunkering_max,
-        "outlier_filter": outlier_filter
+        "outlier_filter": outlier_filter,
+        "q_lower": q_lower,
+        "q_upper": q_upper,
+        "multiplier": multiplier
     }, df_for_loggning)
 
     return df

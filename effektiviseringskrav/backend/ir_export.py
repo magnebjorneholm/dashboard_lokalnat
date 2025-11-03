@@ -1,9 +1,9 @@
 """
 effektiviseringskrav/backend/ir_export.py
-Export av effektiviseringskrav för intäktsram-användning
+Export av effektivitetsvärden för intäktsram-användning
 
-FÖRENKLAD VERSION: Exporterar BARA effektiviseringskrav-procent + DMU/REId.
-IR-baseline laddas lokalt i intäktsramen när beräkning sker.
+Exporterar effektivitet, supereffektivitet och potential.
+Effektiviseringskrav beräknas i intäktsram-tabben baserat på användarens val.
 """
 
 import os
@@ -21,19 +21,22 @@ def export_effektiviseringskrav_scenario(
     base_dir: str = "scenario/effektiviseringskrav/exports_to_ir"
 ) -> Tuple[str, str]:
     """
-    Exporterar effektiviseringskrav för företagsanvändning.
+    Exporterar effektivitetsvärden för företagsanvändning.
     
-    ENKEL VERSION - exporterar bara:
+    Exporterar:
     - DMU
     - REId
     - Företag (om den finns)
-    - Effkrav_proc
+    - Effektivitet (för diagnostik)
+    - Supereffektivitet (för outlier-identifikation)
+    - potential (1 - effektivitet, för beräkning av effektiviseringskrav)
+    - is_outlier (flagga)
     
-    Metod (OPEX/TOTEX) väljs vid import i Intäktsram-tabben.
-    IR-baseline laddas lokalt i intäktsramen när beräkning sker.
+    Användaren väljer trunkering, outlier-definition och metod (OPEX/TOTEX) 
+    vid import i Intäktsram-tabben.
     
     Args:
-        dea_result: DataFrame med DEA-resultat (kolumner: DMU, REId, Effkrav_proc)
+        dea_result: DataFrame med DEA-resultat
         base_dir: Baskatalog för export
         
     Returns:
@@ -43,21 +46,17 @@ def export_effektiviseringskrav_scenario(
         ValueError: Om dea_result saknar kolumner
     """
     # Validera DEA-resultat
-    required_cols = ['DMU', 'REId', 'Effkrav_proc']
+    required_cols = ['DMU', 'REId', 'Effektivitet', 'Supereffektivitet', 'potential', 'is_outlier']
     missing_cols = [col for col in required_cols if col not in dea_result.columns]
     if missing_cols:
         raise ValueError(f"DEA-resultat saknar kolumner: {missing_cols}")
     
     # Välj kolumner att exportera
-    export_cols = ['DMU', 'REId', 'Effkrav_proc']
+    export_cols = ['DMU', 'REId', 'Effektivitet', 'Supereffektivitet', 'potential', 'is_outlier']
     
     # Lägg till Företag om den finns
     if 'Företag' in dea_result.columns:
         export_cols.insert(2, 'Företag')
-    
-    # Lägg till Effektivitet om den finns (för metadata/diagnostik)
-    if 'Effektivitet' in dea_result.columns:
-        export_cols.append('Effektivitet')
     
     export_data = dea_result[export_cols].copy()
     
@@ -83,10 +82,10 @@ def export_effektiviseringskrav_scenario(
     # Skapa metadata
     metadata = {
         "description": (
-            "Effektiviseringskrav för företagsanvändning. "
-            "Innehåller endast effektiviseringskrav-procent. "
-            "Metod (OPEX/TOTEX) väljs vid import. "
-            "IR-baseline laddas lokalt i intäktsramen."
+            "Effektivitetsvärden för företagsanvändning. "
+            "Innehåller effektivitet, supereffektivitet, potential och outlier-flagga. "
+            "Effektiviseringskrav beräknas i intäktsram-tabben baserat på "
+            "användarens val av trunkering, outlier-definition och metod (OPEX/TOTEX)."
         ),
         "organization": org,
         "export_type": "company_use",
@@ -95,16 +94,18 @@ def export_effektiviseringskrav_scenario(
             "end": 2027
         },
         "price_year": 2022,
-        "unit": "procent för Effkrav_proc",
         "export_timestamp": datetime.now().isoformat(),
         "reid_count": len(export_data),
         "dmu_count": export_data['DMU'].nunique(),
-        "mean_effkrav_pct": float(export_data['Effkrav_proc'].mean() * 100),
+        "mean_efficiency": float(export_data['Effektivitet'].mean()),
+        "mean_potential": float(export_data['potential'].mean()),
+        "outlier_count": int(export_data['is_outlier'].sum()),
         "file_format": "parquet",
         "data_file": data_filename,
         "usage": (
-            "Importera i företagsvy, välj OPEX/TOTEX. "
-            "Beräkning sker automatiskt mot IR-baseline och aktuell kapitalkostnad."
+            "Importera i företagsvy för intäktsram-dekomposition. "
+            "Välj trunkering, outlier-definition och metod (OPEX/TOTEX) vid import. "
+            "Beräkning av effektiviseringskrav sker automatiskt."
         )
     }
     
@@ -115,6 +116,7 @@ def export_effektiviseringskrav_scenario(
     print(f"Export klar: {data_filename}")
     print(f"  - {len(export_data)} REId")
     print(f"  - {export_data['DMU'].nunique()} DMU")
-    print(f"  - Medel effektiviseringskrav: {metadata['mean_effkrav_pct']:.2f}%")
+    print(f"  - Medeleffektivitet: {metadata['mean_efficiency']:.3f}")
+    print(f"  - Outliers: {metadata['outlier_count']}")
     
     return data_path, meta_path

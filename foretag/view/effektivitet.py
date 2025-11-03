@@ -5,7 +5,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import io
 from datetime import datetime
 from pathlib import Path
 
@@ -129,32 +128,40 @@ def show_foretag_effektivitet():
         st.warning("Välj minst en input och en output för att köra modellen.")
         return
 
-    # Trunkering och krav för outliers i en egen sektion
-    st.markdown("**Trunkering och krav för outliers**")
+    # Outlier-definition
+    st.markdown("**Outlier-definition**")
+    st.caption("Konfigurera hur outliers identifieras baserat på supereffektivitet")
+    
     col3, col4, col5 = st.columns(3)
     
     with col3:
-        dea_trunk_min = st.slider(
-            "Minsta trunkering", 
-            0.0, 0.3, 0.162416, 
-            step=0.005,
-            help="Lägsta effektivitetsgräns för trunkeringsintervallet"
+        q_lower = st.slider(
+            "Nedre kvartil",
+            0, 50, 25,
+            step=5,
+            key="dea_q_lower",
+            help="Nedre kvartil för outlier-tröskel"
         )
     
     with col4:
-        dea_trunk_max = st.slider(
-            "Högsta trunkering", 
-            0.1, 0.5, 0.3, 
-            step=0.005,
-            help="Högsta effektivitetsgräns för trunkeringsintervallet"
+        q_upper = st.slider(
+            "Övre kvartil",
+            50, 100, 75,
+            step=5,
+            key="dea_q_upper",
+            help="Övre kvartil för outlier-tröskel"
         )
     
     with col5:
-        dea_outlier_krav = st.slider(
-            "Årligt krav för outliers (%)",
-            1.0, 1.82, 1.0, 0.01,
-            help="Fast effektiviseringskrav för företag klassade som outliers"
+        multiplier = st.slider(
+            "IQR-multiplikator",
+            1.0, 3.0, 2.0,
+            step=0.1,
+            key="dea_multiplier",
+            help="Multiplikator för interkvartilavstånd"
         )
+    
+    st.caption("Threshold: Q_upper + multiplikator × (Q_upper - Q_lower)")
 
     # Körknapp centrerad
     st.markdown("")
@@ -172,12 +179,12 @@ def show_foretag_effektivitet():
                 result = run_dea_model(
                     df,
                     rts=dea_rts,
-                    trunkering_min=dea_trunk_min,
-                    trunkering_max=dea_trunk_max,
                     input_cols=input_cols,
                     output_cols=output_cols,
                     outlier_filter=use_outlier_filter,
-                    outlier_krav=dea_outlier_krav/100
+                    q_lower=q_lower,
+                    q_upper=q_upper,
+                    multiplier=multiplier
                 )
                 
                 # Spara DEA-resultat för senare användning
@@ -188,10 +195,10 @@ def show_foretag_effektivitet():
                         'input_cols': input_cols,
                         'output_cols': output_cols,
                         'rts': dea_rts,
-                        'trunk_min': dea_trunk_min,
-                        'trunk_max': dea_trunk_max,
                         'outlier_filter': use_outlier_filter,
-                        'outlier_krav': dea_outlier_krav,
+                        'q_lower': q_lower,
+                        'q_upper': q_upper,
+                        'multiplier': multiplier,
                         'scenario_info': scen_info
                     },
                     'timestamp': datetime.now().isoformat()
@@ -266,17 +273,18 @@ def show_dea_results(latest_result, user_dmu, company_name):  # company_name inn
     neighbor_gap = calculate_company_neighbor_gap(result, user_dmu)
     
     # === FÖRETAGETS RESULTAT ===
-    st.subheader(f"Outputs för {company_name}")  # FIXAT: använd f-string och company_name
+    st.subheader(f"Resultat för {company_name}")
     
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # Rad 1: Företagets värden
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         eff_val = company_row['Effektivitet']
         st.metric("Effektivitet", f"{eff_val:.3f}" if not pd.isna(eff_val) else "N/A")
     
     with col2:
-        krav_val = company_row['Effkrav_proc']
-        st.metric("Årligt krav", f"{krav_val*100:.2f}%" if not pd.isna(krav_val) else "N/A")
+        supereff_val = company_row['Supereffektivitet']
+        st.metric("Supereffektivitet", f"{supereff_val:.3f}" if not pd.isna(supereff_val) else "N/A")
     
     with col3:
         is_outlier = company_row['is_outlier']
@@ -292,7 +300,10 @@ def show_dea_results(latest_result, user_dmu, company_name):  # company_name inn
         else:
             st.metric("Ranking", "N/A")
     
-    with col5:
+    # Rad 2: Kontext och statistik
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
         if neighbor_gap is not None:
             st.metric(
                 "vs grannar",
@@ -302,17 +313,17 @@ def show_dea_results(latest_result, user_dmu, company_name):  # company_name inn
         else:
             st.metric("vs grannar", "N/A", help="Geografisk data saknas")
     
-    # === ÖVERGRIPANDE STATISTIK OCH FÖRDELNINGAR ===
-    n_total = len(result)
-    n_outliers = result['is_outlier'].sum()
-    avg_eff = result[~result["is_outlier"]]["Effektivitet"].mean()
-    avg_krav = result["Effkrav_proc"].mean() * 100
+    with col2:
+        n_total = len(result)
+        st.metric("Totalt antal företag", n_total)
     
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Totalt antal företag", n_total)
-    col2.metric("Outliers", n_outliers)
-    col3.metric("Medeleffektivitet", f"{avg_eff:.3f}")
-    col4.metric("Genomsnittligt krav", f"{avg_krav:.2f}%")
+    with col3:
+        n_outliers = result['is_outlier'].sum()
+        st.metric("Outliers", n_outliers)
+    
+    with col4:
+        avg_eff = result[~result["is_outlier"]]["Effektivitet"].mean()
+        st.metric("Medeleffektivitet", f"{avg_eff:.3f}")
 
     st.markdown("#### Fördelningar")
     col_hist1, col_hist2 = st.columns(2)
@@ -322,7 +333,7 @@ def show_dea_results(latest_result, user_dmu, company_name):  # company_name inn
     with col_hist1:
         display_efficiency_histogram(df_plot["Effektivitet"], title="Effektivitet (exkl. outliers)")
     with col_hist2:
-        display_efficiency_histogram(df_plot["Effkrav_proc"] * 100, title="Årligt effektiviseringskrav (%)")
+        display_efficiency_histogram(df_plot["Supereffektivitet"], title="Supereffektivitet (exkl. outliers)")
 
     # === GEOGRAFISK ANALYS ===
     st.markdown("---")
@@ -338,54 +349,35 @@ def show_dea_results(latest_result, user_dmu, company_name):  # company_name inn
 
     # === EXPORT ===
     st.markdown("---")
-    st.subheader("Export")
+    st.subheader("Export till Intäktsram")
     
-    col_excel, col_ir = st.columns(2)
+    st.caption("Exporterar effektivitet, potential, supereffektivitet och outlier-status för användning i Intäktsram-dekomposition")
     
-    # Excel-export
-    with col_excel:
-        st.markdown("**DEA-resultat**")
-        st.caption("Ladda ned som Excel för egen analys")
-        buffer = create_excel_export(result, company_result_dmu, company_name)
-        st.download_button(
-            label="Ladda ned som Excel",
-            data=buffer.getvalue(),
-            file_name=f"dea_resultat_{company_name.replace(' ', '_').replace('(', '').replace(')', '')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-    
-    # IR-export
-    with col_ir:
-        st.markdown("**Export till Intäktsram**")
-        st.caption("Exporterar effektiviseringskrav för användning i Intäktsram-dekomposition")
-        
-        # Ta bort user_dmu från key eftersom det kan vara utanför scope
-        if st.button("Exportera till Intäktsram", key=f"export_ir_{user_dmu}", use_container_width=True):
-            try:
-                success, message = export_to_ir(company_result_dmu)
+    if st.button("Exportera till Intäktsram", key=f"export_ir_{user_dmu}", use_container_width=True, type="primary"):
+        try:
+            success, message = export_to_ir(company_result_dmu)
+            
+            if success:
+                st.success(message)
+                st.info(
+                    "Nu tillgängligt i Intäktsram → Effektiviseringskrav-tab → Importera från DEA. "
+                    "Välj trunkering och beräkningsparametrar vid import."
+                )
+            else:
+                st.error(message)
                 
-                if success:
-                    st.success(message)
-                    st.info(
-                        "Nu tillgängligt i Intäktsram → Effektiviseringskrav-tab → Importera från DEA. "
-                        "Välj OPEX eller TOTEX vid import."
-                    )
-                else:
-                    st.error(message)
-                    
-            except Exception as e:
-                st.error(f"Export misslyckades: {e}")
-                import traceback
-                st.error(traceback.format_exc())
+        except Exception as e:
+            st.error(f"Export misslyckades: {e}")
+            import traceback
+            st.error(traceback.format_exc())
 
 
 def export_to_ir(company_result):
     """
-    Exporterar effektiviseringskrav till Intäktsram.
+    Exporterar effektivitetsvärden till Intäktsram.
     """
     try:
-        required_cols = ['DMU', 'REId', 'Effkrav_proc']
+        required_cols = ['DMU', 'REId', 'Effektivitet', 'Supereffektivitet', 'potential', 'is_outlier']
         missing_cols = [col for col in required_cols if col not in company_result.columns]
         
         if missing_cols:
@@ -403,36 +395,6 @@ def export_to_ir(company_result):
         
     except Exception as e:
         return False, f"Export misslyckades: {str(e)}"
-
-
-def create_excel_export(result, company_result, company_name):
-    """Skapar Excel-export med företagsfokus"""
-    
-    buffer = io.BytesIO()
-    
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-        # Företagets resultat först
-        company_export = company_result.copy()
-        company_export.to_excel(writer, sheet_name="Mitt_företag", index=False)
-        
-        # Alla företag för kontext
-        all_results = result.copy() 
-        all_results['Mitt_företag'] = all_results['DMU'].isin(company_result['DMU'])
-        all_results.to_excel(writer, sheet_name="Alla_företag", index=False)
-        
-        # Sammanfattning
-        summary_data = {
-            'Mått': ['Företag totalt', 'Medeleffektivitet', 'Mitt företags effektivitet', 'Mitt företags krav'],
-            'Värde': [
-                len(result),
-                f"{result[~result['is_outlier']]['Effektivitet'].mean():.3f}",
-                f"{company_result.iloc[0]['Effektivitet']:.3f}",
-                f"{company_result.iloc[0]['Effkrav_proc']*100:.2f}%"
-            ]
-        }
-        pd.DataFrame(summary_data).to_excel(writer, sheet_name="Sammanfattning", index=False)
-    
-    return buffer
 
 
 if __name__ == "__main__":

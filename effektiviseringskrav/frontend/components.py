@@ -85,32 +85,41 @@ def display_dea_parameters(
     )
     
     st.sidebar.caption(
+        "**Outlier-definition**\n"
+        "Konfigurera hur outliers identifieras baserat på supereffektivitet."
+    )
+    
+    q_lower = st.sidebar.slider(
+        "Nedre kvartil",
+        0, 50, 25,
+        step=5,
+        help="Nedre kvartil för outlier-tröskel"
+    )
+    
+    q_upper = st.sidebar.slider(
+        "Övre kvartil",
+        50, 100, 75,
+        step=5,
+        help="Övre kvartil för outlier-tröskel"
+    )
+    
+    multiplier = st.sidebar.slider(
+        "IQR-multiplikator",
+        1.0, 3.0, 2.0,
+        step=0.1,
+        help="Multiplikator för interkvartilavstånd (IQR)"
+    )
+    
+    st.sidebar.caption(
+        "Threshold: Q_upper + multiplikator × (Q_upper - Q_lower)"
+    )
+    
+    st.sidebar.caption(
         "**Skalavkastning (RTS)**\n"
         "• crs: Konstant skalavkastning\n"
         "• vrs: Variabel skalavkastning"
     )
     dea_rts = st.sidebar.selectbox("Skalavkastning (RTS)", ["crs", "vrs"], index=0)
-    
-    st.sidebar.caption(
-        "**Trunkering av intäktsreduktion**\n"
-        "Begränsar hur mycket ineffektivitet får påverka kraven."
-    )
-    dea_trunk_min = st.sidebar.slider(
-        "Minsta trunkering", 
-        0.0, 0.3, 0.162416, 
-        step=0.005
-    )
-    dea_trunk_max = st.sidebar.slider(
-        "Högsta trunkering", 
-        0.1, 0.5, 0.3, 
-        step=0.005
-    )
-    
-    dea_outlier_krav = st.sidebar.slider(
-        "Årligt krav för outliers (%)",
-        1.0, 1.82, 1.0, 0.01,
-        help="Vilket fast krav (i procent) ska ges till företag som klassas som outliers?"
-    )
     
     run_model = st.sidebar.button("Kör DEA", type="primary")
     
@@ -121,10 +130,10 @@ def display_dea_parameters(
         'input_cols': input_cols,
         'output_cols': output_cols,
         'rts': dea_rts,
-        'trunkering_min': dea_trunk_min,
-        'trunkering_max': dea_trunk_max,
         'outlier_filter': use_outlier_filter,
-        'outlier_krav': dea_outlier_krav / 100
+        'q_lower': q_lower,
+        'q_upper': q_upper,
+        'multiplier': multiplier
     }
 
 
@@ -154,7 +163,7 @@ def _validate_input_exclusivity(input_cols: List[str]) -> Optional[str]:
 # RESULTAT-KOMPONENTER
 # ============================================================================
 
-def display_dea_results_summary(result: pd.DataFrame, outlier_krav_pct: float):
+def display_dea_results_summary(result: pd.DataFrame, outlier_krav_pct: float = None):
     """
     Visar sammanfattande metrics för DEA-resultat.
     """
@@ -176,20 +185,20 @@ def display_dea_results_summary(result: pd.DataFrame, outlier_krav_pct: float):
         st.metric("Medeleffektivitet", f"{avg_eff:.3f}")
     
     with col4:
-        avg_krav = result["Effkrav_proc"].mean() * 100
-        st.metric("Medelkrav (%)", f"{avg_krav:.2f}%")
+        avg_pot = result["potential"].mean()
+        st.metric("Medelpotential", f"{avg_pot:.3f}")
     
     if n_outliers > 0:
-        st.warning(f"{n_outliers} företag klassificerade som outliers (fast krav {outlier_krav_pct:.1f}%)")
+        st.warning(f"{n_outliers} företag klassificerade som outliers")
         _display_outliers_table(result)
 
 
 def _display_outliers_table(result: pd.DataFrame):
     """Visar expanderbar tabell med outliers."""
     df_outliers = result[result["is_outlier"] == True][
-        ["Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc"]
+        ["Företag", "Effektivitet", "Supereffektivitet", "potential"]
     ].copy()
-    df_outliers["Effkrav_proc"] = df_outliers["Effkrav_proc"].round(4)
+    df_outliers["potential"] = df_outliers["potential"].round(4)
     
     with st.expander("Visa outliers"):
         st.dataframe(df_outliers, width='stretch')
@@ -200,12 +209,12 @@ def display_dea_results_table(result: pd.DataFrame):
     Visar huvudresultat-tabell för DEA.
     """
     display_result = result[
-        ["DMU", "Företag", "Effektivitet", "Supereffektivitet", "Effkrav_proc", "is_outlier"]
+        ["DMU", "Företag", "Effektivitet", "Supereffektivitet", "potential", "is_outlier"]
     ].copy()
     
-    display_result["Effkrav_proc"] = (display_result["Effkrav_proc"] * 100).round(2)
+    display_result["potential"] = (display_result["potential"] * 100).round(2)
     display_result = display_result.rename(columns={
-        "Effkrav_proc": "Årligt krav (%)",
+        "potential": "Potential (%)",
         "is_outlier": "Outlier"
     })
     
@@ -266,7 +275,7 @@ def display_efficiency_histogram(data: pd.Series, title: str = "Effektivitet"):
 
 def display_efficiency_distributions(result: pd.DataFrame):
     """
-    Visar två histogram: effektivitet och årligt krav.
+    Visar två histogram: effektivitet och potential.
     """
     st.subheader("Fördelningar")
     
@@ -282,8 +291,8 @@ def display_efficiency_distributions(result: pd.DataFrame):
     
     with col2:
         display_efficiency_histogram(
-            df_plot["Effkrav_proc"] * 100, 
-            title="Årligt effektiviseringskrav (%) (exkl. outliers)"
+            df_plot["potential"] * 100, 
+            title="Potential (%) (exkl. outliers)"
         )
 
 

@@ -5,11 +5,13 @@ Effektiviseringskrav-tab med tydligt flöde och OPEX/TOTEX-toggle
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 from typing import Optional
 from pathlib import Path
 import json
 
 from core.session_utils import ensure_org_dir
+from core.effektiviseringskrav_calculations import calculate_effkrav_for_dataframe
 
 
 def show_effektiviseringskrav_tab(entity_data: pd.Series, df_company: pd.DataFrame):
@@ -123,6 +125,69 @@ def show_effektiviseringskrav_tab(entity_data: pd.Series, df_company: pd.DataFra
             f"Metod **{selected_method}** kommer användas när du importerar effektiviseringskrav."
         )
     
+    # BERÄKNINGSPARAMETRAR
+    st.markdown("---")
+    st.write("**Beräkningsparametrar för effektiviseringskrav**")
+    
+    # Hämta nuvarande parametrar från effkrav_mod eller defaults
+    current_trunk_min = effkrav_mod.get('trunkering_min', 0.162416)
+    current_trunk_max = effkrav_mod.get('trunkering_max', 0.3)
+    current_outlier_krav = effkrav_mod.get('outlier_krav', 0.01)
+    
+    col_param1, col_param2, col_param3 = st.columns(3)
+    
+    with col_param1:
+        trunk_min = st.slider(
+            "Minsta trunkering",
+            0.0, 0.3, current_trunk_min,
+            step=0.005,
+            key="effkrav_trunk_min",
+            help="Lägsta gräns för hur mycket ineffektivitet som får påverka kravet"
+        )
+    
+    with col_param2:
+        trunk_max = st.slider(
+            "Högsta trunkering",
+            0.1, 0.5, current_trunk_max,
+            step=0.005,
+            key="effkrav_trunk_max",
+            help="Högsta gräns för hur mycket ineffektivitet som får påverka kravet"
+        )
+    
+    with col_param3:
+        outlier_krav_pct = st.slider(
+            "Krav för outliers (%)",
+            1.0, 1.82, current_outlier_krav * 100,
+            step=0.01,
+            key="effkrav_outlier_krav",
+            help="Fast årligt effektiviseringskrav för företag klassade som outliers i DEA"
+        )
+    
+    st.caption("Outliers identifieras i DEA-modulen baserat på supereffektivitet")
+    
+    # Visa om parametrar har ändrats
+    params_changed = (
+        is_modified and (
+            trunk_min != current_trunk_min or
+            trunk_max != current_trunk_max or
+            outlier_krav_pct / 100 != current_outlier_krav
+        )
+    )
+    
+    if params_changed:
+        st.warning("⚠️ Parametrar har ändrats. Klicka 'Omberäkna med nya parametrar' för att tillämpa.")
+        if st.button("Omberäkna med nya parametrar", type="primary", use_container_width=True):
+            recalculate_effkrav_with_new_params(
+                effkrav_mod=effkrav_mod,
+                trunk_min=trunk_min,
+                trunk_max=trunk_max,
+                outlier_krav=outlier_krav_pct / 100,
+                method=selected_method,
+                df_company=df_company
+            )
+            st.success("Effektiviseringskrav omberäknat med nya parametrar!")
+            st.rerun()
+    
     # TILLGÄNGLIGA EXPORTS
     st.markdown("---")
     
@@ -130,22 +195,26 @@ def show_effektiviseringskrav_tab(entity_data: pd.Series, df_company: pd.DataFra
     
     if not available_exports.empty:
         available_exports['display'] = (
-            available_exports['mean_effkrav'].apply(lambda x: f"{x:.2f}%") + 
-            " - " + 
+            "Eff: " +
+            available_exports['mean_efficiency'].apply(lambda x: f"{x:.3f}") + 
+            " | Outliers: " + 
+            available_exports['outlier_count'].astype(str) +
+            " | " + 
             available_exports['timestamp'].str[:10]
         )
         
         selected_display = st.selectbox(
             "Tillgängliga DEA-exports",
             options=available_exports['display'].tolist(),
-            key="effkrav_export_selector"
+            key="effkrav_export_selector",
+            help="Välj en export baserat på medeleffektivitet, antal outliers och datum"
         )
         
         selected_export = available_exports[available_exports['display'] == selected_display].iloc[0]
     else:
         st.info(
             "Inga DEA-exports hittades. Gå till DEA-modulen för att köra analys "
-            "och exportera effektiviseringskrav."
+            "och exportera effektivitetsvärden."
         )
         selected_export = None
     
@@ -161,7 +230,10 @@ def show_effektiviseringskrav_tab(entity_data: pd.Series, df_company: pd.DataFra
                     scenario_file=selected_export['filepath'],
                     entity_dmu=entity_data.get('DMU'),
                     df_company=df_company,
-                    method=selected_method
+                    method=selected_method,
+                    trunk_min=trunk_min,
+                    trunk_max=trunk_max,
+                    outlier_krav=outlier_krav_pct / 100
                 )
                 if success:
                     st.success(f"Effektiviseringskrav importerat med {selected_method}-metod!")
@@ -281,12 +353,12 @@ def show_yearly_paverkbara_table(entity_data: pd.Series, effkrav_mod: dict):
 
 def list_available_effkrav_exports() -> pd.DataFrame:
     """
-    Listar tillgängliga effektiviseringskrav-exports för aktuell organisation.
+    Listar tillgängliga effektivitetsvärde-exports för aktuell organisation.
     """
     export_dir = Path(ensure_org_dir("scenario/effektiviseringskrav/exports_to_ir"))
     
     if not export_dir.exists():
-        return pd.DataFrame(columns=['filename', 'mean_effkrav', 'timestamp', 'filepath'])
+        return pd.DataFrame(columns=['filename', 'mean_efficiency', 'outlier_count', 'timestamp', 'filepath'])
     
     exports = []
     
@@ -298,12 +370,14 @@ def list_available_effkrav_exports() -> pd.DataFrame:
                 with open(json_file, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
                 
-                mean_effkrav = metadata.get('mean_effkrav_pct', 0)
+                mean_eff = metadata.get('mean_efficiency', 0)
+                outliers = metadata.get('outlier_count', 0)
                 timestamp = metadata.get('export_timestamp', 'Unknown')
                 
                 exports.append({
                     'filename': parquet_file.name,
-                    'mean_effkrav': mean_effkrav,
+                    'mean_efficiency': mean_eff,
+                    'outlier_count': outliers,
                     'timestamp': timestamp,
                     'filepath': str(parquet_file)
                 })
@@ -313,26 +387,76 @@ def list_available_effkrav_exports() -> pd.DataFrame:
     return pd.DataFrame(exports)
 
 
+def recalculate_effkrav_with_new_params(
+    effkrav_mod: dict,
+    trunk_min: float,
+    trunk_max: float,
+    outlier_krav: float,
+    method: str,
+    df_company: pd.DataFrame
+):
+    """
+    Omberäknar effektiviseringskrav med nya parametrar.
+    Använder befintlig dea_result från effkrav_mod.
+    """
+    if not effkrav_mod or 'dea_result' not in effkrav_mod:
+        st.error("Ingen DEA-data att omberäkna")
+        return
+    
+    dea_result = effkrav_mod['dea_result']
+    
+    # Beräkna om Effkrav_proc med nya parametrar
+    dea_recalc = calculate_effkrav_for_dataframe(
+        dea_result,
+        potential_col='potential',
+        outlier_col='is_outlier',
+        trunkering_min=trunk_min,
+        trunkering_max=trunk_max,
+        outlier_krav=outlier_krav
+    )
+    
+    # Uppdatera effkrav_mod med nya värden
+    effkrav_mod['dea_result'] = dea_recalc
+    effkrav_mod['trunkering_min'] = trunk_min
+    effkrav_mod['trunkering_max'] = trunk_max
+    effkrav_mod['outlier_krav'] = outlier_krav
+    effkrav_mod['method'] = method
+
+
 def apply_effkrav_scenario(
     scenario_file: str, 
     entity_dmu: int, 
     df_company: pd.DataFrame,
-    method: str = 'OPEX'
+    method: str = 'OPEX',
+    trunk_min: float = 0.162416,
+    trunk_max: float = 0.3,
+    outlier_krav: float = 0.01
 ) -> bool:
     """
     Applicerar effektiviseringskrav-scenario på aktivt scenario.
+    Beräknar Effkrav_proc från potential baserat på användarens parametrar.
     """
     try:
         dea_export = pd.read_parquet(scenario_file)
         
-        required_cols = ['DMU', 'REId', 'Effkrav_proc']
+        required_cols = ['DMU', 'REId', 'potential', 'Effektivitet', 'Supereffektivitet', 'is_outlier']
         missing_cols = [col for col in required_cols if col not in dea_export.columns]
         
         if missing_cols:
             st.error(f"Export saknar kolumner: {missing_cols}")
             return False
         
-        dea_result = dea_export[dea_export['DMU'] == entity_dmu].copy()
+        # Beräkna Effkrav_proc för alla företag med nya parametrar
+        dea_with_krav = calculate_effkrav_for_dataframe(
+            dea_export,
+            potential_col='potential',
+            outlier_col='is_outlier',
+            trunkering_min=trunk_min,
+            trunkering_max=trunk_max,
+            outlier_krav=outlier_krav
+        )
+        
+        dea_result = dea_with_krav[dea_with_krav['DMU'] == entity_dmu].copy()
         
         if dea_result.empty:
             st.warning(f"Ingen data hittades för DMU {entity_dmu} i exporten")
@@ -352,6 +476,9 @@ def apply_effkrav_scenario(
             'method': method,
             'dea_result': dea_result,
             'metadata': metadata,
+            'trunkering_min': trunk_min,
+            'trunkering_max': trunk_max,
+            'outlier_krav': outlier_krav,
             'import_timestamp': pd.Timestamp.now().isoformat()
         }
         

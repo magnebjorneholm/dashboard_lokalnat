@@ -1,0 +1,19 @@
+{
+  "description": "Effektivitetsvärden för företagsanvändning. Innehåller effektivitet, supereffektivitet, potential och outlier-flagga. Effektiviseringskrav beräknas i intäktsram-tabben baserat på användarens val av trunkering, outlier-definition och metod (OPEX/TOTEX).",
+  "organization": "kraftringen",
+  "export_type": "company_use",
+  "period": {
+    "start": 2024,
+    "end": 2027
+  },
+  "price_year": 2022,
+  "export_timestamp": "2025-11-03T11:55:44.912156",
+  "reid_count": 1,
+  "dmu_count": 1,
+  "mean_efficiency": 0.7935473,
+  "mean_potential": 0.20645270000000004,
+  "outlier_count": 0,
+  "file_format": "parquet",
+  "data_file": "ir_effkrav_company_20251103_115544.parquet",
+  "usage": "Importera i företagsvy för intäktsram-dekomposition. Välj trunkering, outlier-definition och metod (OPEX/TOTEX) vid import. Beräkning av effektiviseringskrav sker automatiskt."
+}
