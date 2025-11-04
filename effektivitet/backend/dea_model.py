@@ -1,0 +1,122 @@
+import pandas as pd
+import numpy as np
+from pulp import LpProblem, LpVariable, LpMinimize, lpSum, value
+from effektivitet.backend.run_logger import save_run
+
+def run_dea_model(
+    df: pd.DataFrame,
+    rts: str = "crs",
+    input_cols: list = ["CAPEX", "OPEXp"],
+    output_cols: list = ["CU", "MW", "NS", "MWhl", "MWhh"],
+    outlier_filter: bool = True,
+    q_lower: float = 25.0,
+    q_upper: float = 75.0,
+    multiplier: float = 2.0
+) -> pd.DataFrame:
+    """
+    Kör DEA med konfigurerbar outlier-identifikation enligt EI:s metod.
+    Beräknar effektivitet, supereffektivitet och potential.
+    Identifierar outliers baserat på användarens val av kvartilar och multiplikator.
+    Effektiviseringskrav beräknas senare i intäktsram-tabben.
+    """
+    df = df.copy()
+    df[input_cols] = df[input_cols].apply(pd.to_numeric, errors="coerce")
+
+    inputs = df[input_cols].values
+    outputs = df[output_cols].values
+
+    def run_super_efficiency_dea(inputs, outputs, rts):
+        n = len(inputs)
+        eff = []
+        for i in range(n):
+            if np.any(np.isnan(inputs[i])) or np.any(np.isnan(outputs[i])):
+                eff.append("OUTLIER")
+                continue
+
+            model = LpProblem(name=f"DEA_SUPER_DMUi_{i}", sense=LpMinimize)
+            theta = LpVariable("theta", lowBound=0)
+            lambdas = [LpVariable(f"lambda_{j}", lowBound=0) for j in range(n)]
+
+            model += theta
+
+            for r in range(outputs.shape[1]):
+                model += lpSum(lambdas[j] * outputs[j][r] for j in range(n) if j != i) >= outputs[i][r]
+            for k in range(inputs.shape[1]):
+                model += lpSum(lambdas[j] * inputs[j][k] for j in range(n) if j != i) <= theta * inputs[i][k]
+            if rts == "vrs":
+                model += lpSum(lambdas[j] for j in range(n) if j != i) == 1
+
+            try:
+                model.solve()
+                score = value(theta)
+                if score is None or np.isnan(score):
+                    score = "OUTLIER"
+            except:
+                score = "OUTLIER"
+
+            eff.append(score)
+        return eff
+
+    # === Första körning ===
+    eff1 = run_super_efficiency_dea(inputs, outputs, rts)
+    df["supereff1"] = eff1
+
+    theta_valid = [e for e in eff1 if isinstance(e, (int, float)) and not np.isnan(e)]
+    q_low = np.percentile(theta_valid, q_lower)
+    q_high = np.percentile(theta_valid, q_upper)
+    iqr = q_high - q_low
+    threshold = q_high + multiplier * iqr
+    df["is_outlier"] = [e > threshold if isinstance(e, (int, float)) else True for e in eff1]
+
+    # === Andra körning (exkludera outliers) ===
+    df_clean = df[~df["is_outlier"]].reset_index(drop=True)
+    inputs_clean = df_clean[input_cols].values
+    outputs_clean = df_clean[output_cols].values
+    eff2 = run_super_efficiency_dea(inputs_clean, outputs_clean, rts)
+
+    result_effektivitet = []
+    result_supereffektivitet = []
+    result_potential = []
+
+    j = 0
+    for i, is_outlier in enumerate(df["is_outlier"]):
+        if is_outlier:
+                result_effektivitet.append(min(eff1[i], 1))
+                result_supereffektivitet.append(eff1[i])     
+                result_potential.append(1.0)
+        else:
+            theta = eff2[j]
+            if isinstance(theta, (int, float)) and not np.isnan(theta):
+                effektivitet = min(theta, 1)
+                revred = 1 - effektivitet
+
+                result_effektivitet.append(effektivitet)
+                result_supereffektivitet.append(theta)
+                result_potential.append(revred)
+            else:
+                result_effektivitet.append(np.nan)
+                result_supereffektivitet.append(np.nan)
+                result_potential.append(np.nan)
+            j += 1
+
+    df["Effektivitet"] = result_effektivitet
+    df["Supereffektivitet"] = result_supereffektivitet
+    df["potential"] = result_potential
+
+    # Konvertera OUTLIER till NaN inför loggning (för pyarrow/feather-kompatibilitet)
+    df_for_loggning = df.copy()
+    for col in ["supereff1", "Effektivitet", "Supereffektivitet", "potential"]:
+        if col in df_for_loggning.columns:
+            df_for_loggning[col] = pd.to_numeric(df_for_loggning[col], errors="coerce")
+
+    save_run("DEA", {
+        "rts": rts,
+        "input_cols": input_cols,
+        "output_cols": output_cols,
+        "outlier_filter": outlier_filter,
+        "q_lower": q_lower,
+        "q_upper": q_upper,
+        "multiplier": multiplier
+    }, df_for_loggning)
+
+    return df

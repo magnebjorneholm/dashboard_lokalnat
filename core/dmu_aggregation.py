@@ -133,7 +133,7 @@ def read_reconciliation(
 
 def aggregate_to_dmu(
     df_facit: pd.DataFrame,
-    recon_path: str = "effektiviseringskrav/data/reconciliation_id_network_firm_dmu.csv",
+    recon_path: str = "effektivitet/data/reconciliation_id_network_firm_dmu.csv",
     filter_regional: bool = True,
     group_cols: Optional[List[str]] = None,
     agg_cols: Optional[List[str]] = None

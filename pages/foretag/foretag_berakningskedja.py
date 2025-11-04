@@ -4,7 +4,7 @@
 import streamlit as st
 
 # Import från vår företagsmodul
-from foretag.view.kent_full_pipeline import show_kent_full_pipeline
+from kapitalkostnad.frontend.kent_full_pipeline import show_kent_full_pipeline
 
 # Autentisering sköts redan i show_kent_full_pipeline()
 show_kent_full_pipeline()

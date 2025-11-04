@@ -75,23 +75,13 @@ if not st.session_state.access_granted:
             st.warning("Ange både användarnamn och lösenord")
     
     st.stop()
-
-# === NAVIGATION (endast när inloggad) ===
-#if st.session_state.user_role == "regulator":
- #   pages = [
-  #      st.Page("pages/hem_regulator.py", title="Hem"),
-   #     st.Page("pages/regulator/regulator_effektivitet.py", title="DEA och påverkbara kostnader"),
-#        st.Page("pages/kapitalbas.py", title="Kapitalbas"),
- #       st.Page("pages/kapitalbas_beräkningskedja.py", title="Beräkningskedja"),
-  #      st.Page("pages/ir_dekomposition.py", title="IR-dekomposition")
-   # ]
     
 if st.session_state.user_role == "company":
     pages = [
-        st.Page("pages/foretag/ny_foretag_IR.py", title="IR-dekomposition"),
+        st.Page("pages/foretag/foretag_intaktsram.py", title="IR-dekomposition"),
         st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
-        st.Page("pages/foretag/foretag_effektivitet.py", title="DEA och påverkbara kostnader"),
-        st.Page("pages/foretag/information.py", title="Information"),
+        st.Page("pages/foretag/foretag_effektivitet.py", title="DEA"),
+        st.Page("pages/foretag/foretag_information.py", title="Information"),
     ]
 
 else:

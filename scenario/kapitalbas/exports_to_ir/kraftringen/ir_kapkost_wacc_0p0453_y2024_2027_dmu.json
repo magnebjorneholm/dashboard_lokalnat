@@ -10,7 +10,7 @@
   },
   "wacc_old": 0.0453,
   "wacc_new": 0.0453,
-  "export_timestamp": "2025-10-16T12:09:35.980433",
+  "export_timestamp": "2025-11-04T11:15:58.964882",
   "total_dmu_count": 1,
   "file_format": "parquet",
   "data_file": "ir_kapkost_wacc_0p0453_y2024_2027_dmu.parquet",
@@ -20,5 +20,9 @@
     "Avkastning_Ny": "return_ord_new + return_tail_new (påverkas av WACC)",
     "Kapitalkostnad_Ny": "Avskrivningar_Ny + Avkastning_Ny"
   },
-  "note": "Inkluderar koncessionsjusteringar för DMU som saknar dessa i originaldata. Dessa justeringar påverkas INTE av WACC-ändringar."
+  "note": "Inkluderar koncessionsjusteringar för DMU som saknar dessa i originaldata. Dessa justeringar påverkas INTE av WACC-ändringar.",
+  "parameter_adjustments": {
+    "has_normvalue_adjustments": false,
+    "has_lifetime_adjustments": false
+  }
 }
