@@ -23,3 +23,8 @@ shapely
 
 # Annat
 pyyaml
+
+# Firebase Authentication
+Pyrebase4>=4.7.1
+firebase-admin>=6.5.0
+requests>=2.31.0
