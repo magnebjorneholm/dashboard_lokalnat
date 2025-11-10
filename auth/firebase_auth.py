@@ -35,7 +35,7 @@ class FirebaseAuthManager:
         self._initialize_admin()
     
     def _initialize_client(self):
-        """Initialiserar Pyrebase för client-side operations"""
+        """Initialiserar Pyrebase för client-side operationss"""
         try:
             firebase_config = {
                 "apiKey": st.secrets["firebase"]["api_key"],
