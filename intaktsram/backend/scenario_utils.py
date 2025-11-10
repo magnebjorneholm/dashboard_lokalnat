@@ -1,6 +1,6 @@
 """
-foretag/view/scenario_utils.py
 Delad logik för scenario-hantering
+Uppdaterad för Fas 2: Inga sidebar-referenser
 """
 
 import streamlit as st
@@ -11,43 +11,6 @@ from typing import Optional, List, Tuple
 import json
 
 from core.session_utils import ensure_org_dir
-
-
-def list_available_kapitalbas_scenarios() -> pd.DataFrame:
-    """
-    Listar tillgängliga kapitalbas-exports för aktuell organisation.
-    
-    Returns:
-        DataFrame med kolumner: filename, wacc_tag, timestamp, filepath
-    """
-    export_dir = Path(ensure_org_dir("scenario/kapitalbas/exports_to_ir"))
-    
-    if not export_dir.exists():
-        return pd.DataFrame(columns=['filename', 'wacc_tag', 'timestamp', 'filepath'])
-    
-    scenarios = []
-    
-    for parquet_file in sorted(export_dir.glob("ir_kapkost_wacc_*.parquet")):
-        json_file = parquet_file.with_suffix('.json')
-        
-        if json_file.exists():
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
-                
-                wacc_new = metadata.get('wacc_new', 0)
-                timestamp = metadata.get('export_timestamp', 'Unknown')
-                
-                scenarios.append({
-                    'filename': parquet_file.name,
-                    'wacc_tag': f"{wacc_new*100:.2f}%" if wacc_new else "N/A",
-                    'timestamp': timestamp,
-                    'filepath': str(parquet_file)
-                })
-            except Exception:
-                continue
-    
-    return pd.DataFrame(scenarios)
 
 
 def list_saved_scenarios() -> List[Tuple[str, str]]:
@@ -112,10 +75,12 @@ def save_scenario_to_file(scenario_name: str, df_data: pd.DataFrame) -> str:
     
     from core.session_utils import get_user_org
     
+    # Spara både nya och legacy-nycklar för bakåtkompatibilitet
     scenario_metadata = {
         'name': scenario_name,
         'organization': get_user_org(),
         'created': datetime.now().isoformat(),
+        'applied_modifications': st.session_state.scenario_data.get('applied_modifications', {}),
         'modifications': st.session_state.scenario_data.get('modifications', {}),
         'component_sources': st.session_state.scenario_data.get('component_sources', {})
     }
@@ -128,7 +93,8 @@ def save_scenario_to_file(scenario_name: str, df_data: pd.DataFrame) -> str:
 
 def create_scenario(name: str, baseline_df: pd.DataFrame) -> bool:
     """
-    Skapar nytt scenario med frysta baseline-kolumner.
+    Skapar nytt scenario med frysta baseline-kolumner och referens-effektivitet.
+    Initialiserar pending_changes strukturen.
     
     Args:
         name: Scenario-namn
@@ -140,18 +106,19 @@ def create_scenario(name: str, baseline_df: pd.DataFrame) -> bool:
     name = name.strip()
     
     if not name:
-        st.sidebar.error("Scenario-namn får inte vara tomt")
+        st.error("Scenario-namn får inte vara tomt")
         return False
     
     saved_scenarios = list_saved_scenarios()
     existing_names = [s[0] for s in saved_scenarios]
     
     if name in existing_names:
-        st.sidebar.error(f"Scenario '{name}' finns redan. Välj ett annat namn.")
+        st.error(f"Scenario '{name}' finns redan. Välj ett annat namn.")
         return False
     
     baseline_snapshot = baseline_df.copy()
     
+    # Skapa baseline-kolumner
     baseline_snapshot['Paverkbara_Kostnader_Baseline'] = baseline_snapshot['Paverkbara_Kostnader']
     baseline_snapshot['Opaverkbara_Kostnader_Baseline'] = baseline_snapshot['Opaverkbara_Kostnader']
     baseline_snapshot['Kapitalkostnad_Total_Baseline'] = baseline_snapshot['Kapitalkostnad_Total']
@@ -162,15 +129,27 @@ def create_scenario(name: str, baseline_df: pd.DataFrame) -> bool:
     if 'Avkastning' in baseline_snapshot.columns:
         baseline_snapshot['Avkastning_Baseline'] = baseline_snapshot['Avkastning']
     
+    # Hämta referens-effektivitet från Ei:s DEA
+    from core.session_utils import get_user_dmu
+    from effektivitet.backend.reference_dea_loader import get_reference_efficiency_for_dmu
+    
+    user_dmu = get_user_dmu()
+    reference_efficiency = None
+    
+    if user_dmu:
+        try:
+            reference_efficiency = get_reference_efficiency_for_dmu(user_dmu)
+        except Exception as e:
+            st.warning(f"Kunde inte ladda referens-effektivitet: {e}")
+    
+    # Sätt session state med nya pending_changes strukturen
     st.session_state.current_scenario_name = name
     st.session_state.scenario_data = {
         'baseline': baseline_snapshot,
-        'modifications': {},
+        'staged_modifications': {},     # PENDING changes
+        'applied_modifications': {},    # ACTIVE changes
         'created': datetime.now(),
-        'component_sources': {
-            'paverkbara': 'baseline',
-            'kapitalkostnad': 'baseline'
-        }
+        'reference_efficiency': reference_efficiency
     }
     
     return True

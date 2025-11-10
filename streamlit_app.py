@@ -77,11 +77,11 @@ if not st.session_state.access_granted:
     st.stop()
     
 if st.session_state.user_role == "company":
+    # Endast Intäktsram (IR-dekomposition) ska vara tillgänglig i navigationen.
+    # Legacy-sidor (beräkningskedja, DEA, SFA, information) finns kvar i repot
+    # för arkivering/återanvändning men tas bort som val i sidonavigeringen.
     pages = [
         st.Page("pages/foretag/foretag_intaktsram.py", title="IR-dekomposition"),
-        st.Page("pages/foretag/foretag_berakningskedja.py", title="Beräkningskedja"),
-        st.Page("pages/foretag/foretag_effektivitet.py", title="DEA"),
-        st.Page("pages/foretag/foretag_information.py", title="Information"),
     ]
 
 else:

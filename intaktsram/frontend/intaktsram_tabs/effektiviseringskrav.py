@@ -1,493 +1,536 @@
 """
-foretag/view/intaktsram_tabs/effektiviseringskrav.py
-Effektiviseringskrav-tab med tydligt flöde och OPEX/TOTEX-toggle
+Effektiviseringskrav-tab med kedjestruktur
+Effektivitetsvärde → DEA (optional) → Parametrar → Applicera
 """
 
 import streamlit as st
 import pandas as pd
-import numpy as np
-from typing import Optional
-from pathlib import Path
-import json
+from datetime import datetime
 
-from core.session_utils import ensure_org_dir
-from core.effektiviseringskrav_calculations import calculate_effkrav_for_dataframe
+from effektivitet.backend.dea_model import run_dea_model
+from core.data_loader_dea import merge_capex_scenario, load_data
+from core.session_utils import get_user_dmu
+
+from intaktsram.backend.pending_changes_manager import (
+    get_staged,
+    set_staged,
+    get_all_staged,
+    has_staged_changes,
+    count_staged_changes,
+    commit_staged_changes,
+    reset_all,
+    reset_parameter,
+    get_active_value
+)
 
 
-def show_effektiviseringskrav_tab(entity_data: pd.Series, df_company: pd.DataFrame):
-    """
-    Visar effektiviseringskrav-tab med tydligt flöde.
-    """
+def show_effektiviseringskrav_tab(entity_data, scenario_metadata):
+    """Huvudfunktion för effektiviseringskrav-tab med kedjestruktur"""
     
     st.subheader("Effektiviseringskrav")
     
-    is_modified = entity_data.get('Uppdaterad_Paverkbara', False)
-    källa = entity_data.get('Källa_Paverkbara', 'Baseline')
+    # Scenario-check
+    if not st.session_state.current_scenario_name:
+        st.warning("Skapa ett scenario i Översikt-fliken först")
+        return
     
-    scenario_data = st.session_state.get('scenario_data', {})
-    modifications = scenario_data.get('modifications', {})
-    effkrav_mod = modifications.get('paverkbara', {})
+    user_dmu = get_user_dmu()
     
-    if is_modified and effkrav_mod.get('source') == 'effektiviseringskrav':
-        method = effkrav_mod.get('method', 'OPEX')
-        dea_result = effkrav_mod.get('dea_result')
-        
-        if dea_result is not None and not dea_result.empty:
-            effkrav_pct = dea_result.iloc[0].get('Effkrav_proc', 0) * 100
-            st.info(f"Effektiviseringskrav aktivt: **{effkrav_pct:.2f}%** applicerat på **{method}**")
-        else:
-            st.info(f"Effektiviseringskrav aktivt (metod: **{method}**)")
-        
-        if källa and källa != 'Baseline':
-            st.caption(f"Källa: {källa}")
-    else:
-        st.caption("Visar referensperiod (inget effektiviseringskrav applicerat)")
+    # Hämta referens-effektivitet från scenario
+    reference_efficiency = st.session_state.scenario_data.get('reference_efficiency')
+    
+    if not reference_efficiency:
+        st.error("Ingen referens-effektivitet hittades för ditt företag")
+        st.info("Kontrollera att ditt företag finns i Ei:s DEA-dataset")
+        return
+    
+    # === KEDJA STEG 1: EFFEKTIVITETSVÄRDE ===
+    st.markdown("### 1. Effektivitetsvärde")
+    active_efficiency, source = render_efficiency_value_section(reference_efficiency)
+    
+    if not active_efficiency:
+        st.error("Kunde inte bestämma aktivt effektivitetsvärde")
+        return
     
     st.markdown("---")
     
-    # METRICS
-    paverkbara = entity_data.get('Paverkbara_Kostnader', 0)
-    baseline_paverkbara = entity_data.get('Paverkbara_Kostnader_Baseline', paverkbara)
+    # === KEDJA STEG 2: DEA (optional) ===
+    st.markdown("### 2. Ny DEA-analys (valfritt)")
+    st.caption("Kör egen DEA-analys för att byta effektivitetsvärde")
     
+    render_dea_section(user_dmu)
+    
+    st.markdown("---")
+    
+    # === KEDJA STEG 3: BERÄKNINGSPARAMETRAR ===
+    st.markdown("### 3. Beräkningsparametrar")
+    render_calculation_parameters_section()
+    
+    st.markdown("---")
+    
+    # === KEDJA STEG 4: APPLICERA ===
+    st.markdown("### 4. Beräkna och applicera")
+    render_apply_section_effkrav(active_efficiency, source)
+
+
+def render_efficiency_value_section(reference_efficiency):
+    """
+    Visar aktivt effektivitetsvärde (ny DEA > referens)
+    """
+    
+    staged = get_all_staged('paverkbara')
+    
+    # Bestäm aktivt värde
+    if 'new_dea_result' in staged:
+        active_efficiency = staged['new_dea_result']
+        source = 'new_dea'
+        st.info("**Aktivt värde:** Från ny DEA-körning")
+    elif reference_efficiency:
+        active_efficiency = reference_efficiency
+        source = 'reference'
+        st.info("**Aktivt värde:** Från Ei:s referens-DEA")
+    else:
+        return None, None
+    
+    # Visa värden i metrics (3 kolumner)
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        delta_pav = None
-        if is_modified and baseline_paverkbara > 0:
-            delta_pav = paverkbara - baseline_paverkbara
-            delta_pct = (delta_pav / baseline_paverkbara * 100)
-        
-        st.metric(
-            "Påverkbara kostnader",
-            f"{paverkbara:,.0f} tkr".replace(",", " "),
-            delta=f"{delta_pct:.1f}%" if delta_pav else None
-        )
+        if active_efficiency.get('is_outlier'):
+            st.metric("Status", "Outlier")
+        else:
+            eff = active_efficiency.get('Effektivitet', 0)
+            st.metric("Effektivitet", f"{eff:.3f}")
     
     with col2:
-        if baseline_paverkbara > 0:
-            andel = (paverkbara / entity_data.get('Intaktsram_Total', 1) * 100)
-            st.metric(
-                "Andel av intäktsram",
-                f"{andel:.1f}%"
-            )
+        if not active_efficiency.get('is_outlier'):
+            supereff = active_efficiency.get('Supereffektivitet', 0)
+            st.metric("Supereffektivitet", f"{supereff:.3f}")
+        else:
+            st.metric("Supereffektivitet", "N/A")
     
     with col3:
-        if is_modified and delta_pav:
-            st.metric(
-                "Reduktion",
-                f"{abs(delta_pav):,.0f} tkr".replace(",", " "),
-                delta=f"{delta_pav:,.0f} tkr".replace(",", " ")
-            )
+        pot = active_efficiency.get('potential', 0)
+        st.metric("Potential", f"{pot:.3f}")
     
-    # APPLICERA EFFEKTIVISERINGSKRAV PÅ
-    st.markdown("---")
-    st.write("**Applicera effektiviseringskrav på:**")
-    
-    current_method = effkrav_mod.get('method', 'OPEX') if effkrav_mod else 'OPEX'
-    
-    col_toggle, col_info = st.columns([1, 2])
-    
-    with col_toggle:
-        selected_method = st.radio(
-            "Metod",
-            options=['OPEX', 'TOTEX'],
-            index=0 if current_method == 'OPEX' else 1,
-            key="effkrav_method_toggle",
-            help=(
-                "OPEX: Krav appliceras endast på påverkbara kostnader\n"
-                "TOTEX: Krav appliceras på påverkbara + kapitalkostnad"
-            )
-        )
-    
-    with col_info:
-        if selected_method == 'TOTEX':
-            st.info(
-                "**TOTEX-metod:** Effektiviseringskravet appliceras på summan av "
-                "påverkbara kostnader och kapitalkostnad. Om kapitalkostnad ändras "
-                "omberäknas påverkbara automatiskt."
-            )
-        else:
-            st.info(
-                "**OPEX-metod:** Effektiviseringskravet appliceras endast på "
-                "påverkbara kostnader. Kapitalkostnad påverkar inte beräkningen."
-            )
-    
-    if is_modified and selected_method != current_method:
-        if st.button("Tillämpa metodbyte", type="primary", use_container_width=True):
-            if 'paverkbara' not in modifications:
-                modifications['paverkbara'] = {}
-            modifications['paverkbara']['method'] = selected_method
-            st.success(f"Metod ändrad till {selected_method}")
+    # Reset-knapp om ny DEA
+    if source == 'new_dea':
+        if st.button("Reset till referens-DEA", key="reset_dea_to_reference"):
+            remove_staged('paverkbara', 'new_dea_result')
+            remove_staged('paverkbara', 'dea_params')
             st.rerun()
     
-    if not is_modified:
-        st.caption(
-            f"Metod **{selected_method}** kommer användas när du importerar effektiviseringskrav."
-        )
+    return active_efficiency, source
+
+
+def render_dea_section(user_dmu):
+    """
+    DEA-analys sektion med multiselect för variabler
+    Återanvänder layout från effektivitet.py
+    """
     
-    # BERÄKNINGSPARAMETRAR
-    st.markdown("---")
-    st.write("**Beräkningsparametrar för effektiviseringskrav**")
+    # Ladda DEA-dataset
+    try:
+        data_file = "effektivitet/data/Data_modeller.xlsx"
+        df_full = load_data(data_file)
+    except Exception as e:
+        st.error(f"Kunde inte ladda DEA-data: {e}")
+        return
     
-    # Hämta nuvarande parametrar från effkrav_mod eller defaults
-    current_trunk_min = effkrav_mod.get('trunkering_min', 0.162416)
-    current_trunk_max = effkrav_mod.get('trunkering_max', 0.3)
-    current_outlier_krav = effkrav_mod.get('outlier_krav', 0.01)
+    if user_dmu not in df_full['DMU'].values:
+        st.error(f"Ditt företag (DMU {user_dmu}) finns inte i DEA-datasetet")
+        return
     
-    col_param1, col_param2, col_param3 = st.columns(3)
+    # Försök merga CAPEX-scenario
+    df, scen_info = merge_capex_scenario(df_full)
     
-    with col_param1:
-        trunk_min = st.slider(
-            "Minsta trunkering",
-            0.0, 0.3, current_trunk_min,
-            step=0.005,
-            key="effkrav_trunk_min",
-            help="Lägsta gräns för hur mycket ineffektivitet som får påverka kravet"
-        )
+    if scen_info.get("found"):
+        st.success(f"WACC-scenario aktivt: {scen_info['tag'].replace('p','.')} - täckning {scen_info['coverage']:.0%}")
     
-    with col_param2:
-        trunk_max = st.slider(
-            "Högsta trunkering",
-            0.1, 0.5, current_trunk_max,
-            step=0.005,
-            key="effkrav_trunk_max",
-            help="Högsta gräns för hur mycket ineffektivitet som får påverka kravet"
-        )
+    # Input/Output val
+    base_inputs = ["CAPEX", "OPEXp", "TOTEX"]
+    all_inputs = [c for c in base_inputs if c in df.columns]
+    all_outputs = ["CU", "MW", "NS", "MWhl", "MWhh"]
     
-    with col_param3:
-        outlier_krav_pct = st.slider(
-            "Krav för outliers (%)",
-            1.0, 1.82, current_outlier_krav * 100,
-            step=0.01,
-            key="effkrav_outlier_krav",
-            help="Fast årligt effektiviseringskrav för företag klassade som outliers i DEA"
-        )
+    # Lägg till scenario-kolumner
+    if scen_info.get("found"):
+        capex_wacc_col = scen_info.get("capex_col")
+        totex_wacc_col = scen_info.get("totex_col")
+        all_inputs += [c for c in [capex_wacc_col, totex_wacc_col] if c and c in df.columns]
     
-    st.caption("Outliers identifieras i DEA-modulen baserat på supereffektivitet")
-    
-    # Visa om parametrar har ändrats
-    params_changed = (
-        is_modified and (
-            trunk_min != current_trunk_min or
-            trunk_max != current_trunk_max or
-            outlier_krav_pct / 100 != current_outlier_krav
-        )
-    )
-    
-    if params_changed:
-        st.warning("⚠️ Parametrar har ändrats. Klicka 'Omberäkna med nya parametrar' för att tillämpa.")
-        if st.button("Omberäkna med nya parametrar", type="primary", use_container_width=True):
-            recalculate_effkrav_with_new_params(
-                effkrav_mod=effkrav_mod,
-                trunk_min=trunk_min,
-                trunk_max=trunk_max,
-                outlier_krav=outlier_krav_pct / 100,
-                method=selected_method,
-                df_company=df_company
-            )
-            st.success("Effektiviseringskrav omberäknat med nya parametrar!")
-            st.rerun()
-    
-    # TILLGÄNGLIGA EXPORTS
-    st.markdown("---")
-    
-    available_exports = list_available_effkrav_exports()
-    
-    if not available_exports.empty:
-        available_exports['display'] = (
-            "Eff: " +
-            available_exports['mean_efficiency'].apply(lambda x: f"{x:.3f}") + 
-            " | Outliers: " + 
-            available_exports['outlier_count'].astype(str) +
-            " | " + 
-            available_exports['timestamp'].str[:10]
-        )
-        
-        selected_display = st.selectbox(
-            "Tillgängliga DEA-exports",
-            options=available_exports['display'].tolist(),
-            key="effkrav_export_selector",
-            help="Välj en export baserat på medeleffektivitet, antal outliers och datum"
-        )
-        
-        selected_export = available_exports[available_exports['display'] == selected_display].iloc[0]
-    else:
-        st.info(
-            "Inga DEA-exports hittades. Gå till DEA-modulen för att köra analys "
-            "och exportera effektivitetsvärden."
-        )
-        selected_export = None
-    
-    # KNAPPAR
+    # Två kolumner för parametrar
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("Importera från DEA", use_container_width=True, disabled=available_exports.empty):
-            if not st.session_state.current_scenario_name:
-                st.error("Skapa ett scenario först innan du importerar data")
-            elif selected_export is not None:
-                success = apply_effkrav_scenario(
-                    scenario_file=selected_export['filepath'],
-                    entity_dmu=entity_data.get('DMU'),
-                    df_company=df_company,
-                    method=selected_method,
-                    trunk_min=trunk_min,
-                    trunk_max=trunk_max,
-                    outlier_krav=outlier_krav_pct / 100
-                )
-                if success:
-                    st.success(f"Effektiviseringskrav importerat med {selected_method}-metod!")
-                    st.rerun()
-                else:
-                    st.error("Kunde inte importera scenario")
+        st.markdown("**Variabler**")
+        
+        # Inputs
+        current_inputs = get_staged('paverkbara', 'dea_inputs', [c for c in ["CAPEX", "OPEXp"] if c in all_inputs])
+        input_cols = st.multiselect(
+            "Inputvariabler",
+            all_inputs,
+            default=current_inputs,
+            help="Välj kostnadsvariabler som ska ingå i analysen"
+        )
+        if input_cols != current_inputs:
+            set_staged('paverkbara', 'dea_inputs', input_cols)
+        
+        # Outputs
+        current_outputs = get_staged('paverkbara', 'dea_outputs', all_outputs)
+        output_cols = st.multiselect(
+            "Outputvariabler",
+            all_outputs,
+            default=current_outputs,
+            help="Välj outputvariabler som beskriver nätets storlek och aktivitet"
+        )
+        if output_cols != current_outputs:
+            set_staged('paverkbara', 'dea_outputs', output_cols)
     
     with col2:
-        if st.button("Till DEA-analys", use_container_width=True, type="primary"):
-            st.session_state['ir_context'] = {
-                'from_page': 'intaktsram_ny',
-                'reid': entity_data.get('REId'),
-                'dmu': entity_data.get('DMU'),
-                'scenario': st.session_state.get('current_scenario_name', ''),
-                'fokus': 'effektiviseringskrav'
-            }
-            st.switch_page("pages/foretag/foretag_effektivitet.py")
-    
-    # ÅRSVISA PÅVERKBARA KOSTNADER - VISAS ALLTID
-    st.markdown("---")
-    show_yearly_paverkbara_table(entity_data, effkrav_mod)
-    
-    # INFO-EXPANDER
-    if not is_modified:
-        st.markdown("---")
-        with st.expander("Om effektiviseringskrav"):
-            st.write("""
-            **Effektiviseringskrav** bestäms genom DEA-analys (Data Envelopment Analysis) 
-            där ditt företag jämförs med andra lokalnätföretag.
-            
-            **Två metoder:**
-            - **OPEX:** Kravet appliceras endast på påverkbara kostnader
-            - **TOTEX:** Kravet appliceras på summan av påverkbara kostnader och kapitalkostnad
-            
-            **Processen:**
-            1. Välj metod (OPEX/TOTEX) ovan
-            2. Gå till DEA-modulen (knapp ovan)
-            3. Kör DEA-analys och exportera effektiviseringskrav
-            4. Kom tillbaka hit och importera från selectbox ovan
-            
-            För mer information, se DEA-modulen.
-            """)
-
-
-def show_yearly_paverkbara_table(entity_data: pd.Series, effkrav_mod: dict):
-    """
-    Visar tabell med årsvisa påverkbara kostnader.
-    Visas alltid, oavsett om scenario är aktivt eller inte.
-    """
-    last_calc = effkrav_mod.get('last_calculation') if effkrav_mod else None
-    
-    # Om vi har beräkningsdata från scenario
-    if last_calc is not None:
-        export_data = last_calc.get('export_data')
+        st.markdown("**Modellinställningar**")
         
-        if export_data is not None and not export_data.empty:
-            reid = entity_data['REId']
-            entity_calc = export_data[export_data['REId'] == reid]
-            
-            if not entity_calc.empty:
-                row = entity_calc.iloc[0]
-                
-                # Hämta årsvisa värden
-                y2024_base = row.get('Y2024_baseline', 0)
-                y2025_base = row.get('Y2025_baseline', 0)
-                y2026_base = row.get('Y2026_baseline', 0)
-                y2027_base = row.get('Y2027_baseline', 0)
-                
-                y2024_scn = row.get('Y2024_scenario', 0)
-                y2025_scn = row.get('Y2025_scenario', 0)
-                y2026_scn = row.get('Y2026_scenario', 0)
-                y2027_scn = row.get('Y2027_scenario', 0)
-                
-                # Bygg komplett tabell med alla kolumner
-                with st.expander("Årsvisa påverkbara kostnader efter avdrag"):
-                    yearly_data = pd.DataFrame({
-                        'År': [2024, 2025, 2026, 2027],
-                        'Ei baseline (tkr)': [
-                            f"{y2024_base:,.0f}".replace(",", " "),
-                            f"{y2025_base:,.0f}".replace(",", " "),
-                            f"{y2026_base:,.0f}".replace(",", " "),
-                            f"{y2027_base:,.0f}".replace(",", " ")
-                        ],
-                        'Scenario (tkr)': [
-                            f"{y2024_scn:,.0f}".replace(",", " "),
-                            f"{y2025_scn:,.0f}".replace(",", " "),
-                            f"{y2026_scn:,.0f}".replace(",", " "),
-                            f"{y2027_scn:,.0f}".replace(",", " ")
-                        ],
-                        'Skillnad (tkr)': [
-                            f"{(y2024_base - y2024_scn):+,.0f}".replace(",", " "),
-                            f"{(y2025_base - y2025_scn):+,.0f}".replace(",", " "),
-                            f"{(y2026_base - y2026_scn):+,.0f}".replace(",", " "),
-                            f"{(y2027_base - y2027_scn):+,.0f}".replace(",", " ")
-                        ],
-                        'Inkrement (tkr)': [
-                            f"{row.get('Inc_2024_scn', 0):,.0f}".replace(",", " "),
-                            f"{row.get('Inc_2025_scn', 0):,.0f}".replace(",", " "),
-                            f"{row.get('Inc_2026_scn', 0):,.0f}".replace(",", " "),
-                            f"{row.get('Inc_2027_scn', 0):,.0f}".replace(",", " ")
-                        ],
-                        'Kumulativt avdrag (tkr)': [
-                            f"{row.get('Avdrag_2024_scn', 0):,.0f}".replace(",", " "),
-                            f"{row.get('Avdrag_2025_scn', 0):,.0f}".replace(",", " "),
-                            f"{row.get('Avdrag_2026_scn', 0):,.0f}".replace(",", " "),
-                            f"{row.get('Avdrag_2027_scn', 0):,.0f}".replace(",", " ")
-                        ]
-                    })
-                    
-                    st.dataframe(yearly_data, use_container_width=True, hide_index=True)
-                    st.caption("Alla värden är för perioden 2024-2027 (4 år totalt)")
-                return
-    
-    # Om inget scenario: visa bara info
-    st.info("Importera effektiviseringskrav från DEA för att se årsvisa värden")
-    
-
-def list_available_effkrav_exports() -> pd.DataFrame:
-    """
-    Listar tillgängliga effektivitetsvärde-exports för aktuell organisation.
-    """
-    export_dir = Path(ensure_org_dir("scenario/effektiviseringskrav/exports_to_ir"))
-    
-    if not export_dir.exists():
-        return pd.DataFrame(columns=['filename', 'mean_efficiency', 'outlier_count', 'timestamp', 'filepath'])
-    
-    exports = []
-    
-    for parquet_file in sorted(export_dir.glob("ir_effkrav_*.parquet"), reverse=True):
-        json_file = parquet_file.with_suffix('.json')
+        # Skalavkastning
+        current_rts = get_staged('paverkbara', 'dea_rts', 'crs')
+        dea_rts = st.selectbox(
+            "Skalavkastning",
+            ["crs", "vrs"],
+            index=0 if current_rts == 'crs' else 1,
+            help="CRS = Constant Returns to Scale, VRS = Variable Returns to Scale"
+        )
+        if dea_rts != current_rts:
+            set_staged('paverkbara', 'dea_rts', dea_rts)
         
-        if json_file.exists():
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
-                
-                mean_eff = metadata.get('mean_efficiency', 0)
-                outliers = metadata.get('outlier_count', 0)
-                timestamp = metadata.get('export_timestamp', 'Unknown')
-                
-                exports.append({
-                    'filename': parquet_file.name,
-                    'mean_efficiency': mean_eff,
-                    'outlier_count': outliers,
-                    'timestamp': timestamp,
-                    'filepath': str(parquet_file)
-                })
-            except Exception:
-                continue
+        # Outlier-filter
+        current_filter = get_staged('paverkbara', 'outlier_filter', True)
+        use_outlier_filter = st.checkbox(
+            "Filtrera bort outliers före beräkning",
+            value=current_filter,
+            help="Exkluderar extremvärden från analysen"
+        )
+        if use_outlier_filter != current_filter:
+            set_staged('paverkbara', 'outlier_filter', use_outlier_filter)
     
-    return pd.DataFrame(exports)
-
-
-def recalculate_effkrav_with_new_params(
-    effkrav_mod: dict,
-    trunk_min: float,
-    trunk_max: float,
-    outlier_krav: float,
-    method: str,
-    df_company: pd.DataFrame
-):
-    """
-    Omberäknar effektiviseringskrav med nya parametrar.
-    Använder befintlig dea_result från effkrav_mod.
-    """
-    if not effkrav_mod or 'dea_result' not in effkrav_mod:
-        st.error("Ingen DEA-data att omberäkna")
+    # Validera inputs
+    if not validate_input_combinations(input_cols, scen_info, df):
         return
     
-    dea_result = effkrav_mod['dea_result']
+    if not input_cols or not output_cols:
+        st.warning("Välj minst en input och en output för att köra modellen")
+        return
     
-    # Beräkna om Effkrav_proc med nya parametrar
-    dea_recalc = calculate_effkrav_for_dataframe(
-        dea_result,
-        potential_col='potential',
-        outlier_col='is_outlier',
-        trunkering_min=trunk_min,
-        trunkering_max=trunk_max,
-        outlier_krav=outlier_krav
-    )
+    # Outlier-definition (3 kolumner)
+    st.markdown("**Outlier-definition**")
+    st.caption("Konfigurera hur outliers identifieras baserat på supereffektivitet")
     
-    # Uppdatera effkrav_mod med nya värden
-    effkrav_mod['dea_result'] = dea_recalc
-    effkrav_mod['trunkering_min'] = trunk_min
-    effkrav_mod['trunkering_max'] = trunk_max
-    effkrav_mod['outlier_krav'] = outlier_krav
-    effkrav_mod['method'] = method
-
-
-def apply_effkrav_scenario(
-    scenario_file: str, 
-    entity_dmu: int, 
-    df_company: pd.DataFrame,
-    method: str = 'OPEX',
-    trunk_min: float = 0.162416,
-    trunk_max: float = 0.3,
-    outlier_krav: float = 0.01
-) -> bool:
-    """
-    Applicerar effektiviseringskrav-scenario på aktivt scenario.
-    Beräknar Effkrav_proc från potential baserat på användarens parametrar.
-    """
-    try:
-        dea_export = pd.read_parquet(scenario_file)
-        
-        required_cols = ['DMU', 'REId', 'potential', 'Effektivitet', 'Supereffektivitet', 'is_outlier']
-        missing_cols = [col for col in required_cols if col not in dea_export.columns]
-        
-        if missing_cols:
-            st.error(f"Export saknar kolumner: {missing_cols}")
-            return False
-        
-        # Beräkna Effkrav_proc för alla företag med nya parametrar
-        dea_with_krav = calculate_effkrav_for_dataframe(
-            dea_export,
-            potential_col='potential',
-            outlier_col='is_outlier',
-            trunkering_min=trunk_min,
-            trunkering_max=trunk_max,
-            outlier_krav=outlier_krav
+    col3, col4, col5 = st.columns(3)
+    
+    with col3:
+        current_q_lower = get_staged('paverkbara', 'q_lower', 25)
+        q_lower = st.slider(
+            "Nedre kvartil",
+            0, 50, current_q_lower,
+            step=5,
+            help="Nedre kvartil för outlier-tröskel"
         )
-        
-        dea_result = dea_with_krav[dea_with_krav['DMU'] == entity_dmu].copy()
-        
-        if dea_result.empty:
-            st.warning(f"Ingen data hittades för DMU {entity_dmu} i exporten")
-            return False
-        
-        json_file = Path(scenario_file).with_suffix('.json')
-        metadata = {}
-        if json_file.exists():
-            with open(json_file, 'r', encoding='utf-8') as f:
-                metadata = json.load(f)
-        
-        if 'scenario_data' not in st.session_state:
-            return False
-        
-        st.session_state.scenario_data['modifications']['paverkbara'] = {
-            'source': 'effektiviseringskrav',
-            'method': method,
-            'dea_result': dea_result,
-            'metadata': metadata,
-            'trunkering_min': trunk_min,
-            'trunkering_max': trunk_max,
-            'outlier_krav': outlier_krav,
-            'import_timestamp': pd.Timestamp.now().isoformat()
-        }
-        
-        st.session_state.scenario_data['component_sources']['paverkbara'] = 'effektiviseringskrav'
-        
-        return True
-        
-    except Exception as e:
-        st.error(f"Fel vid import: {e}")
-        import traceback
-        st.error(traceback.format_exc())
+        if q_lower != current_q_lower:
+            set_staged('paverkbara', 'q_lower', q_lower)
+    
+    with col4:
+        current_q_upper = get_staged('paverkbara', 'q_upper', 75)
+        q_upper = st.slider(
+            "Övre kvartil",
+            50, 100, current_q_upper,
+            step=5,
+            help="Övre kvartil för outlier-tröskel"
+        )
+        if q_upper != current_q_upper:
+            set_staged('paverkbara', 'q_upper', q_upper)
+    
+    with col5:
+        current_multiplier = get_staged('paverkbara', 'multiplier', 2.0)
+        multiplier = st.slider(
+            "IQR-multiplikator",
+            1.0, 3.0, current_multiplier,
+            step=0.1,
+            help="Multiplikator för interkvartilavstånd"
+        )
+        if multiplier != current_multiplier:
+            set_staged('paverkbara', 'multiplier', multiplier)
+    
+    st.caption("Threshold: Q_upper + multiplikator × (Q_upper - Q_lower)")
+    
+    # Kör DEA-knapp
+    st.markdown("")
+    if st.button("Kör DEA-analys", type="primary", use_container_width=True, key="run_dea_effektiviseringskrav"):
+        with st.spinner("Kör DEA-beräkningar..."):
+            try:
+                result = run_dea_model(
+                    df,
+                    rts=dea_rts,
+                    input_cols=input_cols,
+                    output_cols=output_cols,
+                    outlier_filter=use_outlier_filter,
+                    q_lower=q_lower,
+                    q_upper=q_upper,
+                    multiplier=multiplier
+                )
+                
+                # Extrahera användarens resultat
+                user_result = result[result['DMU'] == user_dmu]
+                
+                if not user_result.empty:
+                    row = user_result.iloc[0]
+                    
+                    # Spara i staged som dictionary
+                    set_staged('paverkbara', 'new_dea_result', {
+                        'DMU': int(row['DMU']),
+                        'REId': str(row.get('REId', '')),
+                        'Företag': str(row.get('Företag', '')),
+                        'Effektivitet': float(row['Effektivitet']) if not row.get('is_outlier') else None,
+                        'Supereffektivitet': float(row['Supereffektivitet']) if not row.get('is_outlier') else None,
+                        'potential': float(row.get('potential', 0)),
+                        'is_outlier': bool(row.get('is_outlier', False))
+                    })
+                    
+                    # Spara DEA-parametrar för referens
+                    set_staged('paverkbara', 'dea_params', {
+                        'input_cols': input_cols,
+                        'output_cols': output_cols,
+                        'rts': dea_rts,
+                        'outlier_filter': use_outlier_filter,
+                        'q_lower': q_lower,
+                        'q_upper': q_upper,
+                        'multiplier': multiplier
+                    })
+                    
+                    st.success("DEA-analys slutförd - nytt effektivitetsvärde aktiverat")
+                    st.rerun()
+                else:
+                    st.error(f"Ingen data för DMU {user_dmu} i resultat")
+                    
+            except Exception as e:
+                st.error(f"DEA-analys misslyckades: {e}")
+                import traceback
+                st.error(traceback.format_exc())
+
+
+def validate_input_combinations(input_cols, scen_info, df):
+    """Validerar input-kombinationer enligt DEA-regler"""
+    
+    has_capex_std = "CAPEX" in input_cols
+    has_capex_scen = any(col.startswith("CAPEX_2024_wacc_") for col in input_cols)
+    has_opexp = "OPEXp" in input_cols
+    has_totex_std = "TOTEX" in input_cols
+    has_totex_scen = any(col.startswith("TOTEX_wacc_") for col in input_cols)
+    
+    capex_any = has_capex_std or has_capex_scen
+    totex_any = has_totex_std or has_totex_scen
+    
+    if totex_any and (capex_any or has_opexp):
+        st.error("Välj antingen TOTEX ELLER CAPEX/OPEXp, inte båda")
         return False
+    
+    if (has_capex_std and has_capex_scen) or (has_totex_std and has_totex_scen):
+        st.error("Välj antingen baseline- ELLER scenario-variant inom samma familj")
+        return False
+    
+    if scen_info.get("found"):
+        capex_wacc_col = scen_info.get("capex_col")
+        totex_wacc_col = scen_info.get("totex_col")
+        chosen_scen_cols = [c for c in [capex_wacc_col, totex_wacc_col] if c and c in input_cols]
+        
+        if chosen_scen_cols:
+            missing = [c for c in chosen_scen_cols if df[c].isna().any()]
+            if missing:
+                st.error(
+                    "Scenario-kolumn saknar värden:\n"
+                    f"- {', '.join(missing)}\n\n"
+                    "Kontrollera exporten från Kapitalbas."
+                )
+                return False
+    
+    return True
+
+
+def render_calculation_parameters_section():
+    """
+    Beräkningsparametrar för effektiviseringskrav
+    """
+    
+    # Baseline-värden från Ei
+    baseline_trunk_min = 0.162416
+    baseline_trunk_max = 0.3
+    baseline_outlier_krav = 0.01
+    baseline_method = 'OPEX'
+    
+    st.caption("Justera parametrar för beräkning av effektiviseringskrav")
+    
+    # Trunkering (2 kolumner)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        current_trunk_min = get_active_value('paverkbara', 'trunk_min', baseline_trunk_min)
+        new_trunk_min = st.number_input(
+            "Trunkering min",
+            value=float(current_trunk_min),
+            min_value=0.0,
+            max_value=0.3,
+            step=0.001,
+            format="%.3f",
+            help="Nedre gräns för potential-trunkering"
+        )
+        st.caption(f"Baseline: {baseline_trunk_min:.3f}")
+        
+        if abs(new_trunk_min - current_trunk_min) > 0.0001:
+            set_staged('paverkbara', 'trunk_min', new_trunk_min)
+    
+    with col2:
+        current_trunk_max = get_active_value('paverkbara', 'trunk_max', baseline_trunk_max)
+        new_trunk_max = st.number_input(
+            "Trunkering max",
+            value=float(current_trunk_max),
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+            format="%.2f",
+            help="Övre gräns för potential-trunkering"
+        )
+        st.caption(f"Baseline: {baseline_trunk_max:.2f}")
+        
+        if abs(new_trunk_max - current_trunk_max) > 0.001:
+            set_staged('paverkbara', 'trunk_max', new_trunk_max)
+    
+    # Outlier-krav
+    current_outlier = get_active_value('paverkbara', 'outlier_krav', baseline_outlier_krav)
+    new_outlier = st.number_input(
+        "Outlier-krav (%)",
+        value=float(current_outlier * 100),
+        min_value=1.0,
+        max_value=1.82,
+        step=0.01,
+        format="%.2f",
+        help="Fast årligt krav för outliers och 100% effektiva"
+    ) / 100
+    st.caption(f"Baseline: {baseline_outlier_krav*100:.2f}%")
+    
+    if abs(new_outlier - current_outlier) > 0.00001:
+        set_staged('paverkbara', 'outlier_krav', new_outlier)
+    
+    # Metod
+    current_method = get_active_value('paverkbara', 'method', baseline_method)
+    new_method = st.selectbox(
+        "Applicera på",
+        options=['OPEX', 'TOTEX'],
+        index=0 if current_method == 'OPEX' else 1,
+        help="OPEX: Endast påverkbara kostnader | TOTEX: Påverkbara + kapitalkostnad"
+    )
+    st.caption(f"Baseline: {baseline_method}")
+    
+    if new_method != current_method:
+        set_staged('paverkbara', 'method', new_method)
+
+
+def render_apply_section_effkrav(active_efficiency, source):
+    """
+    Apply-sektion för effektiviseringskrav
+    """
+    
+    # Kontrollera staged changes för parametrar (inte DEA-resultat)
+    staged = get_all_staged('paverkbara')
+    param_changes = {k: v for k, v in staged.items() 
+                    if k in ['trunk_min', 'trunk_max', 'outlier_krav', 'method']}
+    
+    # Om ingen DEA-körning OCH inga parameterjusteringar
+    if 'new_dea_result' not in staged and not param_changes:
+        st.info("Inga ändringar att applicera. Kör DEA eller justera parametrar för att uppdatera effektiviseringskrav.")
+        return
+    
+    # Visa antal ändringar
+    change_list = []
+    if 'new_dea_result' in staged:
+        change_list.append("Ny DEA-körning")
+    if param_changes:
+        change_list.append(f"{len(param_changes)} parameter")
+    
+    st.caption(f"**Ändringar:** {', '.join(change_list)}")
+    
+    # Apply och Reset knappar
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Beräkna och applicera", type="primary", use_container_width=True, key="apply_effektiviseringskrav"):
+            apply_effektiviseringskrav(active_efficiency, source, staged)
+    
+    with col2:
+        if st.button("Återställ alla", use_container_width=True, key="reset_effektiviseringskrav"):
+            reset_all('paverkbara')
+            st.rerun()
+
+
+def apply_effektiviseringskrav(active_efficiency, source, staged):
+    """
+    Beräknar och applicerar effektiviseringskrav
+    """
+    
+    with st.spinner("Beräknar effektiviseringskrav..."):
+        try:
+            # Hämta parametrar
+            trunk_min = staged.get('trunk_min', 0.162416)
+            trunk_max = staged.get('trunk_max', 0.3)
+            outlier_krav = staged.get('outlier_krav', 0.01)
+            method = staged.get('method', 'OPEX')
+            
+            # Konvertera efficiency till DataFrame
+            efficiency_df = pd.DataFrame([{
+                'DMU': active_efficiency['DMU'],
+                'REId': active_efficiency.get('REId', ''),
+                'Företag': active_efficiency.get('Företag', ''),
+                'Effektivitet': active_efficiency.get('Effektivitet'),
+                'Supereffektivitet': active_efficiency.get('Supereffektivitet'),
+                'potential': active_efficiency.get('potential', 0),
+                'is_outlier': active_efficiency.get('is_outlier', False)
+            }])
+            
+            # Beräkna Effkrav_proc
+            from core.effektiviseringskrav_calculations import calculate_effkrav_for_dataframe
+            
+            efficiency_with_krav = calculate_effkrav_for_dataframe(
+                efficiency_df,
+                potential_col='potential',
+                outlier_col='is_outlier',
+                trunkering_min=trunk_min,
+                trunkering_max=trunk_max,
+                outlier_krav=outlier_krav
+            )
+            
+            # Spara i applied_modifications
+            st.session_state.scenario_data['applied_modifications']['paverkbara'] = {
+                'source': 'effektiviseringskrav',
+                'method': method,
+                'dea_result': efficiency_with_krav,
+                'metadata': {
+                    'efficiency_source': source,
+                    'trunk_min': trunk_min,
+                    'trunk_max': trunk_max,
+                    'outlier_krav': outlier_krav,
+                    'dea_params': staged.get('dea_params') if source == 'new_dea' else None
+                },
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Commit staged changes
+            commit_staged_changes('paverkbara')
+            
+            st.success("Effektiviseringskrav beräknat och applicerat!")
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"Applicering misslyckades: {e}")
+            import traceback
+            st.error(traceback.format_exc())
+
+
+def remove_staged(module: str, param: str):
+    """Helper för att ta bort staged parameter"""
+    from intaktsram.backend.pending_changes_manager import remove_staged as _remove_staged
+    _remove_staged(module, param)
