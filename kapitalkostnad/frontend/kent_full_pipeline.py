@@ -539,13 +539,3 @@ def execute_ir_export_kent(ir_data: pd.DataFrame) -> str:
 
 if __name__ == "__main__":
     show_kent_full_pipeline()
-
-
-# Logga ut
-st.sidebar.markdown("---")
-if st.button("Logga ut", key="logout_kent_pipeline"):
-    st.session_state.access_granted = False
-    st.session_state.current_user = None
-    st.session_state.user_role = None
-    st.session_state.user_dmu = None
-    st.rerun()

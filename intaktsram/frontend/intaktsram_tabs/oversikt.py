@@ -33,7 +33,6 @@ def show_oversikt_tab(entity_data: pd.Series, df_company: pd.DataFrame):
     show_scenario_management(df_company)
     
     st.markdown("---")
-    st.markdown("---")
     
     # Hämta scenario-data
     scenario_data = st.session_state.get('scenario_data', {})
@@ -61,12 +60,10 @@ def show_scenario_management(df_company: pd.DataFrame):
     """
     Visar komplett scenario-hantering
     """
-    
-    st.markdown("### Scenario-hantering")
     st.caption("Skapa, ladda eller spara scenarier för att analysera olika parameterval")
     
     scenario_name = st.text_input(
-        "Scenario-namn",
+        "Namn",
         value=st.session_state.current_scenario_name,
         placeholder="t.ex. WACC 4.75%",
         key="scenario_name_input"
@@ -157,8 +154,7 @@ def show_scenario_status(applied_modifications: dict):
     Visar KVALITATIV scenario-status med antaganden och metodval.
     Fokuserar på VAD som gjordes, inte resultaten.
     """
-    st.markdown("### Scenario-status")
-    st.caption("Antaganden och metodval i aktivt scenario")
+    st.markdown("### Antaganden och metodval i aktivt scenario")
     
     has_modifications = False
     
@@ -315,8 +311,8 @@ def show_combined_component_table(entity_data: pd.Series, applied_modifications:
         ('Påverkbara kostnader', 'Paverkbara_Kostnader'),
         ('Opåverkbara kostnader', 'Opaverkbara_Kostnader'),
         ('Kapitalkostnad', 'Kapitalkostnad_Total'),
-        ('  - Avskrivningar', 'Avskrivningar'),
-        ('  - Avkastning', 'Avkastning'),
+        ('  - varav kapitalförslitning', 'Avskrivningar'),
+        ('  - varav kapitalbindning', 'Avkastning'),
         ('Flexibilitetstjänster', 'Flexibilitetstjanster'),
         ('Avbrottsersättning 12-24h', 'Avbrottsersattning_12_24h')
     ]
@@ -341,9 +337,9 @@ def show_combined_component_table(entity_data: pd.Series, applied_modifications:
         
         table_data.append({
             'Komponent': name,
-            'Scenario (tkr)': f"{current_val:,.0f}".replace(",", " "),
-            'Baseline (tkr)': f"{ref_val:,.0f}".replace(",", " "),
-            'Δ (tkr)': f"{diff:+,.0f}".replace(",", " ") if abs(diff) > 0.5 else "—",
+            'Scenario (MSEK)': f"{current_val/1000:,.1f}".replace(",", " "),
+            'Baseline (MSEK)': f"{ref_val/1000:,.1f}".replace(",", " "),
+            'Δ (MSEK)': f"{diff/1000:+,.1f}".replace(",", " ") if abs(diff) > 0.5 else "—",
             'Δ (%)': f"{diff_pct:+.1f}%" if abs(diff) > 0.5 else "—",
             'Källa': source
         })
@@ -359,9 +355,9 @@ def show_combined_component_table(entity_data: pd.Series, applied_modifications:
     
     table_data.append({
         'Komponent': '**Total intäktsram**',
-        'Scenario (tkr)': f"{total_scenario:,.0f}".replace(",", " "),
-        'Baseline (tkr)': f"{total_baseline:,.0f}".replace(",", " "),
-        'Δ (tkr)': f"{total_diff:+,.0f}".replace(",", " ") if abs(total_diff) > 0.5 else "—",
+        'Scenario (MSEK)': f"{total_scenario/1000:,.1f}".replace(",", " "),
+        'Baseline (MSEK)': f"{total_baseline/1000:,.1f}".replace(",", " "),
+        'Δ (MSEK)': f"{total_diff/1000:+,.1f}".replace(",", " ") if abs(total_diff) > 0.5 else "—",
         'Δ (%)': f"{total_diff_pct:+.1f}%" if abs(total_diff) > 0.5 else "—",
         'Källa': 'Beräknad summa'
     })
@@ -434,7 +430,7 @@ def show_export_section(entity_data: pd.Series, applied_modifications: dict):
                 st.error(f"Export misslyckades: {e}")
     
     with col2:
-        if st.button("Skapa rapport (PDF)", use_container_width=True):
+        if st.button("Skapa rapport (PDF)", use_container_width=True, disabled=True):
             st.info("PDF-rapport implementeras i nästa fas")
 
 
@@ -480,7 +476,7 @@ def create_excel_export(entity_data: pd.Series, applied_modifications: dict) -> 
         
         # Metadata-sheet
         metadata = {
-            'Parameter': ['Scenario-namn', 'Exportdatum', 'Företag', 'DMU', 'REId'],
+            'Parameter': ['Namn', 'Exportdatum', 'Företag', 'DMU', 'REId'],
             'Värde': [
                 st.session_state.get('current_scenario_name', 'Namnlöst'),
                 datetime.now().strftime('%Y-%m-%d %H:%M'),

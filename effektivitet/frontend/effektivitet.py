@@ -399,12 +399,3 @@ def export_to_ir(company_result):
 
 if __name__ == "__main__":
     show_foretag_effektivitet()
-
-# Logga ut
-st.markdown("---")
-if st.button("Logga ut", key="logout_effektivitet"):
-    st.session_state.access_granted = False
-    st.session_state.current_user = None
-    st.session_state.user_role = None
-    st.session_state.user_dmu = None
-    st.rerun()

@@ -38,8 +38,8 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
     intaktsram = get_component_data('intaktsram')
     
     def fmt(val):
-        """Formaterar tal med mellanslag som tusentalsavgränsare."""
-        return f"{val:,.0f}".replace(",", " ")
+        """Formaterar tkr till MSEK med mellanslag som tusentalsavgränsare."""
+        return f"{val/1000:,.1f}".replace(",", " ")
     
     def create_tooltip(name: str, comp: dict) -> str:
         """
@@ -47,20 +47,17 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
         - Scenario (har delta): Visa endast delta
         - Baseline (inget delta): Inget tooltip (tom sträng)
         """
-        TOLERANCE = 1.0  # 1 tkr tolerans för avrundningsskillnader
+        TOLERANCE = 1 # Toleransnivå för signifikant delta i MSEK
         delta = comp['value'] - comp['baseline']
-        
+
         # Om det finns signifikant delta
         if abs(delta) > TOLERANCE:
             if comp['baseline'] != 0:
                 delta_pct = (delta / comp['baseline'] * 100)
                 sign = "+" if delta >= 0 else ""
-                return f"{name} | Δ {sign}{fmt(delta)} tkr ({sign}{delta_pct:.1f}%)"
+                return f"{name} | Δ {sign}{fmt(delta)} MSEK ({sign}{delta_pct:.1f}%)"
             else:
-                return f"{name} | {fmt(comp['value'])} tkr"
-        else:
-            # Baseline eller försumbar skillnad: Inget tooltip
-            return ""
+                return f"{name} | {fmt(comp['value'])} MSEK"
     
     def get_box_class(comp: dict) -> str:
         """Returnerar CSS-klass baserat på om komponenten är direktmodifierad."""
@@ -341,21 +338,21 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
              data-tooltip="{create_tooltip('Påverkbara kostnader', paverkbara)}">
             <div class="badge">1</div>
             <div class="box-title">Påverkbara<br>kostnader</div>
-            <div class="box-value">{fmt(paverkbara['value'])} tkr</div>
+            <div class="box-value">{fmt(paverkbara['value'])} MSEK</div>
         </div>
         
         <div class="box box-input box-ej-paverkbara {get_box_class(ej_paverkbara)}" style="left: {x_mid_left}px; top: {y1}px; width: 188px;"
              data-tooltip="{create_tooltip('Ej påverkbara kostnader', ej_paverkbara)}">
             <div class="badge">2</div>
             <div class="box-title">Ej påverkbara<br>kostnader</div>
-            <div class="box-value">{fmt(ej_paverkbara['value'])} tkr</div>
+            <div class="box-value">{fmt(ej_paverkbara['value'])} MSEK</div>
         </div>
         
         <div class="box box-input box-kapitalbas {get_box_class(kapitalbas)}" style="left: {x_mid_right}px; top: {y1}px; width: 398px;"
              data-tooltip="{create_tooltip('Kapitalbas', kapitalbas)}">
             <div class="badge">3</div>
             <div class="box-title">Kapitalbas</div>
-            <div class="box-value">{fmt(kapitalbas['value'])} tkr</div>
+            <div class="box-value">{fmt(kapitalbas['value'])} MSEK</div>
         </div>
     """
     
@@ -370,21 +367,21 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
              data-tooltip="{create_tooltip('Effektiviseringskrav', effektivisering)}">
             <div class="badge">4</div>
             <div class="box-title">Effektiviseringskrav</div>
-            <div class="box-value">-{fmt(effektivisering['value'])} tkr</div>
+            <div class="box-value">-{fmt(effektivisering['value'])} MSEK</div>
         </div>
         
         <div class="box box-calculation box-avskrivningar {get_box_class(avskrivningar)}" style="left: {x_mid_right}px; top: {y2}px; width: 180px;"
              data-tooltip="{create_tooltip('Avskrivningar', avskrivningar)}">
             <div class="badge">5</div>
             <div class="box-title">Avskrivningar</div>
-            <div class="box-value">{fmt(avskrivningar['value'])} tkr</div>
+            <div class="box-value">{fmt(avskrivningar['value'])} MSEK</div>
         </div>
         
         <div class="box box-calculation box-avkastning {get_box_class(avkastning)}" style="left: {x_right}px; top: {y2}px; width: 188px;"
              data-tooltip="{create_tooltip('Avkastning (WACC)', avkastning)}">
             <div class="badge">6</div>
             <div class="box-title">Avkastning<br>(WACC)</div>
-            <div class="box-value">{fmt(avkastning['value'])} tkr</div>
+            <div class="box-value">{fmt(avkastning['value'])} MSEK</div>
         </div>
     """
     
@@ -398,7 +395,7 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
              data-tooltip="{create_tooltip('Justering kvalitet', kvalitet)}">
             <div class="badge">7</div>
             <div class="box-title">Justering med avseende<br>på kvalitet</div>
-            <div class="box-value">{fmt(kvalitet['value'])} tkr</div>
+            <div class="box-value">{fmt(kvalitet['value'])} MSEK</div>
         </div>
     """
     
@@ -410,14 +407,14 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
              data-tooltip="{create_tooltip('Löpande kostnader', lopande)}">
             <div class="badge">8</div>
             <div class="box-title">Löpande kostnader</div>
-            <div class="box-value">{fmt(lopande['value'])} tkr</div>
+            <div class="box-value">{fmt(lopande['value'])} MSEK</div>
         </div>
         
         <div class="box box-intermediate box-kapitalkostnader {get_box_class(kapitalkostnader)}" style="left: {x_mid_right}px; top: {y4}px; width: 398px;"
              data-tooltip="{create_tooltip('Kapitalkostnader', kapitalkostnader)}">
             <div class="badge">9</div>
             <div class="box-title">Kapitalkostnader</div>
-            <div class="box-value">{fmt(kapitalkostnader['value'])} tkr</div>
+            <div class="box-value">{fmt(kapitalkostnader['value'])} MSEK</div>
         </div>
     """
     
@@ -441,7 +438,7 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
              data-tooltip="{create_tooltip('Intäktsram', intaktsram)}">
             <div class="badge">11</div>
             <div class="box-title" style="font-size: 16px; font-weight: 700;">Intäktsram</div>
-            <div class="box-value" style="font-size: 14px;">{fmt(intaktsram['value'])} tkr</div>
+            <div class="box-value" style="font-size: 14px;">{fmt(intaktsram['value'])} MSEK</div>
         </div>
     """
     

@@ -72,7 +72,7 @@ def get_company_name_from_dmu(dmu: int) -> str:
 def show_login_page():
     """Visar login-formulär"""
     st.markdown("## Logga in")
-    st.markdown("Ange din email och lösenord för att komma åt systemet.")
+    st.markdown("Ange din email och lösenord för att komma åt Regumetrica.")
     
     with st.form("login_form"):
         email = st.text_input("Email", placeholder="foretag@example.com")
@@ -101,7 +101,7 @@ def show_login_page():
         
         # Kolla email verification
         if not user['emailVerified']:
-            st.warning("⚠️ Din email är inte verifierad")
+            st.warning("Din email är inte verifierad")
             st.info("Kolla din inbox för verifieringslänk")
             
             if st.button("Skicka ny verifieringslänk"):
@@ -131,12 +131,12 @@ def show_login_page():
         # Visa välkomstmeddelande
         if st.session_state.user_role == 'company':
             company_name = get_company_name_from_dmu(st.session_state.user_dmu)
-            welcome_msg = f"✅ Välkommen {company_name}!"
+            welcome_msg = f"Välkommen {company_name}!"
             if st.session_state.user_reid:
                 welcome_msg += f" ({st.session_state.user_reid})"
             st.success(welcome_msg)
         else:
-            st.success(f"✅ Välkommen {email}!")
+            st.success(f"Välkommen {email}!")
         
         st.rerun()
     
@@ -153,7 +153,7 @@ def show_login_page():
 def show_register_page():
     """Visar registreringsformulär"""
     st.markdown("## Skapa nytt konto")
-    st.markdown("Registrera ditt företag för att få tillgång till systemet.")
+    st.markdown("Registrera dig för att få tillgång till Regumetrica.")
     
     with st.form("register_form"):
         email = st.text_input(
@@ -192,7 +192,7 @@ def show_register_page():
             reid = None
             dmu = None
         
-        st.info("📧 Efter registrering skickas en verifieringslänk till din email")
+        st.info("Efter registrering skickas en verifieringslänk till din email")
         
         col1, col2 = st.columns([1, 1])
         with col1:
@@ -233,8 +233,8 @@ def show_register_page():
         
         # Visa framgångsmeddelande
         company_name = get_company_name_from_dmu(dmu)
-        st.success(f"✅ Konto skapat för {company_name}!")
-        st.info(f"📧 En verifieringslänk har skickats till {email}")
+        st.success(f"Konto skapat för {company_name}!")
+        st.info(f"En verifieringslänk har skickats till {email}")
         st.markdown(f"**Ditt nätverk:** {reid}")
         st.markdown("Kolla din inbox och klicka på länken för att verifiera ditt konto.")
         
@@ -272,7 +272,7 @@ def show_reset_password_page():
             success, error = firebase_auth.send_password_reset_email(email)
         
         if success:
-            st.success(f"📧 Återställningslänk skickad till {email}")
+            st.success(f"Återställningslänk skickad till {email}")
             st.info("Kolla din inbox och följ instruktionerna i emailet")
             
             if st.button("Gå till inloggning"):
@@ -310,7 +310,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    if st.button("🚪 Logga ut", use_container_width=True):
+    if st.button("Logga ut", use_container_width=True):
         # Rensa session state
         for key in list(st.session_state.keys()):
             del st.session_state[key]
