@@ -20,6 +20,8 @@ from firebase_admin import credentials, auth as admin_auth
 import json
 from typing import Optional, Dict, Tuple
 import requests
+import os
+import toml
 
 
 class FirebaseAuthManager:
@@ -34,15 +36,48 @@ class FirebaseAuthManager:
         self._initialize_client()
         self._initialize_admin()
     
+    def _load_secrets(self) -> Dict:
+        """
+        Laddar secrets från Streamlit secrets (lokalt) eller Secret Files (Render)
+        
+        Försöker i ordning:
+        1. Streamlit secrets (st.secrets) - lokalt
+        2. /etc/secrets/secrets.toml - Render Secret Files
+        
+        Returns:
+            Dict med secrets
+        """
+        # Försök 1: Streamlit secrets (lokalt)
+        try:
+            if hasattr(st, 'secrets') and 'firebase' in st.secrets:
+                return st.secrets
+        except:
+            pass
+        
+        # Försök 2: Render Secret Files
+        secret_file_path = '/etc/secrets/secrets.toml'
+        if os.path.exists(secret_file_path):
+            try:
+                with open(secret_file_path, 'r') as f:
+                    secrets = toml.load(f)
+                    return secrets
+            except Exception as e:
+                st.error(f"Kunde inte läsa Secret File: {e}")
+        
+        raise ValueError("Kunde inte hitta Firebase credentials")
+
+    
     def _initialize_client(self):
         """Initialiserar Pyrebase för client-side operationss"""
         try:
+            secrets = self._load_secrets()
+            
             firebase_config = {
-                "apiKey": st.secrets["firebase"]["api_key"],
-                "authDomain": st.secrets["firebase"]["auth_domain"],
-                "databaseURL": st.secrets["firebase"]["database_url"],
-                "storageBucket": st.secrets["firebase"]["storage_bucket"],
-                "projectId": st.secrets["firebase"]["project_id"]
+                "apiKey": secrets["firebase"]["api_key"],
+                "authDomain": secrets["firebase"]["auth_domain"],
+                "databaseURL": secrets["firebase"]["database_url"],
+                "storageBucket": secrets["firebase"]["storage_bucket"],
+                "projectId": secrets["firebase"]["project_id"]
             }
             
             self.firebase = pyrebase.initialize_app(firebase_config)
@@ -56,17 +91,19 @@ class FirebaseAuthManager:
         """Initialiserar Firebase Admin SDK för server-side operations"""
         try:
             if not firebase_admin._apps:
+                secrets = self._load_secrets()
+                
                 cred_dict = {
-                    "type": st.secrets["firebase_admin"]["type"],
-                    "project_id": st.secrets["firebase_admin"]["project_id"],
-                    "private_key_id": st.secrets["firebase_admin"]["private_key_id"],
-                    "private_key": st.secrets["firebase_admin"]["private_key"].replace('\\n', '\n'),
-                    "client_email": st.secrets["firebase_admin"]["client_email"],
-                    "client_id": st.secrets["firebase_admin"]["client_id"],
-                    "auth_uri": st.secrets["firebase_admin"]["auth_uri"],
-                    "token_uri": st.secrets["firebase_admin"]["token_uri"],
-                    "auth_provider_x509_cert_url": st.secrets["firebase_admin"]["auth_provider_x509_cert_url"],
-                    "client_x509_cert_url": st.secrets["firebase_admin"]["client_x509_cert_url"]
+                    "type": secrets["firebase_admin"]["type"],
+                    "project_id": secrets["firebase_admin"]["project_id"],
+                    "private_key_id": secrets["firebase_admin"]["private_key_id"],
+                    "private_key": secrets["firebase_admin"]["private_key"].replace('\\n', '\n'),
+                    "client_email": secrets["firebase_admin"]["client_email"],
+                    "client_id": secrets["firebase_admin"]["client_id"],
+                    "auth_uri": secrets["firebase_admin"]["auth_uri"],
+                    "token_uri": secrets["firebase_admin"]["token_uri"],
+                    "auth_provider_x509_cert_url": secrets["firebase_admin"]["auth_provider_x509_cert_url"],
+                    "client_x509_cert_url": secrets["firebase_admin"]["client_x509_cert_url"]
                 }
                 
                 cred = credentials.Certificate(cred_dict)

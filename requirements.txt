@@ -28,3 +28,5 @@ pyyaml
 Pyrebase4>=4.7.1
 firebase-admin>=6.5.0
 requests>=2.31.0
+setuptools>=67.0.0
+toml>=0.10.2
