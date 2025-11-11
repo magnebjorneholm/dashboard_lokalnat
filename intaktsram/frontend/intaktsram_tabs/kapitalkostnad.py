@@ -47,7 +47,7 @@ def show_kapitalkostnad_tab(entity_data, scenario_metadata):
     st.subheader("Kapitalkostnad")
     
     if not st.session_state.current_scenario_name:
-        st.warning("Skapa ett scenario i Översikt-fliken först")
+        st.warning("Skapa ett case i Översikt-fliken först")
         return
     
     baseline_wacc = 0.0453
@@ -57,12 +57,12 @@ def show_kapitalkostnad_tab(entity_data, scenario_metadata):
     
     user_dmu = get_user_dmu()
     
-    st.markdown("### 1. WACC-beräkning från CAPM-komponenter")
+    st.markdown("### 1. WACC Parameters (ID: 2.1-2.12)")
     wacc_calculated = render_wacc_section()
     
     st.markdown("---")
     
-    st.markdown("### 2. Avancerat: KENT-parametrar")
+    st.markdown("### 2. Advanced: Asset Parameters (Variables from KENT)")
     st.caption("För fullständig omberäkning från KENT-inrapportering")
     
     kent_data = render_kent_section(user_dmu)
@@ -111,7 +111,7 @@ def render_wacc_section():
     
     with c1:
         new_rf = st.number_input(
-            "Riskfri ränta (nominell) Rf",
+            "Riskfri ränta (nominell) Rf (ID: 2.3)",
             value=float(current_rf),
             step=0.0001,
             format="%.4f",
@@ -122,7 +122,7 @@ def render_wacc_section():
             set_staged('kapitalkostnad', 'rf_nom', new_rf)
         
         new_mrp = st.number_input(
-            "Marknadsriskpremie (nominell) MRP",
+            "Marknadsriskpremie (nominell) MRP (ID: 2.4)",
             value=float(current_mrp),
             step=0.0001,
             format="%.4f",
@@ -133,7 +133,7 @@ def render_wacc_section():
             set_staged('kapitalkostnad', 'mrp', new_mrp)
         
         new_infl = st.number_input(
-            "Inflation π (KPIF)",
+            "Inflation π (KPIF) (ID: 2.7)",
             value=float(current_infl),
             step=0.0001,
             format="%.4f",
@@ -145,7 +145,7 @@ def render_wacc_section():
     
     with c2:
         new_credit = st.number_input(
-            "Kreditriskpremie (nominell)",
+            "Kreditriskpremie (nominell) (ID: 2.5)",
             value=float(current_credit),
             step=0.0001,
             format="%.4f",
@@ -156,7 +156,7 @@ def render_wacc_section():
             set_staged('kapitalkostnad', 'credit', new_credit)
         
         new_debt_share = st.number_input(
-            "Skuldsättningsgrad S = D/(D+E)",
+            "Skuldsättningsgrad S = D/(D+E) (ID: 2.1)",
             value=float(current_debt_share),
             min_value=0.0,
             max_value=0.95,
@@ -169,7 +169,7 @@ def render_wacc_section():
             set_staged('kapitalkostnad', 'debt_share', new_debt_share)
         
         new_tax_rate = st.number_input(
-            "Bolagsskatt T",
+            "Bolagsskatt T (ID: 2.6)",
             value=float(current_tax_rate),
             min_value=0.0,
             max_value=0.99,
@@ -194,7 +194,7 @@ def render_wacc_section():
         
         if new_beta_mode == "β_A":
             new_beta_a = st.number_input(
-                "β_A",
+                "β_A (ID: 2.2)",
                 value=float(current_beta_a),
                 step=0.01,
                 format="%.2f",
@@ -207,7 +207,7 @@ def render_wacc_section():
             beta_a_for_calc = new_beta_a
         else:
             new_beta_e = st.number_input(
-                "β_E",
+                "β_E (ID: 2.8)",
                 value=float(current_beta_e),
                 step=0.01,
                 format="%.2f",
@@ -232,10 +232,10 @@ def render_wacc_section():
     
     st.markdown("---")
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Re (nominell, efter skatt)", f"{Re*100:.2f}%")
-    k2.metric("Rd (nominell, före skatt)", f"{Rd*100:.2f}%")
-    k3.metric("WACC (nominell, före skatt)", f"{Wn*100:.2f}%")
-    k4.metric("WACC (real, före skatt)", f"{Wr*100:.2f}%")
+    k1.metric("Re (nominell, efter skatt) (ID: 2.9)", f"{Re*100:.2f}%")
+    k2.metric("Rd (nominell, före skatt) (ID: 2.10)", f"{Rd*100:.2f}%")
+    k3.metric("WACC (nominell, före skatt) (ID: 2.11)", f"{Wn*100:.2f}%")
+    k4.metric("WACC (real, före skatt) (ID: 2.12)", f"{Wr*100:.2f}%")
     
     set_staged('kapitalkostnad', 'wacc_calculated', Wr)
     
@@ -363,7 +363,7 @@ def apply_changes(method, wacc_calculated, baseline_wacc, kent_data, user_dmu):
                 result = apply_wacc_scaling(wacc_calculated, baseline_wacc, user_dmu)
             else:
                 result = apply_kent_calculation(wacc_calculated, kent_data, user_dmu)
-            
+
             st.session_state.scenario_data['applied_modifications']['kapitalkostnad'] = {
                 'source': 'wacc_scaling' if method == "wacc_scaling" else 'kent_full',
                 'method': method,

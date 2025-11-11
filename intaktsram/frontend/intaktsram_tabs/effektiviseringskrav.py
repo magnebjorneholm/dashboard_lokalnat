@@ -201,7 +201,7 @@ def render_dea_section(user_dmu):
     current_wacc = get_staged('paverkbara', 'wacc_scenario', wacc_baseline)
     
     wacc_scenario = st.number_input(
-        "Kalkylränta (WACC): Påverkar inputs CAPEX och TOTEX för alla nät",
+        "Kalkylränta (WACC): Påverkar inputs CAPEX och TOTEX för alla nät i körningen",
         min_value=0.01,
         max_value=0.10,
         value=float(current_wacc),
@@ -242,7 +242,7 @@ def render_dea_section(user_dmu):
                     format="%.0f",
                 ),
                 'MW': st.column_config.NumberColumn(
-                    'MW (Det högsta värdet av abonnerad och uttagen effekt mot överliggande nät)',
+                    'MW (Effekt mot överliggande nät)',
                     min_value=0,
                     format="%.2f",
                 ),

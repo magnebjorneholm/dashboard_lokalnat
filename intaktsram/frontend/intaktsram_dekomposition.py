@@ -1,6 +1,6 @@
 """
 Huvudvy för intäktsram-dekomposition UTAN sidebar
-All scenario-hantering är flyttad till Översikt-tabben
+All case-hantering är flyttad till Översikt-tabben
 """
 
 import streamlit as st
@@ -101,7 +101,7 @@ def show_foretag_ir_dekomposition_ny():
 
 
 def initialize_session_state():
-    """Initialiserar session state för scenario-hantering."""
+    """Initialiserar session state för case-hantering."""
     if 'scenarios' not in st.session_state:
         st.session_state.scenarios = {}
     

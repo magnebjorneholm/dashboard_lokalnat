@@ -58,6 +58,7 @@ def render_normvalue_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]
         Dict med justeringar {level: str, adjustments: Dict[int, float]}
         eller None om inga justeringar
     """
+    st.markdown("#### Justera normvärden (Parameters ID: 1.X.1)")
     with st.expander("Justera normvärden (procentuellt)", expanded=False):
         st.info("Justera NUAV för scenarioanalys genom procentuella förändringar. "
                 "+15% → 1.15x, -10% → 0.90x")
@@ -103,7 +104,7 @@ def render_normvalue_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]
         current_values = current_values.rename(columns={
             group_encode: 'Kod',
             group_text: 'Beskrivning',
-            'nuav_2022': 'Nuvarande NUAV (tkr)'
+            'nuav_2022': 'Nuvarande NUAV (tkr) (Asset value)'
         })
         
         current_values = current_values.sort_values('Kod').reset_index(drop=True)
@@ -122,8 +123,8 @@ def render_normvalue_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]
             num_rows="fixed",
             disabled=['Kod', 'Beskrivning', 'Nuvarande NUAV (tkr)'],
             column_config={
-                'Nuvarande NUAV (tkr)': st.column_config.NumberColumn(
-                    'Nuvarande NUAV (tkr)',
+                'Nuvarande NUAV (tkr) (Asset value)': st.column_config.NumberColumn(
+                    'Nuvarande NUAV (tkr) (Asset value)',
                     format="%.0f"
                 ),
                 'Justering (%)': st.column_config.NumberColumn(
@@ -256,6 +257,7 @@ def render_lifetime_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]:
         Dict med justeringar {level: str, adjustments: Dict[int, Dict]}
         eller None om inga justeringar
     """
+    st.markdown("#### Justera livslängder (Parameters ID: 1.X.1 & 1.X.2)")
     with st.expander("Justera ekonomisk/maximal livslängd", expanded=False):
         st.info("För scenarioanalys: Testa hur ändringar i regulatoriska livslängder påverkar kapitalkostnaden")
         
@@ -299,8 +301,8 @@ def render_lifetime_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]:
         current_values = current_values.rename(columns={
             group_encode: 'Kod',
             group_text: 'Beskrivning',
-            'ekdep': 'Ekonomisk livslängd',
-            'maxdep': 'Maximal livslängd'
+            'ekdep': 'Ekonomisk livslängd (ID: X.1)',
+            'maxdep': 'Maximal livslängd (ID: X.2)'
         })
         
         current_values = current_values.sort_values('Kod').reset_index(drop=True)
@@ -316,15 +318,15 @@ def render_lifetime_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]:
             num_rows="fixed",
             disabled=['Kod', 'Beskrivning'],
             column_config={
-                'Ekonomisk livslängd': st.column_config.NumberColumn(
-                    'Ekonomisk livslängd',
+                'Ekonomisk livslängd (ID: X.1)': st.column_config.NumberColumn(
+                    'Ekonomisk livslängd (ID: X.1)',
                     min_value=1,
                     max_value=100,
                     step=1,
                     format="%d år"
                 ),
-                'Maximal livslängd': st.column_config.NumberColumn(
-                    'Maximal livslängd',
+                'Maximal livslängd (ID: X.2)': st.column_config.NumberColumn(
+                    'Maximal livslängd (ID: X.2)',
                     min_value=1,
                     max_value=150,
                     step=1,

@@ -1,5 +1,5 @@
 """
-Översikt-tab med kvalitativ scenario-status och jämförelsetabell
+Översikt-tab med kvalitativ case-status och jämförelsetabell
 Uppdaterad för att använda applied_modifications från pending_changes_manager
 """
 
@@ -20,30 +20,30 @@ from intaktsram.backend.scenario_utils import (
 
 def show_oversikt_tab(entity_data: pd.Series, df_company: pd.DataFrame):
     """
-    Visar översikt-tab med scenario-hantering och sammanfattning.
+    Visar översikt-tab med CASE-hantering och sammanfattning.
     
     Args:
         entity_data: Series med data för vald entitet (lokalnät)
         df_company: DataFrame med alla lokalnät för företaget
     """
     
-    st.subheader("Översikt & Scenario-hantering")
+    st.subheader("Översikt & Case-hantering")
     
-    # SCENARIO-HANTERING
+    # CASE-HANTERING
     show_scenario_management(df_company)
     
     st.markdown("---")
     
-    # Hämta scenario-data
+    # Hämta scenario-data (intern state behålls)
     scenario_data = st.session_state.get('scenario_data', {})
     applied_modifications = scenario_data.get('applied_modifications', {})
     has_active_scenario = bool(st.session_state.get('current_scenario_name'))
-    
+
     # SCENARIO-STATUS (Kvalitativ metadata)
     if has_active_scenario:
         show_scenario_status(applied_modifications)
     else:
-        st.info("Inget aktivt scenario. Skapa ett nytt scenario för att börja analysera.")
+        st.info("Inget aktivt case. Skapa ett nytt case för att börja analysera.")
     
     st.markdown("---")
     
@@ -58,12 +58,13 @@ def show_oversikt_tab(entity_data: pd.Series, df_company: pd.DataFrame):
 
 def show_scenario_management(df_company: pd.DataFrame):
     """
-    Visar komplett scenario-hantering
+    Visar komplett case-hantering
     """
-    st.caption("Skapa, ladda eller spara scenarier för att analysera olika parameterval")
-    
+    st.caption("Skapa, ladda eller spara cases för att analysera olika parameterval")
+
+    # Visuellt namn ändrat till 'Case-namn' men widget-key och intern state behålls
     scenario_name = st.text_input(
-        "Namn",
+        "Case-namn",
         value=st.session_state.current_scenario_name,
         placeholder="t.ex. WACC 4.75%",
         key="scenario_name_input"
@@ -72,10 +73,12 @@ def show_scenario_management(df_company: pd.DataFrame):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("Skapa nytt scenario", use_container_width=True, type="primary"):
+        if st.button("Skapa nytt case", use_container_width=True, type="primary"):
             if create_scenario(scenario_name, df_company):
-                st.success(f"Scenario '{scenario_name}' skapat!")
+                st.success(f"Case '{scenario_name}' skapat!")
                 st.rerun()
+            else:
+                st.error("Kunde inte skapa case")
     
     with col2:
         if st.button("Återställ till baseline", use_container_width=True):
@@ -84,20 +87,20 @@ def show_scenario_management(df_company: pd.DataFrame):
                 st.rerun()
     
     with col3:
-        if st.button("Ladda scenario", use_container_width=True):
+        if st.button("Ladda sparat case", use_container_width=True):
             st.session_state.show_scenario_loader = True
             st.rerun()
     
     with col4:
-        if st.session_state.current_scenario_name and st.button("Spara scenario", use_container_width=True):
+        if st.session_state.current_scenario_name and st.button("Spara case", use_container_width=True):
             try:
                 filepath = save_scenario_to_file(
                     st.session_state.current_scenario_name,
                     st.session_state.scenario_data
                 )
-                st.success(f"Scenario sparat: {filepath}")
+                st.success(f"Case sparat: {filepath}")
             except Exception as e:
-                st.error(f"Kunde inte spara: {e}")
+                st.error(f"Kunde inte spara case: {e}")
     
     # Scenario loader
     if st.session_state.get('show_scenario_loader', False):
@@ -106,21 +109,20 @@ def show_scenario_management(df_company: pd.DataFrame):
 
 def show_scenario_loader():
     """
-    Visar scenario loader UI
+    Visar case-loader med lista av sparade cases.
     """
     st.markdown("---")
-    
-    with st.expander("Välj scenario att ladda", expanded=True):
+    with st.expander("Välj case att ladda", expanded=True):
         saved_scenarios = list_saved_scenarios()
-        
+
         if not saved_scenarios:
-            st.info("Inga sparade scenarier hittades")
+            st.info("Inga sparade cases hittades")
             return
-        
+
         scenario_names = [s[0] for s in saved_scenarios]
-        
+
         selected_name = st.selectbox(
-            "Sparade scenarier",
+            "Sparade cases",
             options=scenario_names,
             key="scenario_selector"
         )
@@ -128,10 +130,11 @@ def show_scenario_loader():
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("Ladda scenario", use_container_width=True, type="primary"):
+            if st.button("Ladda case", use_container_width=True, type="primary"):
                 selected_path = next(s[1] for s in saved_scenarios if s[0] == selected_name)
                 df_loaded, metadata = load_scenario_from_file(selected_path)
-                
+
+                # Spara i intern session state (oberoende av visuellt "case"-ordval)
                 st.session_state.current_scenario_name = selected_name
                 st.session_state.scenario_data = {
                     'baseline': df_loaded,
@@ -140,7 +143,7 @@ def show_scenario_loader():
                     'component_sources': metadata.get('component_sources', {})
                 }
                 st.session_state.show_scenario_loader = False
-                st.success(f"Scenario '{selected_name}' laddat!")
+                st.success(f"Case '{selected_name}' laddat!")
                 st.rerun()
         
         with col2:
@@ -154,7 +157,7 @@ def show_scenario_status(applied_modifications: dict):
     Visar KVALITATIV scenario-status med antaganden och metodval.
     Fokuserar på VAD som gjordes, inte resultaten.
     """
-    st.markdown("### Antaganden och metodval i aktivt scenario")
+    st.markdown("### Antaganden och metodval i aktivt casee")
     
     has_modifications = False
     
@@ -173,7 +176,7 @@ def show_scenario_status(applied_modifications: dict):
         st.markdown("")
     
     if not has_modifications:
-        st.info("Inga modifieringar applicerade ännu. Gå till Kapitalkostnad eller Effektiviseringskrav för att skapa ett scenario.")
+        st.info("Inga modifieringar applicerade ännu. Gå till Kapitalkostnad eller Effektiviseringskrav för att fortsätta med caset.")
 
 
 def show_kapitalkostnad_status(kapital_mod: dict):
@@ -230,7 +233,7 @@ def show_kapitalkostnad_status(kapital_mod: dict):
 
 def show_effektiviseringskrav_status(effkrav_mod: dict):
     """
-    Visar kvalitativ status för effektiviseringskrav-scenario
+    Visar kvalitativ status för effektiviseringskrav-case
     """
     method = effkrav_mod.get('method', 'OPEX')
     metadata = effkrav_mod.get('metadata', {})
@@ -293,7 +296,7 @@ def show_effektiviseringskrav_status(effkrav_mod: dict):
 
 def show_combined_component_table(entity_data: pd.Series, applied_modifications: dict):
     """
-    Visar kombinerad tabell med komponenter och jämförelse baseline vs scenario.
+    Visar kombinerad tabell med komponenter och jämförelse baseline vs case.
     """
     st.markdown("### Komponenter (4-årssumma 2024-2027)")
     
@@ -337,7 +340,7 @@ def show_combined_component_table(entity_data: pd.Series, applied_modifications:
         
         table_data.append({
             'Komponent': name,
-            'Scenario (MSEK)': f"{current_val/1000:,.1f}".replace(",", " "),
+            'Case (MSEK)': f"{current_val/1000:,.1f}".replace(",", " "),
             'Baseline (MSEK)': f"{ref_val/1000:,.1f}".replace(",", " "),
             'Δ (MSEK)': f"{diff/1000:+,.1f}".replace(",", " ") if abs(diff) > 0.5 else "—",
             'Δ (%)': f"{diff_pct:+.1f}%" if abs(diff) > 0.5 else "—",
@@ -355,7 +358,7 @@ def show_combined_component_table(entity_data: pd.Series, applied_modifications:
     
     table_data.append({
         'Komponent': '**Total intäktsram**',
-        'Scenario (MSEK)': f"{total_scenario/1000:,.1f}".replace(",", " "),
+        'Case (MSEK)': f"{total_scenario/1000:,.1f}".replace(",", " "),
         'Baseline (MSEK)': f"{total_baseline/1000:,.1f}".replace(",", " "),
         'Δ (MSEK)': f"{total_diff/1000:+,.1f}".replace(",", " ") if abs(total_diff) > 0.5 else "—",
         'Δ (%)': f"{total_diff_pct:+.1f}%" if abs(total_diff) > 0.5 else "—",
@@ -411,7 +414,7 @@ def show_export_section(entity_data: pd.Series, applied_modifications: dict):
     """
     Visar export-funktionalitet
     """
-    st.markdown("### Exportera scenario")
+    st.markdown("### Exportera Case")
     
     col1, col2 = st.columns(2)
     
@@ -422,7 +425,7 @@ def show_export_section(entity_data: pd.Series, applied_modifications: dict):
                 st.download_button(
                     label="Ladda ner Excel-fil",
                     data=excel_data,
-                    file_name=f"intaktsram_scenario_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                    file_name=f"intaktsram_case_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
@@ -436,7 +439,7 @@ def show_export_section(entity_data: pd.Series, applied_modifications: dict):
 
 def create_excel_export(entity_data: pd.Series, applied_modifications: dict) -> bytes:
     """
-    Skapar Excel-export av scenario
+    Skapar Excel-export av case
     """
     output = io.BytesIO()
     
@@ -444,7 +447,7 @@ def create_excel_export(entity_data: pd.Series, applied_modifications: dict) -> 
         # Översikt-sheet
         overview_data = {
             'Komponent': [],
-            'Scenario (tkr)': [],
+            'Case (tkr)': [],
             'Baseline (tkr)': [],
             'Förändring (tkr)': [],
             'Förändring (%)': []
@@ -466,7 +469,7 @@ def create_excel_export(entity_data: pd.Series, applied_modifications: dict) -> 
             delta_pct = (delta / baseline * 100) if baseline != 0 else 0
             
             overview_data['Komponent'].append(name)
-            overview_data['Scenario (tkr)'].append(value)
+            overview_data['Case (tkr)'].append(value)
             overview_data['Baseline (tkr)'].append(baseline)
             overview_data['Förändring (tkr)'].append(delta)
             overview_data['Förändring (%)'].append(delta_pct)
