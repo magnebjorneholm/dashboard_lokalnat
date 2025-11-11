@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from pulp import LpProblem, LpVariable, LpMinimize, lpSum, value
-from effektivitet.backend.run_logger import save_run
 
 def run_dea_model(
     df: pd.DataFrame,
@@ -102,21 +101,4 @@ def run_dea_model(
     df["Effektivitet"] = result_effektivitet
     df["Supereffektivitet"] = result_supereffektivitet
     df["potential"] = result_potential
-
-    # Konvertera OUTLIER till NaN inför loggning (för pyarrow/feather-kompatibilitet)
-    df_for_loggning = df.copy()
-    for col in ["supereff1", "Effektivitet", "Supereffektivitet", "potential"]:
-        if col in df_for_loggning.columns:
-            df_for_loggning[col] = pd.to_numeric(df_for_loggning[col], errors="coerce")
-
-    save_run("DEA", {
-        "rts": rts,
-        "input_cols": input_cols,
-        "output_cols": output_cols,
-        "outlier_filter": outlier_filter,
-        "q_lower": q_lower,
-        "q_upper": q_upper,
-        "multiplier": multiplier
-    }, df_for_loggning)
-
     return df

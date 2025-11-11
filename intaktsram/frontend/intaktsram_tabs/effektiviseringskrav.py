@@ -201,7 +201,7 @@ def render_dea_section(user_dmu):
     current_wacc = get_staged('paverkbara', 'wacc_scenario', wacc_baseline)
     
     wacc_scenario = st.number_input(
-        "Kalkylränta (WACC): Påverkar inputs capex och totex för alla nät",
+        "Kalkylränta (WACC): Påverkar inputs CAPEX och TOTEX för alla nät",
         min_value=0.01,
         max_value=0.10,
         value=float(current_wacc),
@@ -232,40 +232,34 @@ def render_dea_section(user_dmu):
             hide_index=True,
             column_config={
                 'OPEXp': st.column_config.NumberColumn(
-                    'OPEXp (tkr)',
+                    'OPEXp (Påverkbara driftskostnader)',
                     min_value=0,
                     format="%.0f",
-                    help="Påverkbara driftskostnader"
                 ),
                 'CU': st.column_config.NumberColumn(
-                    'CU (st)',
+                    'CU (Antal abonnemang)',
                     min_value=0,
                     format="%.0f",
-                    help="Antal kunder"
                 ),
                 'MW': st.column_config.NumberColumn(
-                    'MW',
+                    'MW (Det högsta värdet av abonnerad och uttagen effekt mot överliggande nät)',
                     min_value=0,
                     format="%.2f",
-                    help="Ansluten effekt"
                 ),
                 'NS': st.column_config.NumberColumn(
-                    'NS (km)',
+                    'NS (nätstationer)',
                     min_value=0,
                     format="%.2f",
-                    help="Nätlängd"
                 ),
                 'MWhl': st.column_config.NumberColumn(
-                    'MWhl (GWh)',
+                    'MWhl (Energi lågspänning)',
                     min_value=0,
                     format="%.2f",
-                    help="Energi lågspänning"
                 ),
                 'MWhh': st.column_config.NumberColumn(
-                    'MWhh (GWh)',
+                    'MWhh (Energi högspänning)',
                     min_value=0,
                     format="%.2f",
-                    help="Energi högspänning"
                 )
             },
             key="data_editor_opexp_volym"
@@ -294,7 +288,7 @@ def render_dea_section(user_dmu):
             value=float(current_q_lower),
             step=0.05,
             format="%.2f",
-            help="Nedre kvartil för outlier-tröskel"
+            help="Nedre kvartil för tröskel"
         )
         if abs(q_lower - current_q_lower) > 0.001:
             set_staged('paverkbara', 'q_lower', q_lower)
@@ -308,7 +302,7 @@ def render_dea_section(user_dmu):
             value=float(current_q_upper),
             step=0.05,
             format="%.2f",
-            help="Övre kvartil för outlier-tröskel"
+            help="Övre kvartil för tröskel"
         )
         if abs(q_upper - current_q_upper) > 0.001:
             set_staged('paverkbara', 'q_upper', q_upper)

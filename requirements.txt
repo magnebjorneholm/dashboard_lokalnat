@@ -6,7 +6,6 @@ xlsxwriter
 pyarrow
 
 # Modellpaket
-pystoned @ git+https://github.com/ds2010/pyStoNED
 pulp
 
 # Visualisering och dashboard
