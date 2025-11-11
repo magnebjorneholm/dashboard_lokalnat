@@ -57,12 +57,13 @@ def show_kapitalkostnad_tab(entity_data, scenario_metadata):
     
     user_dmu = get_user_dmu()
     
-    st.markdown("### 1. WACC Parameters (ID: 2.1-2.12)")
+    st.markdown("### 1. WACC-parametrar (ID: 2.1-2.12)")
+    st.caption("Beräkna kalkylränta från CAPM-komponenter")
     wacc_calculated = render_wacc_section()
     
     st.markdown("---")
     
-    st.markdown("### 2. Advanced: Asset Parameters (Variables from KENT)")
+    st.markdown("### 2. Anläggningsparametrar från KENT")
     st.caption("För fullständig omberäkning från KENT-inrapportering")
     
     kent_data = render_kent_section(user_dmu)
@@ -183,22 +184,22 @@ def render_wacc_section():
     
     with c3:
         new_beta_mode = st.radio(
-            "Beta-inmatning",
-            ["β_A", "β_E"],
-            index=0 if current_beta_mode == "β_A" else 1,
-            help="Välj att ange tillgångsbeta (β_A) eller aktiebeta (β_E) direkt",
+            "Val av beta",
+            ["Tillgångsbeta", "Aktiebeta"],
+            index=0 if "Tillgångsbeta" in current_beta_mode or current_beta_mode == "β_A" else 1,
+            help="Välj att ange tillgångsbeta (obelånad) eller aktiebeta (belånad) direkt",
             key="wacc_input_beta_mode"
         )
         if new_beta_mode != current_beta_mode:
             set_staged('kapitalkostnad', 'beta_mode', new_beta_mode)
         
-        if new_beta_mode == "β_A":
+        if new_beta_mode == "Tillgångsbeta":
             new_beta_a = st.number_input(
-                "β_A (ID: 2.2)",
+                "Tillgångsbeta (ID: 2.2)",
                 value=float(current_beta_a),
                 step=0.01,
                 format="%.2f",
-                help="Tillgångsbeta (obelanad)",
+                help="Tillgångsbeta (obelånad)",
                 key="wacc_input_beta_a"
             )
             if new_beta_a != current_beta_a:
@@ -207,11 +208,11 @@ def render_wacc_section():
             beta_a_for_calc = new_beta_a
         else:
             new_beta_e = st.number_input(
-                "β_E (ID: 2.8)",
+                "Aktiebeta (ID: 2.8)",
                 value=float(current_beta_e),
                 step=0.01,
                 format="%.2f",
-                help="Aktiebeta (belanad)",
+                help="Aktiebeta (belånad)",
                 key="wacc_input_beta_e"
             )
             if new_beta_e != current_beta_e:
@@ -232,8 +233,8 @@ def render_wacc_section():
     
     st.markdown("---")
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Re (nominell, efter skatt) (ID: 2.9)", f"{Re*100:.2f}%")
-    k2.metric("Rd (nominell, före skatt) (ID: 2.10)", f"{Rd*100:.2f}%")
+    k1.metric("Cost of Equity Re (nominell, efter skatt) (ID: 2.9)", f"{Re*100:.2f}%")
+    k2.metric("Cost of Debt Rd (nominell, före skatt) (ID: 2.10)", f"{Rd*100:.2f}%")
     k3.metric("WACC (nominell, före skatt) (ID: 2.11)", f"{Wn*100:.2f}%")
     k4.metric("WACC (real, före skatt) (ID: 2.12)", f"{Wr*100:.2f}%")
     

@@ -104,7 +104,7 @@ def render_normvalue_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]
         current_values = current_values.rename(columns={
             group_encode: 'Kod',
             group_text: 'Beskrivning',
-            'nuav_2022': 'Nuvarande NUAV (tkr) (Asset value)'
+            'nuav_2022': 'Nuvarande NUAV (tkr)'
         })
         
         current_values = current_values.sort_values('Kod').reset_index(drop=True)
@@ -123,8 +123,8 @@ def render_normvalue_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]
             num_rows="fixed",
             disabled=['Kod', 'Beskrivning', 'Nuvarande NUAV (tkr)'],
             column_config={
-                'Nuvarande NUAV (tkr) (Asset value)': st.column_config.NumberColumn(
-                    'Nuvarande NUAV (tkr) (Asset value)',
+                'Nuvarande NUAV (tkr)': st.column_config.NumberColumn(
+                    'Nuvarande NUAV (tkr)',
                     format="%.0f"
                 ),
                 'Justering (%)': st.column_config.NumberColumn(
@@ -257,7 +257,7 @@ def render_lifetime_adjustment_ui(capbase_data: pd.DataFrame) -> Optional[Dict]:
         Dict med justeringar {level: str, adjustments: Dict[int, Dict]}
         eller None om inga justeringar
     """
-    st.markdown("#### Justera livslängder (Parameters ID: 1.X.1 & 1.X.2)")
+    st.markdown("#### Justera livslängder (Tabell 1, ID: 1.1.1 - 1.17.2)")
     with st.expander("Justera ekonomisk/maximal livslängd", expanded=False):
         st.info("För scenarioanalys: Testa hur ändringar i regulatoriska livslängder påverkar kapitalkostnaden")
         
