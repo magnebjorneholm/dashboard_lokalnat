@@ -25,7 +25,7 @@ print("\n[1/3] Laddar data från Data_modeller.xlsx...")
 from core.data_loader_dea import load_data
 from pysfa import SFA
 
-df = load_data("effektivitet/data/Data_modeller.xlsx")
+df = load_data("data/Data_modeller.xlsx")
 print(f"✓ Data laddad: {len(df)} företag")
 
 # ============================================================================

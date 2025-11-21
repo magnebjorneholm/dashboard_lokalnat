@@ -23,8 +23,8 @@ def load_reconciliation() -> pd.DataFrame:
     Returnerar DataFrame med standardiserade kolumnnamn.
     """
     # Försök new_recon.csv först (primär källa)
-    recon_path = "intaktsram/data/new_recon.csv"
-    fallback_path = "effektivitet/data/reconciliation_id_network_firm_dmu.csv"
+    recon_path = "data/new_recon.csv"
+    fallback_path = "data/reconciliation_id_network_firm_dmu.csv"
 
     try:
         if Path(recon_path).exists():
@@ -94,7 +94,7 @@ def load_dmu_volymer() -> pd.DataFrame:
     Innehåller CU, MW, NS, MWhl, MWhh per DMU.
     """
     try:
-        return pd.read_csv("effektivitet/data/dmu_volymer.csv")
+        return pd.read_csv("data/dmu_volymer.csv")
     except Exception as e:
         st.error(f"Kunde inte ladda DMU-volymer: {e}")
         return pd.DataFrame()
@@ -114,7 +114,7 @@ def load_capcost_full() -> pd.DataFrame:
     - capcost_sum, capcost_network
     """
     try:
-        return pd.read_parquet("kapitalkostnad/data/capcost_a_3_Sheet1.parquet")
+        return pd.read_parquet("data/capcost_a_3_Sheet1.parquet")
     except Exception as e:
         st.error(f"Kunde inte ladda capcost_a data: {e}")
         return pd.DataFrame()

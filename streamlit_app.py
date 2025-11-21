@@ -1,10 +1,16 @@
 """
 streamlit_app.py
-Huvudfil för Streamlit-appen med Firebase Authentication
+Huvudfil för Streamlit-appen med Firebase Authentication och modulär arkitektur
 
 Rollbaserad access:
 - company: Lokalnätföretag (filtreras per DMU)
 - regulator: Energimarknadsinspektionen (tillgång till allt)
+
+Flow-baserad navigation:
+1. Case Setup → Välj komponenter
+2. Case Configuration → Konfigurera metoder
+3. Execution → Kör beräkningar
+4. Results → Visa resultat
 """
 
 import streamlit as st
@@ -16,11 +22,25 @@ sys.path.insert(0, str(Path(__file__).parent / "auth"))
 
 from auth.firebase_auth import initialize_firebase_auth
 from core.data_loader_base import load_reconciliation
+from core.producer_registry import build_default_registry
+from core.variable_resolver import VariableResolver
+from core.case_definition_manager import CaseDefinitionManager
+from core.bootstrap_registry import bootstrap_registry
+
+
+# === PAGE CONFIG ===
+st.set_page_config(
+    page_title="Regumetrica",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 
 # === SESSION STATE INITIALISERING ===
 def initialize_session_state():
     """Initialiserar session state variabler"""
+    # Authentication state
     if "access_granted" not in st.session_state:
         st.session_state.access_granted = False
     if "current_user" not in st.session_state:
@@ -37,6 +57,37 @@ def initialize_session_state():
         st.session_state.show_register = False
     if "show_reset_password" not in st.session_state:
         st.session_state.show_reset_password = False
+    
+    # Case state
+    if "page" not in st.session_state:
+        st.session_state.page = 'setup'
+    # Case manager and case_definition (use CaseDefinitionManager to create canonical structure)
+    if "producer_registry" not in st.session_state:
+        # Build registry and bind actual producer callables
+        registry = build_default_registry()
+        try:
+            registry = bootstrap_registry(registry)
+        except Exception:
+            # If bootstrap fails, keep registry as-is (methods may be None)
+            pass
+        st.session_state.producer_registry = registry
+
+    if "case_manager" not in st.session_state:
+        st.session_state.case_manager = CaseDefinitionManager(st.session_state.producer_registry)
+
+    if "case_definition" not in st.session_state:
+        # Create a default case using the CaseDefinitionManager; also keep a
+        # lightweight 'selections' key for UI compatibility (the UI may still
+        # rely on that temporary structure). The canonical fields are
+        # 'parameters', 'modules' and 'module_configs'.
+        default_case = st.session_state.case_manager.create_case("New Scenario")
+        # ensure older UI code that expects 'selections' doesn't break
+        default_case.setdefault('selections', {'parameters': [], 'variables': [], 'modules': []})
+        default_case.setdefault('config', {})
+        st.session_state.case_definition = default_case
+    if "case_results" not in st.session_state:
+        st.session_state.case_results = None
+    # producer_registry already initialized above when creating case_manager
 
 
 initialize_session_state()
@@ -120,7 +171,7 @@ def show_login_page():
             st.error("Kunde inte hämta användarinformation. Kontakta administratör.")
             st.stop()
         
-        # Spara i session state (samma struktur som tidigare!)
+        # Spara i session state
         st.session_state.access_granted = True
         st.session_state.current_user = email
         st.session_state.user_email = email
@@ -295,18 +346,44 @@ if not st.session_state.access_granted:
     st.stop()
 
 
-# === INLOGGAD - VISA SIDOR ===
-
-# Sidebar med logout
+# === INLOGGAD - SIDEBAR ===
 with st.sidebar:
-    st.markdown(f"**Inloggad som:** {st.session_state.user_email}")
+    st.markdown("### Regumetrica")
+    st.markdown("---")
+    
+    st.markdown(f"**Inloggad som:**")
+    st.caption(st.session_state.user_email)
     
     if st.session_state.user_role == "company":
         company_name = get_company_name_from_dmu(st.session_state.user_dmu)
-        st.markdown(f"**Företag:** {company_name}")
+        st.markdown(f"**Företag:**")
+        st.caption(company_name)
         if st.session_state.user_reid:
-            st.markdown(f"**Nätverk:** {st.session_state.user_reid}")
-        st.markdown(f"**DMU:** {st.session_state.user_dmu}")
+            st.markdown(f"**Nätverk:**")
+            st.caption(st.session_state.user_reid)
+        st.markdown(f"**DMU:**")
+        st.caption(st.session_state.user_dmu)
+    
+    st.markdown("---")
+    
+    # Progress indicator
+    pages_map = {
+        'setup': 0,
+        'config': 1,
+        'execution': 2,
+        'results': 3
+    }
+    
+    current_step = pages_map.get(st.session_state.page, 0)
+    
+    steps = ["Setup", "Config", "Execution", "Results"]
+    for i, step in enumerate(steps):
+        if i < current_step:
+            st.markdown(f"✓ {step}")
+        elif i == current_step:
+            st.markdown(f"**→ {step}**")
+        else:
+            st.markdown(f"○ {step}")
     
     st.markdown("---")
     
@@ -317,16 +394,99 @@ with st.sidebar:
         st.rerun()
 
 
-# Definiera sidor baserat på roll
-if st.session_state.user_role == "company":
-    pages = [
-        st.Page("pages/foretag/foretag_intaktsram.py", title="IR-dekomposition"),
-    ]
+# === HUVUDINNEHÅLL - FLOW-BASERAD NAVIGATION ===
+
+# Import page renderers
+from ui.pages.case_setup_page import render_case_setup_page
+from ui.pages.case_config_page import render_case_config_page
+from ui.pages.results_page import render_results_page
+
+# Route baserat på current page
+if st.session_state.page == 'setup':
+    st.session_state.case_definition = render_case_setup_page(
+        st.session_state.case_definition
+    )
+
+elif st.session_state.page == 'config':
+    st.session_state.case_definition = render_case_config_page(
+        st.session_state.case_definition
+    )
+
+elif st.session_state.page == 'execution':
+    st.title("Kör beräkning")
+    
+    case_def = st.session_state.case_definition
+    
+    # Progress tracking
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    try:
+        # Ladda baseline data
+        status_text.text("Laddar baseline data...")
+        progress_bar.progress(10)
+        
+        from producers.baseline.baseline_loaders import load_baseline_data
+        baseline_data = load_baseline_data()
+        
+        # Skapa Variable Resolver
+        status_text.text("Initialiserar Variable Resolver...")
+        progress_bar.progress(20)
+        
+        resolver = VariableResolver(
+            producer_registry=st.session_state.producer_registry,
+            case_definition=case_def,
+            baseline_data=baseline_data
+        )
+        
+        # Hämta intäktsram (detta triggar hela dependency chain)
+        status_text.text("Beräknar intäktsram...")
+        progress_bar.progress(40)
+        
+        intaktsram = resolver.get_variable('intaktsram')
+        
+        progress_bar.progress(80)
+        status_text.text("Sammanställer resultat...")
+        
+        # Lagra resultat - spara canonical metadata (parameters/modules/module_configs)
+        st.session_state.case_results = {
+            'intaktsram': intaktsram,
+            'metadata': {
+                'case_name': case_def.get('name', 'Unnamed case'),
+                'parameters': case_def.get('parameters', {}),
+                'modules': case_def.get('modules', {}),
+                'module_configs': case_def.get('module_configs', {}),
+                'created_at': case_def.get('created_at'),
+                'updated_at': case_def.get('updated_at')
+            },
+            'baseline_intaktsram': baseline_data.get('intaktsram_total', 0)
+        }
+        
+        progress_bar.progress(100)
+        status_text.text("Klart!")
+        
+        st.success("Beräkning klar!")
+        
+        # Automatisk navigation till resultat
+        st.session_state.page = 'results'
+        st.rerun()
+        
+    except Exception as e:
+        st.error(f"Fel vid beräkning: {str(e)}")
+        st.exception(e)
+        
+        if st.button("← Tillbaka till konfiguration"):
+            st.session_state.page = 'config'
+            st.rerun()
+
+elif st.session_state.page == 'results':
+    render_results_page(
+        st.session_state.case_definition,
+        st.session_state.case_results
+    )
 
 else:
-    st.error("Okänd användarroll. Kontakta administratör.")
-    st.stop()
-
-# Kör navigation
-pg = st.navigation(pages)
-pg.run()
+    st.error(f"Okänd sida: {st.session_state.page}")
+    if st.button("Gå till Setup"):
+        st.session_state.page = 'setup'
+        st.rerun()

@@ -33,7 +33,7 @@ print(f"Körning: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 print("Steg 1: Laddar data och kör DEA med EI:s standardspecifikation...")
 print("-" * 80)
 
-df = load_data("effektivitet/data/Data_modeller.xlsx")
+df = load_data("data/Data_modeller.xlsx")
 
 # EI:s standardspecifikation
 dea_result = run_dea_model(

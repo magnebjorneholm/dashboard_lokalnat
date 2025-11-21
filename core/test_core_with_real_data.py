@@ -76,7 +76,7 @@ def test_1_load_real_data():
     print("="*70)
     
     # Ladda facit
-    facit_path = "kapitalkostnad/data/capcost_a_3_Sheet1.parquet"
+    facit_path = "data/capcost_a_3_Sheet1.parquet"
     if not Path(facit_path).exists():
         print(f" Fil saknas: {facit_path}")
         return None
@@ -105,7 +105,7 @@ def test_2_reconciliation():
     print("TEST 2: Reconciliation och DMU-mappning")
     print("="*70)
     
-    recon_path = "effektivitet/data/reconciliation_id_network_firm_dmu.csv"
+    recon_path = "data/reconciliation_id_network_firm_dmu.csv"
     if not Path(recon_path).exists():
         print(f" Fil saknas: {recon_path}")
         return None
@@ -141,7 +141,7 @@ def test_3_dmu_aggregation(df_facit):
     
     df_dmu = aggregate_to_dmu(
         df_facit,
-        recon_path="effektivitet/data/reconciliation_id_network_firm_dmu.csv",
+        recon_path="data/reconciliation_id_network_firm_dmu.csv",
         filter_regional=True
     )
     
@@ -261,7 +261,7 @@ def test_6_dea_export(df_dmu):
     df_dea, df_excl, tag = build_dea_export_table(
         df_2024,
         r_scenario,
-        dea_base_path="effektivitet/data/Data_modeller.xlsx",
+        dea_base_path="data/Data_modeller.xlsx",
         exclude_missing_dmus=True
     )
     
