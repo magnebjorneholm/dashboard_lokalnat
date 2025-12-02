@@ -16,6 +16,7 @@ Flow-baserad navigation:
 import streamlit as st
 from pathlib import Path
 import sys
+import pandas as pd
 
 # Lägg till auth-mappen i Python path
 sys.path.insert(0, str(Path(__file__).parent / "auth"))
@@ -443,6 +444,124 @@ elif st.session_state.page == 'execution':
         status_text.text("Beräknar intäktsram...")
         progress_bar.progress(40)
         
+        # 1. Visa execution plan
+        st.write("### 🔍 Debug: Execution Plan")
+        try:
+            plan = resolver.get_execution_plan('intaktsram')
+            st.write("Execution order:")
+            for i, (var, prod) in enumerate(plan, 1):
+                st.write(f"{i}. `{var}` via `{prod}`")
+        except Exception as e:
+            st.error(f"Kunde inte få execution plan: {e}")
+
+        # 2. Testa varje variabel individuellt
+        st.write("### 🔍 Debug: Variable Types")
+
+        # Lista viktiga variabler att testa
+        test_vars = [
+            'wacc_components',
+            'wacc', 
+            'capex',
+            'capex_baseline',
+            'opex_paverkbara',
+            'opex_opaverkbara',
+            'volumes',
+            'efficiency',
+            'effektiviseringskrav'
+        ]
+
+        results = []
+        for var_name in test_vars:
+            try:
+                value = resolver.get_variable(var_name)
+                value_type = type(value).__name__
+                
+                # Extra info för DataFrames
+                if isinstance(value, pd.DataFrame):
+                    shape = f"{value.shape}"
+                    info = f"DataFrame {shape}"
+                elif isinstance(value, dict):
+                    keys = list(value.keys())[:3]
+                    info = f"Dict with keys: {keys}..."
+                elif isinstance(value, (int, float)):
+                    info = f"Value: {value:.6f}"
+                else:
+                    info = str(type(value))
+                
+                results.append({
+                    'Variable': var_name,
+                    'Type': value_type,
+                    'Info': info,
+                    'Status': '✅' if value_type in ['float', 'int', 'DataFrame', 'dict'] else '⚠️'
+                })
+            except Exception as e:
+                results.append({
+                    'Variable': var_name,
+                    'Type': 'ERROR',
+                    'Info': str(e)[:50],
+                    'Status': '❌'
+                })
+
+        st.dataframe(pd.DataFrame(results), use_container_width=True)
+
+        # 3. Kolla case_definition struktur
+        st.write("### 🔍 Debug: Case Definition")
+        st.write("**Parameters:**")
+        params = st.session_state.case_definition.get('parameters', {})
+        if isinstance(params, dict):
+            for key, value in params.items():
+                st.write(f"- `{key}`: {type(value).__name__}")
+                if key == 'wacc_components' and isinstance(value, dict):
+                    st.json(value)
+        else:
+            st.write(f"Type: {type(params)} (should be dict!)")
+
+        st.write("**Modules:**")
+        modules = st.session_state.case_definition.get('modules', {})
+        if isinstance(modules, dict):
+            for key, value in modules.items():
+                st.write(f"- `{key}`: {value}")
+        else:
+            st.write(f"Type: {type(modules)}")
+
+        # 4. Testa WACC specifikt
+        st.write("### 🔍 Debug: WACC Detailed")
+        try:
+            # Vilken producer används för wacc?
+            producer_id = resolver._determine_producer('wacc')
+            st.write(f"WACC producer: `{producer_id}`")
+            
+            # Hämta wacc
+            wacc_value = resolver.get_variable('wacc')
+            st.write(f"WACC type: `{type(wacc_value).__name__}`")
+            st.write(f"WACC value: `{wacc_value}`")
+            
+            # Kolla registry spec
+            wacc_spec = resolver.registry.get_variable_spec('wacc')
+            st.write(f"Expected dtype: `{wacc_spec.dtype}`")
+            
+        except Exception as e:
+            st.error(f"WACC error: {e}")
+
+        st.write("---")
+        st.write("**Nu kan du fortsätta med intaktsram-beräkningen och se var det kraschar**")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         intaktsram = resolver.get_variable('intaktsram')
         
         progress_bar.progress(80)

@@ -150,39 +150,48 @@ def render_wacc_ui(
         
         wacc_inputs = EiWaccInputs(
             rf_nominal=rf_nom,
-            mrp=mrp,
+            mrp_nominal=mrp,
             inflation=infl,
             credit_spread=credit,
             debt_share=debt_share,
             tax_rate=tax_rate,
-            beta_mode=beta_mode,
-            beta_a=beta_a if beta_mode == 'β_A' else None,
-            beta_e=beta_e if beta_mode == 'β_E' else None
+            beta_asset=beta_a if beta_mode == 'β_A' else None,
+            beta_equity=beta_e if beta_mode == 'β_E' else None
         )
         
-        wacc_calculated = ei_wacc_real_pre_tax(wacc_inputs)
+        Re, Rd, Wn, wacc_calculated = ei_wacc_real_pre_tax(wacc_inputs)
         
         st.markdown("---")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric(
-                "Beräknad WACC",
-                f"{wacc_calculated:.4f}",
-                delta=f"{(wacc_calculated - baseline_wacc):.4f}" if baseline_wacc else None
+                "Re (nominell)",
+                f"{Re * 100:.2f}%",
+                help="Kostnad för eget kapital efter skatt"
             )
         
         with col2:
             st.metric(
-                "WACC (%)",
-                f"{wacc_calculated * 100:.2f}%"
+                "Rd (nominell)",
+                f"{Rd * 100:.2f}%",
+                help="Kostnad för skuld före skatt"
             )
         
         with col3:
             st.metric(
-                "Baseline WACC",
-                f"{baseline_wacc:.4f}"
+                "WACC (nominell)",
+                f"{Wn * 100:.2f}%",
+                help="Vägd kapitalkostnad före skatt, nominell"
+            )
+        
+        with col4:
+            st.metric(
+                "WACC (real)",
+                f"{wacc_calculated * 100:.2f}%",
+                delta=f"{(wacc_calculated - baseline_wacc) * 100:.2f}%" if baseline_wacc else None,
+                help="Vägd kapitalkostnad före skatt, real"
             )
         
         return {

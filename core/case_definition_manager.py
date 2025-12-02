@@ -77,7 +77,15 @@ class CaseDefinitionManager:
             Uppdaterad case definition (ny dict)
         """
         case_def = case_def.copy()
-        case_def['parameters'] = case_def.get('parameters', {}).copy()
+        
+        # Handle transition from list (setup) to dict (config)
+        params = case_def.get('parameters', {})
+        if isinstance(params, list):
+            # Convert from selections list to configuration dict
+            case_def['parameters'] = {}
+        else:
+            case_def['parameters'] = params.copy()
+        
         case_def['parameters'][param_name] = value
         case_def['updated_at'] = datetime.now().isoformat()
         return case_def
@@ -113,7 +121,15 @@ class CaseDefinitionManager:
         
         # Uppdatera case definition
         case_def = case_def.copy()
-        case_def['modules'] = case_def.get('modules', {}).copy()
+        
+        # Handle transition from list (setup) to dict (config)
+        modules = case_def.get('modules', {})
+        if isinstance(modules, list):
+            # Convert from selections list to configuration dict
+            case_def['modules'] = {}
+        else:
+            case_def['modules'] = modules.copy()
+        
         case_def['modules'][variable_name] = producer_id
         case_def['updated_at'] = datetime.now().isoformat()
         return case_def
@@ -157,8 +173,19 @@ class CaseDefinitionManager:
             Uppdaterad case definition (ny dict)
         """
         case_def = case_def.copy()
-        case_def['modules'] = case_def.get('modules', {}).copy()
-        case_def['module_configs'] = case_def.get('module_configs', {}).copy()
+        
+        # Handle transition from list (setup) to dict (config)
+        modules = case_def.get('modules', {})
+        if isinstance(modules, list):
+            case_def['modules'] = {}
+        else:
+            case_def['modules'] = modules.copy()
+        
+        module_configs = case_def.get('module_configs', {})
+        if isinstance(module_configs, dict):
+            case_def['module_configs'] = module_configs.copy()
+        else:
+            case_def['module_configs'] = {}
         
         # Remove module selection
         case_def['modules'].pop(variable_name, None)
@@ -234,10 +261,15 @@ class CaseDefinitionManager:
         new_case['created_at'] = datetime.now().isoformat()
         new_case['updated_at'] = datetime.now().isoformat()
         
-        # Deep copy nested dicts
-        new_case['parameters'] = case_def.get('parameters', {}).copy()
-        new_case['modules'] = case_def.get('modules', {}).copy()
-        new_case['module_configs'] = case_def.get('module_configs', {}).copy()
+        # Deep copy nested dicts, handle lists from setup
+        params = case_def.get('parameters', {})
+        new_case['parameters'] = params.copy() if isinstance(params, dict) else []
+        
+        modules = case_def.get('modules', {})
+        new_case['modules'] = modules.copy() if isinstance(modules, dict) else []
+        
+        module_configs = case_def.get('module_configs', {})
+        new_case['module_configs'] = module_configs.copy() if isinstance(module_configs, dict) else {}
         
         return new_case
     
@@ -258,7 +290,10 @@ class CaseDefinitionManager:
         
         # Get all explicitly set modules
         if 'modules' in case_def:
-            active.update(case_def['modules'])
+            modules = case_def['modules']
+            # Only update if modules is a dict (configured), not a list (selections)
+            if isinstance(modules, dict):
+                active.update(modules)
         
         # Add default producers for unset variables
         for var_name in self.registry.list_variables():
@@ -290,9 +325,15 @@ class CaseDefinitionManager:
             'module_configs': {}
         }
         
-        # Compare parameters
+        # Compare parameters (handle lists from setup)
         params1 = case_def1.get('parameters', {})
         params2 = case_def2.get('parameters', {})
+        
+        # Convert lists to empty dicts for comparison
+        if isinstance(params1, list):
+            params1 = {}
+        if isinstance(params2, list):
+            params2 = {}
         
         all_param_keys = set(params1.keys()) | set(params2.keys())
         for key in all_param_keys:
@@ -304,9 +345,15 @@ class CaseDefinitionManager:
                     'case2': val2
                 }
         
-        # Compare modules
+        # Compare modules (handle lists from setup)
         modules1 = case_def1.get('modules', {})
         modules2 = case_def2.get('modules', {})
+        
+        # Convert lists to empty dicts for comparison
+        if isinstance(modules1, list):
+            modules1 = {}
+        if isinstance(modules2, list):
+            modules2 = {}
         
         all_module_keys = set(modules1.keys()) | set(modules2.keys())
         for key in all_module_keys:

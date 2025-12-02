@@ -21,11 +21,28 @@ def render_case_config_page(case_definition: Dict[str, Any]) -> Dict[str, Any]:
     st.markdown("Konfigurera de valda komponenterna")
     
     # Read selected categories from canonical fields created in setup
+    # These should be lists of keys from the setup page
+    selections_params = case_definition.get('parameters', [])
+    selections_vars = case_definition.get('variables', [])
+    selections_mods = case_definition.get('modules', [])
+    
+    # Convert to list if dict (for compatibility)
+    if isinstance(selections_params, dict):
+        selections_params = list(selections_params.keys())
+    if isinstance(selections_vars, dict):
+        selections_vars = list(selections_vars.keys())
+    if isinstance(selections_mods, dict):
+        selections_mods = list(selections_mods.keys())
+    
     selections = {
-        'parameters': case_definition.get('parameters', []),
-        'variables': case_definition.get('variables', []),
-        'modules': case_definition.get('modules', [])
+        'parameters': selections_params,
+        'variables': selections_vars,
+        'modules': selections_mods
     }
+    
+    # Initialize module_configs if not present
+    if 'module_configs' not in case_definition:
+        case_definition['module_configs'] = {}
 
     n_selected = (
         len(selections.get('parameters', [])) +
@@ -66,7 +83,9 @@ def render_case_config_page(case_definition: Dict[str, Any]) -> Dict[str, Any]:
                 if method == 'custom':
                     from ui.producer_ui.wacc_ui import render_wacc_ui
 
-                    current = case_def.get('parameters', {}).get('wacc_components', {})
+                    # Handle case_def['parameters'] being list (from setup) or dict (from config)
+                    params = case_def.get('parameters', {})
+                    current = params.get('wacc_components', {}) if isinstance(params, dict) else {}
                     wacc_config = render_wacc_ui(current_values=current)
                     case_def = case_manager.update_parameter(case_def, 'wacc_components', wacc_config)
                 else:
@@ -170,7 +189,7 @@ def render_case_config_page(case_definition: Dict[str, Any]) -> Dict[str, Any]:
                 if method == 'dea':
                     try:
                         from core.data_loader_dea import load_data
-                        df = load_data("data/Data_modeller.xlsx")
+                        df = load_data("effektivitet/data/Data_modeller.xlsx")
 
                         from ui.producer_ui.dea_config_ui import render_dea_config_ui
 

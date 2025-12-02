@@ -20,14 +20,22 @@ def render_case_setup_page(case_definition: Dict[str, Any]) -> Dict[str, Any]:
     st.title("Case Setup")
     st.markdown("Välj vilka komponenter som ska konfigureras i ditt case")
     
-    # Use canonical fields in case_definition: 'parameters', 'variables', 'modules'
-    # For the setup page we store lists of selected categories under these keys.
+    # For setup page we need lists of selected categories
+    # Convert from dict to list if needed (dict is canonical, list is for UI selection)
     if 'parameters' not in case_definition:
         case_definition['parameters'] = []
+    elif isinstance(case_definition['parameters'], dict):
+        case_definition['parameters'] = list(case_definition['parameters'].keys())
+    
     if 'variables' not in case_definition:
         case_definition['variables'] = []
+    elif isinstance(case_definition['variables'], dict):
+        case_definition['variables'] = list(case_definition['variables'].keys())
+    
     if 'modules' not in case_definition:
         case_definition['modules'] = []
+    elif isinstance(case_definition['modules'], dict):
+        case_definition['modules'] = list(case_definition['modules'].keys())
 
     selections_params = case_definition['parameters']
     selections_vars = case_definition['variables']

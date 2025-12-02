@@ -12,7 +12,6 @@ from typing import Any
 
 from core.producer_registry import ProducerRegistry
 
-# Import producer callables
 from producers.baseline.baseline_loaders import (
     produce_wacc_from_baseline,
     produce_capex_from_baseline,
@@ -57,22 +56,21 @@ def bootstrap_registry(registry: ProducerRegistry) -> ProducerRegistry:
     except Exception:
         pass
 
-    # WACC components producers (if present)
+    # WACC components producers
     try:
         reg_wc = registry.get_variable_spec('wacc_components')
         if 'baseline' in reg_wc.producers:
             reg_wc.producers['baseline'].method = (lambda: {
-                'rf': 0.0287,
-                'mrp': 0.0668,
+                'rf_nominal': 0.0287,
+                'mrp_nominal': 0.0668,
                 'beta_asset': 0.37,
-                'debt_ratio': 0.36,
+                'debt_share': 0.36,
                 'tax_rate': 0.206,
                 'credit_spread': 0.0114,
                 'inflation': 0.0202
             })
-        if 'user_input' in reg_wc.producers:
-            # UI will provide the actual values; keep placeholder None or a passthrough
-            reg_wc.producers['user_input'].method = (lambda **kwargs: kwargs)
+        # user_input producer reads from case_definition['parameters']
+        # This is handled by variable_resolver, so method=None is correct
     except Exception:
         pass
 
@@ -121,10 +119,6 @@ def bootstrap_registry(registry: ProducerRegistry) -> ProducerRegistry:
     # Efficiency
     try:
         reg_eff = registry.get_variable_spec('efficiency')
-        if 'baseline' in reg_eff.producers:
-            # baseline efficiency is provided by producers.baseline.reference_dea_loader
-            # keep as None if not present; UI can map to that function separately
-            pass
         if 'dea' in reg_eff.producers:
             reg_eff.producers['dea'].method = produce_efficiency_from_dea
     except Exception:
