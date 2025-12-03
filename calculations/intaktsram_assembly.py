@@ -26,7 +26,7 @@ def assemble_intaktsram(
                      - Avdrag_Statligt_Stöd
     
     Args:
-        capex_result: DataFrame med REId, Avskrivningar, Avkastning, Kapitalkostnad_Total
+        capex_result: DataFrame med REId, Kapitalkostnad_Total
         paverkbara_result: DataFrame med REId, Paverkbara_Periodsumma
         sdf_baseline: DataFrame från SDF Excel med opåverkbara och övriga komponenter
         
@@ -34,7 +34,7 @@ def assemble_intaktsram(
         DataFrame med alla komponenter och Intaktsram_Total
     """
     # Start med CAPEX
-    df = capex_result[['REId', 'Avskrivningar', 'Avkastning', 'Kapitalkostnad_Total']].copy()
+    df = capex_result[['REId', 'Kapitalkostnad_Total']].copy()
     
     # Merge påverkbara
     df = df.merge(
@@ -133,8 +133,6 @@ def create_intaktsram_breakdown(
     """
     breakdown = [
         ('Kapitalkostnad', user_intaktsram['Kapitalkostnad_Total']),
-        ('  - varav Avskrivningar', user_intaktsram['Avskrivningar']),
-        ('  - varav Avkastning', user_intaktsram['Avkastning']),
         ('Påverkbara kostnader', user_intaktsram['Paverkbara_Periodsumma']),
         ('Opåverkbara kostnader', user_intaktsram['Opaverkbara_Kostnader']),
         ('Flexibilitetstjänster', user_intaktsram['Flexibilitetstjanster']),

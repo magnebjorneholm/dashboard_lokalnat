@@ -13,28 +13,25 @@ from pipeline.stages.stage_outputs import BaselineStageOutput
 def stage_baseline(baseline: BaselineData) -> BaselineStageOutput:
     """
     Stage 1: Konvertera BaselineData till stage output format.
-    
-    Denna stage är enkel - den bara ompaketerar data från BaselineData
-    till det format som pipeline förväntar sig.
-    
-    Args:
-        baseline: BaselineData (immutable)
-        
-    Returns:
-        BaselineStageOutput med:
-        - df_all_companies: 148 företag med CAPEX, OPEX, volumes
-        - dea_baseline: Baseline DEA-resultat från Ei
-        - reconciliation: REId/id_network mapping (har även DMU för kompatibilitet)
-        - wacc: Baseline WACC (0.0453)
-        - sdf_ir: SDF sheet "IR 2024-2027"
-        - sdf_paverkbara: SDF sheet "Påverkbara"
     """
+    # Validera att baseline har korrekt struktur
+    if not hasattr(baseline, 'sdf_ir'):
+        raise AttributeError(
+            "BaselineData saknar 'sdf_ir' attribut. "
+            "Kontrollera att load_baseline_data() returnerar korrekt struktur."
+        )
+    
+    if not hasattr(baseline, 'sdf_paverkbara'):
+        raise AttributeError(
+            "BaselineData saknar 'sdf_paverkbara' attribut. "
+            "Kontrollera att load_baseline_data() returnerar korrekt struktur."
+        )
     
     return BaselineStageOutput(
         df_all_companies=baseline.df_all_companies.copy(),
         dea_baseline=baseline.dea_results.copy(),
         reconciliation=baseline.reconciliation.copy(),
         wacc=baseline.wacc,
-        sdf_ir=baseline.sdf_ir.copy() if hasattr(baseline, 'sdf_ir') else pd.DataFrame(),
-        sdf_paverkbara=baseline.sdf_paverkbara.copy() if hasattr(baseline, 'sdf_paverkbara') else pd.DataFrame()
+        sdf_ir=baseline.sdf_ir.copy(),
+        sdf_paverkbara=baseline.sdf_paverkbara.copy()
     )

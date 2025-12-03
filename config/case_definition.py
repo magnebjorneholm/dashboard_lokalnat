@@ -29,8 +29,8 @@ class EfficiencyMethod(str, Enum):
 
 class PaverkbaraMethod(str, Enum):
     """Metod för påverkbara kostnader (Post-DEA)"""
-    OPEX = "opex"
-    TOTEX = "totex"
+    OPEX = "OPEX"
+    TOTEX = "TOTEX"
 
 
 # Config dataclasses per stage
@@ -70,11 +70,10 @@ class DeaConfig:
 @dataclass
 class PostDeaConfig:
     """Configuration för Post-DEA stage"""
-    # Efficiency requirement parameters
-    effkrav_truncation: bool = True
-    effkrav_iqr_multiplier: float = 2.0
-    max_efficiency_cap: float = 0.30
-    min_annual_effkrav: float = 0.01
+     # Effektiviseringskrav-parametrar (enligt Ei's metod)
+    trunkering_min: float = 0.162416      # Min potential för trunkering (16.24%)
+    trunkering_max: float = 0.30          # Max potential för trunkering (30%)
+    outlier_krav: float = 0.01            # Fast årligt krav för outliers (1%)
     
     # Påverkbara kostnader
     paverkbara_method: PaverkbaraMethod = PaverkbaraMethod.OPEX

@@ -51,12 +51,18 @@ def calculate_paverkbara_with_effkrav(
         how='left'
     )
     
-    # Merge med CAPEX data (behövs för TOTEX)
-    df = df.merge(
-        capex_data[['REId', 'Kapitalkostnad_Total']],
-        on='REId',
-        how='left'
-    )
+    # Merge med CAPEX data (behövs ENDAST för TOTEX)
+    if method == 'TOTEX':
+        if 'Kapitalkostnad_Total' not in capex_data.columns:
+            raise ValueError(
+                "TOTEX-metod kräver 'Kapitalkostnad_Total' i capex_data. "
+                "Kontrollera att kapitalkostnad förbereds korrekt i post_dea.py"
+            )
+        df = df.merge(
+            capex_data[['REId', 'Kapitalkostnad_Total']],
+            on='REId',
+            how='left'
+        )
     
     # Validera att vi har data
     required_cols = ['REId', 'Effkrav_proc', 'Paverkbara_Medelvarde', 'Neonjusteringar']
@@ -165,41 +171,59 @@ def get_paverkbara_from_sdf(
     """
     Extraherar påverkbara baseline-data från SDF Excel.
     
+    KRITISKT: Använder MEDELVÄRDE 2018-2021 från Påverkbara-sheet,
+    INTE periodsumman från IR-sheet!
+    
     Args:
-        sdf_ir: DataFrame från sheet "IR 2024-2027"
+        sdf_ir: DataFrame från sheet "IR 2024-2027" (används ej längre för medelvärde)
         sdf_paverkbara: DataFrame från sheet "Påverkbara"
         
     Returns:
         DataFrame med REId, Paverkbara_Medelvarde, Neonjusteringar
     """
-    # Från IR sheet: Påverkbara kostnader (medelvärde 2018-2021)
-    ir_cols = ['REId', 'Påverkbara kostnader']
-    df_ir = sdf_ir[ir_cols].copy()
-    df_ir.columns = ['REId', 'Paverkbara_Medelvarde']
+    # REId kolumn kan heta 'REid' eller 'REId' i Påverkbara sheet
+    reid_col = 'REid' if 'REid' in sdf_paverkbara.columns else 'REId'
     
-    # Från Påverkbara sheet: Neonjusteringar
-    # Kolumnnamn kan variera, leta efter den som innehåller "Neonjustering"
+    # Kolumn 123: "Medelvärde 2018-2021 påverkbara kostnader"
+    medelvarde_col = None
+    for col in sdf_paverkbara.columns:
+        if 'medelvärde' in col.lower() and '2018-2021' in col.lower():
+            medelvarde_col = col
+            break
+    
+    if medelvarde_col is None:
+        raise ValueError(
+            "Kunde inte hitta kolumn 'Medelvärde 2018-2021 påverkbara kostnader' "
+            "i Påverkbara sheet. Kontrollera Excel-fil struktur."
+        )
+    
+    # Kolumn 124: Neonjusteringar (separerat yrkandet)
     neojust_col = None
     for col in sdf_paverkbara.columns:
-        if 'neojust' in col.lower() or 'neo' in col.lower():
+        if 'separerat yrkandet' in col.lower():
             neojust_col = col
             break
     
     if neojust_col is None:
-        # Om inte hittas, anta att det är 0
-        df_paverkbara = pd.DataFrame({
-            'REId': sdf_paverkbara['REId'],
-            'Neonjusteringar': 0
-        })
-    else:
-        df_paverkbara = sdf_paverkbara[['REId', neojust_col]].copy()
-        df_paverkbara.columns = ['REId', 'Neonjusteringar']
+        # Fallback: Leta efter annan neonjusteringskolumn
+        for col in sdf_paverkbara.columns:
+            if 'neojust' in col.lower() or ('neo' in col.lower() and 'andr' in col.lower()):
+                neojust_col = col
+                break
     
-    # Merge
-    result = df_ir.merge(df_paverkbara, on='REId', how='left')
+    # Extrahera data
+    result = sdf_paverkbara[[reid_col, medelvarde_col]].copy()
+    result.columns = ['REId', 'Paverkbara_Medelvarde']
+    
+    # Lägg till neonjusteringar
+    if neojust_col:
+        result['Neonjusteringar'] = sdf_paverkbara[neojust_col]
+    else:
+        result['Neonjusteringar'] = 0
     
     # Fyll NaN med 0
     result['Neonjusteringar'] = result['Neonjusteringar'].fillna(0)
+    result['Paverkbara_Medelvarde'] = result['Paverkbara_Medelvarde'].fillna(0)
     
     return result
 

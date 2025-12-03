@@ -38,7 +38,9 @@ def test_baseline_structure(baseline):
     # Testa att alla attribut finns
     assert hasattr(baseline, 'df_all_companies'), "Saknar df_all_companies"
     assert hasattr(baseline, 'dea_results'), "Saknar dea_results"
-    assert hasattr(baseline, 'sdf_data'), "Saknar sdf_data"
+    assert hasattr(baseline, 'sdf_ir'), "Saknar sdf_ir"
+    assert hasattr(baseline, 'sdf_paverkbara'), "Saknar sdf_paverkbara"
+    assert hasattr(baseline, 'sdf_opaverkbara'), "Saknar sdf_opaverkbara"
     assert hasattr(baseline, 'reconciliation'), "Saknar reconciliation"
     assert hasattr(baseline, 'wacc'), "Saknar wacc"
     print("✓ Alla attribut finns")
@@ -66,18 +68,17 @@ def test_baseline_structure(baseline):
     print(f"✓ Alla förväntade DEA-kolumner finns")
     
     # Testa SDF data
-    sdf = baseline.sdf_data
-    print(f"\n📊 sdf_data: Dict med {len(sdf)} sheets")
-    
-    # Testa att alla sheets finns
-    expected_sheets = ['ir', 'opaverkbara', 'paverkbara']
-    for sheet in expected_sheets:
-        assert sheet in sdf, f"Saknar sheet i SDF: {sheet}"
-    print(f"✓ Alla förväntade SDF-sheets finns: {expected_sheets}")
-    
-    # Visa storleken på varje sheet
-    for sheet_name, df in sdf.items():
-        print(f"  - {sheet_name}: {len(df)} rader")
+    print(f"\n📊 SDF data (separata attribut):")
+    print(f"  - sdf_ir: {len(baseline.sdf_ir)} rader")
+    print(f"  - sdf_paverkbara: {len(baseline.sdf_paverkbara)} rader")
+    print(f"  - sdf_opaverkbara: {len(baseline.sdf_opaverkbara)} rader")
+
+    # Validera att SDF-data inte är tom
+    assert len(baseline.sdf_ir) > 0, "sdf_ir är tom"
+    assert len(baseline.sdf_paverkbara) > 0, "sdf_paverkbara är tom"
+    assert len(baseline.sdf_opaverkbara) > 0, "sdf_opaverkbara är tom"
+
+    print(f"✓ Alla SDF-attribut har data")
     
     # Testa reconciliation
     rec = baseline.reconciliation

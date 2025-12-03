@@ -20,7 +20,9 @@ class BaselineData:
     # Main data
     df_all_companies: pd.DataFrame  # 148 rader med CAPEX, OPEX, volymer
     dea_results: pd.DataFrame       # 148 rader från EIs_DEA.xlsx
-    sdf_data: Dict[str, pd.DataFrame]  # Dict med 3 sheets: 'ir', 'opaverkbara', 'paverkbara'
+    sdf_ir: pd.DataFrame
+    sdf_paverkbara: pd.DataFrame
+    sdf_opaverkbara: pd.DataFrame
     reconciliation: pd.DataFrame    # Mapping REId ↔ id_network (har även DMU för kompatibilitet)
     
     # Parameters
@@ -359,9 +361,11 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     return BaselineData(
         df_all_companies=df_all_companies,
         dea_results=dea_results,
-        sdf_data=sdf_data,
+        sdf_ir=sdf_data['ir'],
+        sdf_paverkbara=sdf_data['paverkbara'],
+        sdf_opaverkbara=sdf_data['opaverkbara'],
         reconciliation=reconciliation,
-        wacc=0.0453
+        wacc=0.0453,
     )
 
 
@@ -377,10 +381,10 @@ def get_baseline_summary(baseline: BaselineData) -> Dict:
     """
     df = baseline.df_all_companies
     
-    # Räkna SDF-rader
-    n_sdf_ir = len(baseline.sdf_data.get('ir', pd.DataFrame()))
-    n_sdf_opav = len(baseline.sdf_data.get('opaverkbara', pd.DataFrame()))
-    n_sdf_pav = len(baseline.sdf_data.get('paverkbara', pd.DataFrame()))
+    # Räkna SDF-rader (separata attribut)
+    n_sdf_ir = len(baseline.sdf_ir)
+    n_sdf_opav = len(baseline.sdf_opaverkbara)
+    n_sdf_pav = len(baseline.sdf_paverkbara)
     
     return {
         'n_dmu': len(df),
@@ -394,8 +398,8 @@ def get_baseline_summary(baseline: BaselineData) -> Dict:
         'total_network_km': float(df['NS'].sum()),
         'baseline_wacc': baseline.wacc,
         'n_dea_results': len(baseline.dea_results),
-        'n_sdf_ir': n_sdf_ir,
-        'n_sdf_opaverkbara': n_sdf_opav,
-        'n_sdf_paverkbara': n_sdf_pav,
+        'n_sdf_ir': len(baseline.sdf_ir),
+        'n_sdf_paverkbara': len(baseline.sdf_paverkbara),
+        'n_sdf_opaverkbara': len(baseline.sdf_opaverkbara),
         'n_reconciliation': len(baseline.reconciliation)
     }

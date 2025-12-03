@@ -103,10 +103,13 @@ def run_pipeline(
     
     # Stage 5: Post-DEA
     post_dea_output = stage_post_dea(
-        extraction_output,
-        baseline,
-        case_config.post_dea
+        dea=dea_output,
+        pre_dea=pre_dea_output,
+        baseline=baseline_output,
+        config=case_config.post_dea,
+        user_reid=case_config.user_reid
     )
+
     
     return PipelineResult(
         baseline=baseline_output,

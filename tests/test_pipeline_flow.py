@@ -27,6 +27,28 @@ def test_load_baseline():
     
     return baseline
 
+def test_baseline_structure():
+    """Test att baseline har korrekt struktur INNAN pipeline körs"""
+    print("\n" + "="*60)
+    print("TEST: Validera baseline-struktur")
+    print("="*60 + "\n")
+    
+    baseline = load_baseline_data()
+    
+    # Validera att alla nödvändiga attribut finns
+    assert hasattr(baseline, 'sdf_ir'), "BaselineData saknar sdf_ir"
+    assert hasattr(baseline, 'sdf_paverkbara'), "BaselineData saknar sdf_paverkbara"
+    
+    # Validera att SDF data inte är tom
+    assert len(baseline.sdf_ir) > 0, "sdf_ir är tom"
+    assert len(baseline.sdf_paverkbara) > 0, "sdf_paverkbara är tom"
+    
+    # Validera att rätta kolumner finns
+    assert 'REId' in baseline.sdf_ir.columns, "sdf_ir saknar REId"
+    assert 'Påverkbara kostnader' in baseline.sdf_ir.columns, "sdf_ir saknar 'Påverkbara kostnader'"
+    
+    print("✓ Baseline-struktur validerad")
+    return baseline
 
 def test_create_baseline_config():
     """Test att skapa baseline config"""
@@ -67,6 +89,9 @@ def test_validate_stages(result):
     print("TEST: Validera stage outputs")
     print("="*60 + "\n")
     
+    # Test 0: Validera struktur FÖRST
+    baseline = test_baseline_structure()
+    
     # Stage 1: Baseline
     print("Stage 1: Baseline")
     print(f"  - Companies: {len(result.baseline.df_all_companies)} rader")
@@ -105,12 +130,9 @@ def test_validate_stages(result):
     
     # Stage 5: Post-DEA
     print("\nStage 5: Post-DEA")
-    print(f"  - Effkrav: {result.post_dea.effkrav_proc:.2%}")
-    print(f"  - Effkrav method: {result.post_dea.effkrav_method}")
-    print(f"  - Påverkbara baseline: {result.post_dea.paverkbara_baseline:,.0f} tkr")
-    print(f"  - Påverkbara efter effkrav: {result.post_dea.paverkbara_efter_effkrav:,.0f} tkr")
-    if result.post_dea.intaktsram_total is not None:
-        print(f"  - Intäktsram total: {result.post_dea.intaktsram_total:,.0f} tkr")
+    print(f"  - Effkrav: {result.post_dea.user_effkrav_proc:.2%}")
+    print(f"  - Påverkbara periodsumma: {result.post_dea.user_intaktsram['Paverkbara_Periodsumma']:,.0f} tkr")
+    print(f"  - Intäktsram total: {result.post_dea.user_intaktsram['Intaktsram_Total']:,.0f} tkr")
     assert result.post_dea.user_reid == result.user_reid
     print("  ✓ Post-DEA OK")
     
