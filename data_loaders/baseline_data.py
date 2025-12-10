@@ -94,8 +94,11 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
         # Placeholder
         df['Avkastning'] = df['CAPEX'] * 0.5
     
-    # Beräkna TOTEX
-    df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
+    # Explicit alias för årsvärde (CAPEX är källnamn i Excel)
+    df["Kapitalkostnad_2024"] = df["CAPEX"]  # Byt namn från Excel-kolumn till intern standard
+
+    # Beräkna TOTEX med intern standardkolumn
+    df["TOTEX"] = df["OPEXp"] + df["Kapitalkostnad_2024"]
     
     return df
 
@@ -103,10 +106,10 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
 def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
     """
     Laddar Ei's referens-DEA resultat från Excel.
-    
+
     Args:
         data_path: Sökväg till data-mapp. Om None, använd standardsökvägar.
-    
+
     Returns:
         DataFrame med kolumner:
         - REId: Lokalnät-ID (primärnyckel)
@@ -118,7 +121,7 @@ def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
         - Effkrav_proc: Årligt effektiviseringskrav
         - is_outlier: Boolean flag
     """
-    # Sökvägar att prova
+    # SÃ¶kvÃ¤gar att prova
     search_paths = []
     if data_path:
         search_paths.append(Path(data_path) / "EIs_DEA.xlsx")
@@ -182,20 +185,20 @@ def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
 
 def _load_sdf_data(data_path: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     """
-    Laddar Löpande kostnader från SDF 2024-27.xlsx.
-    
+    # Laddar Löpande kostnader från SDF 2024-27.xlsx.
+
     Laddar 3 sheets:
     - 'IR 2024-2027': Huvudsheet med totala intäktsramar
     - 'Opåverkbara': Opåverkbara kostnader uppdelade
     - 'Påverkbara': Påverkbara kostnader uppdelade
-    
+
     Args:
         data_path: Sökväg till data-mapp. Om None, använd standardsökvägar.
-    
+
     Returns:
         Dict med DataFrames per sheet: {'ir': df1, 'opaverkbara': df2, 'paverkbara': df3}
     """
-    # Sökvägar att prova (med olika varianter av filnamn)
+    # SÃ¶kvÃ¤gar att prova (med olika varianter av filnamn)
     search_paths = []
     if data_path:
         search_paths.append(Path(data_path) / "Löpande kostnader från SDF 2024-27.xlsx")
@@ -227,19 +230,18 @@ def _load_sdf_data(data_path: Optional[str] = None) -> Dict[str, pd.DataFrame]:
             'opaverkbara': pd.DataFrame(),
             'paverkbara': pd.DataFrame()
         }
-    
     try:
         # Läs alla 3 sheets
         ir_sheet = pd.read_excel(data_file, sheet_name='IR 2024-2027', engine='openpyxl')
         opav_sheet = pd.read_excel(data_file, sheet_name='Opåverkbara', engine='openpyxl')
         pav_sheet = pd.read_excel(data_file, sheet_name='Påverkbara', engine='openpyxl')
-        
+
         return {
             'ir': ir_sheet,
             'opaverkbara': opav_sheet,
             'paverkbara': pav_sheet
         }
-        
+
     except Exception as e:
         print(f"  ⚠️ Kunde inte ladda SDF-data: {e}")
         return {
@@ -254,10 +256,10 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     Laddar reconciliation mapping.
     
     Args:
-        data_path: Sökväg till data-mapp. Om None, använd standardsökvägar.
+        data_path: SÃ¶kvÃ¤g till data-mapp. Om None, anvÃ¤nd standardsÃ¶kvÃ¤gar.
     
     Returns:
-        DataFrame med kolumner: ['id_network', 'DMU', 'REId', 'Företag']
+        DataFrame med kolumner: ['id_network', 'DMU', 'REId', 'FÃ¶retag']
     """
     # Sökvägar att prova
     search_paths = []
@@ -290,7 +292,7 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
         
         # Behåll endast relevanta kolumner
         keep_cols = []
-        for col in ['id_network', 'DMU', 'REId', 'Företag', 'id_firm']:
+        for col in ['id_network', 'DMU', 'REId', 'FÃ¶retag', 'id_firm']:
             if col in rec.columns:
                 keep_cols.append(col)
         
@@ -310,16 +312,16 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
         return rec
         
     except Exception as e:
-        raise RuntimeError(f"Fel vid inläsning av reconciliation: {e}")
+        raise RuntimeError(f"Fel vid inlÃ¤sning av reconciliation: {e}")
 
 
 def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     """
     Laddar all baseline data från projektets datafiler.
-    
+
     Args:
         data_path: Sökväg till data-mapp. Om None, använd standardsökvägar.
-    
+
     Returns:
         BaselineData objekt med all data
         
@@ -331,12 +333,12 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     # 1. Ladda Data_modeller.xlsx
     print("Laddar Data_modeller.xlsx...")
     df_all_companies = _load_data_modeller(data_path)
-    print(f"  ✓ Laddade {len(df_all_companies)} företag")
+    print(f"  ✔ Laddade {len(df_all_companies)} företag")
     
     # 2. Ladda EIs_DEA.xlsx
     print("Laddar EIs_DEA.xlsx...")
     dea_results = _load_eis_dea(data_path)
-    print(f"  ✓ Laddade DEA-resultat för {len(dea_results)} företag")
+    print(f"  ✔ Laddade DEA-resultat för {len(dea_results)} företag")
     
     # 3. Ladda SDF data
     print("Laddar Löpande kostnader från SDF...")
@@ -344,14 +346,14 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     n_ir = len(sdf_data.get('ir', pd.DataFrame()))
     n_opav = len(sdf_data.get('opaverkbara', pd.DataFrame()))
     n_pav = len(sdf_data.get('paverkbara', pd.DataFrame()))
-    print(f"  ✓ Laddade SDF-data (IR: {n_ir}, Opåverkbara: {n_opav}, Påverkbara: {n_pav} rader)")
+    print(f"  ✔ Laddade SDF-data (IR: {n_ir}, Opåverkbara: {n_opav}, Påverkbara: {n_pav} rader)")
     
     # 4. Ladda reconciliation mapping
     print("Laddar reconciliation...")
     reconciliation = _load_reconciliation(data_path)
-    print(f"  ✓ Laddade reconciliation ({len(reconciliation)} mappningar)")
+    print(f"  ✔ Laddade reconciliation ({len(reconciliation)} mappningar)")
     
-    # 5. Validera att alla dataset har samma antal företag
+    # 5. Validera att alla dataset har samma antal fÃ¶retag
     n_companies = len(df_all_companies)
     n_dea = len(dea_results)
     
@@ -371,7 +373,7 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
 
 def get_baseline_summary(baseline: BaselineData) -> Dict:
     """
-    Hämta sammanfattning av baseline data.
+    HÃ¤mta sammanfattning av baseline data.
     
     Args:
         baseline: BaselineData objekt
@@ -381,17 +383,17 @@ def get_baseline_summary(baseline: BaselineData) -> Dict:
     """
     df = baseline.df_all_companies
     
-    # Räkna SDF-rader (separata attribut)
+    # RÃ¤kna SDF-rader (separata attribut)
     n_sdf_ir = len(baseline.sdf_ir)
     n_sdf_opav = len(baseline.sdf_opaverkbara)
     n_sdf_pav = len(baseline.sdf_paverkbara)
     
     return {
         'n_dmu': len(df),
-        'total_capex_tsek': float(df['CAPEX'].sum()),
+        'total_capex_tsek': float(df['Kapitalkostnad_2024'].sum()),
         'total_opex_tsek': float(df['OPEXp'].sum()),
         'total_totex_tsek': float(df['TOTEX'].sum()),
-        'mean_capex_tsek': float(df['CAPEX'].mean()),
+        'mean_capex_tsek': float(df['Kapitalkostnad_2024'].mean()),
         'mean_opex_tsek': float(df['OPEXp'].mean()),
         'total_customers': float(df['CU'].sum()),
         'total_mw': float(df['MW'].sum()),

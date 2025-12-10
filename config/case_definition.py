@@ -56,7 +56,7 @@ class DeaConfig:
     method: EfficiencyMethod = EfficiencyMethod.BASELINE
     
     # Custom DEA model specification
-    inputs: List[str] = field(default_factory=lambda: ['CAPEX', 'OPEXp'])
+    inputs: List[str] = field(default_factory=lambda: ['Kapitalkostnad_2024', 'OPEXp'])
     outputs: List[str] = field(default_factory=lambda: ['CU', 'MW', 'NS', 'MWhl', 'MWhh'])
     rts: str = "crs"  # "crs" eller "vrs"
     orientation: str = "input"  # "input" eller "output"
@@ -207,7 +207,7 @@ def create_baseline_dea_config(user_reid: str) -> CaseDefinition:
     Denna spec ska ge EXAKT samma resultat som EIs_DEA.xlsx.
     
     Baseline spec:
-    - Inputs: CAPEX, OPEXp
+    - Inputs: Kapitalkostnad_2024, OPEXp
     - Outputs: CU, MW, NS, MWhl, MWhh
     - RTS: CRS (Constant Returns to Scale)
     - Orientation: input
@@ -225,7 +225,7 @@ def create_baseline_dea_config(user_reid: str) -> CaseDefinition:
         pre_dea=PreDeaConfig(method=CapexMethod.BASELINE),
         dea=DeaConfig(
             method=EfficiencyMethod.DEA,
-            inputs=['CAPEX', 'OPEXp'],
+            inputs=['Kapitalkostnad_2024', 'OPEXp'],
             outputs=['CU', 'MW', 'NS', 'MWhl', 'MWhh'],
             rts='crs',
             orientation='input',

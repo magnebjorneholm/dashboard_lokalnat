@@ -20,7 +20,7 @@ def stage_extraction(
     """
     Stage 4: Extrahera resultat för användarens företag.
     
-    Kombinerar data från Pre-DEA (CAPEX/OPEX) och DEA (efficiency)
+    Kombinerar data från Pre-DEA (Kapitalkostnad_2024/OPEXp) och DEA (efficiency)
     för det specifika företaget.
     
     Args:
@@ -59,7 +59,7 @@ def stage_extraction(
         foretag=str(row['Företag']),
         
         # Från Pre-DEA
-        capex=float(row['CAPEX']),
+        capex=float(row['Kapitalkostnad_2024']),
         opex=float(row['OPEXp']),
         totex=float(row['TOTEX']),
         

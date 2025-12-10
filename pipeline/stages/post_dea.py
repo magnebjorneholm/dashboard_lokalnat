@@ -2,7 +2,7 @@
 pipeline/stages/post_dea.py
 
 Stage 4: Post-DEA
-Beräknar effektiviseringskrav, påverkbara kostnader, och assemblerar intäktsram.
+Beraknar effektiviseringskrav, paverkbara kostnader, och assemblerar intaktsram.
 """
 
 import pandas as pd
@@ -31,36 +31,36 @@ def stage_post_dea(
     user_reid: str
 ) -> PostDeaStageOutput:
     """
-    Stage 4: Beräkna effektiviseringskrav, påverkbara, och intäktsram.
+    Stage 4: Berakna effektiviseringskrav, paverkbara, och intaktsram.
     
     Process:
-    1. Beräkna effektiviseringskrav för alla 148 företag
-    2. Beräkna påverkbara kostnader (OPEX eller TOTEX)
-    3. Förbered kapitalkostnad baserat på Pre-DEA metod
-    4. Assemblera intäktsram med alla komponenter
-    5. Extrahera användarens specifika intäktsram
+    1. Berakna effektiviseringskrav for alla 148 foretag
+    2. Berakna paverkbara kostnader (OPEX eller TOTEX)
+    3. Forbered kapitalkostnad baserat pa Pre-DEA metod
+    4. Assemblera intaktsram med alla komponenter
+    5. Extrahera anvandarens specifika intaktsram
     
     Args:
-        dea: Output från DEA stage (effektivitet, potential för alla 148)
-        pre_dea: Output från Pre-DEA stage (CAPEX-data + metadata)
-        baseline: Output från Baseline stage (SDF-data)
+        dea: Output fran DEA stage (effektivitet, potential for alla 148)
+        pre_dea: Output fran Pre-DEA stage (CAPEX-data + metadata)
+        baseline: Output fran Baseline stage (SDF-data)
         config: PostDeaConfig med trunkering och metod
-        user_reid: REId för användarens företag
+        user_reid: REId for anvandarens foretag
         
     Returns:
         PostDeaStageOutput med:
-        - user_intaktsram: Series med alla komponenter för användaren
-        - user_effkrav_proc: Årligt effektiviseringskrav för användaren
-        - all_intaktsram: DataFrame med alla 148 företags intäktsramar
-        - all_effkrav: DataFrame med alla 148 företags effektiviseringskrav
+        - user_intaktsram: Series med alla komponenter for anvandaren
+        - user_effkrav_proc: Arligt effektiviseringskrav for anvandaren
+        - all_intaktsram: DataFrame med alla 148 foretags intaktsramar
+        - all_effkrav: DataFrame med alla 148 foretags effektiviseringskrav
     """
     
     print("\n" + "="*60)
     print("STAGE 4: POST-DEA")
     print("="*60)
     
-    # STEG 1: Beräkna effektiviseringskrav för alla 148 företag
-    print("\n  Steg 1/5: Beräknar effektiviseringskrav...")
+    # STEG 1: Berakna effektiviseringskrav for alla 148 foretag
+    print("\n  Steg 1/5: Beraknar effektiviseringskrav...")
     
     all_effkrav = calculate_effkrav_for_dataframe(
         df=dea.dea_results,
@@ -71,26 +71,26 @@ def stage_post_dea(
         outlier_krav=config.outlier_krav
     )
     
-    print(f"    ✓ Effektiviseringskrav beräknat för {len(all_effkrav)} företag")
+    print(f"    OK Effektiviseringskrav beraknat for {len(all_effkrav)} foretag")
     
-    # STEG 2: Förbered påverkbara baseline-data från SDF
-    print("\n  Steg 2/5: Laddar påverkbara baseline från SDF...")
+    # STEG 2: Forbered paverkbara baseline-data fran SDF
+    print("\n  Steg 2/5: Laddar paverkbara baseline fran SDF...")
     
     sdf_paverkbara = get_paverkbara_from_sdf(
         sdf_ir=baseline.sdf_ir,
         sdf_paverkbara=baseline.sdf_paverkbara
     )
     
-    print(f"    ✓ Påverkbara baseline laddad för {len(sdf_paverkbara)} företag")
+    print(f"    OK Paverkbara baseline laddad for {len(sdf_paverkbara)} foretag")
     
-    # STEG 3: Beräkna påverkbara kostnader med effektiviseringskrav
-    print(f"\n  Steg 3/5: Beräknar påverkbara kostnader ({config.paverkbara_method})...")
+    # STEG 3: Berakna paverkbara kostnader med effektiviseringskrav
+    print(f"\n  Steg 3/5: Beraknar paverkbara kostnader ({config.paverkbara_method})...")
     
-    # För TOTEX behöver vi kapitalkostnad
+    # For TOTEX behovs kapitalkostnad
     if config.paverkbara_method == PaverkbaraMethod.TOTEX:
         capex_for_paverkbara = _prepare_capex_for_intaktsram(pre_dea, baseline)
     else:
-        # För OPEX behövs ingen CAPEX-data
+        # For OPEX behovs ingen CAPEX-data
         capex_for_paverkbara = pd.DataFrame({'REId': pre_dea.df_all_companies['REId']})
     
     all_paverkbara = calculate_paverkbara_with_effkrav(
@@ -100,20 +100,20 @@ def stage_post_dea(
         method=config.paverkbara_method.value
     )
     
-    print(f"    ✓ Påverkbara beräknat för {len(all_paverkbara)} företag")
+    print(f"    OK Paverkbara beraknat for {len(all_paverkbara)} foretag")
     
-    # STEG 4: Förbered kapitalkostnad för intäktsram (baserat på Pre-DEA metod)
-    print(f"\n  Steg 4/5: Förbereder kapitalkostnad (källa: {pre_dea.capex_method})...")
+    # STEG 4: Forbered kapitalkostnad for intaktsram (baserat pa Pre-DEA metod)
+    print(f"\n  Steg 4/5: Forbereder kapitalkostnad (kalla: {pre_dea.capex_method})...")
     
     capex_for_intaktsram = _prepare_capex_for_intaktsram(
         pre_dea=pre_dea,
         baseline=baseline
     )
     
-    print(f"    ✓ Kapitalkostnad förberedd för {len(capex_for_intaktsram)} företag")
+    print(f"    OK Kapitalkostnad forberedd for {len(capex_for_intaktsram)} foretag")
     
-    # STEG 5: Assemblera intäktsram
-    print("\n  Steg 5/5: Assemblerar intäktsram...")
+    # STEG 5: Assemblera intaktsram
+    print("\n  Steg 5/5: Assemblerar intaktsram...")
     
     all_intaktsram = assemble_intaktsram(
         capex_result=capex_for_intaktsram,
@@ -121,16 +121,16 @@ def stage_post_dea(
         sdf_baseline=baseline.sdf_ir
     )
     
-    print(f"    ✓ Intäktsram assemblerad för {len(all_intaktsram)} företag")
+    print(f"    OK Intaktsram assemblerad for {len(all_intaktsram)} foretag")
     
-    # STEG 6: Extrahera användarens specifika data
-    print(f"\n  Extraherar data för användare ({user_reid})...")
+    # STEG 6: Extrahera anvandarens specifika data
+    print(f"\n  Extraherar data for anvandare ({user_reid})...")
     
     user_intaktsram = extract_user_intaktsram(all_intaktsram, user_reid)
     user_effkrav_proc = all_effkrav[all_effkrav['REId'] == user_reid]['Effkrav_proc'].iloc[0]
     
-    print(f"    ✓ Intäktsram: {user_intaktsram['Intaktsram_Total']:,.0f} tkr")
-    print(f"    ✓ Effektiviseringskrav: {user_effkrav_proc*100:.2f}% per år")
+    print(f"    OK Intaktsram: {user_intaktsram['Intaktsram_Total']:,.0f} tkr")
+    print(f"    OK Effektiviseringskrav: {user_effkrav_proc*100:.2f}% per ar")
     
     print("="*60 + "\n")
     
@@ -149,55 +149,66 @@ def _prepare_capex_for_intaktsram(
     baseline: BaselineStageOutput
 ) -> pd.DataFrame:
     """
-    Förbereder kapitalkostnad-data för intäktsram assembly.
+    Forbereder kapitalkostnad-data for intaktsram assembly.
     
-    Använder rätt källa baserat på Pre-DEA metod:
-    - 'baseline' → SDF IR (periodsummor från Ei)
-    - 'wacc_scaling' → Approximera från skalad CAPEX (år * 4)
-    - 'parameter_change' eller 'kent_upload' → Pre-DEA output (har redan periodsummor)
+    Kritiskt: Returnerar PERIODSUMMA (4 ar), INTE arsvarde!
+    
+    Anvander ratt kalla baserat pa Pre-DEA metod:
+    - 'baseline' -> SDF IR (periodsummor fran Ei)
+    - 'wacc_scaling' -> Approximera fran skalad CAPEX (ar * 4)
+    - 'parameter_change' eller 'kent_upload' -> Kapitalkostnad_Period fran KENT
     
     Args:
-        pre_dea: Output från Pre-DEA stage (innehåller capex_method)
-        baseline: Output från Baseline stage (innehåller SDF IR)
+        pre_dea: Output fran Pre-DEA stage (innehaller capex_method)
+        baseline: Output fran Baseline stage (innehaller SDF IR)
     
     Returns:
-        DataFrame med: REId, Kapitalkostnad_Total (periodsummor)
+        DataFrame med: REId, Kapitalkostnad_Total (periodsummor i tkr)
         
     Raises:
-        ValueError: Om capex_method är okänd eller periodsummor saknas för KENT-metoder
+        ValueError: Om capex_method ar okand
     """
     
     method = pre_dea.capex_method
     
     if method == 'baseline':
-        # Metod 1: Hämta periodsummor från SDF IR (Ei's baseline)
+        # Metod 1: Hamta periodsummor fran SDF IR (Ei's baseline)
         return baseline.sdf_ir[['REId', 'Kapitalkostnad']].rename(
             columns={'Kapitalkostnad': 'Kapitalkostnad_Total'}
         ).copy()
     
     elif method == 'wacc_scaling':
-        # Metod 2: Beräkna periodsummor från skalad CAPEX
-        df = pre_dea.df_all_companies[['REId', 'CAPEX']].copy()
-        
+        # Metod 2: Berakna periodsummor fran skalad Kapitalkostnad_2024 (arsvarde * 4)
+        df = pre_dea.df_all_companies[['REId', 'Kapitalkostnad_2024']].copy()
+
         return pd.DataFrame({
             'REId': df['REId'],
-            'Kapitalkostnad_Total': df['CAPEX'] * 4
+            'Kapitalkostnad_Total': df['Kapitalkostnad_2024'] * 4
         })
     
     elif method in ['parameter_change', 'kent_upload']:
-        # Metod 3-4: Periodsummor ska finnas i Pre-DEA output från KENT pipeline
-        if 'Kapitalkostnad_Total' in pre_dea.df_all_companies.columns:
-            # KENT har körts → har redan periodsummor
-            return pre_dea.df_all_companies[['REId', 'Kapitalkostnad_Total']].copy()
-        else:
-            # Fallback om KENT inte producerat periodsummor (borde inte hända)
-            print(f"    ⚠️ Varning: KENT-metod '{method}' saknar periodsummor, använder SDF baseline")
-            return baseline.sdf_ir[['REId', 'Kapitalkostnad']].rename(
-                columns={'Kapitalkostnad': 'Kapitalkostnad_Total'}
+        # Metod 3-4: Hamta periodsumma fran KENT output
+        
+        # Forst: kolla om Kapitalkostnad_Period finns (ny namnkonvention)
+        if 'Kapitalkostnad_Period' in pre_dea.df_all_companies.columns:
+            return pre_dea.df_all_companies[['REId', 'Kapitalkostnad_Period']].rename(
+                columns={'Kapitalkostnad_Period': 'Kapitalkostnad_Total'}
             ).copy()
+        
+        # Bakatkompabilitet: kolla om Kapitalkostnad_Total finns
+        elif 'Kapitalkostnad_Total' in pre_dea.df_all_companies.columns:
+            return pre_dea.df_all_companies[['REId', 'Kapitalkostnad_Total']].copy()
+        
+        else:
+            # If user requested a KENT-based method we should not silently fall back.
+            raise ValueError(
+                f"Kapitalkostnad periodsummor saknas i Pre-DEA resultat för metod '{method}'. "
+                "Förväntade kolumner: 'Kapitalkostnad_Period' eller 'Kapitalkostnad_Total'. "
+                "Kontrollera KENT-output och kör om pre-dea-steget."
+            )
     
     else:
         raise ValueError(
-            f"Okänd capex_method: '{method}'. "
-            f"Förväntade värden: 'baseline', 'wacc_scaling', 'parameter_change', 'kent_upload'"
+            f"Okand capex_method: '{method}'. "
+            f"Forvantade varden: 'baseline', 'wacc_scaling', 'parameter_change', 'kent_upload'"
         )

@@ -2,7 +2,7 @@
 pipeline/stages/pre_dea.py
 
 Stage 2: Pre-DEA
-Förbereder CAPEX/OPEX data för DEA-analys.
+Förbereder Kapitalkostnad_2024/OPEXp data för DEA-analys.
 
 Stöder 4 metoder:
 1. baseline - Ingen ändring, använd baseline-värden
@@ -19,6 +19,7 @@ from calculations import (
     run_kent_calculations_batch,
     merge_kent_with_baseline
 )
+import traceback
 
 
 def stage_pre_dea(
@@ -34,7 +35,7 @@ def stage_pre_dea(
         
     Returns:
         PreDeaStageOutput med:
-        - df_all_companies: 148 rows, potentially modified CAPEX/OPEX
+        - df_all_companies: 148 rows, potentially modified Kapitalkostnad_2024/OPEXp
         - capex_method: Metod som användes
         - capex_modified: True om CAPEX ändrades
     """
@@ -75,8 +76,8 @@ def _pre_dea_wacc_scaling(
     
     Formel:
         Ny Avkastning = Baseline Avkastning × (ny_WACC / baseline_WACC)
-        Ny CAPEX = Avskrivning + Ny Avkastning
-        Ny TOTEX = OPEXp + Ny CAPEX
+        Ny Kapitalkostnad_2024 = Avskrivning + Ny Avkastning
+        Ny TOTEX = OPEXp + Ny Kapitalkostnad_2024
     """
     
     if config.wacc is None:
@@ -91,7 +92,7 @@ def _pre_dea_wacc_scaling(
         baseline_wacc=baseline.wacc
     )
     
-    print(f"✓ CAPEX skalad för alla {len(df_scaled)} företag")
+    print(f"✓ Kapitalkostnad_2024 skalad för alla {len(df_scaled)} företag")
     
     return PreDeaStageOutput(
         df_all_companies=df_scaled,
@@ -122,9 +123,13 @@ def _pre_dea_parameter_change(
         capbase_data = load_capbase_a()
         print(f"  ✓ Laddade capbase_a: {len(capbase_data):,} komponenter")
     except FileNotFoundError as e:
-        print(f"  ⚠️ {e}")
-        print("  → Använder baseline CAPEX")
-        return _pre_dea_baseline(baseline)
+        # User explicitly chose parameter_change -> missing capbase is a fatal error
+        msg = (
+            f"capbase_a-fil saknas: {e}.\n"
+            "Parameteränderingar kräver capbase_a för att köra KENT. "
+            "Avbryter istället för att tyst använda baseline."
+        )
+        raise FileNotFoundError(msg)
     
     # Kör KENT-beräkningar med justeringar
     try:
@@ -150,9 +155,11 @@ def _pre_dea_parameter_change(
         )
         
     except Exception as e:
+        # Do not silently swallow exceptions for a user-requested KENT run.
         print(f"  ⚠️ Fel i KENT-beräkningar: {e}")
-        print("  → Använder baseline CAPEX")
-        return _pre_dea_baseline(baseline)
+        tb = traceback.format_exc()
+        print("  Stacktrace:\n" + tb)
+        raise
 
 
 def _pre_dea_kent_upload(
@@ -165,10 +172,7 @@ def _pre_dea_kent_upload(
     TODO: Implementera full KENT-pipeline (steg 1-8)
     För nu: använd baseline
     """
-    print("⚠️ KENT-upload inte implementerat än - använder baseline")
-    
-    return PreDeaStageOutput(
-        df_all_companies=baseline.df_all_companies.copy(),
-        capex_method="kent_upload",
-        capex_modified=False
+    raise NotImplementedError(
+        "KENT-upload är inte implementerat ännu. Ange annan metod eller implementera "
+        "upload-steget i pipeline/stages/pre_dea._pre_dea_kent_upload"
     )

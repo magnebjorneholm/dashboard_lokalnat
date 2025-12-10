@@ -16,7 +16,7 @@ class BaselineStageOutput:
     Output från Baseline stage.
     Konverterar BaselineData till stage-format.
     """
-    df_all_companies: pd.DataFrame  # 148 företag med CAPEX, OPEX, volumes
+    df_all_companies: pd.DataFrame  # 148 företag med Kapitalkostnad_2024, OPEXp, volumes
     dea_baseline: pd.DataFrame      # Baseline DEA-resultat från Ei
     reconciliation: pd.DataFrame    # REId/id_network mapping (har även DMU)
     wacc: float                     # Baseline WACC (0.0453)
@@ -30,11 +30,11 @@ class BaselineStageOutput:
 class PreDeaStageOutput:
     """
     Output från Pre-DEA stage.
-    DataFrame med alla 148 företag, potentiellt modifierad CAPEX.
+    DataFrame med alla 148 företag, potentiellt modifierad Kapitalkostnad_2024.
     """
-    df_all_companies: pd.DataFrame  # 148 rows, potentially modified CAPEX/OPEX
+    df_all_companies: pd.DataFrame  # 148 rows, potentially modified Kapitalkostnad_2024/OPEXp
     capex_method: str               # Metod som användes: baseline, wacc_scaling, etc.
-    capex_modified: bool            # True om CAPEX ändrades från baseline
+    capex_modified: bool            # True om Kapitalkostnad_2024 ändrades från baseline
 
 
 @dataclass(frozen=True)

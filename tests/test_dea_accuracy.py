@@ -25,7 +25,7 @@ def test_baseline_dea_accuracy():
     Test att vår DEA med Ei's baseline-spec ger samma resultat som EIs_DEA.xlsx
     
     Baseline spec:
-    - Inputs: CAPEX, OPEXp
+    - Inputs: Kapitalkostnad_2024, OPEXp
     - Outputs: CU, MW, NS, MWhl, MWhh
     - RTS: CRS
     - Orientation: input

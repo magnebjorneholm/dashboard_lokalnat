@@ -1,12 +1,17 @@
 """
 calculations/wacc_scaling.py
 
-WACC-skalning: Skalar avkastning med ny WACC medan avskrivning hålls konstant.
+WACC-skalning: Skalar avkastning med ny WACC medan avskrivning halls konstant.
 
 Formel:
-    CAPEX = Avskrivning + Avkastning
-    Ny Avkastning = Baseline Avkastning × (ny_WACC / baseline_WACC)
-    Ny CAPEX = Avskrivning + Ny Avkastning
+    Kapitalkostnad_2024 = Avskrivning + Avkastning
+    Ny Avkastning = Baseline Avkastning * (ny_WACC / baseline_WACC)
+    Ny Kapitalkostnad_2024 = Avskrivning + Ny Avkastning
+
+Producerar:
+    - Kapitalkostnad_2024: Årsvärde för 2024 (för DEA)
+    - Avskrivning: Oförändrad från baseline
+    - Avkastning: Skalad med WACC-kvot
 """
 
 import pandas as pd
@@ -19,22 +24,22 @@ def calculate_wacc_scaled_capex(
     baseline_wacc: float = 0.0453
 ) -> pd.DataFrame:
     """
-    Skalar CAPEX för alla företag med ny WACC.
+    Skalar CAPEX for alla foretag med ny WACC.
     
     Metod:
-    - Avskrivning hålls konstant
+    - Avskrivning halls konstant
     - Avkastning skalas med (ny_WACC / baseline_WACC)
     - CAPEX = Avskrivning + Ny Avkastning
     - TOTEX = OPEXp + CAPEX (uppdateras)
     
     Args:
-        df_all_companies: DataFrame med alla 148 företag
-            Måste innehålla: CAPEX, Avskrivning, Avkastning, OPEXp
-        new_wacc: Ny WACC (real före skatt)
+        df_all_companies: DataFrame med alla 148 foretag
+            Maste innehalla: CAPEX, Avskrivning, Avkastning, OPEXp
+        new_wacc: Ny WACC (real fore skatt)
         baseline_wacc: Baseline WACC (default 0.0453)
         
     Returns:
-        DataFrame med uppdaterad CAPEX och TOTEX
+        DataFrame med uppdaterad CAPEX, Kapitalkostnad_2024, och TOTEX
         
     Example:
         >>> df_scaled = calculate_wacc_scaled_capex(
@@ -42,35 +47,35 @@ def calculate_wacc_scaled_capex(
         ...     new_wacc=0.05,
         ...     baseline_wacc=0.0453
         ... )
-        >>> # CAPEX och TOTEX är nu uppdaterade
+        >>> # CAPEX och TOTEX ar nu uppdaterade
     """
     
     # Validera input
-    required_cols = ['CAPEX', 'Avskrivning', 'Avkastning', 'OPEXp']
+    required_cols = ['Kapitalkostnad_2024', 'Avskrivning', 'Avkastning', 'OPEXp']
     missing = [col for col in required_cols if col not in df_all_companies.columns]
     if missing:
         raise ValueError(f"Saknar obligatoriska kolumner: {missing}")
     
     if new_wacc <= 0:
-        raise ValueError(f"WACC måste vara positiv: {new_wacc}")
+        raise ValueError(f"WACC maste vara positiv: {new_wacc}")
     
     if baseline_wacc <= 0:
-        raise ValueError(f"Baseline WACC måste vara positiv: {baseline_wacc}")
+        raise ValueError(f"Baseline WACC maste vara positiv: {baseline_wacc}")
     
-    # Kopiera för att inte modifiera original
+    # Kopiera for att inte modifiera original
     df = df_all_companies.copy()
     
-    # Beräkna skalningsfaktor
+    # Berakna skalningsfaktor
     scaling_factor = new_wacc / baseline_wacc
     
-    # Ny avkastning = baseline avkastning × skalningsfaktor
+    # Ny avkastning = baseline avkastning * skalningsfaktor
     df['Avkastning'] = df['Avkastning'] * scaling_factor
     
-    # Ny CAPEX = Avskrivning + Ny Avkastning
-    df['CAPEX'] = df['Avskrivning'] + df['Avkastning']
-    
-    # Uppdatera TOTEX = OPEXp + CAPEX
-    df['TOTEX'] = df['OPEXp'] + df['CAPEX']
+    # Ny Kapitalkostnad_2024 = Avskrivning + Ny Avkastning (Årsvärde)
+    df['Kapitalkostnad_2024'] = df['Avskrivning'] + df['Avkastning']
+
+    # Uppdatera TOTEX = OPEXp + Kapitalkostnad_2024
+    df['TOTEX'] = df['OPEXp'] + df['Kapitalkostnad_2024']
     
     return df
 
@@ -94,8 +99,8 @@ def get_wacc_scaling_summary(
         Dict med sammanfattning
     """
     
-    baseline_capex = df_baseline['CAPEX'].sum()
-    scaled_capex = df_scaled['CAPEX'].sum()
+    baseline_capex = df_baseline['Kapitalkostnad_2024'].sum()
+    scaled_capex = df_scaled['Kapitalkostnad_2024'].sum()
     
     baseline_avkastning = df_baseline['Avkastning'].sum()
     scaled_avkastning = df_scaled['Avkastning'].sum()

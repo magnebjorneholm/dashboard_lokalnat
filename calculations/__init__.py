@@ -16,7 +16,7 @@ from .kent_calculations import (
     calculate_depreciation_batch,
     calculate_returns_batch,
     aggregate_to_network_level,
-    calculate_period_total_capex,
+    calculate_capex_outputs,
     run_kent_calculations_batch
 )
 from .data_mapping import (
@@ -56,7 +56,7 @@ __all__ = [
     'calculate_depreciation_batch',
     'calculate_returns_batch',
     'aggregate_to_network_level',
-    'calculate_period_total_capex',
+    'calculate_capex_outputs',
     'run_kent_calculations_batch',
     
     # Data mapping

@@ -19,9 +19,9 @@ def run_dea_analysis(
     Kör DEA-analys med konfigurerbar modellspecifikation.
     
     Args:
-        df: DataFrame med alla 148 företag, kolumner: REId, CAPEX, OPEXp, CU, MW, NS, MWhl, MWhh
+        df: DataFrame med alla 148 företag, kolumner: REId, Kapitalkostnad_2024, OPEXp, CU, MW, NS, MWhl, MWhh
         model_spec: Dict med DEA-specifikation:
-            - inputs: Lista med input-kolumner (default: ['CAPEX', 'OPEXp'])
+            - inputs: Lista med input-kolumner (default: ['Kapitalkostnad_2024', 'OPEXp'])
             - outputs: Lista med output-kolumner (default: ['CU', 'MW', 'NS', 'MWhl', 'MWhh'])
             - rts: 'crs' eller 'vrs' (default: 'crs')
             - orientation: 'input' eller 'output' (default: 'input')
@@ -39,7 +39,7 @@ def run_dea_analysis(
     df = df.copy()
     
     # Extrahera modellspecifikation
-    input_cols = model_spec.get('inputs', ['CAPEX', 'OPEXp'])
+    input_cols = model_spec.get('inputs', ['Kapitalkostnad_2024', 'OPEXp'])
     output_cols = model_spec.get('outputs', ['CU', 'MW', 'NS', 'MWhl', 'MWhh'])
     rts = model_spec.get('rts', 'crs')
     orientation = model_spec.get('orientation', 'input')
@@ -214,7 +214,7 @@ def _run_super_efficiency_dea(
 
 # Baseline DEA-specifikation (Ei's modell)
 BASELINE_DEA_SPEC = {
-    'inputs': ['CAPEX', 'OPEXp'],
+    'inputs': ['Kapitalkostnad_2024', 'OPEXp'],
     'outputs': ['CU', 'MW', 'NS', 'MWhl', 'MWhh'],
     'rts': 'crs',
     'orientation': 'input',

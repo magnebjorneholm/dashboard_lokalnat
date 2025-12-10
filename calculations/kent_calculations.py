@@ -437,27 +437,48 @@ def aggregate_to_network_level(df: pd.DataFrame) -> pd.DataFrame:
     return df_agg
 
 
-def calculate_period_total_capex(df_network: pd.DataFrame) -> pd.DataFrame:
+def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     """
-    Beräknar total CAPEX för perioden 2024-2027 (tidskoder 229-232).
+    Beräknar kapitalkostnads-outputs med KORREKT halvårsmappning.
+    
+    Tidskoder är HALVÅR: 229=2024H1, 230=2024H2, 231=2025H1, etc.
+    
+    Producerar:
+    - Kapitalkostnad_2024: Årsvärde för 2024 (H1+H2) - används för DEA
+    - Kapitalkostnad_Period: Periodsumma 2024-2027 (8 halvår) - används för intäktsram
     
     Args:
         df_network: DataFrame med capcost_{time} kolumner per id_network
         
     Returns:
-        DataFrame med ny kolumn 'CAPEX' (summa av 229-232)
+        DataFrame med nya kolumner för kapitalkostnad
     """
     df = df_network.copy()
     
-    # Summera kapitalkostnader för 2024-2027 (tidskoder 229-232)
-    capex_cols = [f'capcost_{t}' for t in range(229, 233)]
-    
-    # Säkerställ att alla kolumner finns
-    for col in capex_cols:
+    # Säkerställ att alla capcost-kolumner finns (229-236 = 8 halvår)
+    for t in range(229, 237):
+        col = f'capcost_{t}'
         if col not in df.columns:
             df[col] = 0.0
     
-    df['CAPEX'] = df[capex_cols].sum(axis=1)
+    # Årsvärde för 2024: summa av H1 (229) + H2 (230)
+    df['Kapitalkostnad_2024'] = df['capcost_229'] + df['capcost_230']
+    
+    # Periodsumma för 2024-2027: alla 8 halvår (229-236)
+    period_cols = [f'capcost_{t}' for t in range(229, 237)]
+    df['Kapitalkostnad_Period'] = df[period_cols].sum(axis=1)
+    
+    # OBS: Vi exponerar endast `Kapitalkostnad_2024`; undvik att skapa CAPEX-kolumn
+    
+    # Årsvärden per år (för breakdown/analys)
+    year_to_codes = {
+        2024: [229, 230],
+        2025: [231, 232],
+        2026: [233, 234],
+        2027: [235, 236],
+    }
+    for year, codes in year_to_codes.items():
+        df[f'Kapitalkostnad_{year}'] = df[[f'capcost_{c}' for c in codes]].sum(axis=1)
     
     return df
 
@@ -503,7 +524,7 @@ def run_kent_calculations_batch(
     # Steg 8: Aggregera till id_network nivå
     df_network = aggregate_to_network_level(df_step7)
     
-    # Beräkna total CAPEX för perioden
-    df_network = calculate_period_total_capex(df_network)
+    # Beräkna kapitalkostnads-outputs (årsvärde + periodsumma)
+    df_network = calculate_capex_outputs(df_network)
     
     return df_step7, df_network
