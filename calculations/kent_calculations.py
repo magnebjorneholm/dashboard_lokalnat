@@ -19,7 +19,7 @@ from pathlib import Path
 
 def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
     """
-    Laddar capbase_a.parquet.
+    Laddar capbase_a_mini.parquet.
     
     Args:
         data_path: Sökväg till data-mapp
@@ -29,12 +29,11 @@ def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
     """
     search_paths = []
     if data_path:
-        search_paths.append(Path(data_path) / "capbase_a.parquet")
+        search_paths.append(Path(data_path) / "capbase_a_mini.parquet")
     
     search_paths.extend([
-        Path("capbase_a.parquet"),
-        Path("data/capbase_a.parquet"),
-        Path("/mnt/project/capbase_a.parquet")
+        Path("capbase_a_mini.parquet"),
+        Path("data/capbase_a_mini.parquet"),
     ])
     
     for path in search_paths:
