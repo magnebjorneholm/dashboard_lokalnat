@@ -43,6 +43,11 @@ from .intaktsram_assembly import (
     extract_user_intaktsram,
     create_intaktsram_breakdown
 )
+from .wacc_calculations import (
+    CAPMInputs,
+    calculate_wacc,
+    BASELINE_WACC,
+)
 
 __all__ = [
     # WACC scaling
@@ -81,5 +86,10 @@ __all__ = [
     # Intäktsram assembly
     'assemble_intaktsram',
     'extract_user_intaktsram',
-    'create_intaktsram_breakdown'
+    'create_intaktsram_breakdown',
+
+    # WACC calculations
+    'CAPMInputs',
+    'calculate_wacc',
+    'BASELINE_WACC',
 ]

@@ -25,6 +25,7 @@ PARAM_TO_CONFIG = {
     # Module 5: Efficiency incentive
     "5.1.1": ("dea", "multiplier", 2.0),           # Outlier IQR threshold
     "5.2.1": ("post_dea", "trunkering_max", 0.30), # Max potential cap
+    "5.2.2": ("post_dea", "trunkering_min", 0.162416), # Min potential för trunkering
     "5.3.1": ("post_dea", "outlier_krav", 0.01),   # Min årligt krav för outliers
     
     # Module 4: Operating expenditures (via Module 5)
@@ -78,6 +79,8 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
             outputs=addon.get("dea_outputs", DEA_OUTPUT_OPTIONS),
             rts=addon.get("dea_rts", "crs"),
             multiplier=addon.get("dea_multiplier", 2.0),
+            q_lower=addon.get("dea_q_lower", 25.0),
+            q_upper=addon.get("dea_q_upper", 75.0),
         )
     else:
         dea = DeaConfig(method=EfficiencyMethod.BASELINE)
@@ -90,6 +93,10 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
     trunkering_max = m5.get("trunkering_max")
     if trunkering_max is None:
         trunkering_max = 0.30
+    
+    trunkering_min = m5.get("trunkering_min")
+    if trunkering_min is None:
+        trunkering_min = 0.162416
         
     outlier_krav = m5.get("outlier_krav")
     if outlier_krav is None:
@@ -98,6 +105,7 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
     paverkbara_method_str = m4.get("paverkbara_method", "OPEX")
     
     post_dea = PostDeaConfig(
+        trunkering_min=trunkering_min,
         trunkering_max=trunkering_max,
         outlier_krav=outlier_krav,
         paverkbara_method=PaverkbaraMethod(paverkbara_method_str)
@@ -148,6 +156,8 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     m5 = ui_config.get("m5_efficiency", {})
     if m5.get("trunkering_max") is not None:
         changed.append("5.2.1 Max potential")
+    if m5.get("trunkering_min") is not None:
+        changed.append("5.2.2 Min potential")
     if m5.get("outlier_krav") is not None:
         changed.append("5.3.1 Outlier-krav")
     

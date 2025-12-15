@@ -24,6 +24,7 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
     },
     "m5_efficiency": {
         "trunkering_max": None,  # None = baseline (0.30)
+        "trunkering_min": None,  # None = baseline (0.162416)
         "outlier_krav": None,    # None = baseline (0.01)
     },
     "addon_benchmarking": {
@@ -32,6 +33,8 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "dea_outputs": ["CU", "MW", "NS", "MWhl", "MWhh"],
         "dea_rts": "crs",
         "dea_multiplier": 2.0,  # Outlier IQR multiplier
+        "dea_q_lower": 25.0,    # Nedre percentil
+        "dea_q_upper": 75.0,    # Övre percentil
     }
 }
 

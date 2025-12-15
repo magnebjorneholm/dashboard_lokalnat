@@ -16,6 +16,7 @@ MODULE_KEY = "m5_efficiency"
 # Baseline-värden från User Manual
 BASELINE_OUTLIER_THRESHOLD = 2.0
 BASELINE_MAX_POTENTIAL = 0.30
+BASELINE_MIN_POTENTIAL = 0.162416
 BASELINE_REALIZATION_TIME = 8
 BASELINE_CUSTOMER_SHARING = 0.50
 BASELINE_MIN_REQUIREMENT = 0.01
@@ -28,6 +29,7 @@ def render() -> Dict[str, Any]:
     Returns:
         Dict med användarens val. Keys:
         - trunkering_max: Max potential cap eller None
+        - trunkering_min: Min potential för trunkering eller None
         - outlier_krav: Min årligt krav för outliers eller None
     """
     config: Dict[str, Any] = {}
@@ -60,9 +62,25 @@ def render() -> Dict[str, Any]:
         if max_pot_changed:
             config["trunkering_max"] = max_pot
         
-        # 5.2.2 och 5.2.3 - endast information
-        st.caption(f"Realiseringstid (5.2.2): {BASELINE_REALIZATION_TIME} år (ej konfigurerbar i MVP)")
-        st.caption(f"Kunddelning (5.2.3): {BASELINE_CUSTOMER_SHARING*100:.0f}% (ej konfigurerbar i MVP)")
+        # 5.2.2 Min potential för trunkering
+        min_pot, min_pot_changed = parameter_input(
+            module_key=MODULE_KEY,
+            param_id="5.2.2",
+            label="Min potential för trunkering",
+            baseline=BASELINE_MIN_POTENTIAL,
+            min_val=0.0,
+            max_val=0.50,
+            step=0.01,
+            help_text="Endast företag med potential över detta värde trunkeras.",
+            format_as_percent=True
+        )
+        
+        if min_pot_changed:
+            config["trunkering_min"] = min_pot
+        
+        # 5.2.3 och 5.2.4 - endast information
+        st.caption(f"Realiseringstid (5.2.3): {BASELINE_REALIZATION_TIME} år (ej konfigurerbar i MVP)")
+        st.caption(f"Kunddelning (5.2.4): {BASELINE_CUSTOMER_SHARING*100:.0f}% (ej konfigurerbar i MVP)")
         
         st.divider()
         

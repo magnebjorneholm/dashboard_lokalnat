@@ -20,6 +20,8 @@ BASELINE_INPUTS = ["CAPEX", "OPEXp"]
 BASELINE_OUTPUTS = ["CU", "MW", "NS", "MWhl", "MWhh"]
 BASELINE_RTS = "crs"
 BASELINE_MULTIPLIER = 2.0
+BASELINE_Q_LOWER = 25.0
+BASELINE_Q_UPPER = 75.0
 
 
 def render() -> Dict[str, Any]:
@@ -33,6 +35,8 @@ def render() -> Dict[str, Any]:
         - dea_outputs: Lista med outputs
         - dea_rts: "crs" eller "vrs"
         - dea_multiplier: Outlier IQR multiplier
+        - dea_q_lower: Nedre percentil
+        - dea_q_upper: Övre percentil
     """
     config: Dict[str, Any] = {
         "dea_method": "baseline",
@@ -40,6 +44,8 @@ def render() -> Dict[str, Any]:
         "dea_outputs": BASELINE_OUTPUTS.copy(),
         "dea_rts": BASELINE_RTS,
         "dea_multiplier": BASELINE_MULTIPLIER,
+        "dea_q_lower": BASELINE_Q_LOWER,
+        "dea_q_upper": BASELINE_Q_UPPER,
     }
     
     st.subheader("Add-on: Benchmarking")
@@ -110,16 +116,42 @@ def render() -> Dict[str, Any]:
             st.divider()
             
             # Outlier threshold (5.1.1)
-            st.markdown("**Outlier-detektion**")
+            st.markdown("**Outlier-detektion (IQR-metod)**")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                q_lower = st.number_input(
+                    "Nedre percentil",
+                    value=BASELINE_Q_LOWER,
+                    min_value=0.0,
+                    max_value=50.0,
+                    step=5.0,
+                    key=f"{MODULE_KEY}_q_lower",
+                    help="Nedre gräns för IQR-beräkning (default: 25)"
+                )
+                config["dea_q_lower"] = q_lower
+            
+            with col2:
+                q_upper = st.number_input(
+                    "Övre percentil",
+                    value=BASELINE_Q_UPPER,
+                    min_value=50.0,
+                    max_value=100.0,
+                    step=5.0,
+                    key=f"{MODULE_KEY}_q_upper",
+                    help="Övre gräns för IQR-beräkning (default: 75)"
+                )
+                config["dea_q_upper"] = q_upper
+            
             multiplier, mult_changed = parameter_input(
                 module_key=MODULE_KEY,
                 param_id="5.1.1",
-                label="Outlier-tröskel (IQR)",
+                label="IQR-multiplikator",
                 baseline=BASELINE_MULTIPLIER,
                 min_val=1.0,
                 max_val=5.0,
                 step=0.5,
-                help_text="Företag med supereffektivitet > Q3 + multiplier*IQR klassas som outliers"
+                help_text="Företag med supereffektivitet > Q_upper + multiplier*IQR klassas som outliers"
             )
             config["dea_multiplier"] = multiplier
             
@@ -127,11 +159,11 @@ def render() -> Dict[str, Any]:
             st.divider()
             st.markdown("**Sammanfattning**")
             st.code(f"""
-Inputs:  {', '.join(config['dea_inputs'])}
-Outputs: {', '.join(config['dea_outputs'])}
-RTS:     {config['dea_rts'].upper()}
-Outlier: Q3 + {config['dea_multiplier']:.1f} * IQR
-            """)
+                Inputs:  {', '.join(config['dea_inputs'])}
+                Outputs: {', '.join(config['dea_outputs'])}
+                RTS:     {config['dea_rts'].upper()}
+                Outlier: Q{config['dea_q_upper']:.0f} + {config['dea_multiplier']:.1f} * IQR(Q{config['dea_q_lower']:.0f}, Q{config['dea_q_upper']:.0f})
+                            """)
     
     else:
         st.info(
@@ -140,7 +172,7 @@ Outlier: Q3 + {config['dea_multiplier']:.1f} * IQR
             f"- Inputs: {', '.join(BASELINE_INPUTS)}\n"
             f"- Outputs: {', '.join(BASELINE_OUTPUTS)}\n"
             f"- RTS: {BASELINE_RTS.upper()}\n"
-            f"- Outlier: Q3 + {BASELINE_MULTIPLIER} * IQR"
+            f"- Outlier: Q{BASELINE_Q_UPPER:.0f} + {BASELINE_MULTIPLIER} * IQR"
         )
     
     # Framtida metoder
