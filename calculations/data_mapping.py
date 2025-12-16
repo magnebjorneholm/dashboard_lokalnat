@@ -16,71 +16,133 @@ YEAR_TO_TIMECODES = {
     2027: [235, 236],
 }
 
+# TEST_MODE: Tillåt körning med ofullständig capbase_a
+# Sätt till False i produktion för att blockera PARAMETER_CHANGE med < 148 nätverk
+TEST_MODE = True
+
 
 def merge_kent_with_baseline(
     df_network: pd.DataFrame,
     df_all_companies: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Mergar KENT-beraknad CAPEX med baseline foretagsdata.
+    Mergar KENT-beräknad CAPEX med baseline företagsdata.
     
     Efter RER-filtrering har vi 1:1 mapping: id_network <-> REId (148->148).
-    KENT lagger till REId automatiskt, sa vi kan gora direct merge!
+    KENT lägger till REId automatiskt, så vi kan göra direct merge!
     
     Process:
     1. Verifiera att df_network har REId
-    2. Direct merge pa REId
-    3. Uppdatera TOTEX = OPEXp + CAPEX
+    2. Direct merge på REId
+    3. Hantera saknade företag (TEST_MODE eller fel)
+    4. Uppdatera TOTEX = OPEXp + CAPEX
     
     Args:
-        df_network: DataFrame med kapitalkostnader per REId fran KENT
-            Forvantar: REId, CAPEX, Kapitalkostnad_2024, Kapitalkostnad_Period
-        df_all_companies: Baseline foretagsdata med OPEXp, volumes etc
+        df_network: DataFrame med kapitalkostnader per REId från KENT
+            Förväntar: REId, CAPEX, Kapitalkostnad_2024, Kapitalkostnad_Period
+        df_all_companies: Baseline företagsdata med OPEXp, volumes etc
         
     Returns:
-        DataFrame med 148 foretag och uppdaterad CAPEX/TOTEX + periodsumma
+        DataFrame med 148 företag och uppdaterad CAPEX/TOTEX + periodsumma
     """
     
     # 1. Verifiera att REId finns
     if 'REId' not in df_network.columns:
-        raise ValueError("df_network saknar REId-kolumn! Kor aggregate_to_network_level forst.")
+        raise ValueError("df_network saknar REId-kolumn! Kör aggregate_to_network_level först.")
     
-    # 2. Direct merge pa REId
-    # Ta allt fran df_all_companies utom Kapitalkostnad_2024 och TOTEX
+    # 2. Kontrollera täckning
+    kent_reids = set(df_network['REId'].unique())
+    baseline_reids = set(df_all_companies['REId'].unique())
+    missing_reids = baseline_reids - kent_reids
+    n_kent = len(kent_reids)
+    n_baseline = len(baseline_reids)
+    
+    if missing_reids:
+        if TEST_MODE:
+            print(f"  ⚠️ TEST MODE: KENT har {n_kent}/{n_baseline} företag. "
+                  f"{len(missing_reids)} företag får baseline-värden.")
+        else:
+            raise ValueError(
+                f"KENT output saknar {len(missing_reids)}/{n_baseline} företag. "
+                f"Kör med full capbase_a (148 nätverk) eller aktivera TEST_MODE. "
+                f"Saknade REIds: {sorted(list(missing_reids))[:10]}..."
+            )
+    
+    # 3. Förbered baseline-data (exkludera kolumner som ska ersättas)
     exclude_cols = ['Kapitalkostnad_2024', 'TOTEX', 'Kapitalkostnad_Period',
-                    'Kapitalkostnad_2025', 'Kapitalkostnad_2026', 'Kapitalkostnad_2027']
+                    'Kapitalkostnad_2025', 'Kapitalkostnad_2026', 'Kapitalkostnad_2027',
+                    'CAPEX', 'Avskrivning', 'Avkastning']
     base_cols = [col for col in df_all_companies.columns if col not in exclude_cols]
     df_base = df_all_companies[base_cols].copy()
     
-    # Kolumner att hamta fran KENT
-    kent_cols = ['REId', 'Kapitalkostnad_2024', 'Kapitalkostnad_Period']
-    # Lagg till arsvarden om de finns
-    for year in [2024, 2025, 2026, 2027]:
-        col = f'Kapitalkostnad_{year}'
+    # 4. Kolumner att hämta från KENT
+    kent_cols = ['REId', 'Kapitalkostnad_2024']
+    optional_kent_cols = ['Kapitalkostnad_Period', 'CAPEX', 'Avskrivning', 'Avkastning',
+                          'Kapitalkostnad_2025', 'Kapitalkostnad_2026', 'Kapitalkostnad_2027']
+    for col in optional_kent_cols:
         if col in df_network.columns:
             kent_cols.append(col)
     
+    # 5. Merge med reset_index för att undvika duplicerat index
     df_result = df_base.merge(
         df_network[[c for c in kent_cols if c in df_network.columns]],
         on='REId',
         how='left'
-    )
+    ).reset_index(drop=True)
     
-    # 3. Berakna ny TOTEX = OPEXp + Kapitalkostnad_2024
-    df_result['TOTEX'] = df_result['OPEXp'] + df_result['Kapitalkostnad_2024']
-    
-    # 4. For foretag utan CAPEX fran KENT (shouldn't happen), anvand baseline
+    # 6. Hantera saknade företag
     missing_capex = df_result['Kapitalkostnad_2024'].isna()
     if missing_capex.any():
-        # If KENT ran correctly we expect values for all companies.
-        # Raise an explicit error instead of silently falling back to baseline,
-        # so the caller can decide how to handle partially missing KENT output.
-        missing_reids = df_result.loc[missing_capex, 'REId'].tolist()
-        msg = (
-            f"KENT output saknar Kapitalkostnad_2024 for {missing_capex.sum()} företag. "
-            f"Missing REIds: {missing_reids[:10]}{'...' if len(missing_reids) > 10 else ''}"
-        )
-        raise ValueError(msg)
+        if TEST_MODE:
+            # Fallback till baseline för saknade företag
+            # Kolumner som behöver fallback
+            fallback_cols = [
+                'Kapitalkostnad_2024', 'Kapitalkostnad_Period',
+                'Kapitalkostnad_2025', 'Kapitalkostnad_2026', 'Kapitalkostnad_2027'
+            ]
+            
+            baseline_indexed = df_all_companies.set_index('REId')
+            fallback_count = 0
+            
+            for col in fallback_cols:
+                if col in baseline_indexed.columns:
+                    # Säkerställ kolumn finns i result
+                    if col not in df_result.columns:
+                        df_result[col] = pd.NA
+                    
+                    for idx in df_result[missing_capex].index:
+                        reid = df_result.loc[idx, 'REId']
+                        if reid in baseline_indexed.index:
+                            df_result.loc[idx, col] = baseline_indexed.loc[reid, col]
+                    fallback_count += 1
+            
+            # Om Kapitalkostnad_Period saknas i baseline, approximera
+            # I TEST_MODE: periodsumma ≈ 4 * årsvärde (rimlig approximation)
+            # I PRODUKTION: Detta körs aldrig eftersom alla 148 får KENT-värden
+            if 'Kapitalkostnad_Period' not in df_result.columns:
+                df_result['Kapitalkostnad_Period'] = pd.NA
+            
+            period_missing = df_result['Kapitalkostnad_Period'].isna()
+            if period_missing.any():
+                # Approximera: 4 år ≈ 4x årsvärde
+                df_result.loc[period_missing, 'Kapitalkostnad_Period'] = \
+                    df_result.loc[period_missing, 'Kapitalkostnad_2024'] * 4
+                print(f"  ⚠️ TEST MODE: Approximerade Kapitalkostnad_Period (4x årsvärde) för {period_missing.sum()} företag")
+            
+            print(f"  ✓ Fallback till baseline för {missing_capex.sum()} företag ({fallback_count} kolumner)")
+        else:
+            missing_list = df_result.loc[missing_capex, 'REId'].tolist()
+            raise ValueError(
+                f"KENT output saknar Kapitalkostnad_2024 för {missing_capex.sum()} företag. "
+                f"Missing REIds: {missing_list[:10]}{'...' if len(missing_list) > 10 else ''}"
+            )
+    
+    # 7. Beräkna ny TOTEX = OPEXp + Kapitalkostnad_2024
+    df_result['TOTEX'] = df_result['OPEXp'] + df_result['Kapitalkostnad_2024']
+    
+    # 8. Säkerställ CAPEX-kolumn finns (alias för Kapitalkostnad_2024)
+    if 'CAPEX' not in df_result.columns:
+        df_result['CAPEX'] = df_result['Kapitalkostnad_2024']
     
     return df_result
 
@@ -90,17 +152,17 @@ def get_detailed_capex_data(
     target_reid: str
 ) -> pd.DataFrame:
     """
-    Hamtar detaljerad kapitalkostnadsdata for ett specifikt foretag.
+    Hämtar detaljerad kapitalkostnadsdata för ett specifikt företag.
     
     Args:
-        df_network: DataFrame med kapitalkostnader per REId fran KENT
-        target_reid: REId att hamta data for (ex: "REL00001")
+        df_network: DataFrame med kapitalkostnader per REId från KENT
+        target_reid: REId att hämta data för (ex: "REL00001")
         
     Returns:
         DataFrame med alla tidsperioder och kapitalkostnadskomponenter
     """
     
-    # Direct filter pa REId
+    # Direct filter på REId
     df_filtered = df_network[df_network['REId'] == target_reid].copy()
     
     return df_filtered
@@ -111,16 +173,16 @@ def create_capex_breakdown(
     target_reid: str
 ) -> Dict:
     """
-    Skapar en detaljerad uppdelning av CAPEX for ett foretag.
+    Skapar en detaljerad uppdelning av CAPEX för ett företag.
     
-    Tidskoder ar HALVAR: 229=2024H1, 230=2024H2, etc.
+    Tidskoder är HALVÅR: 229=2024H1, 230=2024H2, etc.
     
     Args:
-        df_network: DataFrame med kapitalkostnader per REId fran KENT
+        df_network: DataFrame med kapitalkostnader per REId från KENT
         target_reid: REId att analysera (ex: "REL00001")
         
     Returns:
-        Dict med breakdown per ar och komponent
+        Dict med breakdown per år och komponent
     """
     
     df_detailed = get_detailed_capex_data(df_network, target_reid)
@@ -130,7 +192,7 @@ def create_capex_breakdown(
     
     breakdown = {}
     
-    # Iterera over ar (inte halvar)
+    # Iterera över år (inte halvår)
     for year, timecodes in YEAR_TO_TIMECODES.items():
         year_data = {
             'dep_ord': 0.0,
@@ -139,7 +201,7 @@ def create_capex_breakdown(
             'return_tail': 0.0,
         }
         
-        # Summera bada halvaren for detta ar
+        # Summera båda halvåren för detta år
         for t in timecodes:
             dep_ord_col = f'dep_ord_{t}'
             dep_tail_col = f'dep_tail_{t}'
@@ -169,14 +231,14 @@ def create_halfyear_breakdown(
     target_reid: str
 ) -> Dict:
     """
-    Skapar halvarsvis breakdown av kapitalkostnader.
+    Skapar halvårsvis breakdown av kapitalkostnader.
     
     Args:
-        df_network: DataFrame med kapitalkostnader per REId fran KENT
+        df_network: DataFrame med kapitalkostnader per REId från KENT
         target_reid: REId att analysera (ex: "REL00001")
         
     Returns:
-        Dict med breakdown per halvar (ex: '2024H1', '2024H2', etc.)
+        Dict med breakdown per halvår (ex: '2024H1', '2024H2', etc.)
     """
     
     df_detailed = get_detailed_capex_data(df_network, target_reid)

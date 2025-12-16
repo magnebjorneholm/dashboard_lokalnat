@@ -5,7 +5,8 @@ Dumpar all rådata utan formatering för att se strukturen.
 """
 
 import streamlit as st
-from utils.state_manager import init_session_state, reset_case, get_user_reid
+from frontend.utils.state_manager import init_session_state, reset_case, get_user_reid
+from frontend.utils.export_button import render_export_button
 
 init_session_state()
 
@@ -74,3 +75,13 @@ with col2:
     if st.button("ÄNDRA CASE", use_container_width=True):
         st.session_state["calculation_done"] = False
         st.switch_page("pages/1_case_config.py")
+
+# Export-knapp
+st.divider()
+render_export_button(
+    user_reid=user_reid,
+    foretag=case.extraction.foretag,
+    baseline_result=baseline,
+    case_result=case,
+    ui_config=st.session_state.get("ui_config", {})
+)

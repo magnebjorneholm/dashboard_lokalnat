@@ -11,10 +11,12 @@ from typing import Dict, Any
 # Explicit default-struktur för alla modules
 DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
     "m1_asset_base": {
-        # Placeholder för framtida parametrar
+        "normvalue_adjustments": None,  # Dict[int, float] {cat_encode: multiplier}
+        "normvalue_level": "cat",       # 'cat' eller 'subcat'
     },
     "m2_depreciation": {
-        # Placeholder för framtida parametrar
+        "lifetime_adjustments": None,   # Dict[int, Dict[str, int]] {cat_encode: {'ekdep': val, 'maxdep': val}}
+        "lifetime_level": "cat",        # 'cat' eller 'subcat'
     },
     "m3_cost_of_capital": {
         "wacc_override": None,  # None = använd baseline (0.0453)

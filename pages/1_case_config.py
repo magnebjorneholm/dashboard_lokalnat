@@ -6,8 +6,8 @@ Huvudsida för att konfigurera ett case.
 
 import streamlit as st
 
-from utils.state_manager import init_session_state, set_module_config, get_user_reid
-from utils.config_adapter import build_case_definition, get_changed_parameters
+from frontend.utils.state_manager import init_session_state, set_module_config, get_user_reid
+from frontend.utils.config_adapter import build_case_definition, get_changed_parameters
 
 from frontend.modules.base import (
     m1_asset_base,

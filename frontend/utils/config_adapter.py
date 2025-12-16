@@ -5,7 +5,7 @@ Konverterar UI-konfiguration till CaseDefinition för backend-pipeline.
 Detta är den enda bryggan mellan frontend och backend.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from config.case_definition import (
     CaseDefinition,
@@ -58,22 +58,69 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
         raise ValueError(f"Ogiltigt REId-format: {user_reid}")
     
     # --- Pre-DEA ---
+    pre_dea = _build_pre_dea_config(ui_config)
+    
+    # --- DEA ---
+    dea = _build_dea_config(ui_config)
+    
+    # --- Post-DEA ---
+    post_dea = _build_post_dea_config(ui_config)
+    
+    return CaseDefinition(
+        name="UI Case",
+        user_reid=user_reid,
+        pre_dea=pre_dea,
+        dea=dea,
+        post_dea=post_dea
+    )
+
+
+def _build_pre_dea_config(ui_config: Dict[str, Any]) -> PreDeaConfig:
+    """
+    Bygg PreDeaConfig baserat på m1, m2, m3.
+    
+    Logik:
+    - Om normvärden eller livslängder ändras → PARAMETER_CHANGE
+    - Om endast WACC ändras → WACC_SCALING
+    - Annars → BASELINE
+    """
+    m1 = ui_config.get("m1_asset_base", {})
+    m2 = ui_config.get("m2_depreciation", {})
     m3 = ui_config.get("m3_cost_of_capital", {})
     
+    normvalue_adjustments = m1.get("normvalue_adjustments")
+    lifetime_adjustments = m2.get("lifetime_adjustments")
     wacc_override = m3.get("wacc_override")
-    if wacc_override is not None:
-        pre_dea = PreDeaConfig(
+    
+    # Bestäm metod baserat på vad som ändrats
+    has_parameter_changes = (normvalue_adjustments is not None or lifetime_adjustments is not None)
+    has_wacc_change = (wacc_override is not None)
+    
+    if has_parameter_changes:
+        # Normvärden eller livslängder ändrades → kör full KENT-beräkning
+        return PreDeaConfig(
+            method=CapexMethod.PARAMETER_CHANGE,
+            wacc=wacc_override if wacc_override else 0.0453,
+            normvalue_adjustments=normvalue_adjustments,
+            lifetime_adjustments=lifetime_adjustments,
+        )
+    elif has_wacc_change:
+        # Endast WACC ändrad → skala befintlig CAPEX
+        return PreDeaConfig(
             method=CapexMethod.WACC_SCALING,
             wacc=wacc_override
         )
     else:
-        pre_dea = PreDeaConfig(method=CapexMethod.BASELINE)
-    
-    # --- DEA ---
+        # Ingen ändring → använd baseline
+        return PreDeaConfig(method=CapexMethod.BASELINE)
+
+
+def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
+    """Bygg DeaConfig baserat på addon_benchmarking."""
     addon = ui_config.get("addon_benchmarking", {})
     
     if addon.get("dea_method") == "custom":
-        dea = DeaConfig(
+        return DeaConfig(
             method=EfficiencyMethod.DEA,
             inputs=addon.get("dea_inputs", ["CAPEX", "OPEXp"]),
             outputs=addon.get("dea_outputs", DEA_OUTPUT_OPTIONS),
@@ -83,9 +130,11 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
             q_upper=addon.get("dea_q_upper", 75.0),
         )
     else:
-        dea = DeaConfig(method=EfficiencyMethod.BASELINE)
-    
-    # --- Post-DEA ---
+        return DeaConfig(method=EfficiencyMethod.BASELINE)
+
+
+def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
+    """Bygg PostDeaConfig baserat på m4, m5."""
     m5 = ui_config.get("m5_efficiency", {})
     m4 = ui_config.get("m4_operating_exp", {})
     
@@ -104,19 +153,11 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
     
     paverkbara_method_str = m4.get("paverkbara_method", "OPEX")
     
-    post_dea = PostDeaConfig(
+    return PostDeaConfig(
         trunkering_min=trunkering_min,
         trunkering_max=trunkering_max,
         outlier_krav=outlier_krav,
         paverkbara_method=PaverkbaraMethod(paverkbara_method_str)
-    )
-    
-    return CaseDefinition(
-        name="UI Case",
-        user_reid=user_reid,
-        pre_dea=pre_dea,
-        dea=dea,
-        post_dea=post_dea
     )
 
 
@@ -147,12 +188,26 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     """
     changed = []
     
-    # Module 3
+    # Module 1: Asset base
+    m1 = ui_config.get("m1_asset_base", {})
+    if m1.get("normvalue_adjustments"):
+        n = len(m1.get("normvalue_adjustments", {}))
+        level = m1.get("normvalue_level", "cat")
+        changed.append(f"1.X.X Normvärden ({n} {level})")
+    
+    # Module 2: Depreciation
+    m2 = ui_config.get("m2_depreciation", {})
+    if m2.get("lifetime_adjustments"):
+        n = len(m2.get("lifetime_adjustments", {}))
+        level = m2.get("lifetime_level", "cat")
+        changed.append(f"2.X.X Livslängder ({n} {level})")
+    
+    # Module 3: Cost of capital
     m3 = ui_config.get("m3_cost_of_capital", {})
     if m3.get("wacc_override") is not None:
         changed.append("3.2.5 WACC")
     
-    # Module 5
+    # Module 5: Efficiency
     m5 = ui_config.get("m5_efficiency", {})
     if m5.get("trunkering_max") is not None:
         changed.append("5.2.1 Max potential")
@@ -161,7 +216,7 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     if m5.get("outlier_krav") is not None:
         changed.append("5.3.1 Outlier-krav")
     
-    # Module 4
+    # Module 4: Operating expenditures
     m4 = ui_config.get("m4_operating_exp", {})
     if m4.get("paverkbara_method", "OPEX") != "OPEX":
         changed.append("5.4.1 TOTEX-metod")

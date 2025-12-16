@@ -6,7 +6,7 @@ Entry point för frontend-applikationen.
 
 import streamlit as st
 
-from utils.state_manager import init_session_state, set_user_reid
+from frontend.utils.state_manager import init_session_state, set_user_reid
 
 # Sidkonfiguration
 st.set_page_config(
