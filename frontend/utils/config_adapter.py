@@ -23,10 +23,13 @@ PARAM_TO_CONFIG = {
     "3.2.5": ("pre_dea", "wacc", 0.0453),
     
     # Module 5: Efficiency incentive
-    "5.1.1": ("dea", "multiplier", 2.0),           # Outlier IQR threshold
-    "5.2.1": ("post_dea", "trunkering_max", 0.30), # Max potential cap
-    "5.2.2": ("post_dea", "trunkering_min", 0.162416), # Min potential för trunkering
-    "5.3.1": ("post_dea", "outlier_krav", 0.01),   # Min årligt krav för outliers
+    "5.1.1": ("dea", "multiplier", 2.0),              # Outlier IQR threshold
+    "5.2.1": ("post_dea", "trunkering_max", 0.30),    # Max potential cap
+    "5.2.2": ("post_dea", "trunkering_min", 0.162416),# Min potential for trunkering
+    "5.2.3": ("post_dea", "realiseringstid", 8),      # Ar for full effektivisering
+    "5.2.4": ("post_dea", "kunddelning", 0.50),       # Andel till kunder
+    "5.2.5": ("post_dea", "tillsynsperiod", 4),       # Langd pa tillsynsperiod
+    "5.3.1": ("post_dea", "outlier_krav", 0.01),      # Min arligt krav for outliers
     
     # Module 4: Operating expenditures (via Module 5)
     "5.4.1": ("post_dea", "paverkbara_method", "OPEX"),  # OPEX eller TOTEX
@@ -42,14 +45,14 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
     Konvertera UI-konfiguration till CaseDefinition.
     
     Args:
-        user_reid: Användarens REId
-        ui_config: Dict från session_state["ui_config"]
+        user_reid: Anvandarens REId
+        ui_config: Dict fran session_state["ui_config"]
     
     Returns:
-        CaseDefinition redo för pipeline
+        CaseDefinition redo for pipeline
     
     Raises:
-        ValueError: Om input är ogiltig
+        ValueError: Om input ar ogiltig
     """
     # Validera REId
     if not user_reid:
@@ -77,12 +80,12 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
 
 def _build_pre_dea_config(ui_config: Dict[str, Any]) -> PreDeaConfig:
     """
-    Bygg PreDeaConfig baserat på m1, m2, m3.
+    Bygg PreDeaConfig baserat pa m1, m2, m3.
     
     Logik:
-    - Om normvärden eller livslängder ändras → PARAMETER_CHANGE
-    - Om endast WACC ändras → WACC_SCALING
-    - Annars → BASELINE
+    - Om normvarden eller livslangder andras -> PARAMETER_CHANGE
+    - Om endast WACC andras -> WACC_SCALING
+    - Annars -> BASELINE
     """
     m1 = ui_config.get("m1_asset_base", {})
     m2 = ui_config.get("m2_depreciation", {})
@@ -92,12 +95,12 @@ def _build_pre_dea_config(ui_config: Dict[str, Any]) -> PreDeaConfig:
     lifetime_adjustments = m2.get("lifetime_adjustments")
     wacc_override = m3.get("wacc_override")
     
-    # Bestäm metod baserat på vad som ändrats
+    # Bestam metod baserat pa vad som andrats
     has_parameter_changes = (normvalue_adjustments is not None or lifetime_adjustments is not None)
     has_wacc_change = (wacc_override is not None)
     
     if has_parameter_changes:
-        # Normvärden eller livslängder ändrades → kör full KENT-beräkning
+        # Normvarden eller livslangder andrades -> kor full KENT-berakning
         return PreDeaConfig(
             method=CapexMethod.PARAMETER_CHANGE,
             wacc=wacc_override if wacc_override else 0.0453,
@@ -105,18 +108,18 @@ def _build_pre_dea_config(ui_config: Dict[str, Any]) -> PreDeaConfig:
             lifetime_adjustments=lifetime_adjustments,
         )
     elif has_wacc_change:
-        # Endast WACC ändrad → skala befintlig CAPEX
+        # Endast WACC andrad -> skala befintlig CAPEX
         return PreDeaConfig(
             method=CapexMethod.WACC_SCALING,
             wacc=wacc_override
         )
     else:
-        # Ingen ändring → använd baseline
+        # Ingen andring -> anvand baseline
         return PreDeaConfig(method=CapexMethod.BASELINE)
 
 
 def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
-    """Bygg DeaConfig baserat på addon_benchmarking."""
+    """Bygg DeaConfig baserat pa addon_benchmarking."""
     addon = ui_config.get("addon_benchmarking", {})
     
     if addon.get("dea_method") == "custom":
@@ -134,11 +137,11 @@ def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
 
 
 def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
-    """Bygg PostDeaConfig baserat på m4, m5."""
+    """Bygg PostDeaConfig baserat pa m4, m5."""
     m5 = ui_config.get("m5_efficiency", {})
     m4 = ui_config.get("m4_operating_exp", {})
     
-    # Använd None-safe defaults
+    # Trunkering
     trunkering_max = m5.get("trunkering_max")
     if trunkering_max is None:
         trunkering_max = 0.30
@@ -151,25 +154,42 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
     if outlier_krav is None:
         outlier_krav = 0.01
     
+    # Nya parametrar for effektiviseringskrav-omrakning
+    kunddelning = m5.get("kunddelning")
+    if kunddelning is None:
+        kunddelning = 0.50
+    
+    realiseringstid = m5.get("realiseringstid")
+    if realiseringstid is None:
+        realiseringstid = 8
+    
+    tillsynsperiod = m5.get("tillsynsperiod")
+    if tillsynsperiod is None:
+        tillsynsperiod = 4
+    
+    # Paverkbara metod
     paverkbara_method_str = m4.get("paverkbara_method", "OPEX")
     
     return PostDeaConfig(
         trunkering_min=trunkering_min,
         trunkering_max=trunkering_max,
         outlier_krav=outlier_krav,
+        kunddelning=kunddelning,
+        realiseringstid=realiseringstid,
+        tillsynsperiod=tillsynsperiod,
         paverkbara_method=PaverkbaraMethod(paverkbara_method_str)
     )
 
 
 def get_baseline_value(param_id: str) -> Any:
     """
-    Hämta baseline-värde för en parameter.
+    Hamta baseline-varde for en parameter.
     
     Args:
         param_id: Parameter-ID (t.ex. "3.2.5")
         
     Returns:
-        Baseline-värde eller None om parameter inte finns
+        Baseline-varde eller None om parameter inte finns
     """
     if param_id in PARAM_TO_CONFIG:
         return PARAM_TO_CONFIG[param_id][2]
@@ -178,13 +198,13 @@ def get_baseline_value(param_id: str) -> Any:
 
 def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     """
-    Returnerar lista med ändrade parametrar.
+    Returnerar lista med andrade parametrar.
     
     Args:
         ui_config: UI-konfiguration
         
     Returns:
-        Lista med Parameter-ID som har ändrats från baseline
+        Lista med Parameter-ID som har andrats fran baseline
     """
     changed = []
     
@@ -193,14 +213,14 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     if m1.get("normvalue_adjustments"):
         n = len(m1.get("normvalue_adjustments", {}))
         level = m1.get("normvalue_level", "cat")
-        changed.append(f"1.X.X Normvärden ({n} {level})")
+        changed.append(f"1.X.X Normvarden ({n} {level})")
     
     # Module 2: Depreciation
     m2 = ui_config.get("m2_depreciation", {})
     if m2.get("lifetime_adjustments"):
         n = len(m2.get("lifetime_adjustments", {}))
         level = m2.get("lifetime_level", "cat")
-        changed.append(f"2.X.X Livslängder ({n} {level})")
+        changed.append(f"2.X.X Livslangder ({n} {level})")
     
     # Module 3: Cost of capital
     m3 = ui_config.get("m3_cost_of_capital", {})
@@ -213,6 +233,12 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
         changed.append("5.2.1 Max potential")
     if m5.get("trunkering_min") is not None:
         changed.append("5.2.2 Min potential")
+    if m5.get("realiseringstid") is not None:
+        changed.append("5.2.3 Realiseringstid")
+    if m5.get("kunddelning") is not None:
+        changed.append("5.2.4 Kunddelning")
+    if m5.get("tillsynsperiod") is not None:
+        changed.append("5.2.5 Tillsynsperiod")
     if m5.get("outlier_krav") is not None:
         changed.append("5.3.1 Outlier-krav")
     

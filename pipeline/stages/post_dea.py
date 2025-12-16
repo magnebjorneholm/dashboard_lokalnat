@@ -1,7 +1,7 @@
 """
 pipeline/stages/post_dea.py
 
-Stage 4: Post-DEA
+Stage 5: Post-DEA
 Beraknar effektiviseringskrav, paverkbara kostnader, och assemblerar intaktsram.
 """
 
@@ -31,7 +31,7 @@ def stage_post_dea(
     user_reid: str
 ) -> PostDeaStageOutput:
     """
-    Stage 4: Berakna effektiviseringskrav, paverkbara, och intaktsram.
+    Stage 5: Berakna effektiviseringskrav, paverkbara, och intaktsram.
     
     Process:
     1. Berakna effektiviseringskrav for alla 148 foretag
@@ -44,7 +44,7 @@ def stage_post_dea(
         dea: Output fran DEA stage (effektivitet, potential for alla 148)
         pre_dea: Output fran Pre-DEA stage (CAPEX-data + metadata)
         baseline: Output fran Baseline stage (SDF-data)
-        config: PostDeaConfig med trunkering och metod
+        config: PostDeaConfig med trunkering, kunddelning, realiseringstid, etc.
         user_reid: REId for anvandarens foretag
         
     Returns:
@@ -56,11 +56,13 @@ def stage_post_dea(
     """
     
     print("\n" + "="*60)
-    print("STAGE 4: POST-DEA")
+    print("STAGE 5: POST-DEA")
     print("="*60)
     
     # STEG 1: Berakna effektiviseringskrav for alla 148 foretag
     print("\n  Steg 1/5: Beraknar effektiviseringskrav...")
+    print(f"    Parametrar: trunkering=[{config.trunkering_min:.1%}, {config.trunkering_max:.1%}], "
+          f"kunddelning={config.kunddelning:.0%}, realiseringstid={config.realiseringstid} ar")
     
     all_effkrav = calculate_effkrav_for_dataframe(
         df=dea.dea_results,
@@ -68,10 +70,13 @@ def stage_post_dea(
         outlier_col='is_outlier',
         trunkering_min=config.trunkering_min,
         trunkering_max=config.trunkering_max,
-        outlier_krav=config.outlier_krav
+        outlier_krav=config.outlier_krav,
+        kunddelning=config.kunddelning,
+        realiseringstid=config.realiseringstid,
+        tillsynsperiod=config.tillsynsperiod
     )
     
-    print(f"    OK Effektiviseringskrav beraknat for {len(all_effkrav)} foretag")
+    print(f"    [OK] Effektiviseringskrav beraknat for {len(all_effkrav)} foretag")
     
     # STEG 2: Forbered paverkbara baseline-data fran SDF
     print("\n  Steg 2/5: Laddar paverkbara baseline fran SDF...")
@@ -81,7 +86,7 @@ def stage_post_dea(
         sdf_paverkbara=baseline.sdf_paverkbara
     )
     
-    print(f"    OK Paverkbara baseline laddad for {len(sdf_paverkbara)} foretag")
+    print(f"    [OK] Paverkbara baseline laddad for {len(sdf_paverkbara)} foretag")
     
     # STEG 3: Berakna paverkbara kostnader med effektiviseringskrav
     print(f"\n  Steg 3/5: Beraknar paverkbara kostnader ({config.paverkbara_method})...")
@@ -100,7 +105,7 @@ def stage_post_dea(
         method=config.paverkbara_method.value
     )
     
-    print(f"    OK Paverkbara beraknat for {len(all_paverkbara)} foretag")
+    print(f"    [OK] Paverkbara beraknat for {len(all_paverkbara)} foretag")
     
     # STEG 4: Forbered kapitalkostnad for intaktsram (baserat pa Pre-DEA metod)
     print(f"\n  Steg 4/5: Forbereder kapitalkostnad (kalla: {pre_dea.capex_method})...")
@@ -110,7 +115,7 @@ def stage_post_dea(
         baseline=baseline
     )
     
-    print(f"    OK Kapitalkostnad forberedd for {len(capex_for_intaktsram)} foretag")
+    print(f"    [OK] Kapitalkostnad forberedd for {len(capex_for_intaktsram)} foretag")
     
     # STEG 5: Assemblera intaktsram
     print("\n  Steg 5/5: Assemblerar intaktsram...")
@@ -121,7 +126,7 @@ def stage_post_dea(
         sdf_baseline=baseline.sdf_ir
     )
     
-    print(f"    OK Intaktsram assemblerad for {len(all_intaktsram)} foretag")
+    print(f"    [OK] Intaktsram assemblerad for {len(all_intaktsram)} foretag")
     
     # STEG 6: Extrahera anvandarens specifika data
     print(f"\n  Extraherar data for anvandare ({user_reid})...")
@@ -129,8 +134,8 @@ def stage_post_dea(
     user_intaktsram = extract_user_intaktsram(all_intaktsram, user_reid)
     user_effkrav_proc = all_effkrav[all_effkrav['REId'] == user_reid]['Effkrav_proc'].iloc[0]
     
-    print(f"    OK Intaktsram: {user_intaktsram['Intaktsram_Total']:,.0f} tkr")
-    print(f"    OK Effektiviseringskrav: {user_effkrav_proc*100:.2f}% per ar")
+    print(f"    [OK] Intaktsram: {user_intaktsram['Intaktsram_Total']:,.0f} tkr")
+    print(f"    [OK] Effektiviseringskrav: {user_effkrav_proc*100:.2f}% per ar")
     
     print("="*60 + "\n")
     
@@ -202,9 +207,9 @@ def _prepare_capex_for_intaktsram(
         else:
             # If user requested a KENT-based method we should not silently fall back.
             raise ValueError(
-                f"Kapitalkostnad periodsummor saknas i Pre-DEA resultat för metod '{method}'. "
-                "Förväntade kolumner: 'Kapitalkostnad_Period' eller 'Kapitalkostnad_Total'. "
-                "Kontrollera KENT-output och kör om pre-dea-steget."
+                f"Kapitalkostnad periodsummor saknas i Pre-DEA resultat for metod '{method}'. "
+                "Forvantade kolumner: 'Kapitalkostnad_Period' eller 'Kapitalkostnad_Total'. "
+                "Kontrollera KENT-output och kor om pre-dea-steget."
             )
     
     else:

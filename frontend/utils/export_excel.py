@@ -310,7 +310,7 @@ def _create_config_sheet(
     ui_config: Dict, 
     case: PipelineResultAdapter
 ):
-    """Skapar konfigurationsflik."""
+    """Skapar konfigurationsflik med alla parametrar."""
     ws = wb.create_sheet("Konfiguration")
     
     ws['A1'] = "Case Konfiguration"
@@ -319,7 +319,7 @@ def _create_config_sheet(
     row = 3
     
     # M1: Normvärden
-    ws.cell(row=row, column=1, value="M1: Normvärdejusteringar").font = Font(bold=True)
+    ws.cell(row=row, column=1, value="M1: Regulatory Asset Base").font = Font(bold=True)
     row += 1
     m1 = ui_config.get('m1_asset_base', {})
     normvalue_adj = m1.get('normvalue_adjustments')
@@ -333,13 +333,13 @@ def _create_config_sheet(
             ws.cell(row=row, column=2, value=f"{pct:+.0f}%")
             row += 1
     else:
-        ws.cell(row=row, column=1, value="Inga ändringar")
+        ws.cell(row=row, column=1, value="Inga ändringar (baseline)")
         row += 1
     
     row += 1
     
     # M2: Livslängder
-    ws.cell(row=row, column=1, value="M2: Livslängdsjusteringar").font = Font(bold=True)
+    ws.cell(row=row, column=1, value="M2: Depreciation").font = Font(bold=True)
     row += 1
     m2 = ui_config.get('m2_depreciation', {})
     lifetime_adj = m2.get('lifetime_adjustments')
@@ -353,7 +353,7 @@ def _create_config_sheet(
             ws.cell(row=row, column=2, value=changes)
             row += 1
     else:
-        ws.cell(row=row, column=1, value="Inga ändringar")
+        ws.cell(row=row, column=1, value="Inga ändringar (baseline)")
         row += 1
     
     row += 1
@@ -364,25 +364,120 @@ def _create_config_sheet(
     m3 = ui_config.get('m3_cost_of_capital', {})
     wacc = m3.get('wacc_override')
     if wacc:
-        ws.cell(row=row, column=1, value="WACC override:")
+        ws.cell(row=row, column=1, value="WACC (3.2.5):")
         ws.cell(row=row, column=2, value=wacc).number_format = '0.00%'
     else:
-        ws.cell(row=row, column=1, value="WACC:")
+        ws.cell(row=row, column=1, value="WACC (3.2.5):")
         ws.cell(row=row, column=2, value="Baseline (4.53%)")
     row += 2
     
-    # DEA info
-    ws.cell(row=row, column=1, value="DEA Metadata").font = Font(bold=True)
+    # M4: Operating Expenditures
+    ws.cell(row=row, column=1, value="M4: Operating Expenditures").font = Font(bold=True)
+    row += 1
+    m4 = ui_config.get('m4_operating_exp', {})
+    paverkbara_method = m4.get('paverkbara_method', 'OPEX')
+    ws.cell(row=row, column=1, value="Påverkbara metod (5.4.1):")
+    ws.cell(row=row, column=2, value=paverkbara_method)
+    row += 2
+    
+    # M5: Efficiency Incentive
+    ws.cell(row=row, column=1, value="M5: Efficiency Incentive").font = Font(bold=True)
+    row += 1
+    m5 = ui_config.get('m5_efficiency', {})
+    
+    # Baseline-värden för jämförelse
+    BASELINE_M5 = {
+        'trunkering_max': 0.30,
+        'trunkering_min': 0.162416,
+        'outlier_krav': 0.01,
+        'kunddelning': 0.50,
+        'realiseringstid': 8,
+        'tillsynsperiod': 4,
+    }
+    
+    # 5.2.1 Max potential
+    val = m5.get('trunkering_max')
+    ws.cell(row=row, column=1, value="Max potential (5.2.1):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=val).number_format = '0.00%'
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['trunkering_max']:.0%})")
+    row += 1
+    
+    # 5.2.2 Min potential trunkering
+    val = m5.get('trunkering_min')
+    ws.cell(row=row, column=1, value="Min potential trunkering (5.2.2):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=val).number_format = '0.00%'
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['trunkering_min']:.2%})")
+    row += 1
+    
+    # 5.2.3 Realiseringstid
+    val = m5.get('realiseringstid')
+    ws.cell(row=row, column=1, value="Realiseringstid (5.2.3):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=f"{val} år")
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['realiseringstid']} år)")
+    row += 1
+    
+    # 5.2.4 Kunddelning
+    val = m5.get('kunddelning')
+    ws.cell(row=row, column=1, value="Kunddelning (5.2.4):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=val).number_format = '0%'
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['kunddelning']:.0%})")
+    row += 1
+    
+    # 5.2.5 Tillsynsperiod
+    val = m5.get('tillsynsperiod')
+    ws.cell(row=row, column=1, value="Tillsynsperiod (5.2.5):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=f"{val} år")
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['tillsynsperiod']} år)")
+    row += 1
+    
+    # 5.3.1 Outlier-krav
+    val = m5.get('outlier_krav')
+    ws.cell(row=row, column=1, value="Outlier-krav (5.3.1):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=val).number_format = '0.00%'
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['outlier_krav']:.0%})")
+    row += 2
+    
+    # DEA info (Add-on: Benchmarking)
+    ws.cell(row=row, column=1, value="Add-on: Benchmarking (DEA)").font = Font(bold=True)
     row += 1
     case_dea = case.dea
+    addon = ui_config.get('addon_benchmarking', {})
+    
     ws.cell(row=row, column=1, value="Metod:")
     ws.cell(row=row, column=2, value=_get_attr(case_dea, 'dea_method', 'baseline'))
     row += 1
+    
     ws.cell(row=row, column=1, value="DEA körd:")
     ws.cell(row=row, column=2, value="Ja" if _get_attr(case_dea, 'dea_executed', False) else "Nej")
+    row += 1
     
-    ws.column_dimensions['A'].width = 25
-    ws.column_dimensions['B'].width = 30
+    if addon.get('dea_method') == 'custom':
+        ws.cell(row=row, column=1, value="Inputs:")
+        ws.cell(row=row, column=2, value=', '.join(addon.get('dea_inputs', [])))
+        row += 1
+        ws.cell(row=row, column=1, value="Outputs:")
+        ws.cell(row=row, column=2, value=', '.join(addon.get('dea_outputs', [])))
+        row += 1
+        ws.cell(row=row, column=1, value="RTS:")
+        ws.cell(row=row, column=2, value=addon.get('dea_rts', 'crs').upper())
+        row += 1
+        ws.cell(row=row, column=1, value="Outlier multiplier (5.1.1):")
+        ws.cell(row=row, column=2, value=addon.get('dea_multiplier', 2.0))
+    
+    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['B'].width = 35
 
 
 def _write_dataframe_to_sheet(ws, df: pd.DataFrame):

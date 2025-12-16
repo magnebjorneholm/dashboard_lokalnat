@@ -70,10 +70,15 @@ class DeaConfig:
 @dataclass
 class PostDeaConfig:
     """Configuration för Post-DEA stage"""
-     # Effektiviseringskrav-parametrar (enligt Ei's metod)
+    # Effektiviseringskrav - trunkering
     trunkering_min: float = 0.162416      # Min potential för trunkering (16.24%)
     trunkering_max: float = 0.30          # Max potential för trunkering (30%)
     outlier_krav: float = 0.01            # Fast årligt krav för outliers (1%)
+    
+    # Effektiviseringskrav - omräkningsparametrar (enligt Ei's metod)
+    kunddelning: float = 0.50             # Andel som tillfaller kunder (50%)
+    realiseringstid: int = 8              # År för att uppnå full effektivisering
+    tillsynsperiod: int = 4               # Längd på tillsynsperiod i år
     
     # Påverkbara kostnader
     paverkbara_method: PaverkbaraMethod = PaverkbaraMethod.OPEX
