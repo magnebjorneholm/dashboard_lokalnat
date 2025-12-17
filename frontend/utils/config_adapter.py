@@ -63,6 +63,10 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
     # --- Pre-DEA ---
     pre_dea = _build_pre_dea_config(ui_config)
     
+    # Om KENT-upload, sätt kent_user_id_network från REId
+    if pre_dea.method == CapexMethod.KENT_UPLOAD:
+        pre_dea.kent_user_id_network = _reid_to_id_network(user_reid)
+    
     # --- DEA ---
     dea = _build_dea_config(ui_config)
     
@@ -78,14 +82,31 @@ def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefi
     )
 
 
+def _reid_to_id_network(reid: str) -> int:
+    """
+    Konverterar REId till id_network.
+    
+    Ex: "REL00886" -> 886
+    """
+    try:
+        # Ta bort "REL" prefix och konvertera till int
+        numeric_part = reid.replace("REL", "").lstrip("0")
+        if not numeric_part:
+            return 0
+        return int(numeric_part)
+    except (ValueError, AttributeError):
+        raise ValueError(f"Kunde inte konvertera REId till id_network: {reid}")
+
+
 def _build_pre_dea_config(ui_config: Dict[str, Any]) -> PreDeaConfig:
     """
     Bygg PreDeaConfig baserat pa m1, m2, m3.
     
-    Logik:
-    - Om normvarden eller livslangder andras -> PARAMETER_CHANGE
-    - Om endast WACC andras -> WACC_SCALING
-    - Annars -> BASELINE
+    Prioritetsordning:
+    1. KENT-upload (om fil uppladdad)
+    2. PARAMETER_CHANGE (om normvarden/livslangder andrats)
+    3. WACC_SCALING (om endast WACC andrats)
+    4. BASELINE (ingen andring)
     """
     m1 = ui_config.get("m1_asset_base", {})
     m2 = ui_config.get("m2_depreciation", {})
@@ -94,12 +115,25 @@ def _build_pre_dea_config(ui_config: Dict[str, Any]) -> PreDeaConfig:
     normvalue_adjustments = m1.get("normvalue_adjustments")
     lifetime_adjustments = m2.get("lifetime_adjustments")
     wacc_override = m3.get("wacc_override")
+    kent_file_bytes = m1.get("kent_file_bytes")
     
     # Bestam metod baserat pa vad som andrats
+    has_kent_upload = (kent_file_bytes is not None)
     has_parameter_changes = (normvalue_adjustments is not None or lifetime_adjustments is not None)
     has_wacc_change = (wacc_override is not None)
     
-    if has_parameter_changes:
+    if has_kent_upload:
+        # KENT-fil uppladdad -> KENT_UPLOAD metod
+        # OBS: kent_user_id_network sätts separat i build_case_definition
+        return PreDeaConfig(
+            method=CapexMethod.KENT_UPLOAD,
+            wacc=wacc_override if wacc_override else 0.0453,
+            normvalue_adjustments=normvalue_adjustments,
+            lifetime_adjustments=lifetime_adjustments,
+            kent_file_bytes=kent_file_bytes,
+            kent_user_id_network=None,  # Sätts i build_case_definition
+        )
+    elif has_parameter_changes:
         # Normvarden eller livslangder andrades -> kor full KENT-berakning
         return PreDeaConfig(
             method=CapexMethod.PARAMETER_CHANGE,
@@ -210,6 +244,8 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     
     # Module 1: Asset base
     m1 = ui_config.get("m1_asset_base", {})
+    if m1.get("kent_file_bytes"):
+        changed.append("KENT-fil uppladdad")
     if m1.get("normvalue_adjustments"):
         n = len(m1.get("normvalue_adjustments", {}))
         level = m1.get("normvalue_level", "cat")

@@ -36,7 +36,7 @@ class PaverkbaraMethod(str, Enum):
 # Config dataclasses per stage
 @dataclass
 class PreDeaConfig:
-    """Configuration för Pre-DEA stage"""
+    """Configuration for Pre-DEA stage"""
     method: CapexMethod = CapexMethod.BASELINE
     
     # WACC-scaling specifikt
@@ -48,6 +48,8 @@ class PreDeaConfig:
     
     # KENT upload specifikt
     kent_file_path: Optional[str] = None
+    kent_file_bytes: Optional[bytes] = None  # Uppladdad KENT Excel-fil som bytes
+    kent_user_id_network: Optional[int] = None  # id_network for det uppladdade foretagets data
 
 
 @dataclass

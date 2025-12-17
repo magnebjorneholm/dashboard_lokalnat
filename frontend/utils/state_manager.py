@@ -13,6 +13,8 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
     "m1_asset_base": {
         "normvalue_adjustments": None,  # Dict[int, float] {cat_encode: multiplier}
         "normvalue_level": "cat",       # 'cat' eller 'subcat'
+        "kent_file_bytes": None,        # Uppladdad KENT-fil som bytes
+        "kent_file_name": None,         # Filnamn for visning
     },
     "m2_depreciation": {
         "lifetime_adjustments": None,   # Dict[int, Dict[str, int]] {cat_encode: {'ekdep': val, 'maxdep': val}}

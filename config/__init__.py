@@ -15,7 +15,8 @@ from .case_definition import (
     get_baseline_config,
     create_wacc_scaling_config,
     create_parameter_change_config,
-    create_custom_dea_config
+    create_custom_dea_config,
+    create_baseline_dea_config,
 )
 
 __all__ = [
@@ -29,5 +30,6 @@ __all__ = [
     'get_baseline_config',
     'create_wacc_scaling_config',
     'create_parameter_change_config',
-    'create_custom_dea_config'
+    'create_custom_dea_config',
+    'create_baseline_dea_config'
 ]

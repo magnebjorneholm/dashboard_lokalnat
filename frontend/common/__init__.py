@@ -11,3 +11,20 @@ __all__ = [
     "parameter_input",
     "parameter_select",
 ]
+
+# Expose asset category utilities
+from frontend.common.asset_categories import (
+    ASSET_CATEGORIES,
+    CATEGORY_BY_CODE,
+    BASELINE_LIFETIMES,
+    get_category_name,
+    get_baseline_lifetime,
+)
+
+__all__ += [
+    "ASSET_CATEGORIES",
+    "CATEGORY_BY_CODE",
+    "BASELINE_LIFETIMES",
+    "get_category_name",
+    "get_baseline_lifetime",
+]

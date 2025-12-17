@@ -322,9 +322,18 @@ def _create_config_sheet(
     ws.cell(row=row, column=1, value="M1: Regulatory Asset Base").font = Font(bold=True)
     row += 1
     m1 = ui_config.get('m1_asset_base', {})
+    
+    # KENT-upload
+    kent_file = m1.get('kent_file_name')
+    if kent_file:
+        ws.cell(row=row, column=1, value="KENT-fil uppladdad:")
+        ws.cell(row=row, column=2, value=kent_file)
+        row += 1
+    
+    # Normvärde-justeringar
     normvalue_adj = m1.get('normvalue_adjustments')
     if normvalue_adj:
-        ws.cell(row=row, column=1, value="Nivå:")
+        ws.cell(row=row, column=1, value="Normvärde-nivå:")
         ws.cell(row=row, column=2, value=m1.get('normvalue_level', 'cat'))
         row += 1
         for cat, mult in normvalue_adj.items():
@@ -332,7 +341,7 @@ def _create_config_sheet(
             ws.cell(row=row, column=1, value=f"Kategori {cat}:")
             ws.cell(row=row, column=2, value=f"{pct:+.0f}%")
             row += 1
-    else:
+    elif not kent_file:
         ws.cell(row=row, column=1, value="Inga ändringar (baseline)")
         row += 1
     

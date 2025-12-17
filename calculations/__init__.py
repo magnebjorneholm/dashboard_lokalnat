@@ -49,6 +49,31 @@ from .wacc_calculations import (
     BASELINE_WACC,
 )
 
+# Kent capbase prep utilities
+from .kent_capbase_prep import (
+    read_kent_excel,
+    process_kent_components,
+    build_capbase_a_from_kent,
+    validate_capbase_a,
+    get_category_encode,
+    year_to_time_code,
+    halvar_to_time_code,
+    CATEGORY_MAPPING,
+)
+
+# Time code constants & helpers
+from .time_codes import (
+    HALFYEAR_TO_TIMECODE,
+    TIMECODE_TO_HALFYEAR,
+    YEAR_TO_TIMECODES,
+    PERIOD_2024_2027_CODES,
+    YEAR_TO_FIRST_TIMECODE,
+    timecode_to_year,
+    timecode_to_halfyear,
+    timecode_to_label,
+    year_to_timecodes,
+)
+
 __all__ = [
     # WACC scaling
     'calculate_wacc_scaled_capex',
@@ -92,4 +117,27 @@ __all__ = [
     'CAPMInputs',
     'calculate_wacc',
     'BASELINE_WACC',
+]
+
+__all__ += [
+    # Kent capbase prep
+    'read_kent_excel',
+    'process_kent_components',
+    'build_capbase_a_from_kent',
+    'validate_capbase_a',
+    'get_category_encode',
+    'year_to_time_code',
+    'halvar_to_time_code',
+    'CATEGORY_MAPPING',
+
+    # Time codes
+    'HALFYEAR_TO_TIMECODE',
+    'TIMECODE_TO_HALFYEAR',
+    'YEAR_TO_TIMECODES',
+    'PERIOD_2024_2027_CODES',
+    'YEAR_TO_FIRST_TIMECODE',
+    'timecode_to_year',
+    'timecode_to_halfyear',
+    'timecode_to_label',
+    'year_to_timecodes',
 ]
