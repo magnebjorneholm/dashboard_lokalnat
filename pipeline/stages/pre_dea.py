@@ -264,9 +264,9 @@ def _kent_upload_only(
             user_period = df_user_network.iloc[0]['Kapitalkostnad_Period']
             print(f"  Anvandarens periodsumma: {user_period:,.0f} tkr")
         else:
-            # Fallback: approximera som 4x arsvarde
-            user_period = user_capex * 4
-            print(f"  Periodsumma approximerad (4x): {user_period:,.0f} tkr")
+            raise ValueError(
+                "Kapitalkostnad_Period saknas i KENT-output. "
+                "Kontrollera att kent_calculations.py producerar periodsummor korrekt.")
         
     except Exception as e:
         print(f"  Fel vid KENT steg 5-8: {e}")

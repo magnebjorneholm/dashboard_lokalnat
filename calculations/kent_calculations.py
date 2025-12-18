@@ -269,86 +269,79 @@ def calculate_returns_batch(df: pd.DataFrame, wacc: float = 0.0453) -> pd.DataFr
     """
     Steg 7: Beräkna avkastning för alla komponenter och tidsperioder.
     
+    Använder Ei's metod med halvårsbaserad åldersberäkning och linjär
+    avskrivning av kvarvarande kapitalbas.
+    
     Args:
         df: DataFrame från steg 6 med depreciation kolumner
         wacc: WACC att använda (default 0.0453)
         
     Returns:
         DataFrame med nya kolumner:
+        - age_return_{time}
+        - capbase_left_ord_{time}
         - return_ord_{time}
+        - capbase_left_tail_{time}
         - return_tail_{time}
     """
-    # Calculate ekdep2 and maxdep2
+    # Beräkna ekdep2 och maxdep2 (halvår)
     df['ekdep2'] = df['ekdep'] / 2
     df['maxdep2'] = df['maxdep'] / 2
     
     new_cols = {}
     
-    # Bearbeta för varje tidsperiod
     for time in range(229, 237):
-        # Calculate age_return
         age_col = f'age_component_{time}'
         if age_col not in df.columns:
             continue
         
-        age_component = pd.to_numeric(df[age_col], errors='coerce')
+        # Konvertera ålder till halvårsbaserat age_return enligt Ei's metod:
+        # 1. Avrunda udda åldrar uppåt (om positiv) eller nedåt (om negativ)
+        # 2. Dividera med 2 för att få halvår
+        # 3. Subtrahera 1 för att få "ålder vid periodens slut"
+        age_return_values = pd.to_numeric(df[age_col], errors='coerce').copy()
         
-        # age_return calculation
-        condition1 = (age_component <= df['ekdep2'])
-        condition2 = (age_component > df['ekdep2']) & (age_component <= df['ekdep'])
+        mask_odd = (age_return_values % 2 == 1)
+        adjustment = np.where(age_return_values > 0, 1, -1)
+        age_return_values = np.where(mask_odd, age_return_values + adjustment, age_return_values)
+        age_return_values = age_return_values / 2
+        age_return_values = age_return_values - 1
         
-        age_return = np.where(
-            condition1,
-            age_component,
-            np.where(
-                condition2,
-                df['ekdep'] - age_component,
-                0
-            )
-        )
-        new_cols[f'age_return_{time}'] = age_return
+        new_cols[f'age_return_{time}'] = age_return_values
         
-        # Calculate return_ord
+        # Ordinary returns: linjär avskrivning av kvarvarande kapitalbas
         nuav_ord_col = f'nuav_ord_{time}'
         if nuav_ord_col in df.columns:
-            return_ord = df[nuav_ord_col] * age_return / df['ekdep'] * wacc
+            # Kvarvarande kapitalbas (linjär avskrivning)
+            # capbase_left = ((ekdep/2 - age_return) / (ekdep/2)) * nuav
+            capbase_left_ord = ((df['ekdep2'] - age_return_values) / df['ekdep2']) * df[nuav_ord_col]
+            
+            # Sätt till 0 där age_return < 0 (ännu ej i drift)
+            capbase_left_ord = np.where(age_return_values < 0, 0, capbase_left_ord)
+            new_cols[f'capbase_left_ord_{time}'] = capbase_left_ord
+            
+            # Avkastning = wacc * kvarvarande_kapitalbas / 2 (halvårsränta)
+            return_ord = wacc * capbase_left_ord / 2
             new_cols[f'return_ord_{time}'] = return_ord
         
-        # Calculate age_return_tail
-        condition1_tail = (age_component > df['ekdep']) & (age_component <= (df['ekdep'] + df['maxdep2']))
-        condition2_tail = (age_component > (df['ekdep'] + df['maxdep2'])) & (age_component <= df['maxdep'])
-        
-        age_return_tail = np.where(
-            condition1_tail,
-            age_component - df['ekdep'],
-            np.where(
-                condition2_tail,
-                df['maxdep'] - age_component,
-                0
-            )
-        )
-        new_cols[f'age_return_tail_{time}'] = age_return_tail
-        
-        # Calculate return_tail
+        # Tail returns: hyperbolisk avskrivning
         nuav_tail_col = f'nuav_tail_{time}'
-        age_reg_col = f'age_reg_{time}'
-        
-        if nuav_tail_col in df.columns and age_reg_col in df.columns:
-            age_reg = pd.to_numeric(df[age_reg_col], errors='coerce')
-            
-            # Safe division
-            numerator = (df[nuav_tail_col] * age_return_tail * wacc).to_numpy().astype(float)
-            denominator = age_reg.to_numpy().astype(float)
-            
-            return_tail = np.divide(
-                numerator,
+        if nuav_tail_col in df.columns:
+            # Kvarvarande kapitalbas för tail (hyperbolisk)
+            # capbase_left_tail = (1 / (age_return + 1)) * nuav_tail
+            denominator = age_return_values + 1
+            capbase_left_tail = np.divide(
+                df[nuav_tail_col].to_numpy().astype(float),
                 denominator,
-                out=np.zeros_like(denominator, dtype=float),
+                out=np.zeros(len(df), dtype=float),
                 where=(denominator != 0)
             )
+            new_cols[f'capbase_left_tail_{time}'] = capbase_left_tail
+            
+            # Avkastning = wacc * kvarvarande_kapitalbas / 2 (halvårsränta)
+            return_tail = wacc * capbase_left_tail / 2
             new_cols[f'return_tail_{time}'] = return_tail
     
-    # Lägg till alla nya kolumner
     if new_cols:
         df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
     
