@@ -70,6 +70,36 @@ class DeaConfig:
 
 
 @dataclass
+class IncentiveConfig:
+    """
+    Configuration för incitamentjusteringar (3.3-3.6).
+    
+    Parametrar för kvalitets-, nätförlust- och belastningsjustering
+    av kapitalkostnad enligt Ei's metodik.
+    """
+    # 3.3 Kvalitetsincitament
+    kpi: float = 17.0  # Kvalitetsprisindex (kr/kW)
+    
+    # 3.4 Nätförlustincitament
+    k_nf: float = 0.50  # Kostnad per kWh nätförlust (kr/kWh)
+    sharing_netloss: float = 0.5  # Delningsfaktor nätförlust
+    
+    # 3.5 Begränsningar för incitament
+    adj_max_agg: float = 1/3  # Max aggregerat incitament (andel av avkastning)
+    adj_max_cemi4: float = 1/3  # Max per delincitament (andel av avkastning)
+    
+    # 3.6 AIT/AIF kostnader per kundtyp (kr/kWh respektive kr/kW)
+    # None = använd baseline från incentive_parameters.py
+    ait_costs: Optional[Dict[str, float]] = None
+    aif_costs: Optional[Dict[str, float]] = None
+    
+    # Aktivera/inaktivera enskilda incitament
+    enable_quality: bool = True
+    enable_netloss: bool = True
+    enable_load: bool = True
+
+
+@dataclass
 class PostDeaConfig:
     """Configuration för Post-DEA stage"""
     # Effektiviseringskrav - trunkering
@@ -84,6 +114,9 @@ class PostDeaConfig:
     
     # Påverkbara kostnader
     paverkbara_method: PaverkbaraMethod = PaverkbaraMethod.OPEX
+    
+    # Incitamentjusteringar (ny)
+    incentive: IncentiveConfig = field(default_factory=IncentiveConfig)
 
 
 @dataclass

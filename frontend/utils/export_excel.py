@@ -232,75 +232,79 @@ def _create_intaktsram_sheet(
     keep_cols = ['REId', 'Kapitalkostnad_Total', 'Paverkbara_Periodsumma', 
                  'Opaverkbara_Kostnader', 'Intaktsram_Total']
     
-    baseline_subset = baseline_df[[c for c in keep_cols if c in baseline_df.columns]].copy()
-    case_subset = case_df[[c for c in keep_cols if c in case_df.columns]].copy()
+    baseline_cols = [c for c in keep_cols if c in baseline_df.columns]
+    case_cols = [c for c in keep_cols if c in case_df.columns]
     
-    # Rename för merge
-    baseline_subset = baseline_subset.rename(columns={
-        'Kapitalkostnad_Total': 'Kapitalkostnad_Baseline',
-        'Paverkbara_Periodsumma': 'Påverkbara_Baseline',
-        'Opaverkbara_Kostnader': 'Opåverkbara_Baseline',
-        'Intaktsram_Total': 'Intäktsram_Baseline'
-    })
-    case_subset = case_subset.rename(columns={
-        'Kapitalkostnad_Total': 'Kapitalkostnad_Case',
-        'Paverkbara_Periodsumma': 'Påverkbara_Case',
-        'Opaverkbara_Kostnader': 'Opåverkbara_Case',
-        'Intaktsram_Total': 'Intäktsram_Case'
-    })
+    if not baseline_cols or not case_cols:
+        ws['A1'] = "Kolumner saknas"
+        return
     
-    merged = baseline_subset.merge(case_subset, on='REId', how='outer')
-    merged['Intäktsram_Delta'] = merged['Intäktsram_Case'] - merged['Intäktsram_Baseline']
-    merged['Intäktsram_Delta%'] = merged['Intäktsram_Delta'] / merged['Intäktsram_Baseline']
-    merged = merged.sort_values('REId').reset_index(drop=True)
+    baseline_df = baseline_df[baseline_cols].copy()
+    case_df = case_df[case_cols].copy()
+    
+    # Merge
+    merged = baseline_df.merge(
+        case_df, 
+        on='REId', 
+        suffixes=('_Baseline', '_Case'),
+        how='outer'
+    )
+    
+    # Beräkna delta för Intäktsram
+    if 'Intaktsram_Total_Baseline' in merged.columns and 'Intaktsram_Total_Case' in merged.columns:
+        merged['Delta'] = merged['Intaktsram_Total_Case'] - merged['Intaktsram_Total_Baseline']
+        merged['Delta%'] = merged['Delta'] / merged['Intaktsram_Total_Baseline']
     
     _write_dataframe_to_sheet(ws, merged)
 
 
 def _create_efficiency_sheet(
-    wb: Workbook, 
-    baseline: PipelineResultAdapter, 
+    wb: Workbook,
+    baseline: PipelineResultAdapter,
     case: PipelineResultAdapter
 ):
-    """Skapar effektivitets-flik med alla företag."""
+    """Skapar effektivitetsflik med DEA-resultat."""
     ws = wb.create_sheet("Effektivitet")
     
-    baseline_df = _get_attr(baseline.post_dea, 'all_effkrav', None)
-    case_df = _get_attr(case.post_dea, 'all_effkrav', None)
+    baseline_effkrav = _get_attr(baseline.post_dea, 'all_effkrav', None)
+    case_effkrav = _get_attr(case.post_dea, 'all_effkrav', None)
     
-    if baseline_df is None or case_df is None:
-        ws['A1'] = "Data saknas"
+    if baseline_effkrav is None or case_effkrav is None:
+        ws['A1'] = "Effektivitetsdata saknas"
         return
     
-    if not isinstance(baseline_df, pd.DataFrame) or not isinstance(case_df, pd.DataFrame):
+    if not isinstance(baseline_effkrav, pd.DataFrame) or not isinstance(case_effkrav, pd.DataFrame):
         ws['A1'] = "Data är inte DataFrame"
         return
     
-    baseline_df = baseline_df.copy()
-    case_df = case_df.copy()
+    baseline_effkrav = baseline_effkrav.copy()
+    case_effkrav = case_effkrav.copy()
     
-    keep_cols = ['REId', 'Effektivitet', 'potential', 'Effkrav_proc', 'is_outlier']
+    # Filtrera till REL-företag
+    if 'REId' in baseline_effkrav.columns:
+        baseline_effkrav = baseline_effkrav[baseline_effkrav['REId'].str.startswith('REL', na=False)].copy()
+    if 'REId' in case_effkrav.columns:
+        case_effkrav = case_effkrav[case_effkrav['REId'].str.startswith('REL', na=False)].copy()
     
-    baseline_subset = baseline_df[[c for c in keep_cols if c in baseline_df.columns]].copy()
-    case_subset = case_df[[c for c in keep_cols if c in case_df.columns]].copy()
+    # Välj kolumner
+    keep_cols = ['REId', 'Effektivitet', 'Potential', 'Effkrav_arlig', 'is_outlier']
+    baseline_cols = [c for c in keep_cols if c in baseline_effkrav.columns]
+    case_cols = [c for c in keep_cols if c in case_effkrav.columns]
     
-    baseline_subset = baseline_subset.rename(columns={
-        'Effektivitet': 'Effektivitet_Baseline',
-        'potential': 'Potential_Baseline',
-        'Effkrav_proc': 'Effkrav_Baseline',
-        'is_outlier': 'Outlier_Baseline'
-    })
-    case_subset = case_subset.rename(columns={
-        'Effektivitet': 'Effektivitet_Case',
-        'potential': 'Potential_Case',
-        'Effkrav_proc': 'Effkrav_Case',
-        'is_outlier': 'Outlier_Case'
-    })
+    if not baseline_cols or not case_cols:
+        ws['A1'] = "Kolumner saknas"
+        return
     
-    merged = baseline_subset.merge(case_subset, on='REId', how='outer')
-    merged['Effektivitet_Delta'] = merged['Effektivitet_Case'] - merged['Effektivitet_Baseline']
-    merged['Effkrav_Delta'] = merged['Effkrav_Case'] - merged['Effkrav_Baseline']
-    merged = merged.sort_values('REId').reset_index(drop=True)
+    baseline_effkrav = baseline_effkrav[baseline_cols].copy()
+    case_effkrav = case_effkrav[case_cols].copy()
+    
+    # Merge
+    merged = baseline_effkrav.merge(
+        case_effkrav,
+        on='REId',
+        suffixes=('_Baseline', '_Case'),
+        how='outer'
+    )
     
     _write_dataframe_to_sheet(ws, merged)
 
@@ -322,18 +326,9 @@ def _create_config_sheet(
     ws.cell(row=row, column=1, value="M1: Regulatory Asset Base").font = Font(bold=True)
     row += 1
     m1 = ui_config.get('m1_asset_base', {})
-    
-    # KENT-upload
-    kent_file = m1.get('kent_file_name')
-    if kent_file:
-        ws.cell(row=row, column=1, value="KENT-fil uppladdad:")
-        ws.cell(row=row, column=2, value=kent_file)
-        row += 1
-    
-    # Normvärde-justeringar
     normvalue_adj = m1.get('normvalue_adjustments')
     if normvalue_adj:
-        ws.cell(row=row, column=1, value="Normvärde-nivå:")
+        ws.cell(row=row, column=1, value="Nivå:")
         ws.cell(row=row, column=2, value=m1.get('normvalue_level', 'cat'))
         row += 1
         for cat, mult in normvalue_adj.items():
@@ -341,7 +336,7 @@ def _create_config_sheet(
             ws.cell(row=row, column=1, value=f"Kategori {cat}:")
             ws.cell(row=row, column=2, value=f"{pct:+.0f}%")
             row += 1
-    elif not kent_file:
+    else:
         ws.cell(row=row, column=1, value="Inga ändringar (baseline)")
         row += 1
     
@@ -378,6 +373,82 @@ def _create_config_sheet(
     else:
         ws.cell(row=row, column=1, value="WACC (3.2.5):")
         ws.cell(row=row, column=2, value="Baseline (4.53%)")
+    row += 2
+    
+    # M3: Quality Adjustments (Incitament)
+    ws.cell(row=row, column=1, value="M3: Quality Adjustments (3.3-3.6)").font = Font(bold=True)
+    row += 1
+    m3q = ui_config.get('m3_quality_adjustments', {})
+    
+    # Baseline-värden för incitament
+    BASELINE_INC = {
+        'kpi': 17.0,
+        'k_nf': 0.50,
+        'sharing_netloss': 0.5,
+        'adj_max_agg': 1/3,
+        'adj_max_cemi4': 1/3,
+    }
+    
+    # 3.3.1 KPI
+    val = m3q.get('kpi')
+    ws.cell(row=row, column=1, value="Kvalitetsprisindex (3.3.1):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=f"{val} kr/kW")
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_INC['kpi']} kr/kW)")
+    row += 1
+    
+    # 3.4.1 K_NF
+    val = m3q.get('k_nf')
+    ws.cell(row=row, column=1, value="Nätförlustkostnad (3.4.1):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=f"{val} kr/kWh")
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_INC['k_nf']} kr/kWh)")
+    row += 1
+    
+    # 3.4.2 Delning nätförlust
+    val = m3q.get('sharing_netloss')
+    ws.cell(row=row, column=1, value="Delning nätförlust (3.4.2):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=val).number_format = '0.00'
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_INC['sharing_netloss']})")
+    row += 1
+    
+    # 3.5.1 Max aggregerat
+    val = m3q.get('adj_max_agg')
+    ws.cell(row=row, column=1, value="Max agg. incitament (3.5.1):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=val).number_format = '0.000'
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline (1/3)")
+    row += 1
+    
+    # 3.5.2 Max per delincitament
+    val = m3q.get('adj_max_cemi4')
+    ws.cell(row=row, column=1, value="Max per delincitament (3.5.2):")
+    if val is not None:
+        ws.cell(row=row, column=2, value=val).number_format = '0.000'
+    else:
+        ws.cell(row=row, column=2, value=f"Baseline (1/3)")
+    row += 1
+    
+    # Aktiverade incitament
+    enable_quality = m3q.get('enable_quality', True)
+    enable_netloss = m3q.get('enable_netloss', True)
+    enable_load = m3q.get('enable_load', True)
+    
+    ws.cell(row=row, column=1, value="Kvalitetsincitament (3.6.1):")
+    ws.cell(row=row, column=2, value="Aktiverat" if enable_quality else "Inaktiverat")
+    row += 1
+    
+    ws.cell(row=row, column=1, value="Nätförlustincitament (3.6.2):")
+    ws.cell(row=row, column=2, value="Aktiverat" if enable_netloss else "Inaktiverat")
+    row += 1
+    
+    ws.cell(row=row, column=1, value="Belastningsincitament (3.6.3):")
+    ws.cell(row=row, column=2, value="Aktiverat" if enable_load else "Inaktiverat")
     row += 2
     
     # M4: Operating Expenditures

@@ -1,27 +1,48 @@
 """
 State Manager for Regumetrica UI.
 
-Hanterar session state initialisering, reset och atkomst.
+Hanterar session state initialisering, reset och åtkomst.
 """
 
 import streamlit as st
 import copy
 from typing import Dict, Any
 
-# Explicit default-struktur for alla modules
+# Explicit default-struktur för alla modules
 DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
     "m1_asset_base": {
         "normvalue_adjustments": None,  # Dict[int, float] {cat_encode: multiplier}
         "normvalue_level": "cat",       # 'cat' eller 'subcat'
         "kent_file_bytes": None,        # Uppladdad KENT-fil som bytes
-        "kent_file_name": None,         # Filnamn for visning
+        "kent_file_name": None,         # Filnamn för visning
     },
     "m2_depreciation": {
         "lifetime_adjustments": None,   # Dict[int, Dict[str, int]] {cat_encode: {'ekdep': val, 'maxdep': val}}
         "lifetime_level": "cat",        # 'cat' eller 'subcat'
     },
     "m3_cost_of_capital": {
-        "wacc_override": None,  # None = anvand baseline (0.0453)
+        "wacc_override": None,  # None = använd baseline (0.0453)
+    },
+    "m3_quality_adjustments": {
+        # 3.3 Kvalitetsincitament
+        "kpi": None,  # None = baseline (17.0 kr/kW)
+        
+        # 3.4 Nätförlustincitament
+        "k_nf": None,  # None = baseline (0.50 kr/kWh)
+        "sharing_netloss": None,  # None = baseline (0.5)
+        
+        # 3.5 Begränsningar
+        "adj_max_agg": None,  # None = baseline (1/3)
+        "adj_max_cemi4": None,  # None = baseline (1/3)
+        
+        # 3.6 AIT/AIF kostnader per kundtyp
+        "ait_costs": None,  # None = baseline (dict per kundtyp)
+        "aif_costs": None,  # None = baseline (dict per kundtyp)
+        
+        # Aktivera/inaktivera
+        "enable_quality": True,
+        "enable_netloss": True,
+        "enable_load": True,
     },
     "m4_operating_exp": {
         "paverkbara_method": "OPEX",  # "OPEX" eller "TOTEX"
@@ -41,7 +62,7 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "dea_rts": "crs",
         "dea_multiplier": 2.0,  # Outlier IQR multiplier
         "dea_q_lower": 25.0,    # Nedre percentil
-        "dea_q_upper": 75.0,    # Ovre percentil
+        "dea_q_upper": 75.0,    # Övre percentil
     }
 }
 
@@ -61,29 +82,29 @@ def init_session_state() -> None:
 
 
 def reset_case() -> None:
-    """Aterstall till nytt case (behall user_reid)."""
+    """Återställ till nytt case (behåll user_reid)."""
     st.session_state["ui_config"] = copy.deepcopy(DEFAULT_UI_CONFIG)
     st.session_state["case_result"] = None
     st.session_state["calculation_done"] = False
 
 
 def get_module_config(module_key: str) -> Dict[str, Any]:
-    """Hamta config for en specifik module."""
+    """Hämta config för en specifik module."""
     return st.session_state.get("ui_config", {}).get(module_key, {})
 
 
 def set_module_config(module_key: str, config: Dict[str, Any]) -> None:
-    """Satt config for en specifik module."""
+    """Sätt config för en specifik module."""
     if "ui_config" not in st.session_state:
         st.session_state["ui_config"] = copy.deepcopy(DEFAULT_UI_CONFIG)
     st.session_state["ui_config"][module_key] = config
 
 
 def get_user_reid() -> str | None:
-    """Hamta valt foretags REId."""
+    """Hämta valt företags REId."""
     return st.session_state.get("user_reid")
 
 
 def set_user_reid(reid: str) -> None:
-    """Satt valt foretags REId."""
+    """Sätt valt företags REId."""
     st.session_state["user_reid"] = reid

@@ -54,7 +54,7 @@ def stage_post_dea(
         dea: Output från DEA stage (effektivitet, potential för alla 148)
         pre_dea: Output från Pre-DEA stage (CAPEX-data + metadata)
         baseline: Output från Baseline stage (SDF-data)
-        config: PostDeaConfig med trunkering, kunddelning, realiseringstid, etc.
+        config: PostDeaConfig med trunkering, kunddelning, realiseringstid, incentive, etc.
         user_reid: REId för användarens företag
         
     Returns:
@@ -126,9 +126,15 @@ def stage_post_dea(
     # STEG 5: Beräkna incitamentjusteringar
     print("\n  Steg 5/6: Beräknar incitamentjusteringar...")
     
+    # Logga incitament-parametrar om de avviker från baseline
+    incentive_config = getattr(config, 'incentive', None)
+    if incentive_config:
+        _log_incentive_params(incentive_config)
+    
     all_incentives = _calculate_incentive_adjustments(
         pre_dea=pre_dea,
-        baseline=baseline
+        baseline=baseline,
+        config=config
     )
     
     if all_incentives is not None:
@@ -184,9 +190,38 @@ def stage_post_dea(
     )
 
 
+def _log_incentive_params(incentive_config) -> None:
+    """Loggar incitament-parametrar som avviker från baseline."""
+    # Baseline-värden för jämförelse
+    BASELINE = {
+        'adj_max_agg': 1/3,
+        'adj_max_cemi4': 1/3,
+        'sharing_netloss': 0.5,
+    }
+    
+    changes = []
+    
+    if hasattr(incentive_config, 'adj_max_agg') and incentive_config.adj_max_agg != BASELINE['adj_max_agg']:
+        changes.append(f"adj_max_agg={incentive_config.adj_max_agg:.3f}")
+    if hasattr(incentive_config, 'adj_max_cemi4') and incentive_config.adj_max_cemi4 != BASELINE['adj_max_cemi4']:
+        changes.append(f"adj_max_cemi4={incentive_config.adj_max_cemi4:.3f}")
+    if hasattr(incentive_config, 'sharing_netloss') and incentive_config.sharing_netloss != BASELINE['sharing_netloss']:
+        changes.append(f"sharing_netloss={incentive_config.sharing_netloss:.2f}")
+    if hasattr(incentive_config, 'enable_quality') and not incentive_config.enable_quality:
+        changes.append("enable_quality=False")
+    if hasattr(incentive_config, 'enable_netloss') and not incentive_config.enable_netloss:
+        changes.append("enable_netloss=False")
+    if hasattr(incentive_config, 'enable_load') and not incentive_config.enable_load:
+        changes.append("enable_load=False")
+    
+    if changes:
+        print(f"    Parametrar: {', '.join(changes)}")
+
+
 def _calculate_incentive_adjustments(
     pre_dea: PreDeaStageOutput,
-    baseline: BaselineStageOutput
+    baseline: BaselineStageOutput,
+    config: PostDeaConfig = None
 ) -> pd.DataFrame:
     """
     Beräknar incitamentjusteringar för alla företag.
@@ -196,11 +231,12 @@ def _calculate_incentive_adjustments(
     2. Nätförlustincitamentet
     3. Belastningsincitamentet
     
-    Varje incitament begränsas till ±1/3 av avkastningen per år.
+    Varje incitament begränsas till ±1/3 av avkastningen per år (konfigurerbart).
     
     Args:
         pre_dea: Output från Pre-DEA stage
         baseline: Output från Baseline stage
+        config: PostDeaConfig med incentive-parametrar (None = baseline)
     
     Returns:
         DataFrame med periodsummor per REId (tkr):
@@ -222,8 +258,11 @@ def _calculate_incentive_adjustments(
         # Förbered input med faktisk avkastning
         df_input = prepare_incentive_input(incentive_data, return_per_year)
         
-        # Kör beräkning
-        df_calc = calculate_all_incentives(df_input, ret_period_col='ret_period')
+        # Extrahera incitament-parametrar från config
+        incentive_params = _extract_incentive_params(config)
+        
+        # Kör beräkning med parametrar
+        df_calc = calculate_all_incentives(df_input, ret_period_col='ret_period', **incentive_params)
         
         # Aggregera till periodsummor per REId
         df_summary = get_incentive_summary_by_reid(df_calc)
@@ -236,6 +275,69 @@ def _calculate_incentive_adjustments(
     except Exception as e:
         print(f"    [FEL] Kunde inte beräkna incitament: {e}")
         return None
+
+
+def _extract_incentive_params(config: PostDeaConfig) -> dict:
+    """
+    Extraherar incitament-parametrar från PostDeaConfig.
+    
+    Args:
+        config: PostDeaConfig (kan vara None eller sakna incentive-attribut)
+        
+    Returns:
+        Dict med parametrar för calculate_all_incentives
+    """
+    params = {}
+    
+    # Om ingen config eller ingen incentive-attribut, returnera tom dict (använd baseline)
+    if config is None:
+        return params
+    
+    incentive = getattr(config, 'incentive', None)
+    if incentive is None:
+        return params
+    
+    # Extrahera parametrar om de finns
+    if hasattr(incentive, 'adj_max_agg') and incentive.adj_max_agg is not None:
+        params['adj_max_agg'] = incentive.adj_max_agg
+    
+    if hasattr(incentive, 'adj_max_cemi4') and incentive.adj_max_cemi4 is not None:
+        params['adj_max_cemi4'] = incentive.adj_max_cemi4
+    
+    if hasattr(incentive, 'sharing_netloss') and incentive.sharing_netloss is not None:
+        params['sharing_netloss'] = incentive.sharing_netloss
+    
+    if hasattr(incentive, 'kpi') and incentive.kpi is not None:
+        # KPI är en dict per år - om användaren anger ett värde, använd samma för alla år
+        if isinstance(incentive.kpi, (int, float)):
+            params['kpi'] = {year: incentive.kpi for year in [2024, 2025, 2026, 2027]}
+        else:
+            params['kpi'] = incentive.kpi
+    
+    if hasattr(incentive, 'k_nf') and incentive.k_nf is not None:
+        # k_nf är en dict per år - om användaren anger ett värde, använd samma för alla år
+        if isinstance(incentive.k_nf, (int, float)):
+            params['k_nf'] = {year: incentive.k_nf for year in [2024, 2025, 2026, 2027]}
+        else:
+            params['k_nf'] = incentive.k_nf
+    
+    if hasattr(incentive, 'ait_costs') and incentive.ait_costs is not None:
+        params['ait_costs'] = incentive.ait_costs
+    
+    if hasattr(incentive, 'aif_costs') and incentive.aif_costs is not None:
+        params['aif_costs'] = incentive.aif_costs
+    
+    # Aktivera/inaktivera
+    if hasattr(incentive, 'enable_quality'):
+        params['enable_quality'] = incentive.enable_quality
+    
+    if hasattr(incentive, 'enable_netloss'):
+        params['enable_netloss'] = incentive.enable_netloss
+    
+    if hasattr(incentive, 'enable_load'):
+        params['enable_load'] = incentive.enable_load
+    
+    return params
 
 
 def _prepare_capex_for_intaktsram(

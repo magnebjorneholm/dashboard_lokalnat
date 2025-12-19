@@ -17,9 +17,19 @@ from calculations.wacc_calculations import (
 from frontend.common.formatting import format_percent
 
 MODULE_KEY = "m3_cost_of_capital"
+MODULE_KEY_QA = "m3_quality_adjustments"
 
 # Baseline CAPM-parametrar (från User Manual tabell 6)
 BASELINE_CAPM = CAPMInputs()
+
+# Baseline incitament-parametrar
+BASELINE_INCENTIVE = {
+    "kpi": 17.0,           # kr/kW
+    "k_nf": 0.50,          # kr/kWh
+    "sharing_netloss": 0.5,
+    "adj_max_agg": 1/3,
+    "adj_max_cemi4": 1/3,
+}
 
 
 def render() -> Dict[str, Any]:
@@ -29,6 +39,7 @@ def render() -> Dict[str, Any]:
     Användaren kan antingen:
     1. Ändra CAPM-komponenter och beräkna WACC
     2. Ange WACC direkt
+    3. Justera incitamentparametrar (kvalitet, nätförlust, belastning)
     
     Returns:
         Dict med användarens val. Keys:
@@ -213,17 +224,188 @@ def render() -> Dict[str, Any]:
             "Output: Kapitalkostnad per tillgångstyp (ordinary + tail)"
         )
     
-    with st.expander("Adjustment of cost of capital", expanded=False):
-        st.info(
-            "Quality adjustments (3.3-3.6) kommer i framtida version:\n"
-            "- Network loss adjustment (3.4)\n"
-            "- Utilization rate adjustment (3.5)\n"
-            "- Interruption adjustment (3.6)"
-        )
-    
     # --- Sätt config baserat på aktuellt värde ---
     current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
     if current_wacc != BASELINE_WACC:
         config["wacc_override"] = current_wacc
+    
+    return config
+
+
+def render_quality_adjustments() -> Dict[str, Any]:
+    """
+    Renderar Quality Adjustments (3.3-3.6).
+    
+    Incitamentjusteringar för:
+    - 3.3 Kvalitetsincitament
+    - 3.4 Nätförlustincitament  
+    - 3.5 Begränsningar
+    - 3.6 Aktivera/inaktivera
+    
+    Returns:
+        Dict med användarens val för incitamentparametrar
+    """
+    config: Dict[str, Any] = {}
+    
+    st.subheader("3.3-3.6 Incitamentjusteringar")
+    st.caption("Justering av kapitalkostnad baserat på kvalitet, nätförlust och belastning")
+    
+    # Aktivera/inaktivera incitament
+    st.markdown("##### Aktivera incitament")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        enable_quality = st.checkbox(
+            "3.6.1 Kvalitetsincitament",
+            value=True,
+            key=f"{MODULE_KEY_QA}_enable_quality",
+            help="Aktivera kvalitetsjustering baserat på AIT/AIF"
+        )
+        config["enable_quality"] = enable_quality
+    
+    with col2:
+        enable_netloss = st.checkbox(
+            "3.6.2 Nätförlustincitament",
+            value=True,
+            key=f"{MODULE_KEY_QA}_enable_netloss",
+            help="Aktivera justering för nätförluster"
+        )
+        config["enable_netloss"] = enable_netloss
+    
+    with col3:
+        enable_load = st.checkbox(
+            "3.6.3 Belastningsincitament",
+            value=True,
+            key=f"{MODULE_KEY_QA}_enable_load",
+            help="Aktivera justering för belastningsutnyttjande"
+        )
+        config["enable_load"] = enable_load
+    
+    st.divider()
+    
+    # 3.3 Kvalitetsincitament
+    with st.expander("3.3 Kvalitetsincitament", expanded=False):
+        st.markdown("Parametrar för kvalitetsjustering baserat på AIT/AIF.")
+        
+        kpi_changed = st.checkbox(
+            "Ändra KPI från baseline",
+            key=f"{MODULE_KEY_QA}_kpi_changed"
+        )
+        
+        if kpi_changed:
+            kpi = st.number_input(
+                "3.3.1 Kvalitetsprisindex (KPI)",
+                value=BASELINE_INCENTIVE["kpi"],
+                min_value=0.0,
+                max_value=100.0,
+                step=1.0,
+                format="%.1f",
+                key=f"{MODULE_KEY_QA}_kpi",
+                help="Pris per kW för kvalitetsjustering (kr/kW)"
+            )
+            config["kpi"] = kpi
+            st.caption(f"Baseline: {BASELINE_INCENTIVE['kpi']} kr/kW")
+        else:
+            st.info(f"KPI = {BASELINE_INCENTIVE['kpi']} kr/kW (baseline)")
+    
+    # 3.4 Nätförlustincitament
+    with st.expander("3.4 Nätförlustincitament", expanded=False):
+        st.markdown("Parametrar för nätförlustjustering.")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            k_nf_changed = st.checkbox(
+                "Ändra nätförlustkostnad",
+                key=f"{MODULE_KEY_QA}_k_nf_changed"
+            )
+            
+            if k_nf_changed:
+                k_nf = st.number_input(
+                    "3.4.1 Nätförlustkostnad (K_NF)",
+                    value=BASELINE_INCENTIVE["k_nf"],
+                    min_value=0.0,
+                    max_value=5.0,
+                    step=0.01,
+                    format="%.2f",
+                    key=f"{MODULE_KEY_QA}_k_nf",
+                    help="Kostnad per kWh nätförlust (kr/kWh)"
+                )
+                config["k_nf"] = k_nf
+                st.caption(f"Baseline: {BASELINE_INCENTIVE['k_nf']} kr/kWh")
+            else:
+                st.info(f"K_NF = {BASELINE_INCENTIVE['k_nf']} kr/kWh (baseline)")
+        
+        with col2:
+            sharing_changed = st.checkbox(
+                "Ändra delningsfaktor",
+                key=f"{MODULE_KEY_QA}_sharing_changed"
+            )
+            
+            if sharing_changed:
+                sharing = st.number_input(
+                    "3.4.2 Delningsfaktor nätförlust",
+                    value=BASELINE_INCENTIVE["sharing_netloss"],
+                    min_value=0.0,
+                    max_value=1.0,
+                    step=0.05,
+                    format="%.2f",
+                    key=f"{MODULE_KEY_QA}_sharing_netloss",
+                    help="Andel som delas (0-1)"
+                )
+                config["sharing_netloss"] = sharing
+                st.caption(f"Baseline: {BASELINE_INCENTIVE['sharing_netloss']}")
+            else:
+                st.info(f"Delning = {BASELINE_INCENTIVE['sharing_netloss']} (baseline)")
+    
+    # 3.5 Begränsningar
+    with st.expander("3.5 Begränsningar för incitament", expanded=False):
+        st.markdown("Max incitamentjustering som andel av avkastning.")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            adj_agg_changed = st.checkbox(
+                "Ändra max aggregerat",
+                key=f"{MODULE_KEY_QA}_adj_agg_changed"
+            )
+            
+            if adj_agg_changed:
+                adj_agg = st.number_input(
+                    "3.5.1 Max aggregerat incitament",
+                    value=BASELINE_INCENTIVE["adj_max_agg"],
+                    min_value=0.0,
+                    max_value=1.0,
+                    step=0.05,
+                    format="%.3f",
+                    key=f"{MODULE_KEY_QA}_adj_max_agg",
+                    help="Max total incitamentjustering (andel av avkastning)"
+                )
+                config["adj_max_agg"] = adj_agg
+                st.caption(f"Baseline: {BASELINE_INCENTIVE['adj_max_agg']:.3f} (1/3)")
+            else:
+                st.info(f"Max agg = {BASELINE_INCENTIVE['adj_max_agg']:.3f} (1/3) (baseline)")
+        
+        with col2:
+            adj_cemi_changed = st.checkbox(
+                "Ändra max per delincitament",
+                key=f"{MODULE_KEY_QA}_adj_cemi_changed"
+            )
+            
+            if adj_cemi_changed:
+                adj_cemi = st.number_input(
+                    "3.5.2 Max per delincitament",
+                    value=BASELINE_INCENTIVE["adj_max_cemi4"],
+                    min_value=0.0,
+                    max_value=1.0,
+                    step=0.05,
+                    format="%.3f",
+                    key=f"{MODULE_KEY_QA}_adj_max_cemi4",
+                    help="Max för enskilt incitament (andel av avkastning)"
+                )
+                config["adj_max_cemi4"] = adj_cemi
+                st.caption(f"Baseline: {BASELINE_INCENTIVE['adj_max_cemi4']:.3f} (1/3)")
+            else:
+                st.info(f"Max per = {BASELINE_INCENTIVE['adj_max_cemi4']:.3f} (1/3) (baseline)")
     
     return config

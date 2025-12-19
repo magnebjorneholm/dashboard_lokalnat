@@ -85,8 +85,15 @@ with tab2:
     set_module_config("m2_depreciation", config)
 
 with tab3:
+    # WACC-konfiguration
     config = m3_cost_of_capital.render()
     set_module_config("m3_cost_of_capital", config)
+    
+    st.divider()
+    
+    # Incitamentjusteringar (3.3-3.6)
+    qa_config = m3_cost_of_capital.render_quality_adjustments()
+    set_module_config("m3_quality_adjustments", qa_config)
 
 with tab4:
     config = m4_operating_exp.render()
