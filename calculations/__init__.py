@@ -74,6 +74,9 @@ from .time_codes import (
     year_to_timecodes,
 )
 
+from .incentive_parameters import MISSING_DATA_IDS
+from .incentive_calculations import calculate_all_incentives
+
 __all__ = [
     # WACC scaling
     'calculate_wacc_scaled_capex',
@@ -140,4 +143,8 @@ __all__ += [
     'timecode_to_halfyear',
     'timecode_to_label',
     'year_to_timecodes',
+
+    #incentive calculations
+    'MISSING_DATA_IDS',
+    'calculate_all_incentives',
 ]

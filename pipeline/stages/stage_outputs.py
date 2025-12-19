@@ -35,6 +35,9 @@ class PreDeaStageOutput:
     df_all_companies: pd.DataFrame  # 148 rows, potentially modified Kapitalkostnad_2024/OPEXp
     capex_method: str               # Metod som användes: baseline, wacc_scaling, etc.
     capex_modified: bool            # True om Kapitalkostnad_2024 ändrades från baseline
+    
+    # WACC som användes vid skalning (behövs för korrekt periodsumma i post_dea)
+    wacc_used: Optional[float] = None
 
 
 @dataclass(frozen=True)
