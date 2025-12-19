@@ -1,5 +1,5 @@
 """
-pipeline/stages/stage_outputs.py
+stage_outputs.py
 
 Output dataclasses för varje pipeline stage.
 Alla outputs är frozen (immutable) för att säkerställa data integrity.
@@ -80,7 +80,8 @@ class ExtractionStageOutput:
 class PostDeaStageOutput:
     """
     Output från Post-DEA stage.
-    Effektiviseringskrav, påverkbara kostnader, och komplett intäktsram.
+    Effektiviseringskrav, incitamentjusteringar, påverkbara kostnader,
+    och komplett intäktsram.
     """
     user_reid: str  # REId för användarens företag
     user_intaktsram: pd.Series  # Alla komponenter för användaren (inkl. Intaktsram_Total)
@@ -89,3 +90,10 @@ class PostDeaStageOutput:
     # För alla 148 företag (för jämförelse/analys)
     all_intaktsram: pd.DataFrame  # Kompletta intäktsramar för alla företag
     all_effkrav: pd.DataFrame  # Effektiviseringskrav för alla företag
+    
+    # Incitamentjusteringar (nytt)
+    # None om incitamentdata saknas
+    all_incentives: Optional[pd.DataFrame] = None
+    # Kolumner: REId, Kvalitetsjustering_Total, Natforlustjustering_Total,
+    #           Belastningsjustering_Total, Incitamentjustering_Total,
+    #           Missing_Incentive_Data (bool)

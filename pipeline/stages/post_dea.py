@@ -1,25 +1,28 @@
 """
-pipeline/stages/post_dea.py
+post_dea.py
 
 Stage 5: Post-DEA
-Beräknar effektiviseringskrav, påverkbara kostnader, och assemblerar intäktsram.
+Beräknar effektiviseringskrav, incitamentjusteringar, påverkbara kostnader,
+och assemblerar intäktsram.
 """
 
 import pandas as pd
 from config import PostDeaConfig
 from config.case_definition import PaverkbaraMethod
 from pipeline.stages.stage_outputs import (
-    DeaStageOutput, 
-    PreDeaStageOutput, 
+    DeaStageOutput,
+    PreDeaStageOutput,
     BaselineStageOutput,
-    PostDeaStageOutput
+    PostDeaStageOutput,
 )
-from calculations import (
-    calculate_effkrav_for_dataframe,
-    calculate_paverkbara_with_effkrav,
-    assemble_intaktsram,
-    extract_user_intaktsram,
-    get_paverkbara_from_sdf
+from calculations.effektiviseringskrav import calculate_effkrav_for_dataframe
+from calculations.paverkbara_calculations import calculate_paverkbara_with_effkrav, get_paverkbara_from_sdf
+from calculations.intaktsram_assembly import assemble_intaktsram, extract_user_intaktsram
+from calculations.incentive_calculations import calculate_all_incentives
+from data_loaders.incentive_data import (
+    load_incentive_data,
+    prepare_incentive_input,
+    get_incentive_summary_by_reid
 )
 
 
@@ -37,14 +40,15 @@ def stage_post_dea(
     user_reid: str
 ) -> PostDeaStageOutput:
     """
-    Stage 5: Beräkna effektiviseringskrav, påverkbara, och intäktsram.
+    Stage 5: Beräkna effektiviseringskrav, incitament, påverkbara, och intäktsram.
     
     Process:
     1. Beräkna effektiviseringskrav för alla 148 företag
     2. Beräkna påverkbara kostnader (OPEX eller TOTEX)
     3. Förbered kapitalkostnad baserat på Pre-DEA metod
-    4. Assemblera intäktsram med alla komponenter
-    5. Extrahera användarens specifika intäktsram
+    4. Beräkna incitamentjusteringar (kvalitet, nätförlust, belastning)
+    5. Assemblera intäktsram med alla komponenter inkl. incitament
+    6. Extrahera användarens specifika intäktsram
     
     Args:
         dea: Output från DEA stage (effektivitet, potential för alla 148)
@@ -54,11 +58,7 @@ def stage_post_dea(
         user_reid: REId för användarens företag
         
     Returns:
-        PostDeaStageOutput med:
-        - user_intaktsram: Series med alla komponenter för användaren
-        - user_effkrav_proc: Årligt effektiviseringskrav för användaren
-        - all_intaktsram: DataFrame med alla 148 företags intäktsramar
-        - all_effkrav: DataFrame med alla 148 företags effektiviseringskrav
+        PostDeaStageOutput med alla beräknade komponenter
     """
     
     print("\n" + "="*60)
@@ -66,7 +66,7 @@ def stage_post_dea(
     print("="*60)
     
     # STEG 1: Beräkna effektiviseringskrav för alla 148 företag
-    print("\n  Steg 1/5: Beräknar effektiviseringskrav...")
+    print("\n  Steg 1/6: Beräknar effektiviseringskrav...")
     print(f"    Parametrar: trunkering=[{config.trunkering_min:.1%}, {config.trunkering_max:.1%}], "
           f"kunddelning={config.kunddelning:.0%}, realiseringstid={config.realiseringstid} år")
     
@@ -85,7 +85,7 @@ def stage_post_dea(
     print(f"    [OK] Effektiviseringskrav beräknat för {len(all_effkrav)} företag")
     
     # STEG 2: Förbered påverkbara baseline-data från SDF
-    print("\n  Steg 2/5: Laddar påverkbara baseline från SDF...")
+    print("\n  Steg 2/6: Laddar påverkbara baseline från SDF...")
     
     sdf_paverkbara = get_paverkbara_from_sdf(
         sdf_ir=baseline.sdf_ir,
@@ -95,7 +95,7 @@ def stage_post_dea(
     print(f"    [OK] Påverkbara baseline laddad för {len(sdf_paverkbara)} företag")
     
     # STEG 3: Beräkna påverkbara kostnader med effektiviseringskrav
-    print(f"\n  Steg 3/5: Beräknar påverkbara kostnader ({config.paverkbara_method})...")
+    print(f"\n  Steg 3/6: Beräknar påverkbara kostnader ({config.paverkbara_method})...")
     
     # För TOTEX behövs kapitalkostnad
     if config.paverkbara_method == PaverkbaraMethod.TOTEX:
@@ -114,7 +114,7 @@ def stage_post_dea(
     print(f"    [OK] Påverkbara beräknat för {len(all_paverkbara)} företag")
     
     # STEG 4: Förbered kapitalkostnad för intäktsram (baserat på Pre-DEA metod)
-    print(f"\n  Steg 4/5: Förbereder kapitalkostnad (källa: {pre_dea.capex_method})...")
+    print(f"\n  Steg 4/6: Förbereder kapitalkostnad (källa: {pre_dea.capex_method})...")
     
     capex_for_intaktsram = _prepare_capex_for_intaktsram(
         pre_dea=pre_dea,
@@ -123,25 +123,53 @@ def stage_post_dea(
     
     print(f"    [OK] Kapitalkostnad förberedd för {len(capex_for_intaktsram)} företag")
     
-    # STEG 5: Assemblera intäktsram
-    print("\n  Steg 5/5: Assemblerar intäktsram...")
+    # STEG 5: Beräkna incitamentjusteringar
+    print("\n  Steg 5/6: Beräknar incitamentjusteringar...")
+    
+    all_incentives = _calculate_incentive_adjustments(
+        pre_dea=pre_dea,
+        baseline=baseline
+    )
+    
+    if all_incentives is not None:
+        n_valid = (~all_incentives['Missing_Incentive_Data']).sum()
+        n_missing = all_incentives['Missing_Incentive_Data'].sum()
+        print(f"    [OK] Incitament beräknat för {n_valid} företag ({n_missing} saknar data)")
+        
+        # Visa statistik
+        total_inc = all_incentives['Incitamentjustering_Total'].sum()
+        print(f"    Total incitamentjustering (alla): {total_inc:,.0f} tkr")
+    else:
+        print("    [VARNING] Incitamentdata saknas - sätter till 0")
+    
+    # STEG 6: Assemblera intäktsram
+    print("\n  Steg 6/6: Assemblerar intäktsram...")
     
     all_intaktsram = assemble_intaktsram(
         capex_result=capex_for_intaktsram,
         paverkbara_result=all_paverkbara,
-        sdf_baseline=baseline.sdf_ir
+        sdf_baseline=baseline.sdf_ir,
+        incentive_result=all_incentives
     )
     
     print(f"    [OK] Intäktsram assemblerad för {len(all_intaktsram)} företag")
     
-    # STEG 6: Extrahera användarens specifika data
+    # Extrahera användarens specifika data
     print(f"\n  Extraherar data för användare ({user_reid})...")
     
     user_intaktsram = extract_user_intaktsram(all_intaktsram, user_reid)
     user_effkrav_proc = all_effkrav[all_effkrav['REId'] == user_reid]['Effkrav_proc'].iloc[0]
     
+    # Hämta användarens incitamentjustering
+    user_incentive = 0.0
+    if all_incentives is not None:
+        user_inc_row = all_incentives[all_incentives['REId'] == user_reid]
+        if not user_inc_row.empty:
+            user_incentive = user_inc_row['Incitamentjustering_Total'].iloc[0]
+    
     print(f"    [OK] Intäktsram: {user_intaktsram['Intaktsram_Total']:,.0f} tkr")
     print(f"    [OK] Effektiviseringskrav: {user_effkrav_proc*100:.2f}% per år")
+    print(f"    [OK] Incitamentjustering: {user_incentive:,.0f} tkr")
     
     print("="*60 + "\n")
     
@@ -151,8 +179,63 @@ def stage_post_dea(
         user_intaktsram=user_intaktsram,
         user_effkrav_proc=user_effkrav_proc,
         all_intaktsram=all_intaktsram,
-        all_effkrav=all_effkrav
+        all_effkrav=all_effkrav,
+        all_incentives=all_incentives
     )
+
+
+def _calculate_incentive_adjustments(
+    pre_dea: PreDeaStageOutput,
+    baseline: BaselineStageOutput
+) -> pd.DataFrame:
+    """
+    Beräknar incitamentjusteringar för alla företag.
+    
+    Tre typer av incitament:
+    1. Kvalitetsincitamentet (AIT/AIF)
+    2. Nätförlustincitamentet
+    3. Belastningsincitamentet
+    
+    Varje incitament begränsas till ±1/3 av avkastningen per år.
+    
+    Args:
+        pre_dea: Output från Pre-DEA stage
+        baseline: Output från Baseline stage
+    
+    Returns:
+        DataFrame med periodsummor per REId (tkr):
+        - Kvalitetsjustering_Total
+        - Natforlustjustering_Total
+        - Belastningsjustering_Total
+        - Incitamentjustering_Total
+        - Missing_Incentive_Data (bool)
+        
+        Returnerar None om incitamentdata saknas.
+    """
+    try:
+        # Ladda incitamentdata
+        incentive_data = load_incentive_data()
+        
+        # Hämta avkastning per år
+        return_per_year = get_return_per_year(pre_dea, baseline)
+        
+        # Förbered input med faktisk avkastning
+        df_input = prepare_incentive_input(incentive_data, return_per_year)
+        
+        # Kör beräkning
+        df_calc = calculate_all_incentives(df_input, ret_period_col='ret_period')
+        
+        # Aggregera till periodsummor per REId
+        df_summary = get_incentive_summary_by_reid(df_calc)
+        
+        return df_summary
+        
+    except FileNotFoundError as e:
+        print(f"    [VARNING] Incitamentdata saknas: {e}")
+        return None
+    except Exception as e:
+        print(f"    [FEL] Kunde inte beräkna incitament: {e}")
+        return None
 
 
 def _prepare_capex_for_intaktsram(
@@ -190,15 +273,6 @@ def _prepare_capex_for_intaktsram(
     
     elif method == 'wacc_scaling':
         # Metod 2: Skala periodsummor från SDF med WACC-kvot
-        # 
-        # KORREKT METOD:
-        # - Kapitalförslitning (avskrivning) är oförändrad
-        # - Kapitalbindning (avkastning) skalas med (ny_WACC / baseline_WACC)
-        # - Ny periodsumma = Kapitalförslitning + Skalad Kapitalbindning
-        #
-        # FELAKTIG (tidigare) METOD:
-        # - Kapitalkostnad_2024 * 4 (ignorerar att kapitalbindningen avtar över tid)
-        
         return _calculate_wacc_scaled_period_capex(pre_dea, baseline)
     
     elif method in ['parameter_change', 'kent_upload']:
@@ -215,7 +289,6 @@ def _prepare_capex_for_intaktsram(
             return pre_dea.df_all_companies[['REId', 'Kapitalkostnad_Total']].copy()
         
         else:
-            # Om användaren valde KENT-baserad metod ska vi inte falla tillbaka tyst
             raise ValueError(
                 f"Kapitalkostnad periodsummor saknas i Pre-DEA resultat för metod '{method}'. "
                 "Förväntade kolumner: 'Kapitalkostnad_Period' eller 'Kapitalkostnad_Total'. "
