@@ -439,12 +439,13 @@ def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     Producerar:
     - Kapitalkostnad_2024: Årsvärde för 2024 (H1+H2) - används för DEA
     - Kapitalkostnad_Period: Periodsumma 2024-2027 (8 halvår) - används för intäktsram
+    - Avkastning_{year}: Avkastning per år - används för incitament 1/3-cap
     
     Args:
         df_network: DataFrame med capcost_{time} kolumner per id_network
         
     Returns:
-        DataFrame med nya kolumner för kapitalkostnad
+        DataFrame med nya kolumner för kapitalkostnad och avkastning
     """
     df = df_network.copy()
     
@@ -461,8 +462,6 @@ def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     period_cols = [f'capcost_{t}' for t in range(229, 237)]
     df['Kapitalkostnad_Period'] = df[period_cols].sum(axis=1)
     
-    # OBS: Vi exponerar endast `Kapitalkostnad_2024`; undvik att skapa CAPEX-kolumn
-    
     # Årsvärden per år (för breakdown/analys)
     year_to_codes = {
         2024: [229, 230],
@@ -472,6 +471,25 @@ def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     }
     for year, codes in year_to_codes.items():
         df[f'Kapitalkostnad_{year}'] = df[[f'capcost_{c}' for c in codes]].sum(axis=1)
+    
+    # Avkastning per år - krävs för incitamentjusteringens 1/3-cap
+    # Cap appliceras per år på avkastningen, inte hela kapitalkostnaden
+    for year, codes in year_to_codes.items():
+        return_cols = []
+        for code in codes:
+            if f'return_ord_{code}' in df.columns:
+                return_cols.append(f'return_ord_{code}')
+            if f'return_tail_{code}' in df.columns:
+                return_cols.append(f'return_tail_{code}')
+        
+        if return_cols:
+            df[f'Avkastning_{year}'] = df[return_cols].sum(axis=1)
+        else:
+            df[f'Avkastning_{year}'] = 0.0
+    
+    # Avkastning periodsumma (för validering/analys)
+    avkastning_year_cols = [f'Avkastning_{y}' for y in year_to_codes.keys()]
+    df['Avkastning_Period'] = df[avkastning_year_cols].sum(axis=1)
     
     return df
 
@@ -495,6 +513,11 @@ def run_kent_calculations_batch(
         Tuple med:
         - df_detailed: DataFrame med alla beräkningar per komponent
         - df_network: DataFrame med aggregerade värden per id_network
+          Innehåller bl.a.:
+          - Kapitalkostnad_2024: Årsvärde för DEA
+          - Kapitalkostnad_Period: Periodsumma för intäktsram
+          - Avkastning_{2024-2027}: Per-år avkastning för incitament-cap
+          - Avkastning_Period: Total avkastning för perioden
     """
     
     # Applicera parameterjusteringar om några finns
@@ -517,7 +540,7 @@ def run_kent_calculations_batch(
     # Steg 8: Aggregera till id_network nivå
     df_network = aggregate_to_network_level(df_step7)
     
-    # Beräkna kapitalkostnads-outputs (årsvärde + periodsumma)
+    # Beräkna kapitalkostnads-outputs (årsvärde + periodsumma + avkastning per år)
     df_network = calculate_capex_outputs(df_network)
     
     return df_step7, df_network

@@ -317,3 +317,117 @@ def _calculate_wacc_scaled_period_capex(
     print(f"      Förändring: {delta_pct:+.2f}%")
     
     return df[['REId', 'Kapitalkostnad_Total']]
+
+
+def get_return_per_year(
+    pre_dea: PreDeaStageOutput,
+    baseline: BaselineStageOutput
+) -> pd.DataFrame:
+    """
+    Hämtar avkastning per år för alla företag, baserat på capex_method.
+    
+    Används för incitamentjusteringens 1/3-cap som appliceras per år.
+    
+    Källor beroende på capex_method:
+    - 'baseline': SDF "varav Kapital-bindning" / 4
+    - 'wacc_scaling': SDF "varav Kapital-bindning" × (ny_WACC / baseline_WACC) / 4
+    - 'kent_upload': KENT-output Avkastning_{year}
+    - 'parameter_change': KENT-output Avkastning_{year}
+    
+    Args:
+        pre_dea: Output från Pre-DEA stage
+        baseline: Output från Baseline stage
+    
+    Returns:
+        DataFrame med: REId, Avkastning_2024, Avkastning_2025, 
+                       Avkastning_2026, Avkastning_2027 (alla i tkr)
+    """
+    
+    method = pre_dea.capex_method
+    years = [2024, 2025, 2026, 2027]
+    
+    if method == 'baseline':
+        # Hämta periodsumma från SDF och dela med 4
+        return _get_return_from_sdf(baseline, scaling_factor=1.0)
+    
+    elif method == 'wacc_scaling':
+        # Skala periodsumma med WACC-kvot och dela med 4
+        if pre_dea.wacc_used is None:
+            raise ValueError(
+                "wacc_used saknas i PreDeaStageOutput för wacc_scaling metod."
+            )
+        scaling_factor = pre_dea.wacc_used / baseline.wacc
+        return _get_return_from_sdf(baseline, scaling_factor=scaling_factor)
+    
+    elif method in ['kent_upload', 'parameter_change']:
+        # Hämta per-år avkastning från KENT-output
+        return _get_return_from_kent(pre_dea, years)
+    
+    else:
+        raise ValueError(
+            f"Okänd capex_method: '{method}'. "
+            f"Förväntade: 'baseline', 'wacc_scaling', 'parameter_change', 'kent_upload'"
+        )
+
+
+def _get_return_from_sdf(
+    baseline: BaselineStageOutput,
+    scaling_factor: float = 1.0
+) -> pd.DataFrame:
+    """
+    Hämtar avkastning per år från SDF (för baseline och wacc_scaling).
+    
+    Approximerar per-år genom att ta periodsumma / 4.
+    """
+    sdf = baseline.sdf_ir.copy()
+    
+    if SDF_COL_KAPITALBINDNING not in sdf.columns:
+        raise ValueError(
+            f"Kolumn '{SDF_COL_KAPITALBINDNING}' saknas i SDF IR."
+        )
+    
+    df = sdf[['REId']].copy()
+    
+    # Hämta periodsumma och skala
+    kapitalbindning_period = pd.to_numeric(
+        sdf[SDF_COL_KAPITALBINDNING], errors='coerce'
+    ).fillna(0)
+    
+    kapitalbindning_skalad = kapitalbindning_period * scaling_factor
+    
+    # Approximera per år (periodsumma / 4)
+    avkastning_per_year = kapitalbindning_skalad / 4
+    
+    # Sätt samma värde för alla år (approximation)
+    for year in [2024, 2025, 2026, 2027]:
+        df[f'Avkastning_{year}'] = avkastning_per_year
+    
+    return df
+
+
+def _get_return_from_kent(
+    pre_dea: PreDeaStageOutput,
+    years: list
+) -> pd.DataFrame:
+    """
+    Hämtar avkastning per år från KENT-output (för kent_upload och parameter_change).
+    """
+    df_kent = pre_dea.df_all_companies
+    
+    # Verifiera att per-år kolumner finns
+    missing_years = []
+    for year in years:
+        col = f'Avkastning_{year}'
+        if col not in df_kent.columns:
+            missing_years.append(year)
+    
+    if missing_years:
+        raise ValueError(
+            f"Avkastning per år saknas i KENT-output för år: {missing_years}. "
+            "Förväntade kolumner: Avkastning_2024, Avkastning_2025, etc. "
+            "Kontrollera att kent_calculations.py genererar dessa kolumner."
+        )
+    
+    # Extrahera relevanta kolumner
+    cols = ['REId'] + [f'Avkastning_{year}' for year in years]
+    return df_kent[cols].copy()
