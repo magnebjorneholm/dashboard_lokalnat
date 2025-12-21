@@ -55,18 +55,17 @@ BASELINE_INCENTIVE = {
     
     # AIT-kostnader (kr/kWh) per (ann, sni)
     "ait_costs": {
-        ('o', 1): 34.35, ('o', 2): 159.96, ('o', 3): 175.06,
-        ('o', 4): 96.97, ('o', 5): 5.84, ('o', 6): 96.01,
-        ('a', 1): 14.10, ('a', 2): 76.00, ('a', 3): 79.31,
-        ('a', 4): 43.70, ('a', 5): 4.98, ('a', 6): 45.16,
+        "o_1": 34.35, "o_2": 159.96, "o_3": 175.06,
+        "o_4": 96.97, "o_5": 5.84, "o_6": 96.01,
+        "a_1": 14.10, "a_2": 76.00, "a_3": 79.31,
+        "a_4": 43.70, "a_5": 4.98, "a_6": 45.16,
     },
     
-    # AIF-kostnader (kr/kW) per (ann, sni)
     "aif_costs": {
-        ('o', 1): 9.78, ('o', 2): 70.75, ('o', 3): 17.78,
-        ('o', 4): 7.65, ('o', 5): 1.95, ('o', 6): 22.18,
-        ('a', 1): 1.72, ('a', 2): 20.71, ('a', 3): 5.94,
-        ('a', 4): 0.92, ('a', 5): 1.85, ('a', 6): 7.08,
+        "o_1": 9.78, "o_2": 70.75, "o_3": 17.78,
+        "o_4": 7.65, "o_5": 1.95, "o_6": 22.18,
+        "a_1": 1.72, "a_2": 20.71, "a_3": 5.94,
+        "a_4": 0.92, "a_5": 1.85, "a_6": 7.08,
     },
 }
 
@@ -570,8 +569,8 @@ def _create_cost_dataframe(cost_type: str) -> pd.DataFrame:
     for sni, label in SNI_LABELS.items():
         data.append({
             "Kundtyp": label,
-            "Oaviserade": baseline[('o', sni)],
-            "Aviserade": baseline[('a', sni)],
+            "Oaviserade": baseline[f"o_{sni}"],
+            "Aviserade": baseline[f"a_{sni}"],
         })
     
     df = pd.DataFrame(data)
@@ -598,8 +597,8 @@ def _dataframe_to_cost_dict(df: pd.DataFrame, cost_type: str) -> Dict[Tuple[str,
     for label in df.index:
         sni = label_to_sni.get(label)
         if sni is not None:
-            result[('o', sni)] = float(df.loc[label, "Oaviserade"])
-            result[('a', sni)] = float(df.loc[label, "Aviserade"])
+            result[f"o_{sni}"] = float(df.loc[label, "Oaviserade"])
+            result[f"a_{sni}"] = float(df.loc[label, "Aviserade"])
     
     return result
 

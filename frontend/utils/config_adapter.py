@@ -201,6 +201,26 @@ def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
     else:
         return DeaConfig(method=EfficiencyMethod.BASELINE)
 
+def _convert_incentive_keys(m3q: Dict[str, Any]) -> Dict[str, Any]:
+    """Konverterar JSON-kompatibla nycklar till backend-format."""
+    result = {}
+    
+    # kpi/k_nf: string år → int år
+    for key in ['kpi', 'k_nf']:
+        if m3q.get(key):
+            result[key] = {int(k): v for k, v in m3q[key].items()}
+    
+    # ait_costs/aif_costs: "o_1" → ('o', 1)
+    for key in ['ait_costs', 'aif_costs']:
+        if m3q.get(key):
+            converted = {}
+            for k, v in m3q[key].items():
+                ann, sni = k.split('_')
+                converted[(ann, int(sni))] = v
+            result[key] = converted
+    
+    return result
+
 
 def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
     """
@@ -208,17 +228,21 @@ def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
     
     Hanterar både enkla värden och Dict-format (per år, per kundtyp).
     """
+   
     m3q = ui_config.get("m3_quality_adjustments", {})
+
+      # Konvertera JSON-nycklar till backend-format
+    converted = _convert_incentive_keys(m3q)
     
     # Hämta värden - None betyder "använd baseline"
-    kpi = m3q.get("kpi")
-    k_nf = m3q.get("k_nf")
+    kpi = converted.get("kpi") or m3q.get("kpi")
+    k_nf = converted.get("k_nf") or m3q.get("k_nf")
     sharing_netloss = m3q.get("sharing_netloss")
     adj_max_agg = m3q.get("adj_max_agg")
     adj_max_cemi4 = m3q.get("adj_max_cemi4")
-    ait_costs = m3q.get("ait_costs")
-    aif_costs = m3q.get("aif_costs")
-    
+    ait_costs = converted.get("ait_costs") or m3q.get("ait_costs")
+    aif_costs = converted.get("aif_costs") or m3q.get("aif_costs")
+
     enable_quality = m3q.get("enable_quality", True)
     enable_netloss = m3q.get("enable_netloss", True)
     enable_load = m3q.get("enable_load", True)
