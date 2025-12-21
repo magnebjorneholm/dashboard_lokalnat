@@ -6,7 +6,7 @@ Definierar strukturen för alla pipeline-konfigurationer.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 from enum import Enum
 
 
@@ -74,26 +74,63 @@ class IncentiveConfig:
     """
     Configuration för incitamentjusteringar (3.3-3.6).
     
-    Parametrar för kvalitets-, nätförlust- och belastningsjustering
-    av kapitalkostnad enligt Ei's metodik.
+    Fullständig parametrisering av kvalitets-, nätförlust- och 
+    belastningsjustering enligt Ei's metodik.
+    
+    Parametrar kan vara:
+    - Enkla värden (float/bool)
+    - Dict per år: {2024: X, 2025: Y, ...}
+    - Dict per kundtyp: {('o', 1): X, ('a', 1): Y, ...}
     """
-    # 3.3 Kvalitetsincitament
-    kpi: float = 17.0  # Kvalitetsprisindex (kr/kW)
+    # === 3.3 Kvalitetsincitament ===
     
-    # 3.4 Nätförlustincitament
-    k_nf: float = 0.50  # Kostnad per kWh nätförlust (kr/kWh)
-    sharing_netloss: float = 0.5  # Delningsfaktor nätförlust
+    # KPI-faktorer per år (prisjustering till 2022 års priser)
+    # Dict[int, float] = {year: factor}
+    kpi: Optional[Dict[int, float]] = field(default_factory=lambda: {
+        2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546
+    })
     
-    # 3.5 Begränsningar för incitament
-    adj_max_agg: float = 1/3  # Max aggregerat incitament (andel av avkastning)
-    adj_max_cemi4: float = 1/3  # Max per delincitament (andel av avkastning)
+    # AIT-kostnader per kundtyp (kr/kWh)
+    # Dict[Tuple[str, int], float] = {(ann, sni): kostnad}
+    # ann: 'a' = aviserade, 'o' = oaviserade
+    # sni: 1-6 (kundtyp)
+    ait_costs: Optional[Dict[Tuple[str, int], float]] = field(default_factory=lambda: {
+        ('o', 1): 34.35, ('o', 2): 159.96, ('o', 3): 175.06,
+        ('o', 4): 96.97, ('o', 5): 5.84, ('o', 6): 96.01,
+        ('a', 1): 14.10, ('a', 2): 76.00, ('a', 3): 79.31,
+        ('a', 4): 43.70, ('a', 5): 4.98, ('a', 6): 45.16,
+    })
     
-    # 3.6 AIT/AIF kostnader per kundtyp (kr/kWh respektive kr/kW)
-    # None = använd baseline från incentive_parameters.py
-    ait_costs: Optional[Dict[str, float]] = None
-    aif_costs: Optional[Dict[str, float]] = None
+    # AIF-kostnader per kundtyp (kr/kW)
+    # Samma struktur som ait_costs
+    aif_costs: Optional[Dict[Tuple[str, int], float]] = field(default_factory=lambda: {
+        ('o', 1): 9.78, ('o', 2): 70.75, ('o', 3): 17.78,
+        ('o', 4): 7.65, ('o', 5): 1.95, ('o', 6): 22.18,
+        ('a', 1): 1.72, ('a', 2): 20.71, ('a', 3): 5.94,
+        ('a', 4): 0.92, ('a', 5): 1.85, ('a', 6): 7.08,
+    })
     
-    # Aktivera/inaktivera enskilda incitament
+    # Max CEMI4-korrigering (andel, 0-1)
+    adj_max_cemi4: float = 0.25
+    
+    # === 3.4 Nätförlustincitament ===
+    
+    # Elpris per år (kr/MWh)
+    # Dict[int, float] = {year: pris}
+    k_nf: Optional[Dict[int, float]] = field(default_factory=lambda: {
+        2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44
+    })
+    
+    # Delningsfaktor nätförlust (andel som tillfaller företaget)
+    sharing_netloss: float = 0.75
+    
+    # === 3.6 Begränsningar ===
+    
+    # Max aggregerat incitament per år (andel av avkastning)
+    adj_max_agg: float = 1/3
+    
+    # === Aktivera/inaktivera ===
+    
     enable_quality: bool = True
     enable_netloss: bool = True
     enable_load: bool = True
@@ -115,7 +152,7 @@ class PostDeaConfig:
     # Påverkbara kostnader
     paverkbara_method: PaverkbaraMethod = PaverkbaraMethod.OPEX
     
-    # Incitamentjusteringar (ny)
+    # Incitamentjusteringar
     incentive: IncentiveConfig = field(default_factory=IncentiveConfig)
 
 

@@ -5,7 +5,7 @@ Konverterar UI-konfiguration till CaseDefinition för backend-pipeline.
 Detta är den enda bryggan mellan frontend och backend.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 from config.case_definition import (
     CaseDefinition,
@@ -24,14 +24,14 @@ PARAM_TO_CONFIG = {
     "3.2.5": ("pre_dea", "wacc", 0.0453),
     
     # Module 3: Quality adjustments (3.3-3.6)
-    "3.3.1": ("incentive", "kpi", 17.0),                    # Kvalitetsprisindex
-    "3.4.1": ("incentive", "k_nf", 0.50),                   # Nätförlustkostnad kr/kWh
-    "3.4.2": ("incentive", "sharing_netloss", 0.5),         # Delningsfaktor nätförlust
-    "3.5.1": ("incentive", "adj_max_agg", 1/3),             # Max aggregerat incitament
-    "3.5.2": ("incentive", "adj_max_cemi4", 1/3),           # Max per delincitament
-    "3.6.1": ("incentive", "enable_quality", True),         # Aktivera kvalitetsincitament
-    "3.6.2": ("incentive", "enable_netloss", True),         # Aktivera nätförlustincitament
-    "3.6.3": ("incentive", "enable_load", True),            # Aktivera belastningsincitament
+    "3.3.1": ("incentive", "kpi", {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546}),
+    "3.4.1": ("incentive", "k_nf", {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44}),
+    "3.4.2": ("incentive", "sharing_netloss", 0.75),
+    "3.5.1": ("incentive", "adj_max_agg", 1/3),
+    "3.5.2": ("incentive", "adj_max_cemi4", 0.25),
+    "3.6.1": ("incentive", "enable_quality", True),
+    "3.6.2": ("incentive", "enable_netloss", True),
+    "3.6.3": ("incentive", "enable_load", True),
     
     # Module 5: Efficiency incentive
     "5.1.1": ("dea", "multiplier", 2.0),              # Outlier IQR threshold
@@ -49,6 +49,27 @@ PARAM_TO_CONFIG = {
 # Kolumnnamn för DEA (konsekvent med backend)
 DEA_INPUT_OPTIONS: List[str] = ["CAPEX", "OPEXp", "TOTEX"]
 DEA_OUTPUT_OPTIONS: List[str] = ["CU", "MW", "NS", "MWhl", "MWhh"]
+
+# Baseline-värden för incitament (importeras inte för att undvika cirkulär import)
+BASELINE_INCENTIVE = {
+    "kpi": {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
+    "k_nf": {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44},
+    "sharing_netloss": 0.75,
+    "adj_max_agg": 1/3,
+    "adj_max_cemi4": 0.25,
+    "ait_costs": {
+        ('o', 1): 34.35, ('o', 2): 159.96, ('o', 3): 175.06,
+        ('o', 4): 96.97, ('o', 5): 5.84, ('o', 6): 96.01,
+        ('a', 1): 14.10, ('a', 2): 76.00, ('a', 3): 79.31,
+        ('a', 4): 43.70, ('a', 5): 4.98, ('a', 6): 45.16,
+    },
+    "aif_costs": {
+        ('o', 1): 9.78, ('o', 2): 70.75, ('o', 3): 17.78,
+        ('o', 4): 7.65, ('o', 5): 1.95, ('o', 6): 22.18,
+        ('a', 1): 1.72, ('a', 2): 20.71, ('a', 3): 5.94,
+        ('a', 4): 0.92, ('a', 5): 1.85, ('a', 6): 7.08,
+    },
+}
 
 
 def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefinition:
@@ -182,10 +203,14 @@ def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
 
 
 def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
-    """Bygg IncentiveConfig baserat på m3_quality_adjustments."""
+    """
+    Bygg IncentiveConfig baserat på m3_quality_adjustments.
+    
+    Hanterar både enkla värden och Dict-format (per år, per kundtyp).
+    """
     m3q = ui_config.get("m3_quality_adjustments", {})
     
-    # Hämta värden med fallback till baseline
+    # Hämta värden - None betyder "använd baseline"
     kpi = m3q.get("kpi")
     k_nf = m3q.get("k_nf")
     sharing_netloss = m3q.get("sharing_netloss")
@@ -198,14 +223,15 @@ def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
     enable_netloss = m3q.get("enable_netloss", True)
     enable_load = m3q.get("enable_load", True)
     
+    # Bygg config - använd baseline om None
     return IncentiveConfig(
-        kpi=kpi if kpi is not None else 17.0,
-        k_nf=k_nf if k_nf is not None else 0.50,
-        sharing_netloss=sharing_netloss if sharing_netloss is not None else 0.5,
-        adj_max_agg=adj_max_agg if adj_max_agg is not None else 1/3,
-        adj_max_cemi4=adj_max_cemi4 if adj_max_cemi4 is not None else 1/3,
-        ait_costs=ait_costs,
-        aif_costs=aif_costs,
+        kpi=kpi if kpi is not None else BASELINE_INCENTIVE["kpi"],
+        k_nf=k_nf if k_nf is not None else BASELINE_INCENTIVE["k_nf"],
+        sharing_netloss=sharing_netloss if sharing_netloss is not None else BASELINE_INCENTIVE["sharing_netloss"],
+        adj_max_agg=adj_max_agg if adj_max_agg is not None else BASELINE_INCENTIVE["adj_max_agg"],
+        adj_max_cemi4=adj_max_cemi4 if adj_max_cemi4 is not None else BASELINE_INCENTIVE["adj_max_cemi4"],
+        ait_costs=ait_costs if ait_costs is not None else BASELINE_INCENTIVE["ait_costs"],
+        aif_costs=aif_costs if aif_costs is not None else BASELINE_INCENTIVE["aif_costs"],
         enable_quality=enable_quality,
         enable_netloss=enable_netloss,
         enable_load=enable_load,
@@ -312,15 +338,19 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     # Module 3: Quality adjustments (incitament)
     m3q = ui_config.get("m3_quality_adjustments", {})
     if m3q.get("kpi") is not None:
-        changed.append("3.3.1 Kvalitetsprisindex (KPI)")
+        changed.append("3.7.X KPI-faktorer")
     if m3q.get("k_nf") is not None:
-        changed.append("3.4.1 Nätförlustkostnad")
+        changed.append("3.4.1 Elpris (K_NF)")
     if m3q.get("sharing_netloss") is not None:
         changed.append("3.4.2 Delning nätförlust")
     if m3q.get("adj_max_agg") is not None:
-        changed.append("3.5.1 Max aggregerat incitament")
+        changed.append("3.6.1 Max aggregerat incitament")
     if m3q.get("adj_max_cemi4") is not None:
-        changed.append("3.5.2 Max per delincitament")
+        changed.append("3.3.X CEMI-korrigering")
+    if m3q.get("ait_costs") is not None:
+        changed.append("3.3.X AIT-kostnader")
+    if m3q.get("aif_costs") is not None:
+        changed.append("3.3.X AIF-kostnader")
     if not m3q.get("enable_quality", True):
         changed.append("3.6.1 Kvalitetsincitament AV")
     if not m3q.get("enable_netloss", True):

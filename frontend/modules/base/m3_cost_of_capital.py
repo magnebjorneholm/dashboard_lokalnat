@@ -7,7 +7,8 @@ Variable-IDs: 30.X
 """
 
 import streamlit as st
-from typing import Dict, Any
+import pandas as pd
+from typing import Dict, Any, Tuple
 
 from calculations.wacc_calculations import (
     CAPMInputs,
@@ -22,13 +23,51 @@ MODULE_KEY_QA = "m3_quality_adjustments"
 # Baseline CAPM-parametrar (från User Manual tabell 6)
 BASELINE_CAPM = CAPMInputs()
 
-# Baseline incitament-parametrar
+# Kundtyper för AIT/AIF
+SNI_LABELS = {
+    1: "Jordbruk",
+    2: "Industri",
+    3: "Handel/tjänster",
+    4: "Offentlig verksamhet",
+    5: "Hushåll",
+    6: "Gränspunkt",
+}
+
+# Baseline-värden från incentive_parameters.py
 BASELINE_INCENTIVE = {
-    "kpi": 17.0,           # kr/kW
-    "k_nf": 0.50,          # kr/kWh
-    "sharing_netloss": 0.5,
+    # On/off
+    "enable_quality": True,
+    "enable_netloss": True,
+    "enable_load": True,
+    
+    # Caps
     "adj_max_agg": 1/3,
-    "adj_max_cemi4": 1/3,
+    "adj_max_cemi4": 0.25,
+    
+    # Nätförlust
+    "sharing_netloss": 0.75,
+    
+    # KPI per år (prisjustering till 2022 års priser)
+    "kpi": {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
+    
+    # K_NF per år (kr/MWh)
+    "k_nf": {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44},
+    
+    # AIT-kostnader (kr/kWh) per (ann, sni)
+    "ait_costs": {
+        ('o', 1): 34.35, ('o', 2): 159.96, ('o', 3): 175.06,
+        ('o', 4): 96.97, ('o', 5): 5.84, ('o', 6): 96.01,
+        ('a', 1): 14.10, ('a', 2): 76.00, ('a', 3): 79.31,
+        ('a', 4): 43.70, ('a', 5): 4.98, ('a', 6): 45.16,
+    },
+    
+    # AIF-kostnader (kr/kW) per (ann, sni)
+    "aif_costs": {
+        ('o', 1): 9.78, ('o', 2): 70.75, ('o', 3): 17.78,
+        ('o', 4): 7.65, ('o', 5): 1.95, ('o', 6): 22.18,
+        ('a', 1): 1.72, ('a', 2): 20.71, ('a', 3): 5.94,
+        ('a', 4): 0.92, ('a', 5): 1.85, ('a', 6): 7.08,
+    },
 }
 
 
@@ -53,7 +92,7 @@ def render() -> Dict[str, Any]:
     if f"{MODULE_KEY}_current_wacc" not in st.session_state:
         st.session_state[f"{MODULE_KEY}_current_wacc"] = BASELINE_WACC
     if f"{MODULE_KEY}_input_mode" not in st.session_state:
-        st.session_state[f"{MODULE_KEY}_input_mode"] = "baseline"  # baseline, capm, direct
+        st.session_state[f"{MODULE_KEY}_input_mode"] = "baseline"
     
     # --- Aktuellt värde (alltid synligt) ---
     current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
@@ -232,31 +271,36 @@ def render() -> Dict[str, Any]:
     return config
 
 
+# =============================================================================
+# INCITAMENTJUSTERINGAR (3.3-3.6)
+# =============================================================================
+
 def render_quality_adjustments() -> Dict[str, Any]:
     """
     Renderar Quality Adjustments (3.3-3.6).
     
-    Incitamentjusteringar för:
-    - 3.3 Kvalitetsincitament
-    - 3.4 Nätförlustincitament  
-    - 3.5 Begränsningar
-    - 3.6 Aktivera/inaktivera
+    Fullständig parametrisering av incitamentjusteringar:
+    - 3.3 Kvalitetsincitament (AIT/AIF-kostnader, KPI, CEMI)
+    - 3.4 Nätförlustincitament (K_NF, delning)
+    - 3.5 Belastningsincitament
+    - 3.6 Begränsningar (caps)
+    - 3.7 Avancerat (KPI-faktorer per år)
     
     Returns:
-        Dict med användarens val för incitamentparametrar
+        Dict med alla incitamentparametrar
     """
     config: Dict[str, Any] = {}
     
     st.subheader("3.3-3.6 Incitamentjusteringar")
     st.caption("Justering av kapitalkostnad baserat på kvalitet, nätförlust och belastning")
     
-    # Aktivera/inaktivera incitament
+    # === AKTIVERA/INAKTIVERA (alltid synlig) ===
     st.markdown("##### Aktivera incitament")
     col1, col2, col3 = st.columns(3)
     
     with col1:
         enable_quality = st.checkbox(
-            "3.6.1 Kvalitetsincitament",
+            "Kvalitetsincitament",
             value=True,
             key=f"{MODULE_KEY_QA}_enable_quality",
             help="Aktivera kvalitetsjustering baserat på AIT/AIF"
@@ -265,7 +309,7 @@ def render_quality_adjustments() -> Dict[str, Any]:
     
     with col2:
         enable_netloss = st.checkbox(
-            "3.6.2 Nätförlustincitament",
+            "Nätförlustincitament",
             value=True,
             key=f"{MODULE_KEY_QA}_enable_netloss",
             help="Aktivera justering för nätförluster"
@@ -274,7 +318,7 @@ def render_quality_adjustments() -> Dict[str, Any]:
     
     with col3:
         enable_load = st.checkbox(
-            "3.6.3 Belastningsincitament",
+            "Belastningsincitament",
             value=True,
             key=f"{MODULE_KEY_QA}_enable_load",
             help="Aktivera justering för belastningsutnyttjande"
@@ -283,129 +327,332 @@ def render_quality_adjustments() -> Dict[str, Any]:
     
     st.divider()
     
-    # 3.3 Kvalitetsincitament
+    # === 3.3 KVALITETSINCITAMENT ===
     with st.expander("3.3 Kvalitetsincitament", expanded=False):
-        st.markdown("Parametrar för kvalitetsjustering baserat på AIT/AIF.")
-        
-        kpi_changed = st.checkbox(
-            "Ändra KPI från baseline",
-            key=f"{MODULE_KEY_QA}_kpi_changed"
-        )
-        
-        if kpi_changed:
-            kpi = st.number_input(
-                "3.3.1 Kvalitetsprisindex (KPI)",
-                value=BASELINE_INCENTIVE["kpi"],
-                min_value=0.0,
-                max_value=100.0,
-                step=1.0,
-                format="%.1f",
-                key=f"{MODULE_KEY_QA}_kpi",
-                help="Pris per kW för kvalitetsjustering (kr/kW)"
-            )
-            config["kpi"] = kpi
-            st.caption(f"Baseline: {BASELINE_INCENTIVE['kpi']} kr/kW")
-        else:
-            st.info(f"KPI = {BASELINE_INCENTIVE['kpi']} kr/kW (baseline)")
+        _render_quality_section(config)
     
-    # 3.4 Nätförlustincitament
+    # === 3.4 NÄTFÖRLUSTINCITAMENT ===
     with st.expander("3.4 Nätförlustincitament", expanded=False):
-        st.markdown("Parametrar för nätförlustjustering.")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            k_nf_changed = st.checkbox(
-                "Ändra nätförlustkostnad",
-                key=f"{MODULE_KEY_QA}_k_nf_changed"
-            )
-            
-            if k_nf_changed:
-                k_nf = st.number_input(
-                    "3.4.1 Nätförlustkostnad (K_NF)",
-                    value=BASELINE_INCENTIVE["k_nf"],
-                    min_value=0.0,
-                    max_value=5.0,
-                    step=0.01,
-                    format="%.2f",
-                    key=f"{MODULE_KEY_QA}_k_nf",
-                    help="Kostnad per kWh nätförlust (kr/kWh)"
-                )
-                config["k_nf"] = k_nf
-                st.caption(f"Baseline: {BASELINE_INCENTIVE['k_nf']} kr/kWh")
-            else:
-                st.info(f"K_NF = {BASELINE_INCENTIVE['k_nf']} kr/kWh (baseline)")
-        
-        with col2:
-            sharing_changed = st.checkbox(
-                "Ändra delningsfaktor",
-                key=f"{MODULE_KEY_QA}_sharing_changed"
-            )
-            
-            if sharing_changed:
-                sharing = st.number_input(
-                    "3.4.2 Delningsfaktor nätförlust",
-                    value=BASELINE_INCENTIVE["sharing_netloss"],
-                    min_value=0.0,
-                    max_value=1.0,
-                    step=0.05,
-                    format="%.2f",
-                    key=f"{MODULE_KEY_QA}_sharing_netloss",
-                    help="Andel som delas (0-1)"
-                )
-                config["sharing_netloss"] = sharing
-                st.caption(f"Baseline: {BASELINE_INCENTIVE['sharing_netloss']}")
-            else:
-                st.info(f"Delning = {BASELINE_INCENTIVE['sharing_netloss']} (baseline)")
+        _render_netloss_section(config)
     
-    # 3.5 Begränsningar
-    with st.expander("3.5 Begränsningar för incitament", expanded=False):
-        st.markdown("Max incitamentjustering som andel av avkastning.")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            adj_agg_changed = st.checkbox(
-                "Ändra max aggregerat",
-                key=f"{MODULE_KEY_QA}_adj_agg_changed"
-            )
-            
-            if adj_agg_changed:
-                adj_agg = st.number_input(
-                    "3.5.1 Max aggregerat incitament",
-                    value=BASELINE_INCENTIVE["adj_max_agg"],
-                    min_value=0.0,
-                    max_value=1.0,
-                    step=0.05,
-                    format="%.3f",
-                    key=f"{MODULE_KEY_QA}_adj_max_agg",
-                    help="Max total incitamentjustering (andel av avkastning)"
-                )
-                config["adj_max_agg"] = adj_agg
-                st.caption(f"Baseline: {BASELINE_INCENTIVE['adj_max_agg']:.3f} (1/3)")
-            else:
-                st.info(f"Max agg = {BASELINE_INCENTIVE['adj_max_agg']:.3f} (1/3) (baseline)")
-        
-        with col2:
-            adj_cemi_changed = st.checkbox(
-                "Ändra max per delincitament",
-                key=f"{MODULE_KEY_QA}_adj_cemi_changed"
-            )
-            
-            if adj_cemi_changed:
-                adj_cemi = st.number_input(
-                    "3.5.2 Max per delincitament",
-                    value=BASELINE_INCENTIVE["adj_max_cemi4"],
-                    min_value=0.0,
-                    max_value=1.0,
-                    step=0.05,
-                    format="%.3f",
-                    key=f"{MODULE_KEY_QA}_adj_max_cemi4",
-                    help="Max för enskilt incitament (andel av avkastning)"
-                )
-                config["adj_max_cemi4"] = adj_cemi
-                st.caption(f"Baseline: {BASELINE_INCENTIVE['adj_max_cemi4']:.3f} (1/3)")
-            else:
-                st.info(f"Max per = {BASELINE_INCENTIVE['adj_max_cemi4']:.3f} (1/3) (baseline)")
+    # === 3.5 BELASTNINGSINCITAMENT ===
+    with st.expander("3.5 Belastningsincitament", expanded=False):
+        st.info("Belastningsincitamentet beräknas automatiskt baserat på utnyttjningsgrad.\n\n"
+                "Formel: `(ug_obs - ug_norm) * k_upstream`\n\n"
+                "Inga justerbara parametrar utöver on/off.")
+    
+    # === 3.6 BEGRÄNSNINGAR (CAPS) ===
+    with st.expander("3.6 Begränsningar", expanded=False):
+        _render_caps_section(config)
+    
+    # === 3.7 KPI-FAKTORER (avancerat) ===
+    with st.expander("3.7 KPI-faktorer (avancerat)", expanded=False):
+        _render_kpi_section(config)
     
     return config
+
+
+def _render_quality_section(config: Dict[str, Any]) -> None:
+    """Renderar 3.3 Kvalitetsincitament."""
+    st.markdown("Parametrar för kvalitetsjustering baserat på AIT/AIF.")
+    
+    # --- CEMI-korrigering ---
+    st.markdown("###### CEMI-korrigering")
+    cemi_changed = st.checkbox(
+        "Ändra CEMI max-korrigering",
+        key=f"{MODULE_KEY_QA}_cemi_changed",
+        help="Max reduktion av kvalitetsincitament vid försämrad CEMI4"
+    )
+    
+    if cemi_changed:
+        adj_max_cemi4 = st.slider(
+            "Max CEMI4-korrigering",
+            min_value=0.0,
+            max_value=1.0,
+            value=BASELINE_INCENTIVE["adj_max_cemi4"],
+            step=0.05,
+            format="%.2f",
+            key=f"{MODULE_KEY_QA}_adj_max_cemi4",
+            help="Andel av incitament som kan reduceras vid försämrad CEMI4"
+        )
+        config["adj_max_cemi4"] = adj_max_cemi4
+        _show_baseline_comparison(adj_max_cemi4, BASELINE_INCENTIVE["adj_max_cemi4"], "")
+    else:
+        st.caption(f"Baseline: {BASELINE_INCENTIVE['adj_max_cemi4']:.2f} (25%)")
+    
+    st.divider()
+    
+    # --- AIT-kostnader ---
+    st.markdown("###### AIT-kostnader (kr/kWh)")
+    ait_changed = st.checkbox(
+        "Ändra AIT-kostnader per kundtyp",
+        key=f"{MODULE_KEY_QA}_ait_changed"
+    )
+    
+    if ait_changed:
+        ait_df = _create_cost_dataframe("ait")
+        edited_ait = st.data_editor(
+            ait_df,
+            key=f"{MODULE_KEY_QA}_ait_editor",
+            use_container_width=True,
+            hide_index=False,
+            column_config={
+                "Oaviserade": st.column_config.NumberColumn(format="%.2f"),
+                "Aviserade": st.column_config.NumberColumn(format="%.2f"),
+            }
+        )
+        ait_costs = _dataframe_to_cost_dict(edited_ait, "ait")
+        if ait_costs != BASELINE_INCENTIVE["ait_costs"]:
+            config["ait_costs"] = ait_costs
+    
+    st.divider()
+    
+    # --- AIF-kostnader ---
+    st.markdown("###### AIF-kostnader (kr/kW)")
+    aif_changed = st.checkbox(
+        "Ändra AIF-kostnader per kundtyp",
+        key=f"{MODULE_KEY_QA}_aif_changed"
+    )
+    
+    if aif_changed:
+        aif_df = _create_cost_dataframe("aif")
+        edited_aif = st.data_editor(
+            aif_df,
+            key=f"{MODULE_KEY_QA}_aif_editor",
+            use_container_width=True,
+            hide_index=False,
+            column_config={
+                "Oaviserade": st.column_config.NumberColumn(format="%.2f"),
+                "Aviserade": st.column_config.NumberColumn(format="%.2f"),
+            }
+        )
+        aif_costs = _dataframe_to_cost_dict(edited_aif, "aif")
+        if aif_costs != BASELINE_INCENTIVE["aif_costs"]:
+            config["aif_costs"] = aif_costs
+
+
+def _render_netloss_section(config: Dict[str, Any]) -> None:
+    """Renderar 3.4 Nätförlustincitament."""
+    st.markdown("Parametrar för nätförlustjustering.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Delningsfaktor
+        sharing_changed = st.checkbox(
+            "Ändra delningsfaktor",
+            key=f"{MODULE_KEY_QA}_sharing_changed"
+        )
+        
+        if sharing_changed:
+            sharing = st.slider(
+                "Delningsfaktor",
+                min_value=0.0,
+                max_value=1.0,
+                value=BASELINE_INCENTIVE["sharing_netloss"],
+                step=0.05,
+                format="%.2f",
+                key=f"{MODULE_KEY_QA}_sharing_netloss",
+                help="Andel av vinst/förlust som tillfaller företaget"
+            )
+            config["sharing_netloss"] = sharing
+            _show_baseline_comparison(sharing, BASELINE_INCENTIVE["sharing_netloss"], "")
+        else:
+            st.caption(f"Baseline: {BASELINE_INCENTIVE['sharing_netloss']:.2f} (75%)")
+    
+    with col2:
+        # K_NF per år
+        k_nf_changed = st.checkbox(
+            "Ändra elpris (K_NF) per år",
+            key=f"{MODULE_KEY_QA}_k_nf_changed"
+        )
+        
+        if k_nf_changed:
+            k_nf_df = _create_yearly_dataframe("k_nf", "Elpris (kr/MWh)")
+            edited_k_nf = st.data_editor(
+                k_nf_df,
+                key=f"{MODULE_KEY_QA}_k_nf_editor",
+                use_container_width=True,
+                hide_index=False,
+                column_config={
+                    "Elpris (kr/MWh)": st.column_config.NumberColumn(format="%.2f"),
+                }
+            )
+            k_nf_dict = _dataframe_to_yearly_dict(edited_k_nf, "Elpris (kr/MWh)")
+            if k_nf_dict != BASELINE_INCENTIVE["k_nf"]:
+                config["k_nf"] = k_nf_dict
+        else:
+            st.caption(f"Baseline: {BASELINE_INCENTIVE['k_nf'][2024]:.2f} kr/MWh (alla år)")
+
+
+def _render_caps_section(config: Dict[str, Any]) -> None:
+    """Renderar 3.6 Begränsningar."""
+    st.markdown("Max incitamentjustering som andel av avkastning.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        adj_agg_changed = st.checkbox(
+            "Ändra max aggregerat",
+            key=f"{MODULE_KEY_QA}_adj_agg_changed"
+        )
+        
+        if adj_agg_changed:
+            adj_agg = st.slider(
+                "Max totalt per år",
+                min_value=0.0,
+                max_value=1.0,
+                value=BASELINE_INCENTIVE["adj_max_agg"],
+                step=0.05,
+                format="%.3f",
+                key=f"{MODULE_KEY_QA}_adj_max_agg",
+                help="Max total incitamentjustering per år"
+            )
+            config["adj_max_agg"] = adj_agg
+            _show_baseline_comparison(adj_agg, BASELINE_INCENTIVE["adj_max_agg"], "")
+        else:
+            st.caption(f"Baseline: {BASELINE_INCENTIVE['adj_max_agg']:.3f} (1/3)")
+    
+    with col2:
+        adj_ind_changed = st.checkbox(
+            "Ändra max per incitament",
+            key=f"{MODULE_KEY_QA}_adj_ind_changed"
+        )
+        
+        if adj_ind_changed:
+            st.info("Individuell cap per incitamenttyp styrs av samma parameter som aggregerad cap i nuvarande implementation.")
+
+
+def _render_kpi_section(config: Dict[str, Any]) -> None:
+    """Renderar 3.7 KPI-faktorer."""
+    st.markdown("KPI-faktorer för prisjustering till 2022 års priser.")
+    
+    kpi_changed = st.checkbox(
+        "Ändra KPI-faktorer per år",
+        key=f"{MODULE_KEY_QA}_kpi_changed"
+    )
+    
+    if kpi_changed:
+        kpi_df = _create_yearly_dataframe("kpi", "KPI-faktor")
+        edited_kpi = st.data_editor(
+            kpi_df,
+            key=f"{MODULE_KEY_QA}_kpi_editor",
+            use_container_width=True,
+            hide_index=False,
+            column_config={
+                "KPI-faktor": st.column_config.NumberColumn(format="%.4f"),
+            }
+        )
+        kpi_dict = _dataframe_to_yearly_dict(edited_kpi, "KPI-faktor")
+        if kpi_dict != BASELINE_INCENTIVE["kpi"]:
+            config["kpi"] = kpi_dict
+    else:
+        st.caption(f"Baseline: {BASELINE_INCENTIVE['kpi'][2024]:.4f} (alla år)")
+
+
+# =============================================================================
+# HJÄLPFUNKTIONER
+# =============================================================================
+
+def _create_cost_dataframe(cost_type: str) -> pd.DataFrame:
+    """
+    Skapar DataFrame för AIT/AIF-kostnader.
+    
+    Args:
+        cost_type: "ait" eller "aif"
+    
+    Returns:
+        DataFrame med kundtyper som index, kolumner för Oaviserade/Aviserade
+    """
+    baseline = BASELINE_INCENTIVE[f"{cost_type}_costs"]
+    
+    data = []
+    for sni, label in SNI_LABELS.items():
+        data.append({
+            "Kundtyp": label,
+            "Oaviserade": baseline[('o', sni)],
+            "Aviserade": baseline[('a', sni)],
+        })
+    
+    df = pd.DataFrame(data)
+    df = df.set_index("Kundtyp")
+    return df
+
+
+def _dataframe_to_cost_dict(df: pd.DataFrame, cost_type: str) -> Dict[Tuple[str, int], float]:
+    """
+    Konverterar DataFrame tillbaka till cost dict.
+    
+    Args:
+        df: DataFrame från data_editor
+        cost_type: "ait" eller "aif"
+    
+    Returns:
+        Dict med (ann, sni) -> float
+    """
+    result = {}
+    
+    # Mappa label tillbaka till sni
+    label_to_sni = {v: k for k, v in SNI_LABELS.items()}
+    
+    for label in df.index:
+        sni = label_to_sni.get(label)
+        if sni is not None:
+            result[('o', sni)] = float(df.loc[label, "Oaviserade"])
+            result[('a', sni)] = float(df.loc[label, "Aviserade"])
+    
+    return result
+
+
+def _create_yearly_dataframe(param_key: str, column_name: str) -> pd.DataFrame:
+    """
+    Skapar DataFrame för per-år parametrar.
+    
+    Args:
+        param_key: "kpi" eller "k_nf"
+        column_name: Namn på värdekolumn
+    
+    Returns:
+        DataFrame med år som index
+    """
+    baseline = BASELINE_INCENTIVE[param_key]
+    
+    data = []
+    for year in [2024, 2025, 2026, 2027]:
+        data.append({
+            "År": year,
+            column_name: baseline[year],
+        })
+    
+    df = pd.DataFrame(data)
+    df = df.set_index("År")
+    return df
+
+
+def _dataframe_to_yearly_dict(df: pd.DataFrame, column_name: str) -> Dict[int, float]:
+    """
+    Konverterar DataFrame tillbaka till yearly dict.
+    
+    Args:
+        df: DataFrame från data_editor
+        column_name: Namn på värdekolumn
+    
+    Returns:
+        Dict med year -> float
+    """
+    result = {}
+    for year in df.index:
+        result[int(year)] = float(df.loc[year, column_name])
+    return result
+
+
+def _show_baseline_comparison(current: float, baseline: float, unit: str) -> None:
+    """Visar färgkodad jämförelse med baseline."""
+    if current != baseline:
+        delta = current - baseline
+        if delta > 0:
+            st.caption(f":green[+{delta:.3f}] från baseline ({baseline:.3f}{unit})")
+        else:
+            st.caption(f":red[{delta:.3f}] från baseline ({baseline:.3f}{unit})")
+    else:
+        st.caption(f"= baseline ({baseline:.3f}{unit})")

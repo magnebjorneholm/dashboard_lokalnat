@@ -195,18 +195,37 @@ def _log_incentive_params(incentive_config) -> None:
     # Baseline-värden för jämförelse
     BASELINE = {
         'adj_max_agg': 1/3,
-        'adj_max_cemi4': 1/3,
-        'sharing_netloss': 0.5,
+        'adj_max_cemi4': 0.25,
+        'sharing_netloss': 0.75,
+        'kpi': {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
+        'k_nf': {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44},
     }
     
     changes = []
     
+    # Enkla parametrar
     if hasattr(incentive_config, 'adj_max_agg') and incentive_config.adj_max_agg != BASELINE['adj_max_agg']:
         changes.append(f"adj_max_agg={incentive_config.adj_max_agg:.3f}")
     if hasattr(incentive_config, 'adj_max_cemi4') and incentive_config.adj_max_cemi4 != BASELINE['adj_max_cemi4']:
         changes.append(f"adj_max_cemi4={incentive_config.adj_max_cemi4:.3f}")
     if hasattr(incentive_config, 'sharing_netloss') and incentive_config.sharing_netloss != BASELINE['sharing_netloss']:
         changes.append(f"sharing_netloss={incentive_config.sharing_netloss:.2f}")
+    
+    # Dict-parametrar (kpi, k_nf)
+    if hasattr(incentive_config, 'kpi') and incentive_config.kpi is not None:
+        if incentive_config.kpi != BASELINE['kpi']:
+            changes.append("kpi=ändrad")
+    if hasattr(incentive_config, 'k_nf') and incentive_config.k_nf is not None:
+        if incentive_config.k_nf != BASELINE['k_nf']:
+            changes.append("k_nf=ändrad")
+    
+    # AIT/AIF-kostnader
+    if hasattr(incentive_config, 'ait_costs') and incentive_config.ait_costs is not None:
+        changes.append("ait_costs=ändrad")
+    if hasattr(incentive_config, 'aif_costs') and incentive_config.aif_costs is not None:
+        changes.append("aif_costs=ändrad")
+    
+    # On/off
     if hasattr(incentive_config, 'enable_quality') and not incentive_config.enable_quality:
         changes.append("enable_quality=False")
     if hasattr(incentive_config, 'enable_netloss') and not incentive_config.enable_netloss:

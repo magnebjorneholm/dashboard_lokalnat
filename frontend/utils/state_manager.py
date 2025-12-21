@@ -24,25 +24,39 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "wacc_override": None,  # None = använd baseline (0.0453)
     },
     "m3_quality_adjustments": {
-        # 3.3 Kvalitetsincitament
-        "kpi": None,  # None = baseline (17.0 kr/kW)
-        
-        # 3.4 Nätförlustincitament
-        "k_nf": None,  # None = baseline (0.50 kr/kWh)
-        "sharing_netloss": None,  # None = baseline (0.5)
-        
-        # 3.5 Begränsningar
-        "adj_max_agg": None,  # None = baseline (1/3)
-        "adj_max_cemi4": None,  # None = baseline (1/3)
-        
-        # 3.6 AIT/AIF kostnader per kundtyp
-        "ait_costs": None,  # None = baseline (dict per kundtyp)
-        "aif_costs": None,  # None = baseline (dict per kundtyp)
-        
-        # Aktivera/inaktivera
+        # === On/off switchar ===
         "enable_quality": True,
         "enable_netloss": True,
         "enable_load": True,
+        
+        # === 3.3 Kvalitetsincitament ===
+        # CEMI-korrigering
+        "adj_max_cemi4": None,  # None = baseline (0.25)
+        
+        # AIT-kostnader per kundtyp (kr/kWh)
+        # Dict med (ann, sni) -> float, t.ex. {('o', 1): 34.35, ('a', 1): 14.10, ...}
+        "ait_costs": None,  # None = baseline
+        
+        # AIF-kostnader per kundtyp (kr/kW)
+        # Dict med (ann, sni) -> float
+        "aif_costs": None,  # None = baseline
+        
+        # === 3.4 Nätförlustincitament ===
+        # Delningsfaktor
+        "sharing_netloss": None,  # None = baseline (0.75)
+        
+        # Elpris per år (kr/MWh)
+        # Dict med year -> float, t.ex. {2024: 753.44, 2025: 753.44, ...}
+        "k_nf": None,  # None = baseline
+        
+        # === 3.6 Begränsningar ===
+        # Max aggregerat incitament (andel av avkastning)
+        "adj_max_agg": None,  # None = baseline (1/3)
+        
+        # === 3.7 KPI-faktorer (avancerat) ===
+        # Prisjustering till 2022 års priser, per år
+        # Dict med year -> float, t.ex. {2024: 1.1546, ...}
+        "kpi": None,  # None = baseline
     },
     "m4_operating_exp": {
         "paverkbara_method": "OPEX",  # "OPEX" eller "TOTEX"
