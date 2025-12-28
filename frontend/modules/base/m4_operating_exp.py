@@ -55,13 +55,4 @@ def render() -> Dict[str, Any]:
         if method_changed and method == "TOTEX":
             st.warning("TOTEX-metod valdes. Effektiviseringskravet tillämpas på både OPEX och CAPEX.")
     
-    with st.expander("Variables", expanded=False):
-        st.info(
-            "OPEX variables (40.X) visas som output.\n\n"
-            "Inkluderar:\n"
-            "- Adjustable OPEX (OPEXp)\n"
-            "- Flexibility services\n"
-            "- Non-adjustable OPEX"
-        )
-    
     return config

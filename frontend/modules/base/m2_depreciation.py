@@ -49,22 +49,14 @@ def render(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
             use_subcat = False
         
         if use_subcat and capbase_data is not None:
-            # Subkategori-läge: hämta från data
             adjustments, level_used = _render_subcat_editor(capbase_data)
         else:
-            # Kategori-läge: använd hårdkodade baseline-värden
             adjustments, level_used = _render_cat_editor()
         
         if adjustments:
             config["lifetime_adjustments"] = adjustments
             config["lifetime_level"] = level_used
             st.success(f"{len(adjustments)} livslängdsjustering(ar) aktiva")
-    
-    with st.expander("Variables", expanded=False):
-        st.info(
-            "Depreciation variables (20.X) beräknas automatiskt.\n\n"
-            "Output: Avskrivning per tillgångstyp (ordinarie + svans)"
-        )
     
     return config
 
@@ -87,8 +79,8 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str]:
         })
     
     baseline_df = pd.DataFrame(data)
+    original_df = baseline_df.copy()
     
-    # Redigerbar tabell
     edited_df = st.data_editor(
         baseline_df,
         use_container_width=True,
@@ -99,43 +91,30 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str]:
             'Kod': st.column_config.NumberColumn('Kod', format="%d"),
             'Kategori': st.column_config.TextColumn('Kategori', width="large"),
             'Ekon. livslängd': st.column_config.NumberColumn(
-                'Ekon. livslängd (år)',
-                min_value=1,
-                max_value=200,
+                'Ekon. livslängd',
+                min_value=4,
+                max_value=100,
                 step=1,
-                format="%d"
+                format="%d år"
             ),
             'Max. livslängd': st.column_config.NumberColumn(
-                'Max. livslängd (år)',
-                min_value=1,
-                max_value=250,
+                'Max. livslängd',
+                min_value=4,
+                max_value=150,
                 step=1,
-                format="%d"
+                format="%d år"
             )
         },
         key=f"{MODULE_KEY}_cat_editor"
     )
     
-    # Validera och extrahera ändringar
-    adjustments = _extract_lifetime_changes(baseline_df, edited_df)
-    
-    # Validering: maxdep >= ekdep
-    invalid = edited_df[edited_df['Max. livslängd'] < edited_df['Ekon. livslängd']]
-    if not invalid.empty:
-        st.error(f"Fel: {len(invalid)} kategori(er) har max livslängd < ekonomisk livslängd")
-        return None, 'cat'
-    
+    adjustments = _extract_lifetime_changes(edited_df, original_df)
     return adjustments, 'cat'
 
 
 def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int, Dict[str, int]]], str]:
-    """
-    Renderar editor för subkategorinivå baserat på data.
-    
-    Returns:
-        (adjustments dict eller None, 'subcat')
-    """
-    # Aggregera unika subkategorier
+    """Renderar editor för subkategorinivå."""
+    # Aggregera subkategorier från faktisk data
     agg_df = capbase_data.groupby(['subcat_encode', 'subcat']).agg({
         'ekdep': 'first',
         'maxdep': 'first'
@@ -145,15 +124,15 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
         'subcat_encode': 'Kod',
         'subcat': 'Subkategori',
         'ekdep': 'Ekon. livslängd',
-        'maxdep': 'Max. livslängd'
+        'maxdep': 'Max. livslängd',
     })
     
-    agg_df = agg_df.sort_values('Kod').reset_index(drop=True)
-    baseline_df = agg_df.copy()
+    agg_df = agg_df[['Kod', 'Subkategori', 'Ekon. livslängd', 'Max. livslängd']].sort_values('Kod').reset_index(drop=True)
     
-    # Redigerbar tabell
+    original_df = agg_df.copy()
+    
     edited_df = st.data_editor(
-        baseline_df,
+        agg_df,
         use_container_width=True,
         hide_index=True,
         num_rows="fixed",
@@ -162,61 +141,50 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
             'Kod': st.column_config.NumberColumn('Kod', format="%d"),
             'Subkategori': st.column_config.TextColumn('Subkategori', width="large"),
             'Ekon. livslängd': st.column_config.NumberColumn(
-                'Ekon. livslängd (år)',
-                min_value=1,
-                max_value=200,
+                'Ekon. livslängd',
+                min_value=4,
+                max_value=100,
                 step=1,
-                format="%d"
+                format="%d år"
             ),
             'Max. livslängd': st.column_config.NumberColumn(
-                'Max. livslängd (år)',
-                min_value=1,
-                max_value=250,
+                'Max. livslängd',
+                min_value=4,
+                max_value=150,
                 step=1,
-                format="%d"
+                format="%d år"
             )
         },
         key=f"{MODULE_KEY}_subcat_editor"
     )
     
-    # Validera och extrahera ändringar
-    adjustments = _extract_lifetime_changes(baseline_df, edited_df)
-    
-    # Validering
-    invalid = edited_df[edited_df['Max. livslängd'] < edited_df['Ekon. livslängd']]
-    if not invalid.empty:
-        st.error(f"Fel: {len(invalid)} subkategori(er) har max livslängd < ekonomisk livslängd")
-        return None, 'subcat'
-    
+    adjustments = _extract_lifetime_changes(edited_df, original_df)
     return adjustments, 'subcat'
 
 
 def _extract_lifetime_changes(
-    baseline_df: pd.DataFrame, 
-    edited_df: pd.DataFrame
+    edited_df: pd.DataFrame, 
+    original_df: pd.DataFrame
 ) -> Optional[Dict[int, Dict[str, int]]]:
     """
-    Jämför baseline med edited och returnerar endast ändrade värden.
+    Extraherar livslängdsjusteringar genom att jämföra edited vs original.
     
     Returns:
-        Dict med {code: {'ekdep': val, 'maxdep': val}} eller None om inga ändringar
+        Dict[code, Dict['ekdep'|'maxdep', new_value]] eller None
     """
     adjustments = {}
     
-    for idx in range(len(baseline_df)):
-        code = int(baseline_df.iloc[idx]['Kod'])
-        
-        baseline_ekdep = int(baseline_df.iloc[idx]['Ekon. livslängd'])
-        baseline_maxdep = int(baseline_df.iloc[idx]['Max. livslängd'])
-        
-        edited_ekdep = int(edited_df.iloc[idx]['Ekon. livslängd'])
-        edited_maxdep = int(edited_df.iloc[idx]['Max. livslängd'])
+    for idx, edited_row in edited_df.iterrows():
+        original_row = original_df.iloc[idx]
+        code = int(edited_row['Kod'])
         
         changes = {}
-        if edited_ekdep != baseline_ekdep:
-            changes['ekdep'] = edited_ekdep
-        if edited_maxdep != baseline_maxdep:
-            changes['maxdep'] = edited_maxdep
+        
+        if edited_row['Ekon. livslängd'] != original_row['Ekon. livslängd']:
+            changes['ekdep'] = int(edited_row['Ekon. livslängd'])
+        
+        if edited_row['Max. livslängd'] != original_row['Max. livslängd']:
+            changes['maxdep'] = int(edited_row['Max. livslängd'])
         
         if changes:
             adjustments[code] = changes

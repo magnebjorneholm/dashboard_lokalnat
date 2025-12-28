@@ -61,22 +61,14 @@ def render(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
             use_subcat = False
         
         if use_subcat and capbase_data is not None:
-            # Subkategori-läge: hämta från data
             adjustments, level_used = _render_subcat_editor(capbase_data)
         else:
-            # Kategori-läge: använd hårdkodade baseline-värden
             adjustments, level_used = _render_cat_editor()
         
         if adjustments:
             config["normvalue_adjustments"] = adjustments
             config["normvalue_level"] = level_used
             st.success(f"{len(adjustments)} normvärdejustering(ar) aktiva")
-    
-    with st.expander("Variables", expanded=False):
-        st.info(
-            "Asset base variables (10.X, 11.X) beräknas automatiskt.\n\n"
-            "Output: Tillgångsvärden per kategori baserat på NUAV"
-        )
     
     return config
 
@@ -94,136 +86,32 @@ def _render_kent_upload() -> Dict[str, Any]:
     }
     
     st.caption(
-        "Ladda upp din KENT Excel-fil for att anvanda egen kapitalbas "
-        "istallet for regulatorns baseline-data."
+        "Ladda upp din KENT Excel-fil för att använda egen kapitalbas "
+        "istället för regulatorns baseline-data."
     )
     
     uploaded_file = st.file_uploader(
-        "Valj KENT Excel-fil (.xlsx)",
+        "KENT Excel-fil",
         type=["xlsx", "xls"],
-        key=f"{MODULE_KEY}_kent_uploader",
-        help="KENT-fil i Excel-format med ark: Normvarde, Ovriga varderingsmetoder"
+        key=f"{MODULE_KEY}_kent_upload",
+        help="Exportera från KENT och ladda upp här"
     )
     
     if uploaded_file is not None:
-        file_bytes = uploaded_file.read()
-        uploaded_file.seek(0)
-        
-        # Validera fil
-        validation, summary = _validate_kent_file(uploaded_file)
-        
-        if validation["valid"]:
-            result["kent_file_bytes"] = file_bytes
-            result["kent_file_name"] = uploaded_file.name
-            
-            st.success(f"Fil laddad: {uploaded_file.name}")
-            
-            # Visa sammanfattning
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Normvarde", summary.get("n_normvarde", 0))
-            with col2:
-                st.metric("Ovriga metoder", summary.get("n_ovriga", 0))
-            with col3:
-                st.metric("Investeringar", summary.get("n_investeringar", 0))
-            
-            st.caption(f"Totalt {summary.get('n_components', 0)} komponenter")
-            
-            # Varningar
-            for warning in validation.get("warnings", []):
-                st.warning(warning)
-        else:
-            st.error("Filen kunde inte valideras")
-            for error in validation.get("errors", []):
-                st.error(f"- {error}")
-    
-    # Info
-    with st.expander("Hur fungerar KENT-upload?", expanded=False):
-        st.markdown("""
-        **Nar du laddar upp en KENT-fil:**
-        
-        1. Din kapitalbas ersatter regulatorns baseline-data for ditt foretag
-        2. Nya investeringar och utrangeringar inkluderas
-        3. Kapitalkostnader beraknas med Ei's metodik (steg 5-8)
-        
-        **Tva scenarion:**
-        
-        - **Endast KENT**: Din data anvands, ovriga 147 foretag anvander baseline
-        - **KENT + parametrar**: Om du andrar normvarden/livslangder beraknas ALLA foretag om
-        """)
+        result["kent_file_bytes"] = uploaded_file.getvalue()
+        result["kent_file_name"] = uploaded_file.name
+        st.success(f"Fil laddad: {uploaded_file.name}")
     
     return result
 
 
-def _validate_kent_file(file_obj) -> tuple:
-    """Validerar KENT-fil."""
-    import pandas as pd
-    
-    validation = {"valid": True, "errors": [], "warnings": []}
-    summary = {}
-    
-    try:
-        xlsx = pd.ExcelFile(file_obj)
-        sheets = xlsx.sheet_names
-        
-        has_normvarde = 'Normvärde' in sheets
-        has_ovriga = 'Övriga värderingsmetoder' in sheets
-        
-        if not has_normvarde and not has_ovriga:
-            validation["valid"] = False
-            validation["errors"].append(
-                "Filen saknar bade 'Normvarde' och 'Ovriga varderingsmetoder' ark"
-            )
-            return validation, summary
-        
-        n_normvarde = 0
-        n_ovriga = 0
-        n_investeringar = 0
-        
-        if has_normvarde:
-            df = pd.read_excel(xlsx, sheet_name='Normvärde', header=1)
-            kod_col = [c for c in df.columns if 'Kod' in str(c)]
-            if kod_col:
-                df = df[df[kod_col[0]].notna()]
-            n_normvarde = len(df)
-        
-        if has_ovriga:
-            df = pd.read_excel(xlsx, sheet_name='Övriga värderingsmetoder', header=1)
-            kat_col = [c for c in df.columns if 'kategori' in str(c).lower()]
-            if kat_col:
-                df = df[df[kat_col[0]].notna()]
-            n_ovriga = len(df)
-        
-        if 'Investeringar_Utrangeringar' in sheets:
-            df = pd.read_excel(xlsx, sheet_name='Investeringar_Utrangeringar', header=1)
-            typ_col = [c for c in df.columns if 'Investering' in str(c)]
-            if typ_col:
-                df = df[df[typ_col[0]].notna()]
-            n_investeringar = len(df)
-        
-        total = n_normvarde + n_ovriga + n_investeringar
-        
-        if total == 0:
-            validation["valid"] = False
-            validation["errors"].append("Ingen kapitalbas hittades i filen")
-            return validation, summary
-        
-        summary = {
-            "n_components": total,
-            "n_normvarde": n_normvarde,
-            "n_ovriga": n_ovriga,
-            "n_investeringar": n_investeringar,
-        }
-        
-    except Exception as e:
-        validation["valid"] = False
-        validation["errors"].append(f"Kunde inte lasa fil: {str(e)}")
-    
-    return validation, summary
-
-
 def _render_cat_editor() -> tuple[Optional[Dict[int, float]], str]:
-    """Renderar editor för kategorinivå."""
+    """
+    Renderar editor för kategorinivå med hårdkodade baseline-värden.
+    
+    Returns:
+        (adjustments dict eller None, 'cat')
+    """
     data = []
     for cat in ASSET_CATEGORIES:
         data.append({

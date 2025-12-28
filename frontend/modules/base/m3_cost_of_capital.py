@@ -160,7 +160,7 @@ def render() -> Dict[str, Any]:
                 step=0.001,
                 format="%.3f",
                 key=f"{MODULE_KEY}_market_risk_premium",
-                help="Förväntad meravkastning utöver riskfri ränta"
+                help="Förväntad överavkastning mot riskfri ränta"
             )
         
         with col2:
@@ -172,29 +172,29 @@ def render() -> Dict[str, Any]:
                 step=0.001,
                 format="%.3f",
                 key=f"{MODULE_KEY}_credit_risk_premium",
-                help="Räntepåslag för företagsskuld"
+                help="Tillägg för företagsspecifik kreditrisk"
             )
             
             tax_rate = st.number_input(
-                "3.1.6 Bolagsskatt",
+                "3.1.6 Skattesats",
                 value=BASELINE_CAPM.tax_rate,
                 min_value=0.0,
                 max_value=0.50,
                 step=0.001,
                 format="%.3f",
                 key=f"{MODULE_KEY}_tax_rate",
-                help="Svensk bolagsskattesats"
+                help="Bolagsskattesats"
             )
             
             inflation = st.number_input(
                 "3.1.7 Inflation (CPIF)",
                 value=BASELINE_CAPM.inflation,
-                min_value=-0.05,
+                min_value=0.0,
                 max_value=0.20,
                 step=0.001,
                 format="%.3f",
                 key=f"{MODULE_KEY}_inflation",
-                help="CPIF-prognos för omräkning till real nivå"
+                help="Förväntad inflation"
             )
         
         # Beräkna WACC från inputs
@@ -255,12 +255,6 @@ def render() -> Dict[str, Any]:
             st.session_state[f"{MODULE_KEY}_current_wacc"] = direct_wacc
             st.session_state[f"{MODULE_KEY}_input_mode"] = "direct"
             st.rerun()
-    
-    with st.expander("Variables", expanded=False):
-        st.info(
-            "Capital cost variables (30.X) beräknas automatiskt.\n\n"
-            "Output: Kapitalkostnad per tillgångstyp (ordinary + tail)"
-        )
     
     # --- Sätt config baserat på aktuellt värde ---
     current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
@@ -578,7 +572,7 @@ def _create_cost_dataframe(cost_type: str) -> pd.DataFrame:
     return df
 
 
-def _dataframe_to_cost_dict(df: pd.DataFrame, cost_type: str) -> Dict[Tuple[str, int], float]:
+def _dataframe_to_cost_dict(df: pd.DataFrame, cost_type: str) -> Dict[str, float]:
     """
     Konverterar DataFrame tillbaka till cost dict.
     
@@ -587,7 +581,7 @@ def _dataframe_to_cost_dict(df: pd.DataFrame, cost_type: str) -> Dict[Tuple[str,
         cost_type: "ait" eller "aif"
     
     Returns:
-        Dict med (ann, sni) -> float
+        Dict med "o_sni"/"a_sni" -> float
     """
     result = {}
     
