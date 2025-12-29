@@ -9,6 +9,14 @@ import streamlit as st
 from typing import Dict, Any, List
 
 from frontend.common.parameter_input import parameter_input
+from frontend.common.formulas import (
+    get_formula_with_caption,
+    FORMULA_DEA_LP,
+    FORMULA_DEA_COMPACT,
+    FORMULA_DEA_VRS_CONSTRAINT,
+    FORMULA_OUTLIER_THRESHOLD,
+    FORMULA_EFFICIENCY_POTENTIAL,
+)
 
 MODULE_KEY = "addon_benchmarking"
 
@@ -94,6 +102,31 @@ def render() -> Dict[str, Any]:
     # === DEA-KONFIGURATION ===
     with st.expander("DEA-konfiguration", expanded=True):
         
+        # === BERÄKNINGSFORMLER ===
+        st.markdown("**DEA-optimering (input-oriented)**")
+        
+        # Kompakt formel för snabb överblick
+        formula_compact, caption_compact = get_formula_with_caption("DEA")
+        st.latex(formula_compact)
+        st.caption(caption_compact)
+        
+        # Fullständig LP-formulering i en sub-expander
+        with st.expander("Visa fullständig LP-formulering", expanded=False):
+            st.markdown("**Super-efficiency DEA** (exkluderar DMU i från referensmängden)")
+            formula_lp, caption_lp = get_formula_with_caption("DEA_SUPER")
+            st.latex(formula_lp)
+            st.caption(caption_lp)
+            
+            st.markdown("**VRS-constraint** (om variabel skalavkastning)")
+            st.latex(FORMULA_DEA_VRS_CONSTRAINT)
+            st.caption("Läggs till vid VRS för att tillåta variabel skalavkastning")
+            
+            st.markdown("**Effektiviseringspotential**")
+            st.latex(FORMULA_EFFICIENCY_POTENTIAL)
+            st.caption("Potential = 1 - θ, där θ är effektivitetsscoren")
+        
+        st.divider()
+        
         # --- Inputs ---
         st.markdown("**Inputs (kostnader)**")
         selected_inputs = st.multiselect(
@@ -146,6 +179,10 @@ def render() -> Dict[str, Any]:
         
         # --- Outlier-detektion ---
         st.markdown("**Outlier-detektion (IQR-metod)**")
+        
+        # Visa outlier-formel
+        st.latex(FORMULA_OUTLIER_THRESHOLD)
+        st.caption("Företag med supereffektivitet över tröskeln klassas som outliers")
         
         col1, col2 = st.columns(2)
         with col1:

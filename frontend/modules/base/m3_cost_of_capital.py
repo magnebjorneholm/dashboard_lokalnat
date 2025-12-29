@@ -16,6 +16,19 @@ from calculations.wacc_calculations import (
     BASELINE_WACC,
 )
 from frontend.common.formatting import format_percent
+from frontend.common.formulas import (
+    get_formula_with_caption,
+    FORMULA_HAMADA,
+    FORMULA_CAPM,
+    FORMULA_WACC_NOMINAL_COMPLETE,
+    FORMULA_FISHER,
+    FORMULA_QUALITY_COST_AIT,
+    FORMULA_QUALITY_COST_AIF,
+    FORMULA_NETLOSS_INCENTIVE,
+    FORMULA_LOAD_INCENTIVE,
+    FORMULA_INCENTIVE_CAP_TOTAL,
+    FORMULA_NORM_AIT,
+)
 
 MODULE_KEY = "m3_cost_of_capital"
 MODULE_KEY_QA = "m3_quality_adjustments"
@@ -181,7 +194,7 @@ def render() -> Dict[str, Any]:
 
 
 def _render_capm_section() -> None:
-    """Renderar 3.1 CAPM-komponenter."""
+    """Renderar 3.1 CAPM-komponenter med LaTeX-formler."""
     st.markdown("##### 3.1 CAPM-komponenter")
     st.caption("Beräkna WACC från underliggande parametrar")
     
@@ -295,6 +308,26 @@ def _render_capm_section() -> None:
         
         st.metric("**3.2.5 WACC real före skatt**", format_percent(calculated_wacc))
         
+        # === BERÄKNINGSFORMLER ===
+        st.divider()
+        st.markdown("##### Beräkningsformler")
+        
+        st.markdown("**1. Hamada-formeln** (tillgångsbeta → aktiebeta)")
+        st.latex(FORMULA_HAMADA)
+        st.caption("Konverterar obelanad beta till belanad beta med hänsyn till skuldsättning och skattesköld")
+        
+        st.markdown("**2. CAPM** (kostnad eget kapital)")
+        st.latex(FORMULA_CAPM)
+        st.caption("Capital Asset Pricing Model: kostnad för eget kapital som funktion av systematisk risk")
+        
+        st.markdown("**3. WACC nominell före skatt**")
+        st.latex(FORMULA_WACC_NOMINAL_COMPLETE)
+        st.caption("Viktat genomsnitt av kostnad för eget kapital och skuld, uppgrossat för skatt")
+        
+        st.markdown("**4. Fisher-ekvationen** (nominell → real)")
+        st.latex(FORMULA_FISHER)
+        st.caption("Omräkning från nominell till real ränta med hänsyn till inflation")
+        
         # Knapp för att använda beräknat värde
         if st.button("Använd detta WACC", key=f"{MODULE_KEY}_use_capm", type="primary"):
             st.session_state[f"{MODULE_KEY}_current_wacc"] = calculated_wacc
@@ -394,6 +427,18 @@ def _render_derived_section() -> None:
             format_percent(wacc_real),
             delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
         )
+    
+    # === BERÄKNINGSFORMLER ===
+    st.divider()
+    st.markdown("##### Beräkningsformler")
+    
+    st.markdown("**WACC nominell före skatt**")
+    st.latex(FORMULA_WACC_NOMINAL_COMPLETE)
+    st.caption("WACC nominell före skatt")
+    
+    st.markdown("**Fisher-ekvationen** (nominell → real)")
+    st.latex(FORMULA_FISHER)
+    st.caption("Fisher-ekvationen: nominell till real ränta")
     
     if st.button("Använd detta WACC", key=f"{MODULE_KEY}_use_derived", type="primary"):
         st.session_state[f"{MODULE_KEY}_current_wacc"] = wacc_real
@@ -496,9 +541,7 @@ def render_quality_adjustments() -> Dict[str, Any]:
     
     # === 3.5 BELASTNINGSINCITAMENT ===
     with st.expander("3.5 Belastningsincitament", expanded=False):
-        st.info("Belastningsincitamentet beräknas automatiskt baserat på utnyttjningsgrad.\n\n"
-                "Formel: `(ug_obs - ug_norm) × k_upstream`\n\n"
-                "Inga justerbara parametrar utöver on/off.")
+        _render_load_section(config)
     
     # === 3.6 BEGRÄNSNINGAR (CAPS) ===
     with st.expander("3.6 Begränsningar", expanded=False):
@@ -512,8 +555,28 @@ def render_quality_adjustments() -> Dict[str, Any]:
 
 
 def _render_quality_section(config: Dict[str, Any]) -> None:
-    """Renderar 3.3 Kvalitetsincitament."""
+    """Renderar 3.3 Kvalitetsincitament med LaTeX-formler."""
     st.markdown("Parametrar för kvalitetsjustering baserat på AIT/AIF.")
+    
+    # === BERÄKNINGSFORMLER ===
+    st.markdown("###### Beräkningsformler")
+    
+    st.markdown("**Kvalitetskostnad AIT** (per kundtyp och avbrottstyp)")
+    formula_ait, caption_ait = get_formula_with_caption("QUALITY_AIT")
+    st.latex(formula_ait)
+    st.caption(caption_ait)
+    
+    st.markdown("**Kvalitetskostnad AIF** (per kundtyp och avbrottstyp)")
+    formula_aif, caption_aif = get_formula_with_caption("QUALITY_AIF")
+    st.latex(formula_aif)
+    st.caption(caption_aif)
+    
+    st.markdown("**Normnivå** (som funktion av kundtäthet)")
+    formula_norm, caption_norm = get_formula_with_caption("NORM_AIT")
+    st.latex(formula_norm)
+    st.caption(caption_norm)
+    
+    st.divider()
     
     # CEMI-korrigering
     st.markdown("###### CEMI-korrigering")
@@ -576,8 +639,16 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
 
 
 def _render_netloss_section(config: Dict[str, Any]) -> None:
-    """Renderar 3.4 Nätförlustincitament."""
+    """Renderar 3.4 Nätförlustincitament med LaTeX-formler."""
     st.markdown("Parametrar för nätförlustjustering.")
+    
+    # === BERÄKNINGSFORMEL ===
+    st.markdown("###### Beräkningsformel")
+    formula, caption = get_formula_with_caption("NETLOSS")
+    st.latex(formula)
+    st.caption(caption)
+    
+    st.divider()
     
     col1, col2 = st.columns(2)
     
@@ -617,9 +688,34 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
             st.caption(":orange[Elpris ändrat från baseline]")
 
 
+def _render_load_section(config: Dict[str, Any]) -> None:
+    """Renderar 3.5 Belastningsincitament med LaTeX-formler."""
+    st.markdown("Parametrar för belastningsjustering.")
+    
+    # === BERÄKNINGSFORMEL ===
+    st.markdown("###### Beräkningsformel")
+    formula, caption = get_formula_with_caption("LOAD")
+    st.latex(formula)
+    st.caption(caption)
+    
+    st.divider()
+    
+    st.info(
+        "Belastningsincitamentet beräknas automatiskt baserat på utnyttjandegrad.\n\n"
+        "Inga justerbara parametrar utöver on/off."
+    )
+
+
 def _render_caps_section(config: Dict[str, Any]) -> None:
-    """Renderar 3.6 Begränsningar."""
+    """Renderar 3.6 Begränsningar med LaTeX-formler."""
     st.markdown("Max incitamentjustering som andel av avkastning.")
+    
+    # === BERÄKNINGSFORMEL ===
+    st.markdown("###### Beräkningsformel")
+    st.latex(FORMULA_INCENTIVE_CAP_TOTAL)
+    st.caption("Cap på totalt incitament per år")
+    
+    st.divider()
     
     adj_agg = st.slider(
         "Max totalt per år",

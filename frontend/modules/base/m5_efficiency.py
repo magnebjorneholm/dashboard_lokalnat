@@ -10,6 +10,13 @@ import streamlit as st
 from typing import Dict, Any
 
 from frontend.common.parameter_input import parameter_input
+from frontend.common.formulas import (
+    get_formula_with_caption,
+    FORMULA_TOTAL_EFFICIENCY,
+    FORMULA_ANNUAL_EFFICIENCY_REQ,
+    FORMULA_EFFICIENCY_COMPLETE,
+    FORMULA_OUTLIER_THRESHOLD,
+)
 
 MODULE_KEY = "m5_efficiency"
 
@@ -46,9 +53,28 @@ def render() -> Dict[str, Any]:
         # 5.1.1 Outlier threshold - hanteras i DEA add-on
         st.caption("Outlier threshold (5.1.1) konfigureras i Add-on: Benchmarking")
         
+        # Visa outlier-formel för referens
+        st.markdown("**Outlier-tröskel (IQR-metod)**")
+        st.latex(FORMULA_OUTLIER_THRESHOLD)
+        st.caption("Företag med supereffektivitet över tröskeln klassas som outliers")
+        
         st.divider()
         
         st.markdown("##### 5.2 Efficiency requirement conversion")
+        
+        # === BERÄKNINGSFORMLER ===
+        st.markdown("**Beräkningsformler**")
+        
+        st.markdown("*Total effektivisering under tillsynsperioden:*")
+        st.latex(FORMULA_TOTAL_EFFICIENCY)
+        st.caption("Kombinerar trunkerad potential med kunddelning och realiseringstid")
+        
+        st.markdown("*Årligt effektiviseringskrav:*")
+        formula_eff, caption_eff = get_formula_with_caption("EFFICIENCY_REQ")
+        st.latex(formula_eff)
+        st.caption(caption_eff)
+        
+        st.divider()
         
         # 5.2.1 Max potential cap
         max_pot, max_pot_changed = parameter_input(
@@ -118,40 +144,10 @@ def render() -> Dict[str, Any]:
         
         if min_req_changed:
             config["outlier_krav"] = min_req
-        
-        # === BERÄKNAT MAX ÅRLIGT KRAV ===
+    
+        # Visa komplett formel
         st.divider()
-        st.markdown("##### Beräknat max årligt effkrav")
-        
-        # Hämta aktuella värden (eller defaults)
-        current_max = config.get("trunkering_max", BASELINE_MAX_POTENTIAL)
-        current_kund = config.get("kunddelning", BASELINE_CUSTOMER_SHARING)
-        current_real = config.get("realiseringstid", BASELINE_REALIZATION_TIME)
-        current_tills = BASELINE_SUPERVISION_PERIOD
-        
-        # Beräkna max årligt krav
-        # Formel: total_eff = max_potential * kunddelning * (tillsynsperiod / realiseringstid)
-        #         max_yearly = (1 + total_eff)^(1/tillsynsperiod) - 1
-        total_eff = current_max * current_kund * (current_tills / current_real)
-        max_yearly = (1 + total_eff) ** (1 / current_tills) - 1
-        
-        # Baseline max yearly (för jämförelse)
-        baseline_total = BASELINE_MAX_POTENTIAL * BASELINE_CUSTOMER_SHARING * (BASELINE_SUPERVISION_PERIOD / BASELINE_REALIZATION_TIME)
-        baseline_yearly = (1 + baseline_total) ** (1 / BASELINE_SUPERVISION_PERIOD) - 1
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            delta_pp = (max_yearly - baseline_yearly) * 100
-            st.metric(
-                label="Max årligt effektiviseringskrav",
-                value=f"{max_yearly*100:.2f}%",
-                delta=f"{delta_pp:+.2f}pp" if abs(delta_pp) > 0.001 else None
-            )
-        with col2:
-            st.caption(
-                f"**Formel:**\n"
-                f"Total = {current_max:.0%} × {current_kund:.0%} × ({current_tills}/{current_real}) = {total_eff:.2%}\n\n"
-                f"Årlig = (1 + {total_eff:.2%})^(1/{current_tills}) - 1 = {max_yearly:.2%}"
-            )
+        st.markdown("**Komplett formel**")
+        st.latex(FORMULA_EFFICIENCY_COMPLETE)
     
     return config
