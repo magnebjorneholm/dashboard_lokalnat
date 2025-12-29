@@ -50,7 +50,8 @@ def render() -> Dict[str, Any]:
             help_text="OPEX = endast påverkbara kostnader. TOTEX = påverkbara + kapitalkostnader."
         )
         
-        config["paverkbara_method"] = method
+        if method_changed:
+            config["paverkbara_method"] = method
         
         if method_changed and method == "TOTEX":
             st.warning("TOTEX-metod valdes. Effektiviseringskravet tillämpas på både OPEX och CAPEX.")

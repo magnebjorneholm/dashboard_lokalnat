@@ -1,7 +1,8 @@
 """
 Parameter Input komponent för Regumetrica UI.
 
-Återanvändbar komponent för baseline-first parameter-input med override-möjlighet.
+Återanvändbar komponent för parameter-input med baseline-jämförelse.
+Värdet visas alltid och jämförs mot baseline för att avgöra om det ändrats.
 """
 
 import streamlit as st
@@ -22,10 +23,10 @@ def parameter_input(
     format_as_percent: bool = False
 ) -> Tuple[float, bool]:
     """
-    Renderar parameter-input med override-möjlighet.
+    Renderar parameter-input med baseline-jämförelse.
     
-    Visar baseline-värde som default. Användaren kan välja att ändra
-    genom att checka i "Ändra"-checkboxen.
+    Visar alltid inputfält med baseline som default. Returnerar om värdet
+    skiljer sig från baseline.
     
     Args:
         module_key: Unik nyckel för modulen (för widget-key prefix)
@@ -37,22 +38,15 @@ def parameter_input(
         max_val: Största tillåtna värde
         step: Stegstorlek för input
         help_text: Hjälptext
-        format_as_percent: Om True, formatera baseline som procent
+        format_as_percent: Om True, formatera som procent i hjälptext
     
     Returns:
-        Tuple med (current_value, is_overridden)
+        Tuple med (current_value, is_changed)
     """
-    # Unika keys med module-prefix för att undvika kollisioner
-    override_key = f"{module_key}_override_{param_id}"
-    value_key = f"{module_key}_value_{param_id}"
+    input_key = f"{module_key}_input_{param_id}"
     
-    # Initialisera state om det inte finns
-    if override_key not in st.session_state:
-        st.session_state[override_key] = False
-        st.session_state[value_key] = baseline
-    
-    # Layout: ID | Label | Input/Baseline
-    col_id, col_label, col_checkbox, col_input = st.columns([1, 2, 1, 2])
+    # Layout: ID | Label | Input | Baseline
+    col_id, col_label, col_input, col_baseline = st.columns([1, 2, 2, 1.5])
     
     with col_id:
         st.markdown(f"**{param_id}**")
@@ -60,38 +54,41 @@ def parameter_input(
     with col_label:
         st.markdown(label)
     
-    with col_checkbox:
-        is_overridden = st.checkbox(
-            "Ändra",
-            key=override_key,
-            help="Kryssa i för att ändra från baseline"
+    with col_input:
+        current = st.number_input(
+            label,
+            value=baseline,
+            min_value=min_val,
+            max_value=max_val,
+            step=step,
+            key=input_key,
+            help=help_text,
+            label_visibility="collapsed"
         )
     
-    with col_input:
-        if is_overridden:
-            current = st.number_input(
-                f"{label} (ny)",
-                value=st.session_state[value_key],
-                min_value=min_val,
-                max_value=max_val,
-                step=step,
-                key=f"{module_key}_input_{param_id}",
-                help=help_text,
-                label_visibility="collapsed"
-            )
-            st.session_state[value_key] = current
+    with col_baseline:
+        # Visa baseline och ändringsstatus
+        if format_as_percent:
+            baseline_str = format_percent(baseline)
+        elif unit:
+            baseline_str = f"{baseline} {unit}"
         else:
-            # Visa baseline-värde formaterat
+            baseline_str = str(baseline)
+        
+        # Jämför med tolerans för flyttal
+        is_changed = abs(current - baseline) > 1e-9
+        
+        if is_changed:
+            delta = current - baseline
             if format_as_percent:
-                display_val = format_percent(baseline)
-            elif unit:
-                display_val = f"{baseline} {unit}"
+                delta_str = f"{delta*100:+.2f}pp"
             else:
-                display_val = str(baseline)
-            st.markdown(f"*{display_val} (baseline)*")
-            current = baseline
+                delta_str = f"{delta:+.2g}"
+            st.caption(f":orange[{delta_str}] från {baseline_str}")
+        else:
+            st.caption(f"= {baseline_str}")
     
-    return current, is_overridden
+    return current, is_changed
 
 
 def parameter_select(
@@ -103,7 +100,10 @@ def parameter_select(
     help_text: str = ""
 ) -> Tuple[str, bool]:
     """
-    Renderar parameter-select med override-möjlighet.
+    Renderar parameter-select med baseline-jämförelse.
+    
+    Visar alltid selectbox med baseline som default. Returnerar om värdet
+    skiljer sig från baseline.
     
     Args:
         module_key: Unik nyckel för modulen
@@ -114,16 +114,12 @@ def parameter_select(
         help_text: Hjälptext
     
     Returns:
-        Tuple med (selected_value, is_overridden)
+        Tuple med (selected_value, is_changed)
     """
-    override_key = f"{module_key}_override_{param_id}"
-    value_key = f"{module_key}_value_{param_id}"
+    select_key = f"{module_key}_select_{param_id}"
     
-    if override_key not in st.session_state:
-        st.session_state[override_key] = False
-        st.session_state[value_key] = baseline
-    
-    col_id, col_label, col_checkbox, col_input = st.columns([1, 2, 1, 2])
+    # Layout: ID | Label | Select | Baseline
+    col_id, col_label, col_select, col_baseline = st.columns([1, 2, 2, 1.5])
     
     with col_id:
         st.markdown(f"**{param_id}**")
@@ -131,27 +127,25 @@ def parameter_select(
     with col_label:
         st.markdown(label)
     
-    with col_checkbox:
-        is_overridden = st.checkbox(
-            "Ändra",
-            key=override_key,
-            help="Kryssa i för att ändra från baseline"
+    with col_select:
+        # Hitta baseline-index
+        baseline_idx = options.index(baseline) if baseline in options else 0
+        
+        current = st.selectbox(
+            label,
+            options=options,
+            index=baseline_idx,
+            key=select_key,
+            help=help_text,
+            label_visibility="collapsed"
         )
     
-    with col_input:
-        if is_overridden:
-            idx = options.index(st.session_state[value_key]) if st.session_state[value_key] in options else 0
-            current = st.selectbox(
-                f"{label} (ny)",
-                options=options,
-                index=idx,
-                key=f"{module_key}_select_{param_id}",
-                help=help_text,
-                label_visibility="collapsed"
-            )
-            st.session_state[value_key] = current
+    with col_baseline:
+        is_changed = (current != baseline)
+        
+        if is_changed:
+            st.caption(f":orange[Ändrat] från {baseline}")
         else:
-            st.markdown(f"*{baseline} (baseline)*")
-            current = baseline
+            st.caption(f"= {baseline}")
     
-    return current, is_overridden
+    return current, is_changed
