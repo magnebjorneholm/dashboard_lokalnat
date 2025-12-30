@@ -91,7 +91,6 @@ def render() -> Dict[str, Any]:
         index=0,
         key=f"{MODULE_KEY}_method",
         horizontal=True,
-        help="DEA = Data Envelopment Analysis"
     )
 
     if method != "DEA":
@@ -101,32 +100,10 @@ def render() -> Dict[str, Any]:
     
     # === DEA CONFIGURATION ===
     with st.expander("DEA specification", expanded=True):
-        
-        # === CALCULATION FORMULAS ===
-        st.markdown("**DEA optimization (input-oriented)**")
-        
-        # Compact formula for quick overview
-        formula_compact, caption_compact = get_formula_with_caption("DEA")
-        st.latex(formula_compact)
-        st.caption(caption_compact)
-        
-        # Full LP formulation in sub-expander
-        with st.expander("View complete LP formulation", expanded=False):
-            st.markdown("**Super-efficiency DEA** (excludes DMU i from reference set)")
-            formula_lp, caption_lp = get_formula_with_caption("DEA_SUPER")
-            st.latex(formula_lp)
-            st.caption(caption_lp)
-            
-            st.markdown("**VRS constraint** (variable returns to scale)")
-            st.latex(FORMULA_DEA_VRS_CONSTRAINT)
-            st.caption("Added under VRS to permit variable returns to scale")
-            
-            st.markdown("**Efficiency potential**")
-            st.latex(FORMULA_EFFICIENCY_POTENTIAL)
-            st.caption("Potential = 1 - θ, where θ is the efficiency score")
-        
-        st.divider()
-        
+        st.caption(
+            "Configure DEA model. If configuration matches Ei baseline, "
+            "pre-computed results are applied; otherwise, new DEA is run."
+        )
         # --- Inputs ---
         st.markdown("**Inputs (costs)**")
         selected_inputs = st.multiselect(
