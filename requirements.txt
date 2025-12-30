@@ -10,7 +10,7 @@ pulp
 
 # Visualisering och dashboard
 matplotlib
-streamlit
+streamlit==1.52.2
 streamlit-folium
 folium
 plotly
