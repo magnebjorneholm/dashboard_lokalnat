@@ -1,28 +1,26 @@
 # .streamlit/config.toml
-# Regumetrica - Nordic Finance grafisk profil
+# Regumetrica - Nordic Blue grafisk profil
 # Professionell design för elmarknadsanalys och regulatory affairs
+# Streamlit 1.52.2
 
 [theme]
 base = "light"
 
-# Primärfärg för interaktiva element (knappar, sliders, länkar)
-# Teal - signalerar energi och teknisk kompetens
-primaryColor = "#0D9488"
+# Primärfärg - Nordic Blue för consulting/finance-känsla
+primaryColor = "#2563EB"
 
-# Huvudbakgrund - ljus nordisk grå
-backgroundColor = "#F7FAFC"
+# Huvudbakgrund - ljus nordisk slate
+backgroundColor = "#F8FAFC"
 
-# Sekundär bakgrund för kort, expanders och sidopanel
-secondaryBackgroundColor = "#FFFFFF"
+# Sekundär bakgrund för kort, expanders, sidopanel
+secondaryBackgroundColor = "#F1F5F9"
 
-# Textfärg - mörkgrå för optimal läsbarhet
-textColor = "#2D3748"
+# Textfärg - mörkblå slate för optimal läsbarhet
+textColor = "#0F172A"
 
-# Typografi - Inter för professionell, modern känsla
-# Fallback till system sans-serif
+# Typografi - sans serif (Inter laddas via CSS)
 font = "sans serif"
 
-# === SERVERINSTÄLLNINGAR ===
 
 [server]
 port = 8501
@@ -31,25 +29,19 @@ runOnSave = false
 fileWatcherType = "poll"
 maxUploadSize = 200
 maxMessageSize = 200
-enableCORS = true
-enableXsrfProtection = true
-enableWebsocketCompression = false
+enableStaticServing = true
+
 
 [client]
 showErrorDetails = true
 toolbarMode = "auto"
 showSidebarNavigation = true
 
+
 [browser]
-serverAddress = "localhost"
-serverPort = 8501
 gatherUsageStats = false
+
 
 [runner]
 magicEnabled = true
 fastReruns = true
-enforceSerializableSessionState = false
-
-[logger]
-level = "info"
-messageFormat = "%(asctime)s %(message)s"

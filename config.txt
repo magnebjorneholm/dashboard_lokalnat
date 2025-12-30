@@ -7,7 +7,7 @@ base = "light"
 
 # Primärfärg för interaktiva element (knappar, sliders, länkar)
 # Teal - signalerar energi och teknisk kompetens
-primaryColor = "#0D9488"
+primaryColor = "#081ca1ff"
 
 # Huvudbakgrund - ljus nordisk grå
 backgroundColor = "#F7FAFC"
