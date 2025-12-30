@@ -1,7 +1,7 @@
 """
 Module 5: Efficiency Incentive
 
-Hanterar effektiviseringskrav-parametrar.
+Handles efficiency requirement parameters.
 Parameter-IDs: 5.1.X - 5.4.X
 Variable-IDs: 50.X
 """
@@ -20,7 +20,7 @@ from frontend.common.formulas import (
 
 MODULE_KEY = "m5_efficiency"
 
-# Baseline-värden från Ei's metod för tillsynsperiod 2024-2027
+# Baseline values from Ei methodology for regulatory period 2024-2027
 BASELINE_OUTLIER_THRESHOLD = 2.0
 BASELINE_MAX_POTENTIAL = 0.30
 BASELINE_REALIZATION_TIME = 8
@@ -31,17 +31,17 @@ BASELINE_MIN_REQUIREMENT = 0.01
 
 def render() -> Dict[str, Any]:
     """
-    Renderar Module 5: Efficiency incentive.
+    Render Module 5: Efficiency incentive.
     
-    Alla inputs visas alltid med baseline som default. Endast värden som
-    skiljer sig från baseline sparas till config.
+    All inputs are always displayed with baseline as default. Only values
+    differing from baseline are saved to config.
     
     Returns:
-        Dict med användarens val. Keys:
-        - trunkering_max: Max potential cap eller None
-        - outlier_krav: Min årligt krav för outliers eller None
-        - kunddelning: Andel som tillfaller kunder eller None
-        - realiseringstid: År för full effektivisering eller None
+        Dict with user selections:
+        - trunkering_max: Max potential cap or None
+        - outlier_krav: Min annual requirement for outliers or None
+        - kunddelning: Share allocated to customers or None
+        - realiseringstid: Years for full efficiency realization or None
     """
     config: Dict[str, Any] = {}
     
@@ -49,27 +49,27 @@ def render() -> Dict[str, Any]:
     
     with st.expander("Parameters", expanded=True):
         st.markdown("##### 5.1 Outlier identification")
-        
-        # 5.1.1 Outlier threshold - hanteras i DEA add-on
-        st.caption("Outlier threshold (5.1.1) konfigureras i Add-on: Benchmarking")
-        
-        # Visa outlier-formel för referens
-        st.markdown("**Outlier-tröskel (IQR-metod)**")
+
+        # 5.1.1 Outlier threshold - handled in DEA add-on
+        st.caption("Outlier threshold (5.1.1): see Add-on Benchmarking")
+
+        # Show outlier formula for reference
+        st.markdown("**Outlier threshold (IQR method)**")
         st.latex(FORMULA_OUTLIER_THRESHOLD)
-        st.caption("Företag med supereffektivitet över tröskeln klassas som outliers")
+        st.caption("Firms exceeding threshold flagged as outliers")
         
         st.divider()
         
         st.markdown("##### 5.2 Efficiency requirement conversion")
         
-        # === BERÄKNINGSFORMLER ===
-        st.markdown("**Beräkningsformler**")
+        # === CALCULATION FORMULAS ===
+        st.markdown("**Calculation formulas**")
         
-        st.markdown("*Total effektivisering under tillsynsperioden:*")
+        st.markdown("*Total efficiency gain over regulatory period:*")
         st.latex(FORMULA_TOTAL_EFFICIENCY)
-        st.caption("Kombinerar trunkerad potential med kunddelning och realiseringstid")
+        st.caption("Truncated potential × customer share × realization factor")
         
-        st.markdown("*Årligt effektiviseringskrav:*")
+        st.markdown("*Annual efficiency requirement:*")
         formula_eff, caption_eff = get_formula_with_caption("EFFICIENCY_REQ")
         st.latex(formula_eff)
         st.caption(caption_eff)
@@ -80,45 +80,45 @@ def render() -> Dict[str, Any]:
         max_pot, max_pot_changed = parameter_input(
             module_key=MODULE_KEY,
             param_id="5.2.1",
-            label="Max effektiviseringspotential",
+            label="Maximum efficiency potential cap",
             baseline=BASELINE_MAX_POTENTIAL,
             min_val=0.0,
             max_val=1.0,
             step=0.01,
-            help_text="Effektivitetspotential trunkeras vid detta tak.",
+            help_text="Upper bound on assessed efficiency potential",
             format_as_percent=True
         )
         
         if max_pot_changed:
             config["trunkering_max"] = max_pot
         
-        # 5.2.2 Realiseringstid
+        # 5.2.2 Realization time
         real_time, real_time_changed = parameter_input(
             module_key=MODULE_KEY,
             param_id="5.2.2",
-            label="Realiseringstid",
+            label="Realization time",
             baseline=float(BASELINE_REALIZATION_TIME),
             min_val=1.0,
             max_val=20.0,
             step=1.0,
-            unit="år",
-            help_text="Antal år för att uppnå full effektivisering.",
+            unit="years",
+            help_text="Time horizon for full efficiency realization",
             format_as_percent=False
         )
         
         if real_time_changed:
             config["realiseringstid"] = int(real_time)
         
-        # 5.2.3 Kunddelning
+        # 5.2.3 Customer sharing factor
         kund_del, kund_del_changed = parameter_input(
             module_key=MODULE_KEY,
             param_id="5.2.3",
-            label="Kunddelning",
+            label="Customer sharing factor",
             baseline=BASELINE_CUSTOMER_SHARING,
             min_val=0.0,
             max_val=1.0,
             step=0.05,
-            help_text="Andel av effektivisering som tillfaller kunder (resten till företaget).",
+            help_text="Proportion of efficiency gains allocated to customers",
             format_as_percent=True
         )
         
@@ -129,25 +129,25 @@ def render() -> Dict[str, Any]:
         
         st.markdown("##### 5.3 Efficiency requirement bounds")
         
-        # 5.3.1 Minimum annual requirement (för outliers)
+        # 5.3.1 Minimum annual requirement (for outliers)
         min_req, min_req_changed = parameter_input(
             module_key=MODULE_KEY,
             param_id="5.3.1",
-            label="Minimum årligt effkrav",
+            label="Minimum annual requirement",
             baseline=BASELINE_MIN_REQUIREMENT,
             min_val=0.0,
             max_val=0.10,
             step=0.001,
-            help_text="Fast årligt krav som tillämpas på outliers.",
+            help_text="Minimum annual requirement for outliers",
             format_as_percent=True
         )
         
         if min_req_changed:
             config["outlier_krav"] = min_req
     
-        # Visa komplett formel
+        # Show complete formula
         st.divider()
-        st.markdown("**Komplett formel**")
+        st.markdown("**Complete formula**")
         st.latex(FORMULA_EFFICIENCY_COMPLETE)
     
     return config

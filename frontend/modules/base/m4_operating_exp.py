@@ -1,7 +1,7 @@
 """
 Module 4: Operating Expenditures
 
-Hanterar OPEX-parametrar och påverkbara metod.
+Handles OPEX parameters and påverkbara method.
 Parameter-IDs: 4.1.X
 Variable-IDs: 40.X
 """
@@ -16,11 +16,11 @@ MODULE_KEY = "m4_operating_exp"
 
 def render() -> Dict[str, Any]:
     """
-    Renderar Module 4: Operating expenditures.
+    Render Module 4: Operating expenditures.
     
     Returns:
-        Dict med användarens val. Keys:
-        - paverkbara_method: "OPEX" eller "TOTEX"
+        Dict with user selections:
+        - paverkbara_method: "OPEX" or "TOTEX"
     """
     config: Dict[str, Any] = {}
     
@@ -30,30 +30,30 @@ def render() -> Dict[str, Any]:
         st.markdown("##### 4.1 General scaling parameters")
         
         st.info(
-            "OPEX scaling factors (4.1.1-4.1.3) kommer i framtida version:\n"
-            "- Scaling factor adjustable OPEX\n"
-            "- Scaling factor flexibility services\n"
-            "- Scaling factor non-adjustable OPEX"
+            "OPEX scaling factors (4.1.1–4.1.3) — planned:\n"
+            "- Adjustable OPEX scaling\n"
+            "- Flexibility services scaling\n"
+            "- Non-adjustable OPEX scaling"
         )
         
         st.divider()
         
-        # Påverkbara metod (5.4.1 men hör konceptuellt till OPEX)
-        st.markdown("##### Effektivitetskravets kostnadsbas")
+        # Påverkbara method (5.4.1 but conceptually belongs to OPEX)
+        st.markdown("##### Efficiency requirement cost base")
         
         method, method_changed = parameter_select(
             module_key=MODULE_KEY,
             param_id="5.4.1",
-            label="Tillämpa effkrav på",
+            label="Apply efficiency requirement to",
             options=["OPEX", "TOTEX"],
             baseline="OPEX",
-            help_text="OPEX = endast påverkbara kostnader. TOTEX = påverkbara + kapitalkostnader."
+            help_text="OPEX: adjustable costs. TOTEX: includes capital costs."
         )
         
         if method_changed:
             config["paverkbara_method"] = method
         
         if method_changed and method == "TOTEX":
-            st.warning("TOTEX-metod valdes. Effektiviseringskravet tillämpas på både OPEX och CAPEX.")
+            st.warning("TOTEX basis: efficiency requirement includes capital costs")
     
     return config
