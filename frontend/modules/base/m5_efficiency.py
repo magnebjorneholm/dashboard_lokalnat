@@ -10,18 +10,12 @@ import streamlit as st
 from typing import Dict, Any
 
 from frontend.common.parameter_input import parameter_input
-from frontend.common.formulas import (
-    get_formula_with_caption,
-    FORMULA_TOTAL_EFFICIENCY,
-    FORMULA_ANNUAL_EFFICIENCY_REQ,
-    FORMULA_EFFICIENCY_COMPLETE,
-    FORMULA_OUTLIER_THRESHOLD,
-)
+from frontend.common.formulas import FORMULA_EFFICIENCY_COMPLETE
+from calculations.effektiviseringskrav import get_max_effkrav
 
 MODULE_KEY = "m5_efficiency"
 
 # Baseline values from Ei methodology for regulatory period 2024-2027
-BASELINE_OUTLIER_THRESHOLD = 2.0
 BASELINE_MAX_POTENTIAL = 0.30
 BASELINE_REALIZATION_TIME = 8
 BASELINE_CUSTOMER_SHARING = 0.50
@@ -49,32 +43,11 @@ def render() -> Dict[str, Any]:
     
     with st.expander("Parameters", expanded=True):
         st.markdown("##### 5.1 Outlier identification")
-
-        # 5.1.1 Outlier threshold - handled in DEA add-on
-        st.caption("Outlier threshold (5.1.1): see Add-on Benchmarking")
-
-        # Show outlier formula for reference
-        st.markdown("**Outlier threshold (IQR method)**")
-        st.latex(FORMULA_OUTLIER_THRESHOLD)
-        st.caption("Firms exceeding threshold flagged as outliers")
+        st.caption("Outlier threshold (5.1.1): configured in Add-on Benchmarking")
         
         st.divider()
         
         st.markdown("##### 5.2 Efficiency requirement conversion")
-        
-        # === CALCULATION FORMULAS ===
-        st.markdown("**Calculation formulas**")
-        
-        st.markdown("*Total efficiency gain over regulatory period:*")
-        st.latex(FORMULA_TOTAL_EFFICIENCY)
-        st.caption("Truncated potential × customer share × realization factor")
-        
-        st.markdown("*Annual efficiency requirement:*")
-        formula_eff, caption_eff = get_formula_with_caption("EFFICIENCY_REQ")
-        st.latex(formula_eff)
-        st.caption(caption_eff)
-        
-        st.divider()
         
         # 5.2.1 Max potential cap
         max_pot, max_pot_changed = parameter_input(
@@ -129,7 +102,7 @@ def render() -> Dict[str, Any]:
         
         st.markdown("##### 5.3 Efficiency requirement bounds")
         
-        # 5.3.1 Minimum annual requirement (for outliers)
+        # 5.3.1 Minimum annual requirement
         min_req, min_req_changed = parameter_input(
             module_key=MODULE_KEY,
             param_id="5.3.1",
@@ -138,12 +111,27 @@ def render() -> Dict[str, Any]:
             min_val=0.0,
             max_val=0.10,
             step=0.001,
-            help_text="Minimum annual requirement for outliers",
+            help_text="Floor for annual efficiency requirement (applies to outliers and efficient firms)",
             format_as_percent=True
         )
         
         if min_req_changed:
             config["outlier_krav"] = min_req
+        
+        # Calculate and display resulting range
+        current_max_pot = max_pot if max_pot_changed else BASELINE_MAX_POTENTIAL
+        current_real_time = int(real_time) if real_time_changed else BASELINE_REALIZATION_TIME
+        current_kund_del = kund_del if kund_del_changed else BASELINE_CUSTOMER_SHARING
+        current_min_req = min_req if min_req_changed else BASELINE_MIN_REQUIREMENT
+        
+        max_annual_req = get_max_effkrav(
+            trunkering_max=current_max_pot,
+            kunddelning=current_kund_del,
+            realiseringstid=current_real_time,
+            tillsynsperiod=BASELINE_SUPERVISION_PERIOD
+        )
+        
+        st.caption(f"Resulting range: {current_min_req*100:.2f}% – {max_annual_req*100:.2f}% annually")
     
         # Show complete formula
         st.divider()

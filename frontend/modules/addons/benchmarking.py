@@ -8,15 +8,7 @@ New DEA runs only if configuration differs from baseline.
 import streamlit as st
 from typing import Dict, Any, List
 
-from frontend.common.parameter_input import parameter_input
-from frontend.common.formulas import (
-    get_formula_with_caption,
-    FORMULA_DEA_LP,
-    FORMULA_DEA_COMPACT,
-    FORMULA_DEA_VRS_CONSTRAINT,
-    FORMULA_OUTLIER_THRESHOLD,
-    FORMULA_EFFICIENCY_POTENTIAL,
-)
+from frontend.common.formulas import FORMULA_OUTLIER_THRESHOLD
 
 MODULE_KEY = "addon_benchmarking"
 
@@ -154,10 +146,9 @@ def render() -> Dict[str, Any]:
         
         st.divider()
         
-        # --- Outlier detection ---
-        st.markdown("**Outlier detection (IQR method)**")
+        # --- Outlier detection (5.1.1) ---
+        st.markdown("**5.1 Outlier detection**")
         
-        # Show outlier formula
         st.latex(FORMULA_OUTLIER_THRESHOLD)
         st.caption("Firms exceeding threshold flagged as outliers")
         
@@ -186,14 +177,15 @@ def render() -> Dict[str, Any]:
             )
             config["dea_q_upper"] = q_upper
         
+        # 5.1.1 IQR multiplier
         multiplier = st.number_input(
-            "IQR multiplier (5.1.1)",
+            "IQR multiplier",
             value=BASELINE_MULTIPLIER,
             min_value=1.0,
             max_value=5.0,
             step=0.5,
             key=f"{MODULE_KEY}_multiplier",
-            help="Threshold = Q_upper + multiplier × IQR"
+            help="Threshold = Q_upper + multiplier × IQR (baseline: 2.0)"
         )
         config["dea_multiplier"] = multiplier
         

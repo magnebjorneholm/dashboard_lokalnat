@@ -242,69 +242,53 @@ def _create_intaktsram_sheet(
     baseline_df = baseline_df[baseline_cols].copy()
     case_df = case_df[case_cols].copy()
     
-    # Merge
-    merged = baseline_df.merge(
-        case_df, 
-        on='REId', 
-        suffixes=('_Baseline', '_Case'),
-        how='outer'
-    )
+    # Merge och beräkna delta
+    merged = baseline_df.merge(case_df, on='REId', suffixes=('_baseline', '_case'))
     
-    # Beräkna delta för Intäktsram
-    if 'Intaktsram_Total_Baseline' in merged.columns and 'Intaktsram_Total_Case' in merged.columns:
-        merged['Delta'] = merged['Intaktsram_Total_Case'] - merged['Intaktsram_Total_Baseline']
-        merged['Delta%'] = merged['Delta'] / merged['Intaktsram_Total_Baseline']
+    for col in ['Kapitalkostnad_Total', 'Paverkbara_Periodsumma', 'Opaverkbara_Kostnader', 'Intaktsram_Total']:
+        if f'{col}_baseline' in merged.columns and f'{col}_case' in merged.columns:
+            merged[f'{col}_Delta'] = merged[f'{col}_case'] - merged[f'{col}_baseline']
+            merged[f'{col}_Delta%'] = merged[f'{col}_Delta'] / merged[f'{col}_baseline'].replace(0, float('nan'))
     
     _write_dataframe_to_sheet(ws, merged)
 
 
 def _create_efficiency_sheet(
-    wb: Workbook,
-    baseline: PipelineResultAdapter,
+    wb: Workbook, 
+    baseline: PipelineResultAdapter, 
     case: PipelineResultAdapter
 ):
-    """Skapar effektivitetsflik med DEA-resultat."""
+    """Skapar effektivitets-flik."""
     ws = wb.create_sheet("Effektivitet")
     
-    baseline_effkrav = _get_attr(baseline.post_dea, 'all_effkrav', None)
-    case_effkrav = _get_attr(case.post_dea, 'all_effkrav', None)
+    case_dea = case.dea
+    baseline_dea = baseline.dea
     
-    if baseline_effkrav is None or case_effkrav is None:
-        ws['A1'] = "Effektivitetsdata saknas"
+    case_results = _get_attr(case_dea, 'dea_results', None)
+    baseline_results = _get_attr(baseline_dea, 'dea_results', None)
+    
+    if case_results is None or baseline_results is None:
+        ws['A1'] = "DEA-resultat saknas"
         return
     
-    if not isinstance(baseline_effkrav, pd.DataFrame) or not isinstance(case_effkrav, pd.DataFrame):
-        ws['A1'] = "Data är inte DataFrame"
+    if not isinstance(case_results, pd.DataFrame) or not isinstance(baseline_results, pd.DataFrame):
+        ws['A1'] = "DEA-resultat är inte DataFrame"
         return
-    
-    baseline_effkrav = baseline_effkrav.copy()
-    case_effkrav = case_effkrav.copy()
-    
-    # Filtrera till REL-företag
-    if 'REId' in baseline_effkrav.columns:
-        baseline_effkrav = baseline_effkrav[baseline_effkrav['REId'].str.startswith('REL', na=False)].copy()
-    if 'REId' in case_effkrav.columns:
-        case_effkrav = case_effkrav[case_effkrav['REId'].str.startswith('REL', na=False)].copy()
     
     # Välj kolumner
-    keep_cols = ['REId', 'Effektivitet', 'Potential', 'Effkrav_arlig', 'is_outlier']
-    baseline_cols = [c for c in keep_cols if c in baseline_effkrav.columns]
-    case_cols = [c for c in keep_cols if c in case_effkrav.columns]
+    keep_cols = ['REId', 'Effektivitet', 'Supereffektivitet', 'potential', 'is_outlier']
+    case_cols = [c for c in keep_cols if c in case_results.columns]
+    baseline_cols = [c for c in keep_cols if c in baseline_results.columns]
     
-    if not baseline_cols or not case_cols:
-        ws['A1'] = "Kolumner saknas"
+    if 'REId' not in case_cols or 'REId' not in baseline_cols:
+        ws['A1'] = "REId saknas i DEA-resultat"
         return
     
-    baseline_effkrav = baseline_effkrav[baseline_cols].copy()
-    case_effkrav = case_effkrav[case_cols].copy()
+    case_df = case_results[case_cols].copy()
+    baseline_df = baseline_results[baseline_cols].copy()
     
     # Merge
-    merged = baseline_effkrav.merge(
-        case_effkrav,
-        on='REId',
-        suffixes=('_Baseline', '_Case'),
-        how='outer'
-    )
+    merged = baseline_df.merge(case_df, on='REId', suffixes=('_baseline', '_case'))
     
     _write_dataframe_to_sheet(ws, merged)
 
@@ -375,82 +359,6 @@ def _create_config_sheet(
         ws.cell(row=row, column=2, value="Baseline (4.53%)")
     row += 2
     
-    # M3: Quality Adjustments (Incitament)
-    ws.cell(row=row, column=1, value="M3: Quality Adjustments (3.3-3.6)").font = Font(bold=True)
-    row += 1
-    m3q = ui_config.get('m3_quality_adjustments', {})
-    
-    # Baseline-värden för incitament
-    BASELINE_INC = {
-        'kpi': 17.0,
-        'k_nf': 0.50,
-        'sharing_netloss': 0.5,
-        'adj_max_agg': 1/3,
-        'adj_max_cemi4': 1/3,
-    }
-    
-    # 3.3.1 KPI
-    val = m3q.get('kpi')
-    ws.cell(row=row, column=1, value="Kvalitetsprisindex (3.3.1):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=f"{val} kr/kW")
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_INC['kpi']} kr/kW)")
-    row += 1
-    
-    # 3.4.1 K_NF
-    val = m3q.get('k_nf')
-    ws.cell(row=row, column=1, value="Nätförlustkostnad (3.4.1):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=f"{val} kr/kWh")
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_INC['k_nf']} kr/kWh)")
-    row += 1
-    
-    # 3.4.2 Delning nätförlust
-    val = m3q.get('sharing_netloss')
-    ws.cell(row=row, column=1, value="Delning nätförlust (3.4.2):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=val).number_format = '0.00'
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_INC['sharing_netloss']})")
-    row += 1
-    
-    # 3.5.1 Max aggregerat
-    val = m3q.get('adj_max_agg')
-    ws.cell(row=row, column=1, value="Max agg. incitament (3.5.1):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=val).number_format = '0.000'
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline (1/3)")
-    row += 1
-    
-    # 3.5.2 Max per delincitament
-    val = m3q.get('adj_max_cemi4')
-    ws.cell(row=row, column=1, value="Max per delincitament (3.5.2):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=val).number_format = '0.000'
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline (1/3)")
-    row += 1
-    
-    # Aktiverade incitament
-    enable_quality = m3q.get('enable_quality', True)
-    enable_netloss = m3q.get('enable_netloss', True)
-    enable_load = m3q.get('enable_load', True)
-    
-    ws.cell(row=row, column=1, value="Kvalitetsincitament (3.6.1):")
-    ws.cell(row=row, column=2, value="Aktiverat" if enable_quality else "Inaktiverat")
-    row += 1
-    
-    ws.cell(row=row, column=1, value="Nätförlustincitament (3.6.2):")
-    ws.cell(row=row, column=2, value="Aktiverat" if enable_netloss else "Inaktiverat")
-    row += 1
-    
-    ws.cell(row=row, column=1, value="Belastningsincitament (3.6.3):")
-    ws.cell(row=row, column=2, value="Aktiverat" if enable_load else "Inaktiverat")
-    row += 2
-    
     # M4: Operating Expenditures
     ws.cell(row=row, column=1, value="M4: Operating Expenditures").font = Font(bold=True)
     row += 1
@@ -465,64 +373,45 @@ def _create_config_sheet(
     row += 1
     m5 = ui_config.get('m5_efficiency', {})
     
-    # Baseline-värden för jämförelse
+    # Baseline-värden enligt UM Table 13
     BASELINE_M5 = {
         'trunkering_max': 0.30,
-        'trunkering_min': 0.162416,
-        'outlier_krav': 0.01,
-        'kunddelning': 0.50,
         'realiseringstid': 8,
+        'kunddelning': 0.50,
+        'outlier_krav': 0.01,
         'tillsynsperiod': 4,
     }
     
     # 5.2.1 Max potential
     val = m5.get('trunkering_max')
-    ws.cell(row=row, column=1, value="Max potential (5.2.1):")
+    ws.cell(row=row, column=1, value="Maximum efficiency potential cap (5.2.1):")
     if val is not None:
         ws.cell(row=row, column=2, value=val).number_format = '0.00%'
     else:
         ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['trunkering_max']:.0%})")
     row += 1
     
-    # 5.2.2 Min potential trunkering
-    val = m5.get('trunkering_min')
-    ws.cell(row=row, column=1, value="Min potential trunkering (5.2.2):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=val).number_format = '0.00%'
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['trunkering_min']:.2%})")
-    row += 1
-    
-    # 5.2.3 Realiseringstid
+    # 5.2.2 Realiseringstid
     val = m5.get('realiseringstid')
-    ws.cell(row=row, column=1, value="Realiseringstid (5.2.3):")
+    ws.cell(row=row, column=1, value="Realization time (5.2.2):")
     if val is not None:
         ws.cell(row=row, column=2, value=f"{val} år")
     else:
         ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['realiseringstid']} år)")
     row += 1
     
-    # 5.2.4 Kunddelning
+    # 5.2.3 Kunddelning
     val = m5.get('kunddelning')
-    ws.cell(row=row, column=1, value="Kunddelning (5.2.4):")
+    ws.cell(row=row, column=1, value="Customer sharing factor (5.2.3):")
     if val is not None:
         ws.cell(row=row, column=2, value=val).number_format = '0%'
     else:
         ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['kunddelning']:.0%})")
     row += 1
     
-    # 5.2.5 Tillsynsperiod
-    val = m5.get('tillsynsperiod')
-    ws.cell(row=row, column=1, value="Tillsynsperiod (5.2.5):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=f"{val} år")
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['tillsynsperiod']} år)")
-    row += 1
-    
-    # 5.3.1 Outlier-krav
+    # 5.3.1 Minimum annual requirement
     val = m5.get('outlier_krav')
-    ws.cell(row=row, column=1, value="Outlier-krav (5.3.1):")
+    ws.cell(row=row, column=1, value="Minimum annual requirement (5.3.1):")
     if val is not None:
         ws.cell(row=row, column=2, value=val).number_format = '0.00%'
     else:
@@ -556,7 +445,7 @@ def _create_config_sheet(
         ws.cell(row=row, column=1, value="Outlier multiplier (5.1.1):")
         ws.cell(row=row, column=2, value=addon.get('dea_multiplier', 2.0))
     
-    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['A'].width = 40
     ws.column_dimensions['B'].width = 35
 
 
