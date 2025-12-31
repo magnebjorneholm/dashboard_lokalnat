@@ -1,5 +1,5 @@
 """
-incentive_data.py
+data_loaders/incentive_data.py
 
 Laddar och förbereder incitamentdata från all_adjust_vars.csv.
 Mappar numerisk reid till REId-format (REL00001, etc.).
@@ -7,7 +7,33 @@ Mappar numerisk reid till REId-format (REL00001, etc.).
 
 import pandas as pd
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, List
+
+
+# Alla variabelkolumner som kan overridas
+# Dessa är företagsspecifika observerade och normvärden
+VARIABLE_COLUMNS: List[str] = [
+    # Nätförlust
+    "nf_norm", "nf_obs", "e_in",
+    # Belastning  
+    "ug_norm", "ug_obs", "k_upstream",
+    # CEMI4
+    "cemi4_norm", "cemi4_obs",
+    # AIF observerade (12 st)
+    "aif_a_1_obs", "aif_a_2_obs", "aif_a_3_obs", "aif_a_4_obs", "aif_a_5_obs", "aif_a_6_obs",
+    "aif_o_1_obs", "aif_o_2_obs", "aif_o_3_obs", "aif_o_4_obs", "aif_o_5_obs", "aif_o_6_obs",
+    # AIF norm (12 st)
+    "aif_a_1_norm", "aif_a_2_norm", "aif_a_3_norm", "aif_a_4_norm", "aif_a_5_norm", "aif_a_6_norm",
+    "aif_o_1_norm", "aif_o_2_norm", "aif_o_3_norm", "aif_o_4_norm", "aif_o_5_norm", "aif_o_6_norm",
+    # AIT observerade (12 st)
+    "ait_a_1_obs", "ait_a_2_obs", "ait_a_3_obs", "ait_a_4_obs", "ait_a_5_obs", "ait_a_6_obs",
+    "ait_o_1_obs", "ait_o_2_obs", "ait_o_3_obs", "ait_o_4_obs", "ait_o_5_obs", "ait_o_6_obs",
+    # AIT norm (12 st)
+    "ait_a_1_norm", "ait_a_2_norm", "ait_a_3_norm", "ait_a_4_norm", "ait_a_5_norm", "ait_a_6_norm",
+    "ait_o_1_norm", "ait_o_2_norm", "ait_o_3_norm", "ait_o_4_norm", "ait_o_5_norm", "ait_o_6_norm",
+    # ÅME per kundtyp (6 st)
+    "ame_1", "ame_2", "ame_3", "ame_4", "ame_5", "ame_6",
+]
 
 
 def load_incentive_data(filepath: Optional[str] = None) -> pd.DataFrame:
@@ -137,3 +163,208 @@ def get_incentive_summary_by_reid(
     )
     
     return df_summary
+
+
+def apply_variable_overrides(
+    df: pd.DataFrame,
+    user_reid: str,
+    variable_overrides: Optional[Dict[str, float]]
+) -> pd.DataFrame:
+    """
+    Applicerar variabel-overrides för ett specifikt företag.
+    
+    Overrides appliceras på ALLA år (2024-2027) för det angivna företaget.
+    Övriga företag påverkas inte.
+    
+    Args:
+        df: DataFrame med incitamentdata (output från prepare_incentive_input)
+        user_reid: REId för företaget vars variabler ska ändras (ex: "REL00886")
+        variable_overrides: Dict med kolumnnamn -> nytt värde
+                           Ex: {"nf_obs": 0.045, "ug_obs": 0.65}
+                           Om None eller tom dict -> ingen ändring
+    
+    Returns:
+        DataFrame med applicerade overrides
+    """
+    if not variable_overrides:
+        return df
+    
+    df = df.copy()
+    
+    # Skapa mask för användarens rader
+    mask = df['REId'] == user_reid
+    
+    if not mask.any():
+        print(f"    [VARNING] Företag {user_reid} hittades inte i incitamentdata")
+        return df
+    
+    # Applicera varje override (filtrera bort ogiltiga värden)
+    applied = []
+    for col, value in variable_overrides.items():
+        # Skippa None, "NULL", "null" och andra ogiltiga värden
+        if value is None or value == "NULL" or value == "null":
+            continue
+        
+        if col in df.columns:
+            try:
+                df.loc[mask, col] = float(value)
+                applied.append(col)
+            except (ValueError, TypeError) as e:
+                print(f"    [VARNING] Kunde inte konvertera '{col}'={value}: {e}")
+        else:
+            print(f"    [VARNING] Okänd variabel '{col}' ignorerades")
+    
+    if applied:
+        print(f"    Variabel-overrides för {user_reid}: {len(applied)} st ({', '.join(applied[:5])}{'...' if len(applied) > 5 else ''})")
+    
+    return df
+
+
+def get_user_baseline_variables(
+    user_reid: str,
+    year: int = 2024,
+    filepath: Optional[str] = None
+) -> Dict[str, float]:
+    """
+    Hämtar baseline-värden för ett företags incitamentvariabler.
+    
+    Returnerar värden för ett specifikt år (default 2024).
+    Används i UI för att visa baseline i input-fält.
+    
+    Args:
+        user_reid: REId för företaget (ex: "REL00886")
+        year: År att hämta värden för (default 2024)
+        filepath: Sökväg till data (None = default)
+    
+    Returns:
+        Dict med variabelnamn -> baseline-värde
+        Ex: {"nf_obs": 0.039, "ug_obs": 0.404, ...}
+        
+        Returnerar tom dict om företaget inte hittas.
+    """
+    try:
+        df = load_incentive_data(filepath)
+    except FileNotFoundError:
+        return {}
+    
+    # Filtrera på företag och år
+    mask = (df['REId'] == user_reid) & (df['year'] == year)
+    df_user = df[mask]
+    
+    if df_user.empty:
+        return {}
+    
+    # Extrahera första (och enda) raden
+    row = df_user.iloc[0]
+    
+    # Bygg dict med alla tillgängliga variabler
+    result = {}
+    for col in VARIABLE_COLUMNS:
+        if col in row.index:
+            val = row[col]
+            # Hantera NaN
+            if pd.notna(val):
+                result[col] = float(val)
+            else:
+                result[col] = None
+    
+    return result
+
+
+def get_variable_metadata() -> Dict[str, Dict]:
+    """
+    Returnerar metadata för alla incitamentvariabler.
+    
+    Används för att bygga UI med korrekta labels, enheter och kategorier.
+    
+    Returns:
+        Dict med variabelnamn -> metadata dict:
+        {
+            "nf_obs": {
+                "label": "Nätförlust observerad",
+                "category": "netloss",
+                "unit": "andel",
+                "format": ".4f",
+            },
+            ...
+        }
+    """
+    return {
+        # Nätförlust
+        "nf_norm": {"label": "Nätförlust norm", "category": "netloss", "unit": "andel", "format": ".4f"},
+        "nf_obs": {"label": "Nätförlust observerad", "category": "netloss", "unit": "andel", "format": ".4f"},
+        "e_in": {"label": "Energi in", "category": "netloss", "unit": "MWh", "format": ",.0f"},
+        
+        # Belastning
+        "ug_norm": {"label": "Utnyttjandegrad norm", "category": "load", "unit": "andel", "format": ".4f"},
+        "ug_obs": {"label": "Utnyttjandegrad observerad", "category": "load", "unit": "andel", "format": ".4f"},
+        "k_upstream": {"label": "Kostnad överliggande nät", "category": "load", "unit": "kr", "format": ",.0f"},
+        
+        # CEMI4
+        "cemi4_norm": {"label": "CEMI4 norm", "category": "quality", "unit": "andel", "format": ".4f"},
+        "cemi4_obs": {"label": "CEMI4 observerad", "category": "quality", "unit": "andel", "format": ".4f"},
+        
+        # AIF observerade
+        "aif_a_1_obs": {"label": "AIF aviserad jordbruk", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_2_obs": {"label": "AIF aviserad industri", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_3_obs": {"label": "AIF aviserad handel/tjänster", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_4_obs": {"label": "AIF aviserad offentlig", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_5_obs": {"label": "AIF aviserad hushåll", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_6_obs": {"label": "AIF aviserad gränspunkt", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_1_obs": {"label": "AIF oaviserad jordbruk", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_2_obs": {"label": "AIF oaviserad industri", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_3_obs": {"label": "AIF oaviserad handel/tjänster", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_4_obs": {"label": "AIF oaviserad offentlig", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_5_obs": {"label": "AIF oaviserad hushåll", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_6_obs": {"label": "AIF oaviserad gränspunkt", "category": "aif_obs", "unit": "antal/kW", "format": ".4f"},
+        
+        # AIF norm
+        "aif_a_1_norm": {"label": "AIF aviserad jordbruk norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_2_norm": {"label": "AIF aviserad industri norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_3_norm": {"label": "AIF aviserad handel/tjänster norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_4_norm": {"label": "AIF aviserad offentlig norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_5_norm": {"label": "AIF aviserad hushåll norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_a_6_norm": {"label": "AIF aviserad gränspunkt norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_1_norm": {"label": "AIF oaviserad jordbruk norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_2_norm": {"label": "AIF oaviserad industri norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_3_norm": {"label": "AIF oaviserad handel/tjänster norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_4_norm": {"label": "AIF oaviserad offentlig norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_5_norm": {"label": "AIF oaviserad hushåll norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        "aif_o_6_norm": {"label": "AIF oaviserad gränspunkt norm", "category": "aif_norm", "unit": "antal/kW", "format": ".4f"},
+        
+        # AIT observerade
+        "ait_a_1_obs": {"label": "AIT aviserad jordbruk", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_2_obs": {"label": "AIT aviserad industri", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_3_obs": {"label": "AIT aviserad handel/tjänster", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_4_obs": {"label": "AIT aviserad offentlig", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_5_obs": {"label": "AIT aviserad hushåll", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_6_obs": {"label": "AIT aviserad gränspunkt", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_1_obs": {"label": "AIT oaviserad jordbruk", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_2_obs": {"label": "AIT oaviserad industri", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_3_obs": {"label": "AIT oaviserad handel/tjänster", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_4_obs": {"label": "AIT oaviserad offentlig", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_5_obs": {"label": "AIT oaviserad hushåll", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_6_obs": {"label": "AIT oaviserad gränspunkt", "category": "ait_obs", "unit": "tim/kWh", "format": ".4f"},
+        
+        # AIT norm
+        "ait_a_1_norm": {"label": "AIT aviserad jordbruk norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_2_norm": {"label": "AIT aviserad industri norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_3_norm": {"label": "AIT aviserad handel/tjänster norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_4_norm": {"label": "AIT aviserad offentlig norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_5_norm": {"label": "AIT aviserad hushåll norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_a_6_norm": {"label": "AIT aviserad gränspunkt norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_1_norm": {"label": "AIT oaviserad jordbruk norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_2_norm": {"label": "AIT oaviserad industri norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_3_norm": {"label": "AIT oaviserad handel/tjänster norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_4_norm": {"label": "AIT oaviserad offentlig norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_5_norm": {"label": "AIT oaviserad hushåll norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        "ait_o_6_norm": {"label": "AIT oaviserad gränspunkt norm", "category": "ait_norm", "unit": "tim/kWh", "format": ".4f"},
+        
+        # ÅME
+        "ame_1": {"label": "ÅME jordbruk", "category": "ame", "unit": "kW", "format": ",.1f"},
+        "ame_2": {"label": "ÅME industri", "category": "ame", "unit": "kW", "format": ",.1f"},
+        "ame_3": {"label": "ÅME handel/tjänster", "category": "ame", "unit": "kW", "format": ",.1f"},
+        "ame_4": {"label": "ÅME offentlig", "category": "ame", "unit": "kW", "format": ",.1f"},
+        "ame_5": {"label": "ÅME hushåll", "category": "ame", "unit": "kW", "format": ",.1f"},
+        "ame_6": {"label": "ÅME gränspunkt", "category": "ame", "unit": "kW", "format": ",.1f"},
+    }

@@ -134,6 +134,22 @@ class IncentiveConfig:
     enable_quality: bool = True
     enable_netloss: bool = True
     enable_load: bool = True
+    
+    # === Variabel-overrides (företagsspecifika) ===
+    # 
+    # Dessa overrides appliceras ENDAST på användarens företag.
+    # Värdet appliceras på ALLA år (2024-2027).
+    # Om None -> använd baseline från all_adjust_vars.csv
+    # 
+    # Struktur: Dict[str, float] där nyckel är kolumnnamn
+    # Exempel:
+    # {
+    #     "nf_obs": 0.045,        # Nätförlust observerad
+    #     "ug_obs": 0.65,         # Utnyttjandegrad observerad
+    #     "ait_o_1_obs": 12.5,    # AIT oaviserad jordbruk
+    #     "ame_2": 150000,        # ÅME industri
+    # }
+    variable_overrides: Optional[Dict[str, float]] = None
 
 
 @dataclass

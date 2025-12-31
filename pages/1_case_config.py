@@ -13,6 +13,7 @@ from frontend.modules.base import (
     m1_asset_base,
     m2_depreciation,
     m3_cost_of_capital,
+    m3_incentive_variables,
     m4_operating_exp,
     m5_efficiency,
 )
@@ -85,15 +86,21 @@ with tab2:
     set_module_config("m2_depreciation", config)
 
 with tab3:
-    # WACC-konfiguration
+    # WACC-parametrar
     config = m3_cost_of_capital.render()
     set_module_config("m3_cost_of_capital", config)
     
     st.divider()
     
-    # Incitamentjusteringar (3.3-3.6)
+    # Kvalitetsjusteringar (parametrar som påverkar alla företag)
     qa_config = m3_cost_of_capital.render_quality_adjustments()
     set_module_config("m3_quality_adjustments", qa_config)
+    
+    st.divider()
+    
+    # Incitamentvariabler (företagsspecifika observerade/normvärden)
+    var_config = m3_incentive_variables.render()
+    set_module_config("m3_incentive_variables", var_config)
 
 with tab4:
     config = m4_operating_exp.render()

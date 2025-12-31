@@ -201,6 +201,7 @@ def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
     else:
         return DeaConfig(method=EfficiencyMethod.BASELINE)
 
+
 def _convert_incentive_keys(m3q: Dict[str, Any]) -> Dict[str, Any]:
     """Konverterar JSON-kompatibla nycklar till backend-format."""
     result = {}
@@ -224,14 +225,17 @@ def _convert_incentive_keys(m3q: Dict[str, Any]) -> Dict[str, Any]:
 
 def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
     """
-    Bygg IncentiveConfig baserat på m3_quality_adjustments.
+    Bygg IncentiveConfig baserat på m3_quality_adjustments och m3_incentive_variables.
     
     Hanterar både enkla värden och Dict-format (per år, per kundtyp).
+    
+    Nytt: Inkluderar variable_overrides från m3_incentive_variables.
     """
    
     m3q = ui_config.get("m3_quality_adjustments", {})
+    m3v = ui_config.get("m3_incentive_variables", {})
 
-      # Konvertera JSON-nycklar till backend-format
+    # Konvertera JSON-nycklar till backend-format
     converted = _convert_incentive_keys(m3q)
     
     # Hämta värden - None betyder "använd baseline"
@@ -247,6 +251,17 @@ def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
     enable_netloss = m3q.get("enable_netloss", True)
     enable_load = m3q.get("enable_load", True)
     
+    # Hämta variable_overrides från m3_incentive_variables
+    # Filtrera bort None-värden och "NULL"-strängar (= använd baseline)
+    variable_overrides = None
+    if m3v:
+        overrides = {
+            k: v for k, v in m3v.items() 
+            if v is not None and v != "NULL" and v != "null"
+        }
+        if overrides:
+            variable_overrides = overrides
+    
     # Bygg config - använd baseline om None
     return IncentiveConfig(
         kpi=kpi if kpi is not None else BASELINE_INCENTIVE["kpi"],
@@ -259,6 +274,7 @@ def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
         enable_quality=enable_quality,
         enable_netloss=enable_netloss,
         enable_load=enable_load,
+        variable_overrides=variable_overrides,
     )
 
 
@@ -394,6 +410,12 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
         changed.append("3.6.2 Nätförlustincitament AV")
     if not m3q.get("enable_load", True):
         changed.append("3.6.3 Belastningsincitament AV")
+    
+    # Module 3: Incentive variables (NYA)
+    m3v = ui_config.get("m3_incentive_variables", {})
+    n_variable_overrides = sum(1 for v in m3v.values() if v is not None)
+    if n_variable_overrides > 0:
+        changed.append(f"30.X Incitamentvariabler ({n_variable_overrides} st)")
     
     # Module 5: Efficiency (enligt UM Table 13)
     m5 = ui_config.get("m5_efficiency", {})

@@ -58,6 +58,53 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         # Dict med year -> float, t.ex. {2024: 1.1546, ...}
         "kpi": None,  # None = baseline
     },
+    "m3_incentive_variables": {
+        # === Företagsspecifika incitamentvariabler ===
+        # Alla värden är None = använd baseline från all_adjust_vars.csv
+        # Om ett värde sätts, appliceras det på ALLA år (2024-2027)
+        
+        # --- 30.2 Nätförlust ---
+        "nf_norm": None,      # Nätförlust norm (andel)
+        "nf_obs": None,       # Nätförlust observerad (andel)
+        "e_in": None,         # Energi in (MWh)
+        
+        # --- 30.3 Belastning ---
+        "ug_norm": None,      # Utnyttjandegrad norm (andel)
+        "ug_obs": None,       # Utnyttjandegrad observerad (andel)
+        "k_upstream": None,   # Kostnad överliggande nät (kr)
+        
+        # --- 30.4 Kvalitet (CEMI4) ---
+        "cemi4_norm": None,   # CEMI4 norm (andel)
+        "cemi4_obs": None,    # CEMI4 observerad (andel)
+        
+        # --- 30.4 Kvalitet (AIF observerade) ---
+        "aif_a_1_obs": None, "aif_a_2_obs": None, "aif_a_3_obs": None,
+        "aif_a_4_obs": None, "aif_a_5_obs": None, "aif_a_6_obs": None,
+        "aif_o_1_obs": None, "aif_o_2_obs": None, "aif_o_3_obs": None,
+        "aif_o_4_obs": None, "aif_o_5_obs": None, "aif_o_6_obs": None,
+        
+        # --- 30.4 Kvalitet (AIF norm) ---
+        "aif_a_1_norm": None, "aif_a_2_norm": None, "aif_a_3_norm": None,
+        "aif_a_4_norm": None, "aif_a_5_norm": None, "aif_a_6_norm": None,
+        "aif_o_1_norm": None, "aif_o_2_norm": None, "aif_o_3_norm": None,
+        "aif_o_4_norm": None, "aif_o_5_norm": None, "aif_o_6_norm": None,
+        
+        # --- 30.4 Kvalitet (AIT observerade) ---
+        "ait_a_1_obs": None, "ait_a_2_obs": None, "ait_a_3_obs": None,
+        "ait_a_4_obs": None, "ait_a_5_obs": None, "ait_a_6_obs": None,
+        "ait_o_1_obs": None, "ait_o_2_obs": None, "ait_o_3_obs": None,
+        "ait_o_4_obs": None, "ait_o_5_obs": None, "ait_o_6_obs": None,
+        
+        # --- 30.4 Kvalitet (AIT norm) ---
+        "ait_a_1_norm": None, "ait_a_2_norm": None, "ait_a_3_norm": None,
+        "ait_a_4_norm": None, "ait_a_5_norm": None, "ait_a_6_norm": None,
+        "ait_o_1_norm": None, "ait_o_2_norm": None, "ait_o_3_norm": None,
+        "ait_o_4_norm": None, "ait_o_5_norm": None, "ait_o_6_norm": None,
+        
+        # --- 30.4 Kvalitet (ÅME per kundtyp) ---
+        "ame_1": None, "ame_2": None, "ame_3": None,
+        "ame_4": None, "ame_5": None, "ame_6": None,
+    },
     "m4_operating_exp": {
         "paverkbara_method": "OPEX",  # "OPEX" eller "TOTEX"
     },

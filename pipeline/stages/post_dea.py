@@ -22,7 +22,8 @@ from calculations.incentive_calculations import calculate_all_incentives
 from data_loaders.incentive_data import (
     load_incentive_data,
     prepare_incentive_input,
-    get_incentive_summary_by_reid
+    get_incentive_summary_by_reid,
+    apply_variable_overrides,
 )
 
 
@@ -134,7 +135,8 @@ def stage_post_dea(
     all_incentives = _calculate_incentive_adjustments(
         pre_dea=pre_dea,
         baseline=baseline,
-        config=config
+        config=config,
+        user_reid=user_reid  # Skicka med user_reid för variable_overrides
     )
     
     if all_incentives is not None:
@@ -233,6 +235,11 @@ def _log_incentive_params(incentive_config) -> None:
     if hasattr(incentive_config, 'enable_load') and not incentive_config.enable_load:
         changes.append("enable_load=False")
     
+    # Variable overrides (NYA)
+    if hasattr(incentive_config, 'variable_overrides') and incentive_config.variable_overrides:
+        n = len(incentive_config.variable_overrides)
+        changes.append(f"variable_overrides={n} st")
+    
     if changes:
         print(f"    Parametrar: {', '.join(changes)}")
 
@@ -240,7 +247,8 @@ def _log_incentive_params(incentive_config) -> None:
 def _calculate_incentive_adjustments(
     pre_dea: PreDeaStageOutput,
     baseline: BaselineStageOutput,
-    config: PostDeaConfig = None
+    config: PostDeaConfig = None,
+    user_reid: str = None
 ) -> pd.DataFrame:
     """
     Beräknar incitamentjusteringar för alla företag.
@@ -250,12 +258,13 @@ def _calculate_incentive_adjustments(
     2. Nätförlustincitamentet
     3. Belastningsincitamentet
     
-    Varje incitament begränsas till ±1/3 av avkastningen per år (konfigurerbart).
+    Varje incitament begränsas till +/-1/3 av avkastningen per år (konfigurerbart).
     
     Args:
         pre_dea: Output från Pre-DEA stage
         baseline: Output från Baseline stage
         config: PostDeaConfig med incentive-parametrar (None = baseline)
+        user_reid: REId för användarens företag (för variable_overrides)
     
     Returns:
         DataFrame med periodsummor per REId (tkr):
@@ -276,6 +285,12 @@ def _calculate_incentive_adjustments(
         
         # Förbered input med faktisk avkastning
         df_input = prepare_incentive_input(incentive_data, return_per_year)
+        
+        # Applicera variable_overrides om de finns
+        if config and hasattr(config, 'incentive') and config.incentive:
+            variable_overrides = getattr(config.incentive, 'variable_overrides', None)
+            if variable_overrides and user_reid:
+                df_input = apply_variable_overrides(df_input, user_reid, variable_overrides)
         
         # Extrahera incitament-parametrar från config
         incentive_params = _extract_incentive_params(config)
@@ -368,51 +383,43 @@ def _prepare_capex_for_intaktsram(
     
     KRITISKT: Returnerar PERIODSUMMA (4 år), INTE årsvärde!
     
-    Använder rätt källa baserat på Pre-DEA metod:
-    - 'baseline' -> SDF IR (periodsummor från Ei)
-    - 'wacc_scaling' -> Skala periodsummor från SDF med WACC-kvot
-    - 'parameter_change' eller 'kent_upload' -> Kapitalkostnad_Period från KENT
+    Källa beror på Pre-DEA metod:
+    - 'baseline': Använd SDF "Kapitalkostnad" (periodsumma)
+    - 'wacc_scaling': Skala SDF kapitalbindning med WACC-kvot
+    - 'kent_upload' / 'parameter_change': Använd KENT-output periodsumma
     
     Args:
-        pre_dea: Output från Pre-DEA stage (innehåller capex_method och wacc_used)
-        baseline: Output från Baseline stage (innehåller SDF IR)
+        pre_dea: Output från Pre-DEA stage
+        baseline: Output från Baseline stage
     
     Returns:
-        DataFrame med: REId, Kapitalkostnad_Total (periodsummor i tkr)
-        
-    Raises:
-        ValueError: Om capex_method är okänd eller data saknas
+        DataFrame med: REId, Kapitalkostnad_Total (periodsumma i tkr)
     """
     
     method = pre_dea.capex_method
     
     if method == 'baseline':
-        # Metod 1: Hämta periodsummor från SDF IR (Ei's baseline)
-        return baseline.sdf_ir[['REId', SDF_COL_KAPITALKOSTNAD]].rename(
-            columns={SDF_COL_KAPITALKOSTNAD: 'Kapitalkostnad_Total'}
-        ).copy()
+        # Direkt från SDF - redan periodsumma
+        return _get_capex_from_sdf(baseline)
     
     elif method == 'wacc_scaling':
-        # Metod 2: Skala periodsummor från SDF med WACC-kvot
+        # Skala periodsummor (inte årsvärde × 4)
         return _calculate_wacc_scaled_period_capex(pre_dea, baseline)
     
-    elif method in ['parameter_change', 'kent_upload']:
-        # Metod 3-4: Hämta periodsumma från KENT output
+    elif method in ['kent_upload', 'parameter_change']:
+        # KENT-output - verifiera att det är periodsumma
+        df_kent = pre_dea.df_all_companies
         
-        # Först: kolla om Kapitalkostnad_Period finns (ny namnkonvention)
-        if 'Kapitalkostnad_Period' in pre_dea.df_all_companies.columns:
-            return pre_dea.df_all_companies[['REId', 'Kapitalkostnad_Period']].rename(
+        if 'Kapitalkostnad_Period' in df_kent.columns:
+            return df_kent[['REId', 'Kapitalkostnad_Period']].rename(
                 columns={'Kapitalkostnad_Period': 'Kapitalkostnad_Total'}
-            ).copy()
-        
-        # Bakåtkompatibilitet: kolla om Kapitalkostnad_Total finns
-        elif 'Kapitalkostnad_Total' in pre_dea.df_all_companies.columns:
-            return pre_dea.df_all_companies[['REId', 'Kapitalkostnad_Total']].copy()
-        
+            )
+        elif 'Kapitalkostnad_Total' in df_kent.columns:
+            return df_kent[['REId', 'Kapitalkostnad_Total']]
         else:
             raise ValueError(
-                f"Kapitalkostnad periodsummor saknas i Pre-DEA resultat för metod '{method}'. "
-                "Förväntade kolumner: 'Kapitalkostnad_Period' eller 'Kapitalkostnad_Total'. "
+                f"KENT-output saknar periodsumma för kapitalkostnad. "
+                f"Förväntade kolumner: 'Kapitalkostnad_Period' eller 'Kapitalkostnad_Total'. "
                 "Kontrollera KENT-output och kör om pre-dea-steget."
             )
     
@@ -421,6 +428,24 @@ def _prepare_capex_for_intaktsram(
             f"Okänd capex_method: '{method}'. "
             f"Förväntade värden: 'baseline', 'wacc_scaling', 'parameter_change', 'kent_upload'"
         )
+
+
+def _get_capex_from_sdf(baseline: BaselineStageOutput) -> pd.DataFrame:
+    """Hämtar kapitalkostnad periodsumma direkt från SDF."""
+    sdf = baseline.sdf_ir.copy()
+    
+    if SDF_COL_KAPITALKOSTNAD not in sdf.columns:
+        raise ValueError(
+            f"Kolumn '{SDF_COL_KAPITALKOSTNAD}' saknas i SDF IR."
+        )
+    
+    df = sdf[['REId', SDF_COL_KAPITALKOSTNAD]].copy()
+    df.columns = ['REId', 'Kapitalkostnad_Total']
+    df['Kapitalkostnad_Total'] = pd.to_numeric(
+        df['Kapitalkostnad_Total'], errors='coerce'
+    ).fillna(0)
+    
+    return df
 
 
 def _calculate_wacc_scaled_period_capex(
@@ -433,13 +458,13 @@ def _calculate_wacc_scaled_period_capex(
     Metod:
     1. Hämta periodsummor för kapitalförslitning och kapitalbindning från SDF
     2. Beräkna skalningsfaktor: ny_WACC / baseline_WACC
-    3. Skala ENDAST kapitalbindningen (avkastning avtar med WACC)
+    3. Skala ENDAST kapitalbindningen (avkastning ändras med WACC)
     4. Ny periodsumma = Kapitalförslitning + Skalad Kapitalbindning
     
     Varför detta är korrekt:
     - Kapitalförslitning (avskrivning) beror på NUAV och livslängd, inte på WACC
-    - Kapitalbindning (avkastning) = kapitalbas × WACC, proportionell mot WACC
-    - Att ta årsvärde × 4 är FEL eftersom kapitalbindningen avtar varje halvår
+    - Kapitalbindning (avkastning) = kapitalbas x WACC, proportionell mot WACC
+    - Att ta årsvärde x 4 är FEL eftersom kapitalbindningen avtar varje halvår
       när tillgångarna åldras
     
     Args:
@@ -524,7 +549,7 @@ def get_return_per_year(
     
     Källor beroende på capex_method:
     - 'baseline': SDF "varav Kapital-bindning" / 4
-    - 'wacc_scaling': SDF "varav Kapital-bindning" × (ny_WACC / baseline_WACC) / 4
+    - 'wacc_scaling': SDF "varav Kapital-bindning" x (ny_WACC / baseline_WACC) / 4
     - 'kent_upload': KENT-output Avkastning_{year}
     - 'parameter_change': KENT-output Avkastning_{year}
     
