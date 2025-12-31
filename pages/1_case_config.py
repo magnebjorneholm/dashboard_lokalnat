@@ -1,7 +1,7 @@
 """
 Case Configuration Page.
 
-Huvudsida för att konfigurera ett case.
+Main page for configuring a regulatory case.
 """
 
 import streamlit as st
@@ -19,22 +19,22 @@ from frontend.modules.base import (
 )
 from frontend.modules.addons import benchmarking
 
-# Initialisera state
+# Initialize state
 init_session_state()
 
 
-# --- Cachade funktioner (måste definieras före användning) ---
+# --- Cached functions (must be defined before use) ---
 
-@st.cache_data(ttl=3600, show_spinner="Laddar baseline data...")
+@st.cache_data(ttl=3600, show_spinner="Loading baseline data...")
 def get_baseline_data():
-    """Cachad baseline-data."""
+    """Cached baseline data."""
     from data_loaders.baseline_data import load_baseline_data
     return load_baseline_data()
 
 
-@st.cache_data(ttl=3600, show_spinner="Beräknar baseline...")
+@st.cache_data(ttl=3600, show_spinner="Calculating baseline...")
 def get_baseline_result(_baseline_data, user_reid: str):
-    """Cachad baseline-result per företag."""
+    """Cached baseline result per company."""
     from config.case_definition import get_baseline_config
     from pipeline.core import run_pipeline
     
@@ -42,32 +42,32 @@ def get_baseline_result(_baseline_data, user_reid: str):
     return run_pipeline(_baseline_data, baseline_config)
 
 
-# --- Sidinnehåll ---
+# --- Page content ---
 
 st.title("Regumetrica - Case Configuration")
 
-# Kontrollera att företag är valt
+# Check that company is selected
 user_reid = get_user_reid()
 if user_reid is None:
-    st.warning("Välj företag i sidopanelen för att fortsätta.")
+    st.warning("Select a company in the sidebar to continue.")
     st.stop()
 
-# Visa valt företag
-st.info(f"Företag: **{user_reid}**")
+# Show selected company
+st.info(f"Company: **{user_reid}**")
 
-# Visa ändrade parametrar i sidebar
+# Show changed parameters in sidebar
 if "ui_config" in st.session_state:
     changed = get_changed_parameters(st.session_state["ui_config"])
     if changed:
         with st.sidebar:
-            st.markdown("### Ändrade parametrar")
+            st.markdown("### Modified Parameters")
             for param in changed:
                 st.markdown(f"- {param}")
     else:
         with st.sidebar:
-            st.caption("Alla parametrar = baseline")
+            st.caption("All parameters at baseline")
 
-# Tabs för modules
+# Tabs for modules
 tab1, tab2, tab3, tab4, tab5, tab_addons = st.tabs([
     "1. Asset Base",
     "2. Depreciation",
@@ -86,19 +86,19 @@ with tab2:
     set_module_config("m2_depreciation", config)
 
 with tab3:
-    # WACC-parametrar
+    # WACC parameters
     config = m3_cost_of_capital.render()
     set_module_config("m3_cost_of_capital", config)
     
     st.divider()
     
-    # Kvalitetsjusteringar (parametrar som påverkar alla företag)
+    # Quality adjustments (parameters affecting all companies)
     qa_config = m3_cost_of_capital.render_quality_adjustments()
     set_module_config("m3_quality_adjustments", qa_config)
     
     st.divider()
     
-    # Incitamentvariabler (företagsspecifika observerade/normvärden)
+    # Incentive variables (company-specific observed/norm values)
     var_config = m3_incentive_variables.render()
     set_module_config("m3_incentive_variables", var_config)
 
@@ -114,49 +114,49 @@ with tab_addons:
     config = benchmarking.render()
     set_module_config("addon_benchmarking", config)
 
-# Beräkna-knapp
+# Calculate button
 st.divider()
 
-if st.button("BERÄKNA INTÄKTSRAM", type="primary", use_container_width=True):
+if st.button("CALCULATE REVENUE FRAME", type="primary", use_container_width=True):
     
-    with st.status("Kör beräkning...", expanded=True) as status:
+    with st.status("Running calculation...", expanded=True) as status:
         
         try:
-            # Ladda baseline data (cachad)
-            st.write("Laddar baseline data...")
+            # Load baseline data (cached)
+            st.write("Loading baseline data...")
             baseline_data = get_baseline_data()
             
-            # Hämta baseline-resultat (cachad per företag)
-            st.write("Hämtar baseline...")
+            # Retrieve baseline result (cached per company)
+            st.write("Retrieving baseline...")
             baseline_result = get_baseline_result(baseline_data, user_reid)
             st.session_state["baseline_result"] = baseline_result
             
-            # Bygg case definition
-            st.write("Bygger case...")
+            # Build case definition
+            st.write("Building case...")
             case_definition = build_case_definition(
                 user_reid,
                 st.session_state["ui_config"]
             )
             
-            # Kör pipeline
-            st.write("Beräknar intäktsram...")
+            # Run pipeline
+            st.write("Calculating revenue frame...")
             from pipeline.core import run_pipeline
             case_result = run_pipeline(baseline_data, case_definition)
             st.session_state["case_result"] = case_result
             
             st.session_state["calculation_done"] = True
-            status.update(label="Beräkning klar!", state="complete")
+            status.update(label="Calculation complete", state="complete")
             
         except ValueError as e:
-            st.error(f"Konfigurationsfel: {e}")
-            status.update(label="Fel!", state="error")
+            st.error(f"Configuration error: {e}")
+            status.update(label="Error", state="error")
             st.stop()
         except Exception as e:
-            st.error(f"Beräkningsfel: {e}")
-            with st.expander("Teknisk information"):
+            st.error(f"Calculation error: {e}")
+            with st.expander("Technical Details"):
                 st.exception(e)
-            status.update(label="Fel!", state="error")
+            status.update(label="Error", state="error")
             st.stop()
     
-    # Navigera till resultat
+    # Navigate to results
     st.switch_page("pages/2_results.py")

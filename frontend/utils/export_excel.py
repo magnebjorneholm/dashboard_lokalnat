@@ -1,8 +1,8 @@
 """
 frontend/utils/export_excel.py
 
-Export av case-resultat till Excel.
-Skapar en fil med 4 flikar: Sammanfattning, Intäktsram, Effektivitet, Konfiguration.
+Export case results to Excel.
+Creates a file with 4 sheets: Summary, Revenue Frame, Efficiency, Configuration.
 """
 
 import pandas as pd
@@ -67,22 +67,22 @@ def create_case_export(
     ui_config: Dict[str, Any]
 ) -> BytesIO:
     """
-    Skapar Excel-export av case-resultat.
+    Creates Excel export of case results.
     
     Args:
-        user_reid: Användarens REId
-        foretag: Företagsnamn
-        baseline_result: Baseline pipeline-resultat (objekt med .extraction, .pre_dea, etc.)
-        case_result: Case pipeline-resultat (objekt med .extraction, .pre_dea, etc.)
-        ui_config: UI-konfiguration (parametrar)
+        user_reid: User's REId
+        foretag: Company name
+        baseline_result: Baseline pipeline result (object with .extraction, .pre_dea, etc.)
+        case_result: Case pipeline result (object with .extraction, .pre_dea, etc.)
+        ui_config: UI configuration (parameters)
     
     Returns:
-        BytesIO med Excel-fil redo för nedladdning
+        BytesIO with Excel file ready for download
     """
     wb = Workbook()
     wb.remove(wb.active)
     
-    # Wrap resultat för enhetlig åtkomst
+    # Wrap results for unified access
     baseline = PipelineResultAdapter(baseline_result)
     case = PipelineResultAdapter(case_result)
     
@@ -99,7 +99,7 @@ def create_case_export(
 
 
 def get_export_filename(user_reid: str) -> str:
-    """Genererar filnamn med timestamp."""
+    """Generates filename with timestamp."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"regumetrica_case_{user_reid}_{timestamp}.xlsx"
 
@@ -111,17 +111,17 @@ def _create_summary_sheet(
     baseline: PipelineResultAdapter,
     case: PipelineResultAdapter
 ):
-    """Skapar sammanfattningsflik med baseline vs case."""
-    ws = wb.create_sheet("Sammanfattning")
+    """Creates summary sheet with baseline vs case comparison."""
+    ws = wb.create_sheet("Summary")
     
-    # Rubrik
-    ws['A1'] = "Regumetrica - Case Resultat"
+    # Header
+    ws['A1'] = "Regumetrica - Case Results"
     ws['A1'].font = Font(bold=True, size=14)
     ws.merge_cells('A1:E1')
     
-    ws['A3'] = "Företag:"
+    ws['A3'] = "Company:"
     ws['B3'] = f"{foretag} ({user_reid})"
-    ws['A4'] = "Exportdatum:"
+    ws['A4'] = "Export date:"
     ws['B4'] = datetime.now().strftime("%Y-%m-%d %H:%M")
     
     # Metadata
@@ -131,31 +131,31 @@ def _create_summary_sheet(
     case_pre_dea = case.pre_dea
     case_dea = case.dea
     
-    ws['A7'] = "CAPEX-metod:"
+    ws['A7'] = "CAPEX method:"
     ws['B7'] = _get_attr(case_pre_dea, 'capex_method', 'baseline')
-    ws['A8'] = "DEA-metod:"
+    ws['A8'] = "DEA method:"
     ws['B8'] = _get_attr(case_dea, 'dea_method', 'baseline')
-    ws['A9'] = "DEA körd:"
-    ws['B9'] = "Ja" if _get_attr(case_dea, 'dea_executed', False) else "Nej"
+    ws['A9'] = "DEA executed:"
+    ws['B9'] = "Yes" if _get_attr(case_dea, 'dea_executed', False) else "No"
     
-    # Jämförelsetabell
-    ws['A11'] = "Jämförelse: Baseline vs Case"
+    # Comparison table
+    ws['A11'] = "Comparison: Baseline vs Case"
     ws['A11'].font = Font(bold=True)
     
-    headers = ['Variabel', 'Baseline', 'Case', 'Delta', 'Delta %']
+    headers = ['Variable', 'Baseline', 'Case', 'Delta', 'Delta %']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=12, column=col, value=header)
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
         cell.alignment = Alignment(horizontal='center')
     
-    # Hämta intäktsram-data
+    # Get revenue frame data
     baseline_ir = _get_attr(baseline.post_dea, 'user_intaktsram', None)
     case_ir = _get_attr(case.post_dea, 'user_intaktsram', None)
     baseline_effkrav = _get_attr(baseline.post_dea, 'user_effkrav_proc', 0)
     case_effkrav = _get_attr(case.post_dea, 'user_effkrav_proc', 0)
     
-    # Data-rader
+    # Data rows
     comparison_data = [
         ('Kapitalkostnad_Total', 'tkr'),
         ('Paverkbara_Periodsumma', 'tkr'),
@@ -185,14 +185,14 @@ def _create_summary_sheet(
         
         row += 1
     
-    # Effektivitetskrav
+    # Efficiency requirement
     ws.cell(row=row, column=1, value="Effkrav_proc")
     ws.cell(row=row, column=2, value=baseline_effkrav).number_format = '0.00%'
     ws.cell(row=row, column=3, value=case_effkrav).number_format = '0.00%'
     delta_effkrav = case_effkrav - baseline_effkrav if baseline_effkrav and case_effkrav else None
     ws.cell(row=row, column=4, value=delta_effkrav).number_format = '0.00%'
     
-    # Kolumnbredder
+    # Column widths
     ws.column_dimensions['A'].width = 30
     ws.column_dimensions['B'].width = 15
     ws.column_dimensions['C'].width = 15
@@ -205,30 +205,30 @@ def _create_intaktsram_sheet(
     baseline: PipelineResultAdapter, 
     case: PipelineResultAdapter
 ):
-    """Skapar intäktsram-flik med alla företag."""
-    ws = wb.create_sheet("Intäktsram")
+    """Creates revenue frame sheet with all companies."""
+    ws = wb.create_sheet("Revenue Frame")
     
     baseline_df = _get_attr(baseline.post_dea, 'all_intaktsram', None)
     case_df = _get_attr(case.post_dea, 'all_intaktsram', None)
     
     if baseline_df is None or case_df is None:
-        ws['A1'] = "Data saknas"
+        ws['A1'] = "Data missing"
         return
     
     if not isinstance(baseline_df, pd.DataFrame) or not isinstance(case_df, pd.DataFrame):
-        ws['A1'] = "Data är inte DataFrame"
+        ws['A1'] = "Data is not DataFrame"
         return
     
     baseline_df = baseline_df.copy()
     case_df = case_df.copy()
     
-    # Filtrera till REL-företag
+    # Filter to REL companies
     if 'REId' in baseline_df.columns:
         baseline_df = baseline_df[baseline_df['REId'].str.startswith('REL', na=False)].copy()
     if 'REId' in case_df.columns:
         case_df = case_df[case_df['REId'].str.startswith('REL', na=False)].copy()
     
-    # Välj kolumner
+    # Select columns
     keep_cols = ['REId', 'Kapitalkostnad_Total', 'Paverkbara_Periodsumma', 
                  'Opaverkbara_Kostnader', 'Intaktsram_Total']
     
@@ -236,13 +236,13 @@ def _create_intaktsram_sheet(
     case_cols = [c for c in keep_cols if c in case_df.columns]
     
     if not baseline_cols or not case_cols:
-        ws['A1'] = "Kolumner saknas"
+        ws['A1'] = "Columns missing"
         return
     
     baseline_df = baseline_df[baseline_cols].copy()
     case_df = case_df[case_cols].copy()
     
-    # Merge och beräkna delta
+    # Merge and calculate delta
     merged = baseline_df.merge(case_df, on='REId', suffixes=('_baseline', '_case'))
     
     for col in ['Kapitalkostnad_Total', 'Paverkbara_Periodsumma', 'Opaverkbara_Kostnader', 'Intaktsram_Total']:
@@ -258,251 +258,111 @@ def _create_efficiency_sheet(
     baseline: PipelineResultAdapter, 
     case: PipelineResultAdapter
 ):
-    """Skapar effektivitets-flik."""
-    ws = wb.create_sheet("Effektivitet")
+    """Creates efficiency sheet."""
+    ws = wb.create_sheet("Efficiency")
     
-    case_dea = case.dea
     baseline_dea = baseline.dea
+    case_dea = case.dea
     
-    case_results = _get_attr(case_dea, 'dea_results', None)
-    baseline_results = _get_attr(baseline_dea, 'dea_results', None)
+    ws['A1'] = "Efficiency Analysis"
+    ws['A1'].font = Font(bold=True, size=12)
     
-    if case_results is None or baseline_results is None:
-        ws['A1'] = "DEA-resultat saknas"
-        return
+    # DEA metadata
+    ws['A3'] = "DEA Configuration"
+    ws['A3'].font = Font(bold=True)
     
-    if not isinstance(case_results, pd.DataFrame) or not isinstance(baseline_results, pd.DataFrame):
-        ws['A1'] = "DEA-resultat är inte DataFrame"
-        return
+    ws['A4'] = "Method:"
+    ws['B4'] = _get_attr(case_dea, 'dea_method', 'baseline')
+    ws['A5'] = "Executed:"
+    ws['B5'] = "Yes" if _get_attr(case_dea, 'dea_executed', False) else "No"
     
-    # Välj kolumner
-    keep_cols = ['REId', 'Effektivitet', 'Supereffektivitet', 'potential', 'is_outlier']
-    case_cols = [c for c in keep_cols if c in case_results.columns]
-    baseline_cols = [c for c in keep_cols if c in baseline_results.columns]
-    
-    if 'REId' not in case_cols or 'REId' not in baseline_cols:
-        ws['A1'] = "REId saknas i DEA-resultat"
-        return
-    
-    case_df = case_results[case_cols].copy()
-    baseline_df = baseline_results[baseline_cols].copy()
-    
-    # Merge
-    merged = baseline_df.merge(case_df, on='REId', suffixes=('_baseline', '_case'))
-    
-    _write_dataframe_to_sheet(ws, merged)
+    # Efficiency scores if available
+    case_scores = _get_attr(case_dea, 'efficiency_scores', None)
+    if case_scores is not None and isinstance(case_scores, pd.DataFrame):
+        ws['A7'] = "Efficiency Scores"
+        ws['A7'].font = Font(bold=True)
+        _write_dataframe_to_sheet(ws, case_scores, start_row=8)
 
 
 def _create_config_sheet(
-    wb: Workbook, 
-    ui_config: Dict, 
+    wb: Workbook,
+    ui_config: Dict[str, Any],
     case: PipelineResultAdapter
 ):
-    """Skapar konfigurationsflik med alla parametrar."""
-    ws = wb.create_sheet("Konfiguration")
+    """Creates configuration sheet with all parameters."""
+    ws = wb.create_sheet("Configuration")
     
-    ws['A1'] = "Case Konfiguration"
-    ws['A1'].font = Font(bold=True, size=14)
+    ws['A1'] = "Case Configuration"
+    ws['A1'].font = Font(bold=True, size=12)
     
     row = 3
-    
-    # M1: Normvärden
-    ws.cell(row=row, column=1, value="M1: Regulatory Asset Base").font = Font(bold=True)
-    row += 1
-    m1 = ui_config.get('m1_asset_base', {})
-    normvalue_adj = m1.get('normvalue_adjustments')
-    if normvalue_adj:
-        ws.cell(row=row, column=1, value="Nivå:")
-        ws.cell(row=row, column=2, value=m1.get('normvalue_level', 'cat'))
+    for module_name, module_config in ui_config.items():
+        ws.cell(row=row, column=1, value=module_name)
+        ws.cell(row=row, column=1).font = Font(bold=True)
         row += 1
-        for cat, mult in normvalue_adj.items():
-            pct = (float(mult) - 1) * 100
-            ws.cell(row=row, column=1, value=f"Kategori {cat}:")
-            ws.cell(row=row, column=2, value=f"{pct:+.0f}%")
-            row += 1
-    else:
-        ws.cell(row=row, column=1, value="Inga ändringar (baseline)")
-        row += 1
-    
-    row += 1
-    
-    # M2: Livslängder
-    ws.cell(row=row, column=1, value="M2: Depreciation").font = Font(bold=True)
-    row += 1
-    m2 = ui_config.get('m2_depreciation', {})
-    lifetime_adj = m2.get('lifetime_adjustments')
-    if lifetime_adj:
-        ws.cell(row=row, column=1, value="Nivå:")
-        ws.cell(row=row, column=2, value=m2.get('lifetime_level', 'cat'))
-        row += 1
-        for cat, vals in lifetime_adj.items():
-            changes = ', '.join([f"{k}={v}" for k, v in vals.items()])
-            ws.cell(row=row, column=1, value=f"Kategori {cat}:")
-            ws.cell(row=row, column=2, value=changes)
-            row += 1
-    else:
-        ws.cell(row=row, column=1, value="Inga ändringar (baseline)")
+        
+        if isinstance(module_config, dict):
+            for key, value in module_config.items():
+                # Skip binary data
+                if isinstance(value, bytes):
+                    ws.cell(row=row, column=2, value=key)
+                    ws.cell(row=row, column=3, value="[binary data]")
+                elif isinstance(value, (dict, list)):
+                    ws.cell(row=row, column=2, value=key)
+                    ws.cell(row=row, column=3, value=str(value)[:100])
+                else:
+                    ws.cell(row=row, column=2, value=key)
+                    ws.cell(row=row, column=3, value=value)
+                row += 1
         row += 1
     
-    row += 1
-    
-    # M3: WACC
-    ws.cell(row=row, column=1, value="M3: Cost of Capital").font = Font(bold=True)
-    row += 1
-    m3 = ui_config.get('m3_cost_of_capital', {})
-    wacc = m3.get('wacc_override')
-    if wacc:
-        ws.cell(row=row, column=1, value="WACC (3.2.5):")
-        ws.cell(row=row, column=2, value=wacc).number_format = '0.00%'
-    else:
-        ws.cell(row=row, column=1, value="WACC (3.2.5):")
-        ws.cell(row=row, column=2, value="Baseline (4.53%)")
-    row += 2
-    
-    # M4: Operating Expenditures
-    ws.cell(row=row, column=1, value="M4: Operating Expenditures").font = Font(bold=True)
-    row += 1
-    m4 = ui_config.get('m4_operating_exp', {})
-    paverkbara_method = m4.get('paverkbara_method', 'OPEX')
-    ws.cell(row=row, column=1, value="Påverkbara metod (5.4.1):")
-    ws.cell(row=row, column=2, value=paverkbara_method)
-    row += 2
-    
-    # M5: Efficiency Incentive
-    ws.cell(row=row, column=1, value="M5: Efficiency Incentive").font = Font(bold=True)
-    row += 1
-    m5 = ui_config.get('m5_efficiency', {})
-    
-    # Baseline-värden enligt UM Table 13
-    BASELINE_M5 = {
-        'trunkering_max': 0.30,
-        'realiseringstid': 8,
-        'kunddelning': 0.50,
-        'outlier_krav': 0.01,
-        'tillsynsperiod': 4,
-    }
-    
-    # 5.2.1 Max potential
-    val = m5.get('trunkering_max')
-    ws.cell(row=row, column=1, value="Maximum efficiency potential cap (5.2.1):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=val).number_format = '0.00%'
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['trunkering_max']:.0%})")
-    row += 1
-    
-    # 5.2.2 Realiseringstid
-    val = m5.get('realiseringstid')
-    ws.cell(row=row, column=1, value="Realization time (5.2.2):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=f"{val} år")
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['realiseringstid']} år)")
-    row += 1
-    
-    # 5.2.3 Kunddelning
-    val = m5.get('kunddelning')
-    ws.cell(row=row, column=1, value="Customer sharing factor (5.2.3):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=val).number_format = '0%'
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['kunddelning']:.0%})")
-    row += 1
-    
-    # 5.3.1 Minimum annual requirement
-    val = m5.get('outlier_krav')
-    ws.cell(row=row, column=1, value="Minimum annual requirement (5.3.1):")
-    if val is not None:
-        ws.cell(row=row, column=2, value=val).number_format = '0.00%'
-    else:
-        ws.cell(row=row, column=2, value=f"Baseline ({BASELINE_M5['outlier_krav']:.0%})")
-    row += 2
-    
-    # DEA info (Add-on: Benchmarking)
-    ws.cell(row=row, column=1, value="Add-on: Benchmarking (DEA)").font = Font(bold=True)
-    row += 1
-    case_dea = case.dea
-    addon = ui_config.get('addon_benchmarking', {})
-    
-    ws.cell(row=row, column=1, value="Metod:")
-    ws.cell(row=row, column=2, value=_get_attr(case_dea, 'dea_method', 'baseline'))
-    row += 1
-    
-    ws.cell(row=row, column=1, value="DEA körd:")
-    ws.cell(row=row, column=2, value="Ja" if _get_attr(case_dea, 'dea_executed', False) else "Nej")
-    row += 1
-    
-    if addon.get('dea_method') == 'custom':
-        ws.cell(row=row, column=1, value="Inputs:")
-        ws.cell(row=row, column=2, value=', '.join(addon.get('dea_inputs', [])))
-        row += 1
-        ws.cell(row=row, column=1, value="Outputs:")
-        ws.cell(row=row, column=2, value=', '.join(addon.get('dea_outputs', [])))
-        row += 1
-        ws.cell(row=row, column=1, value="RTS:")
-        ws.cell(row=row, column=2, value=addon.get('dea_rts', 'crs').upper())
-        row += 1
-        ws.cell(row=row, column=1, value="Outlier multiplier (5.1.1):")
-        ws.cell(row=row, column=2, value=addon.get('dea_multiplier', 2.0))
-    
-    ws.column_dimensions['A'].width = 40
-    ws.column_dimensions['B'].width = 35
+    ws.column_dimensions['A'].width = 25
+    ws.column_dimensions['B'].width = 30
+    ws.column_dimensions['C'].width = 50
 
 
-def _write_dataframe_to_sheet(ws, df: pd.DataFrame):
-    """Skriver DataFrame till worksheet med formatering."""
-    for col, header in enumerate(df.columns, 1):
-        cell = ws.cell(row=1, column=col, value=header)
-        cell.font = HEADER_FONT
-        cell.fill = HEADER_FILL
-        cell.alignment = Alignment(horizontal='center')
-    
-    for row_idx, row_data in enumerate(df.itertuples(index=False), 2):
-        for col_idx, value in enumerate(row_data, 1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            col_name = df.columns[col_idx - 1]
-            if 'Delta%' in col_name or 'Effkrav' in col_name or 'Effektivitet' in col_name or 'Potential' in col_name:
-                cell.number_format = '0.00%'
-            elif any(x in col_name for x in ['Kapitalkostnad', 'Intäktsram', 'Påverkbara', 'Opåverkbara', 'Delta']):
-                cell.number_format = '#,##0'
-    
-    for col_idx, col_name in enumerate(df.columns, 1):
-        ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = max(12, len(str(col_name)) + 2)
+# --- Helper functions ---
 
-
-def _get_attr(obj, name: str, default=None):
-    """Hämtar attribut från objekt eller dict."""
+def _get_attr(obj, attr: str, default=None):
+    """Safely get attribute from object or dict."""
     if obj is None:
         return default
-    if hasattr(obj, name):
-        return getattr(obj, name)
-    if isinstance(obj, dict):
-        return obj.get(name, default)
+    if hasattr(obj, attr):
+        return getattr(obj, attr)
+    elif isinstance(obj, dict):
+        return obj.get(attr, default)
     return default
 
 
-def _get_series_value(series, key: str):
-    """Hämtar värde från pandas Series eller dict."""
+def _get_series_value(series, key, default=None):
+    """Safely get value from pandas Series."""
     if series is None:
-        return None
-    if isinstance(series, pd.Series):
-        return series.get(key) if key in series.index else None
-    if isinstance(series, dict):
-        return series.get(key)
-    if hasattr(series, key):
-        return getattr(series, key)
-    return None
+        return default
+    if isinstance(series, pd.Series) and key in series.index:
+        return series[key]
+    return default
 
 
-def _calc_delta(baseline, case):
-    """Beräknar delta och delta%."""
-    if baseline is None or case is None:
+def _calc_delta(baseline_val, case_val):
+    """Calculate delta and percentage change."""
+    if baseline_val is None or case_val is None:
         return None, None
-    try:
-        baseline = float(baseline)
-        case = float(case)
-        delta = case - baseline
-        delta_pct = delta / baseline if baseline != 0 else None
-        return delta, delta_pct
-    except (ValueError, TypeError):
-        return None, None
+    delta = case_val - baseline_val
+    delta_pct = delta / baseline_val if baseline_val != 0 else None
+    return delta, delta_pct
+
+
+def _write_dataframe_to_sheet(ws, df: pd.DataFrame, start_row: int = 1):
+    """Write DataFrame to worksheet with headers."""
+    # Headers
+    for col, header in enumerate(df.columns, 1):
+        cell = ws.cell(row=start_row, column=col, value=header)
+        cell.font = HEADER_FONT
+        cell.fill = HEADER_FILL
+    
+    # Data
+    for row_idx, row_data in enumerate(df.values, start_row + 1):
+        for col_idx, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            if isinstance(value, float):
+                cell.number_format = '#,##0.00'

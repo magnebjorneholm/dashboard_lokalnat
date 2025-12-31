@@ -1,7 +1,7 @@
 """
 Results Page - Raw Debug Version.
 
-Dumpar all rådata utan formatering för att se strukturen.
+Displays all raw data without formatting to inspect structure.
 """
 
 import streamlit as st
@@ -10,11 +10,11 @@ from frontend.utils.export_button import render_export_button
 
 init_session_state()
 
-st.title("Resultat (Raw Debug)")
+st.title("Results (Debug View)")
 
 if not st.session_state.get("calculation_done"):
-    st.warning("Ingen beräkning gjord ännu.")
-    if st.button("Gå till Case Config"):
+    st.warning("No calculation performed yet.")
+    if st.button("Go to Case Config"):
         st.switch_page("pages/1_case_config.py")
     st.stop()
 
@@ -22,9 +22,9 @@ baseline = st.session_state.get("baseline_result")
 case = st.session_state.get("case_result")
 user_reid = get_user_reid()
 
-st.subheader(f"Företag: {user_reid}")
+st.subheader(f"Company: {user_reid}")
 
-# --- Dump varje stage som rådata ---
+# --- Dump each stage as raw data ---
 
 st.subheader("Case Result")
 
@@ -62,21 +62,21 @@ st.divider()
 with st.expander("UI Config (session_state)", expanded=False):
     st.json(st.session_state.get("ui_config", {}))
 
-# Knappar
+# Buttons
 st.divider()
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("NYTT CASE", use_container_width=True):
+    if st.button("NEW CASE", use_container_width=True):
         reset_case()
         st.switch_page("pages/1_case_config.py")
 
 with col2:
-    if st.button("ÄNDRA CASE", use_container_width=True):
+    if st.button("MODIFY CASE", use_container_width=True):
         st.session_state["calculation_done"] = False
         st.switch_page("pages/1_case_config.py")
 
-# Export-knapp
+# Export button
 st.divider()
 render_export_button(
     user_reid=user_reid,
