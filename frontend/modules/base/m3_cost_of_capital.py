@@ -542,8 +542,8 @@ def render_quality_adjustments() -> Dict[str, Any]:
     with st.expander("3.6 Aggregate adjustment cap", expanded=False):
         _render_caps_section(config)
     
-    # === 3.7 KPI FACTORS (advanced) ===
-    with st.expander("3.7 KPI factors (advanced)", expanded=False):
+    # === 3.7 KPI FACTORS ===
+    with st.expander("3.7 CPI factors", expanded=False):
         _render_kpi_section(config)
     
     return config
