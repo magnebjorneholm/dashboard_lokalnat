@@ -33,7 +33,7 @@ BASELINE_CAPM = CAPMInputs()
 
 # Baseline derived parameters (calculated from CAPM baseline)
 BASELINE_DERIVED = {
-    "cost_of_equity_nominal": 0.0645,   # Re: Rf + βE × MRP
+    "cost_of_equity_nominal": 0.0645,   # Re: Rf + βₑ × MRP
     "cost_of_debt_nominal": 0.0401,     # Rd: Rf + credit spread
     "debt_ratio": 0.36,                  # S: debt ratio
     "tax_rate": 0.206,                   # τ: corporate tax
@@ -208,7 +208,7 @@ def _render_capm_section() -> None:
         )
         
         asset_beta = st.number_input(
-            "3.1.2 Asset beta (βA)",
+            "3.1.2 Asset beta",
             value=BASELINE_CAPM.asset_beta,
             min_value=0.0,
             max_value=2.0,
@@ -230,7 +230,7 @@ def _render_capm_section() -> None:
         )
         
         market_risk_premium = st.number_input(
-            "3.1.4 Market risk premium (MRP)",
+            "3.1.4 Market risk premium",
             value=BASELINE_CAPM.market_risk_premium,
             min_value=0.0,
             max_value=0.20,
@@ -295,13 +295,18 @@ def _render_capm_section() -> None:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("3.2.1 Equity beta (βE)", f"{result.equity_beta:.4f}")
-            st.metric("3.2.2 Cost of equity (Re)", format_percent(result.cost_of_equity_nominal))
+            with st.container(border=True):
+                st.metric("3.2.1 Equity beta", f"{result.equity_beta:.4f}")
+            with st.container(border=True):
+                st.metric("3.2.2 Cost of equity (Re)", format_percent(result.cost_of_equity_nominal))
         with col2:
-            st.metric("3.2.3 Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
-            st.metric("3.2.4 WACC nominal", format_percent(result.wacc_nominal_pre_tax))
+            with st.container(border=True):
+                st.metric("3.2.3 Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
+            with st.container(border=True):
+                st.metric("3.2.4 WACC nominal", format_percent(result.wacc_nominal_pre_tax))
         
-        st.metric("**3.2.5 WACC real pre-tax**", format_percent(calculated_wacc))
+        with st.container(border=True):
+            st.metric("3.2.5 WACC real pre-tax", format_percent(calculated_wacc))
         
         # === CALCULATION FORMULAS ===
         st.divider()
@@ -353,7 +358,7 @@ def _render_derived_section() -> None:
             step=0.001,
             format="%.4f",
             key=f"{MODULE_KEY}_derived_cost_equity",
-            help="Nominal cost of equity (post-tax). Baseline: Rf + βE × MRP"
+            help="Nominal cost of equity (post-tax). Baseline: Rf + βₑ × MRP"
         )
         
         cost_of_debt = st.number_input(
@@ -414,14 +419,16 @@ def _render_derived_section() -> None:
     
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("3.2.4 WACC nominal pre-tax", format_percent(wacc_nominal))
+        with st.container(border=True):
+            st.metric("3.2.4 WACC nominal pre-tax", format_percent(wacc_nominal))
     with col2:
         delta = wacc_real - BASELINE_WACC
-        st.metric(
-            "3.2.5 WACC real pre-tax", 
-            format_percent(wacc_real),
-            delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
-        )
+        with st.container(border=True):
+            st.metric(
+                "3.2.5 WACC real pre-tax", 
+                format_percent(wacc_real),
+                delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
+            )
     
     # === CALCULATION FORMULAS ===
     st.divider()

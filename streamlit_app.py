@@ -7,6 +7,7 @@ Entry point för frontend-applikationen.
 import streamlit as st
 
 from frontend.utils.state_manager import init_session_state, set_user_reid
+from frontend.common.styling import apply_styling
 
 # Page configuration
 st.set_page_config(
@@ -15,6 +16,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Apply custom styling (fonts, refinements)
+apply_styling()
+st.write("Styling applied") 
 
 # Initialize state
 init_session_state()
@@ -69,14 +74,12 @@ with st.sidebar:
 case_config = st.Page(
     "pages/1_case_config.py",
     title="Case Config",
-    icon="⚙️",
     default=True
 )
 
 results = st.Page(
     "pages/2_results.py",
     title="Results",
-    icon="📊"
 )
 
 # Run navigation
