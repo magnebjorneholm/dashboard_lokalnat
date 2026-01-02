@@ -11,7 +11,6 @@ from .wacc_scaling import (
 )
 from .kent_calculations import (
     load_capbase_a,
-    apply_parameter_adjustments,
     calculate_ages_and_nuav_batch,
     calculate_depreciation_batch,
     calculate_returns_batch,
@@ -21,8 +20,7 @@ from .kent_calculations import (
 )
 from .data_mapping import (
     merge_kent_with_baseline,
-    get_detailed_capex_data,
-    create_capex_breakdown
+    
 )
 from .dea_calculations import (
     run_dea_analysis,
@@ -84,7 +82,6 @@ __all__ = [
     
     # KENT calculations
     'load_capbase_a',
-    'apply_parameter_adjustments',
     'calculate_ages_and_nuav_batch',
     'calculate_depreciation_batch',
     'calculate_returns_batch',
@@ -94,8 +91,7 @@ __all__ = [
     
     # Data mapping
     'merge_kent_with_baseline',
-    'get_detailed_capex_data',
-    'create_capex_breakdown',
+    
     
     # DEA analysis
     'run_dea_analysis',

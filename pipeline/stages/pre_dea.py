@@ -141,9 +141,11 @@ def _pre_dea_parameter_change(
         )
         print(f"  KENT-beräkningar klara: {len(df_network)} nätverk")
         
+        # Skicka med sdf_ir för DEV FALLBACK av Kapitalkostnad_Period
         df_result = merge_kent_with_baseline(
             df_network,
-            baseline.df_all_companies
+            baseline.df_all_companies,
+            sdf_ir=baseline.sdf_ir  # Fallback för företag utan KENT-data
         )
         print(f"  Mergat med baseline: {len(df_result)} företag")
         
@@ -417,10 +419,11 @@ def _kent_upload_with_parameters(
         return _pre_dea_baseline(baseline)
     
     # Merge med baseline för övrig data
-    # merge_kent_with_baseline() hanterar Kapitalkostnad_Period
+    # Skicka med sdf_ir för DEV FALLBACK av Kapitalkostnad_Period
     df_result = merge_kent_with_baseline(
         df_network,
-        baseline.df_all_companies
+        baseline.df_all_companies,
+        sdf_ir=baseline.sdf_ir  # Fallback för företag utan KENT-data
     )
     print(f"  Mergat med baseline: {len(df_result)} företag")
     

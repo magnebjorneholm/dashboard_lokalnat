@@ -3,10 +3,16 @@ calculations/data_mapping.py
 
 Funktioner för att mappa mellan id_network, REId och företagsdata.
 Efter RER-filtrering har vi 1:1 mapping: id_network <-> REId.
+
+Uppdaterad med ny merge-strategi:
+- Baseline har nu Avkastning_2024-2027, Avkastning_Period
+- KENT uppdaterar ENDAST de företag som faktiskt omberäknats
+- Övriga företag behåller sina baseline-värden intakta
+- DEV FALLBACK: Företag utan Kapitalkostnad_Period får värde från SDF
 """
 
 import pandas as pd
-from typing import Dict
+from typing import Dict, List, Optional
 
 # Korrekt halvårsmappning
 YEAR_TO_TIMECODES = {
@@ -16,258 +22,356 @@ YEAR_TO_TIMECODES = {
     2027: [235, 236],
 }
 
-# TEST_MODE: Tillåt körning med ofullständig capbase_a
-# Sätt till False i produktion för att blockera PARAMETER_CHANGE med < 148 nätverk
-TEST_MODE = True
-
 
 def merge_kent_with_baseline(
     df_network: pd.DataFrame,
-    df_all_companies: pd.DataFrame
+    df_all_companies: pd.DataFrame,
+    sdf_ir: Optional[pd.DataFrame] = None
 ) -> pd.DataFrame:
     """
     Mergar KENT-beräknad CAPEX med baseline företagsdata.
     
-    Efter RER-filtrering har vi 1:1 mapping: id_network <-> REId (148->148).
-    KENT lägger till REId automatiskt, så vi kan göra direct merge!
-    
-    Process:
-    1. Verifiera att df_network har REId
-    2. Direct merge på REId
-    3. Hantera saknade företag (TEST_MODE eller fel)
-    4. Uppdatera TOTEX = OPEXp + CAPEX
+    NY STRATEGI (med utökad baseline):
+    - Baseline har redan Avkastning_2024-2027, Avkastning_Period
+    - KENT uppdaterar ENDAST de företag som faktiskt omberäknats
+    - Övriga företag behåller sina baseline-värden intakta
+    - DEV FALLBACK: Om sdf_ir tillhandahålls, används SDF-data för företag
+      som saknar Kapitalkostnad_Period (typiskt under utveckling med mini-parquet)
     
     Args:
         df_network: DataFrame med kapitalkostnader per REId från KENT
-            Förväntar: REId, CAPEX, Kapitalkostnad_2024, Kapitalkostnad_Period
-        df_all_companies: Baseline företagsdata med OPEXp, volumes etc
+            Förväntar: REId, Kapitalkostnad_2024, och eventuellt per-år kolumner
+        df_all_companies: Baseline företagsdata med OPEXp, volumes, per-år avkastning
+        sdf_ir: (Valfri) SDF intäktsram-data med 'Kapitalkostnad' periodsumma.
+            Om angiven används som fallback för företag utan KENT-beräknad period.
         
     Returns:
-        DataFrame med 148 företag och uppdaterad CAPEX/TOTEX + periodsumma
+        DataFrame med 148 företag och uppdaterad CAPEX/TOTEX för KENT-beräknade företag
     """
     
-    # 1. Verifiera att REId finns
+    # 1. Verifiera att REId finns i KENT-output
     if 'REId' not in df_network.columns:
-        raise ValueError("df_network saknar REId-kolumn! Kör aggregate_to_network_level först.")
+        raise ValueError(
+            "df_network saknar REId-kolumn! "
+            "Kör aggregate_to_network_level först."
+        )
     
-    # 2. Kontrollera täckning
+    # 2. Starta med en kopia av baseline (behåll ALLA kolumner)
+    df_result = df_all_companies.copy()
+    
+    # 3. Identifiera vilka REIds som KENT har omberäknat
     kent_reids = set(df_network['REId'].unique())
     baseline_reids = set(df_all_companies['REId'].unique())
-    missing_reids = baseline_reids - kent_reids
+    
     n_kent = len(kent_reids)
     n_baseline = len(baseline_reids)
     
-    if missing_reids:
-        if TEST_MODE:
-            print(f"  ⚠️ TEST MODE: KENT har {n_kent}/{n_baseline} företag. "
-                  f"{len(missing_reids)} företag får baseline-värden.")
-        else:
-            raise ValueError(
-                f"KENT output saknar {len(missing_reids)}/{n_baseline} företag. "
-                f"Kör med full capbase_a (148 nätverk) eller aktivera TEST_MODE. "
-                f"Saknade REIds: {sorted(list(missing_reids))[:10]}..."
-            )
+    # Logga täckning
+    missing_in_kent = baseline_reids - kent_reids
+    if missing_in_kent:
+        print(f"  ℹ KENT har {n_kent}/{n_baseline} företag. "
+              f"{len(missing_in_kent)} företag behåller baseline-värden.")
     
-    # 3. Förbered baseline-data (exkludera kolumner som ska ersättas)
-    exclude_cols = ['Kapitalkostnad_2024', 'TOTEX', 'Kapitalkostnad_Period',
-                    'Kapitalkostnad_2025', 'Kapitalkostnad_2026', 'Kapitalkostnad_2027',
-                    'CAPEX', 'Avskrivning', 'Avkastning']
-    base_cols = [col for col in df_all_companies.columns if col not in exclude_cols]
-    df_base = df_all_companies[base_cols].copy()
+    # 4. Definiera kolumner som ska uppdateras från KENT (om de finns)
+    update_cols = [
+        # Kapitalkostnader
+        'Kapitalkostnad_2024', 'Kapitalkostnad_2025', 
+        'Kapitalkostnad_2026', 'Kapitalkostnad_2027',
+        'Kapitalkostnad_Period',
+        'CAPEX',
+        
+        # Avskrivningar och avkastning (aggregat)
+        'Avskrivning', 'Avkastning',
+        
+        # Per-år avkastning
+        'Avkastning_2024', 'Avkastning_2025', 
+        'Avkastning_2026', 'Avkastning_2027',
+        'Avkastning_Period',
+        
+        # Per-år avskrivningar (om KENT producerar dem)
+        'Avskrivning_2024', 'Avskrivning_2025',
+        'Avskrivning_2026', 'Avskrivning_2027',
+        'Avskrivning_Period',
+    ]
     
-    # 4. Kolumner att hämta från KENT
-    kent_cols = ['REId', 'Kapitalkostnad_2024']
-    optional_kent_cols = ['Kapitalkostnad_Period', 'CAPEX', 'Avskrivning', 'Avkastning',
-                          'Kapitalkostnad_2025', 'Kapitalkostnad_2026', 'Kapitalkostnad_2027']
-    for col in optional_kent_cols:
-        if col in df_network.columns:
-            kent_cols.append(col)
+    # Filtrera till kolumner som faktiskt finns i KENT-output
+    available_update_cols = [col for col in update_cols if col in df_network.columns]
     
-    # 5. Merge med reset_index för att undvika duplicerat index
-    df_result = df_base.merge(
-        df_network[[c for c in kent_cols if c in df_network.columns]],
-        on='REId',
-        how='left'
-    ).reset_index(drop=True)
+    if not available_update_cols:
+        print("  ⚠ KENT-output saknar uppdateringsbara kolumner!")
+        return df_result
     
-    # 6. Hantera saknade företag
-    missing_capex = df_result['Kapitalkostnad_2024'].isna()
-    if missing_capex.any():
-        if TEST_MODE:
-            # Fallback till baseline för saknade företag
-            # Kolumner som behöver fallback
-            fallback_cols = [
-                'Kapitalkostnad_2024', 'Kapitalkostnad_Period',
-                'Kapitalkostnad_2025', 'Kapitalkostnad_2026', 'Kapitalkostnad_2027'
-            ]
-            
-            baseline_indexed = df_all_companies.set_index('REId')
-            fallback_count = 0
-            
-            for col in fallback_cols:
-                if col in baseline_indexed.columns:
-                    # Säkerställ kolumn finns i result
-                    if col not in df_result.columns:
-                        df_result[col] = pd.NA
-                    
-                    for idx in df_result[missing_capex].index:
-                        reid = df_result.loc[idx, 'REId']
-                        if reid in baseline_indexed.index:
-                            df_result.loc[idx, col] = baseline_indexed.loc[reid, col]
-                    fallback_count += 1
-            
-            # Om Kapitalkostnad_Period saknas i baseline, approximera
-            # I TEST_MODE: periodsumma ≈ 4 * årsvärde (rimlig approximation)
-            # I PRODUKTION: Detta körs aldrig eftersom alla 148 får KENT-värden
-            if 'Kapitalkostnad_Period' not in df_result.columns:
-                df_result['Kapitalkostnad_Period'] = pd.NA
-            
-            period_missing = df_result['Kapitalkostnad_Period'].isna()
-            if period_missing.any():
-                # Approximera: 4 år ≈ 4x årsvärde
-                df_result.loc[period_missing, 'Kapitalkostnad_Period'] = \
-                    df_result.loc[period_missing, 'Kapitalkostnad_2024'] * 4
-                print(f"  ⚠️ TEST MODE: Approximerade Kapitalkostnad_Period (4x årsvärde) för {period_missing.sum()} företag")
-            
-            print(f"  ✓ Fallback till baseline för {missing_capex.sum()} företag ({fallback_count} kolumner)")
-        else:
-            missing_list = df_result.loc[missing_capex, 'REId'].tolist()
-            raise ValueError(
-                f"KENT output saknar Kapitalkostnad_2024 för {missing_capex.sum()} företag. "
-                f"Missing REIds: {missing_list[:10]}{'...' if len(missing_list) > 10 else ''}"
-            )
+    print(f"  ℹ Uppdaterar {len(available_update_cols)} kolumner från KENT")
     
-    # 7. Beräkna ny TOTEX = OPEXp + Kapitalkostnad_2024
+    # 5. Säkerställ att alla uppdateringskolumner finns i result
+    for col in available_update_cols:
+        if col not in df_result.columns:
+            df_result[col] = pd.NA
+    
+    # 6. Uppdatera ENDAST de rader som finns i KENT-output
+    df_network_indexed = df_network.set_index('REId')
+    
+    updated_count = 0
+    for reid in kent_reids:
+        if reid in df_result['REId'].values:
+            mask = df_result['REId'] == reid
+            
+            for col in available_update_cols:
+                if col in df_network_indexed.columns:
+                    value = df_network_indexed.loc[reid, col]
+                    df_result.loc[mask, col] = value
+            
+            updated_count += 1
+    
+    print(f"  ✓ Uppdaterade {updated_count} företag med KENT-värden")
+    
+    # 7. Synkronisera CAPEX med Kapitalkostnad_2024 om CAPEX saknas
+    if 'CAPEX' not in available_update_cols and 'Kapitalkostnad_2024' in available_update_cols:
+        for reid in kent_reids:
+            if reid in df_result['REId'].values:
+                mask = df_result['REId'] == reid
+                df_result.loc[mask, 'CAPEX'] = df_result.loc[mask, 'Kapitalkostnad_2024']
+    
+    # 8. Beräkna TOTEX för alla (inklusive uppdaterade)
     df_result['TOTEX'] = df_result['OPEXp'] + df_result['Kapitalkostnad_2024']
     
-    # 8. Säkerställ CAPEX-kolumn finns (alias för Kapitalkostnad_2024)
-    if 'CAPEX' not in df_result.columns:
-        df_result['CAPEX'] = df_result['Kapitalkostnad_2024']
+    # 9. DEV FALLBACK: Fyll i Kapitalkostnad_Period från SDF för företag utan KENT-data
+    df_result = _apply_kapitalkostnad_period_fallback(df_result, sdf_ir, kent_reids)
+    
+    # 10. Verifiera resultat
+    n_result = len(df_result)
+    if n_result != n_baseline:
+        print(f"  ⚠ VARNING: Resultat har {n_result} rader, förväntat {n_baseline}")
     
     return df_result
 
 
-def get_detailed_capex_data(
-    df_network: pd.DataFrame,
-    target_reid: str
+def _apply_kapitalkostnad_period_fallback(
+    df_result: pd.DataFrame,
+    sdf_ir: Optional[pd.DataFrame],
+    kent_reids: set
 ) -> pd.DataFrame:
     """
-    Hämtar detaljerad kapitalkostnadsdata för ett specifikt företag.
+    DEV FALLBACK: Fyller i Kapitalkostnad_Period från SDF för företag som saknar KENT-data.
+    
+    Under utveckling med capbase_a_mini.parquet har endast ett fåtal företag
+    beräknad Kapitalkostnad_Period. Denna funktion fyller i från SDF för övriga.
     
     Args:
-        df_network: DataFrame med kapitalkostnader per REId från KENT
-        target_reid: REId att hämta data för (ex: "REL00001")
+        df_result: DataFrame med merge-resultat
+        sdf_ir: SDF intäktsram-data (valfri)
+        kent_reids: Set med REIds som har KENT-data
         
     Returns:
-        DataFrame med alla tidsperioder och kapitalkostnadskomponenter
+        DataFrame med ifylld Kapitalkostnad_Period
     """
+    # Säkerställ att kolumnen finns
+    if 'Kapitalkostnad_Period' not in df_result.columns:
+        df_result['Kapitalkostnad_Period'] = pd.NA
     
-    # Direct filter på REId
-    df_filtered = df_network[df_network['REId'] == target_reid].copy()
+    # Identifiera företag som saknar Kapitalkostnad_Period
+    missing_period_mask = df_result['Kapitalkostnad_Period'].isna()
+    n_missing = missing_period_mask.sum()
     
-    return df_filtered
+    if n_missing == 0:
+        # Alla företag har Kapitalkostnad_Period, ingen fallback behövs
+        return df_result
+    
+    # Om SDF inte tillhandahålls, logga varning och returnera
+    if sdf_ir is None:
+        print(f"  ⚠ {n_missing} företag saknar Kapitalkostnad_Period och ingen SDF-fallback tillgänglig")
+        return df_result
+    
+    # Hitta kolumnnamn för kapitalkostnad i SDF (kan vara 'Kapitalkostnad' eller liknande)
+    sdf_capex_col = None
+    for col_name in ['Kapitalkostnad', 'Kapitalkostnad_Total', 'Kapitalkostnad_Period']:
+        if col_name in sdf_ir.columns:
+            sdf_capex_col = col_name
+            break
+    
+    if sdf_capex_col is None:
+        print(f"  ⚠ Kunde inte hitta kapitalkostnad-kolumn i SDF. "
+              f"Tillgängliga kolumner: {list(sdf_ir.columns)[:10]}...")
+        return df_result
+    
+    # Skapa lookup från SDF
+    sdf_lookup = sdf_ir.set_index('REId')[sdf_capex_col].to_dict()
+    
+    # Fyll i saknade värden
+    filled_count = 0
+    for idx, row in df_result[missing_period_mask].iterrows():
+        reid = row['REId']
+        if reid in sdf_lookup:
+            sdf_value = sdf_lookup[reid]
+            if pd.notna(sdf_value):
+                df_result.loc[idx, 'Kapitalkostnad_Period'] = sdf_value
+                filled_count += 1
+    
+    # Logga tydligt för utvecklaren
+    n_total = len(df_result)
+    n_from_kent = len(kent_reids)
+    print(f"  [DEV FALLBACK] {n_missing} av {n_total} företag saknade Kapitalkostnad_Period från KENT.")
+    print(f"                 Använde SDF-baseline för {filled_count} företag.")
+    
+    # Verifiera att alla nu har värden
+    still_missing = df_result['Kapitalkostnad_Period'].isna().sum()
+    if still_missing > 0:
+        print(f"  ⚠ {still_missing} företag saknar fortfarande Kapitalkostnad_Period efter fallback")
+    
+    return df_result
 
 
-def create_capex_breakdown(
-    df_network: pd.DataFrame, 
-    target_reid: str
-) -> Dict:
+def get_yearly_return_columns(df: pd.DataFrame) -> List[str]:
     """
-    Skapar en detaljerad uppdelning av CAPEX för ett företag.
-    
-    Tidskoder är HALVÅR: 229=2024H1, 230=2024H2, etc.
+    Returnerar lista med per-år avkastningskolumner som finns i DataFrame.
     
     Args:
-        df_network: DataFrame med kapitalkostnader per REId från KENT
-        target_reid: REId att analysera (ex: "REL00001")
+        df: DataFrame att kontrollera
         
     Returns:
-        Dict med breakdown per år och komponent
+        Lista med kolumnnamn
     """
-    
-    df_detailed = get_detailed_capex_data(df_network, target_reid)
-    
-    if df_detailed.empty:
-        return {}
-    
-    breakdown = {}
-    
-    # Iterera över år (inte halvår)
-    for year, timecodes in YEAR_TO_TIMECODES.items():
-        year_data = {
-            'dep_ord': 0.0,
-            'dep_tail': 0.0,
-            'return_ord': 0.0,
-            'return_tail': 0.0,
-        }
-        
-        # Summera båda halvåren för detta år
-        for t in timecodes:
-            dep_ord_col = f'dep_ord_{t}'
-            dep_tail_col = f'dep_tail_{t}'
-            ret_ord_col = f'return_ord_{t}'
-            ret_tail_col = f'return_tail_{t}'
-            
-            if dep_ord_col in df_detailed.columns:
-                year_data['dep_ord'] += df_detailed[dep_ord_col].iloc[0]
-            if dep_tail_col in df_detailed.columns:
-                year_data['dep_tail'] += df_detailed[dep_tail_col].iloc[0]
-            if ret_ord_col in df_detailed.columns:
-                year_data['return_ord'] += df_detailed[ret_ord_col].iloc[0]
-            if ret_tail_col in df_detailed.columns:
-                year_data['return_tail'] += df_detailed[ret_tail_col].iloc[0]
-        
-        year_data['total_dep'] = year_data['dep_ord'] + year_data['dep_tail']
-        year_data['total_return'] = year_data['return_ord'] + year_data['return_tail']
-        year_data['capcost_total'] = year_data['total_dep'] + year_data['total_return']
-        
-        breakdown[year] = year_data
-    
-    return breakdown
+    yearly_cols = ['Avkastning_2024', 'Avkastning_2025', 
+                   'Avkastning_2026', 'Avkastning_2027']
+    return [col for col in yearly_cols if col in df.columns]
 
 
-def create_halfyear_breakdown(
-    df_network: pd.DataFrame, 
-    target_reid: str
-) -> Dict:
+def has_yearly_returns(df: pd.DataFrame) -> bool:
     """
-    Skapar halvårsvis breakdown av kapitalkostnader.
+    Kontrollerar om DataFrame har alla per-år avkastningskolumner.
     
     Args:
-        df_network: DataFrame med kapitalkostnader per REId från KENT
-        target_reid: REId att analysera (ex: "REL00001")
+        df: DataFrame att kontrollera
         
     Returns:
-        Dict med breakdown per halvår (ex: '2024H1', '2024H2', etc.)
+        True om alla per-år kolumner finns
     """
+    yearly_cols = ['Avkastning_2024', 'Avkastning_2025', 
+                   'Avkastning_2026', 'Avkastning_2027']
+    return all(col in df.columns for col in yearly_cols)
+
+
+def extract_yearly_returns(
+    df: pd.DataFrame,
+    reid_col: str = 'REId'
+) -> pd.DataFrame:
+    """
+    Extraherar per-år avkastning från DataFrame.
     
-    df_detailed = get_detailed_capex_data(df_network, target_reid)
-    
-    if df_detailed.empty:
-        return {}
-    
-    breakdown = {}
-    
-    for t in range(229, 237):
-        # Konvertera tidskod till label
-        year = 2024 + (t - 229) // 2
-        half = ((t - 229) % 2) + 1
-        label = f"{year}H{half}"
+    Args:
+        df: DataFrame med per-år avkastningskolumner
+        reid_col: Namn på REId-kolumn
         
-        dep_ord = df_detailed[f'dep_ord_{t}'].iloc[0] if f'dep_ord_{t}' in df_detailed.columns else 0
-        dep_tail = df_detailed[f'dep_tail_{t}'].iloc[0] if f'dep_tail_{t}' in df_detailed.columns else 0
-        ret_ord = df_detailed[f'return_ord_{t}'].iloc[0] if f'return_ord_{t}' in df_detailed.columns else 0
-        ret_tail = df_detailed[f'return_tail_{t}'].iloc[0] if f'return_tail_{t}' in df_detailed.columns else 0
-        
-        breakdown[label] = {
-            'timecode': t,
-            'dep_ord': dep_ord,
-            'dep_tail': dep_tail,
-            'return_ord': ret_ord,
-            'return_tail': ret_tail,
-            'total_dep': dep_ord + dep_tail,
-            'total_return': ret_ord + ret_tail,
-            'capcost_total': dep_ord + dep_tail + ret_ord + ret_tail
-        }
+    Returns:
+        DataFrame med REId och Avkastning_2024-2027
+    """
+    yearly_cols = ['Avkastning_2024', 'Avkastning_2025', 
+                   'Avkastning_2026', 'Avkastning_2027']
     
-    return breakdown
+    available_cols = [col for col in yearly_cols if col in df.columns]
+    
+    if not available_cols:
+        raise ValueError("DataFrame saknar per-år avkastningskolumner")
+    
+    return df[[reid_col] + available_cols].copy()
+
+
+def scale_yearly_returns(
+    df: pd.DataFrame,
+    scaling_factor: float,
+    reid_col: str = 'REId'
+) -> pd.DataFrame:
+    """
+    Skalar per-år avkastning med en faktor.
+    
+    Används för WACC-skalning där avkastning är proportionell mot WACC.
+    
+    Args:
+        df: DataFrame med per-år avkastningskolumner
+        scaling_factor: Faktor att multiplicera med (ny_WACC / baseline_WACC)
+        reid_col: Namn på REId-kolumn
+        
+    Returns:
+        DataFrame med skalad per-år avkastning
+    """
+    yearly_cols = ['Avkastning_2024', 'Avkastning_2025', 
+                   'Avkastning_2026', 'Avkastning_2027']
+    
+    result = df[[reid_col]].copy()
+    
+    for col in yearly_cols:
+        if col in df.columns:
+            result[col] = df[col] * scaling_factor
+        else:
+            raise ValueError(f"Kolumn {col} saknas i DataFrame")
+    
+    # Beräkna ny periodsumma
+    result['Avkastning_Period'] = (
+        result['Avkastning_2024'] + result['Avkastning_2025'] +
+        result['Avkastning_2026'] + result['Avkastning_2027']
+    )
+    
+    return result
+
+
+def get_reconciliation_mapping(reconciliation_df: pd.DataFrame) -> Dict[str, int]:
+    """
+    Skapar mapping från REId till id_network.
+    
+    Args:
+        reconciliation_df: DataFrame med REId och id_network kolumner
+        
+    Returns:
+        Dict {REId: id_network}
+    """
+    if 'REId' not in reconciliation_df.columns:
+        raise ValueError("reconciliation_df saknar REId-kolumn")
+    
+    if 'id_network' not in reconciliation_df.columns:
+        raise ValueError("reconciliation_df saknar id_network-kolumn")
+    
+    return dict(zip(reconciliation_df['REId'], reconciliation_df['id_network']))
+
+
+def get_reid_from_id_network(
+    id_network: int, 
+    reconciliation_df: pd.DataFrame
+) -> Optional[str]:
+    """
+    Hämtar REId för ett givet id_network.
+    
+    Args:
+        id_network: Nätverk-ID
+        reconciliation_df: Reconciliation DataFrame
+        
+    Returns:
+        REId eller None om ej hittat
+    """
+    mask = reconciliation_df['id_network'] == id_network
+    
+    if mask.any():
+        return reconciliation_df.loc[mask, 'REId'].iloc[0]
+    
+    return None
+
+
+def get_id_network_from_reid(
+    reid: str, 
+    reconciliation_df: pd.DataFrame
+) -> Optional[int]:
+    """
+    Hämtar id_network för ett givet REId.
+    
+    Args:
+        reid: REId (ex: "REL00001")
+        reconciliation_df: Reconciliation DataFrame
+        
+    Returns:
+        id_network eller None om ej hittat
+    """
+    mask = reconciliation_df['REId'] == reid
+    
+    if mask.any():
+        return int(reconciliation_df.loc[mask, 'id_network'].iloc[0])
+    
+    return None

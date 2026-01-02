@@ -1,12 +1,19 @@
 """
-post_dea.py
+pipeline/stages/post_dea.py
 
 Stage 5: Post-DEA
 Beräknar effektiviseringskrav, incitamentjusteringar, påverkbara kostnader,
 och assemblerar intäktsram.
+
+UPPDATERAD med förenklad get_return_per_year():
+- Baseline har nu Avkastning_2024-2027 direkt i df_all_companies
+- Eliminerar approximationen "periodsumma / 4" för baseline och wacc_scaling
+- Korrekt per-år variation bevaras för incitamentjusteringens 1/3-cap
 """
 
 import pandas as pd
+from typing import Optional
+
 from config import PostDeaConfig
 from config.case_definition import PaverkbaraMethod
 from pipeline.stages.stage_outputs import (
@@ -32,6 +39,10 @@ SDF_COL_KAPITALFORSLITNING = '-varav Kapital-förslitning'
 SDF_COL_KAPITALBINDNING = 'varav Kapital-bindning'
 SDF_COL_KAPITALKOSTNAD = 'Kapitalkostnad'
 
+
+# =============================================================================
+# HUVUDFUNKTION: stage_post_dea
+# =============================================================================
 
 def stage_post_dea(
     dea: DeaStageOutput,
@@ -100,7 +111,7 @@ def stage_post_dea(
     
     # För TOTEX behövs kapitalkostnad
     if config.paverkbara_method == PaverkbaraMethod.TOTEX:
-        capex_for_paverkbara = _prepare_capex_for_intaktsram(pre_dea, baseline)
+        capex_for_paverkbara = get_period_capex(pre_dea, baseline)
     else:
         # För OPEX behövs ingen CAPEX-data
         capex_for_paverkbara = pd.DataFrame({'REId': pre_dea.df_all_companies['REId']})
@@ -117,10 +128,7 @@ def stage_post_dea(
     # STEG 4: Förbered kapitalkostnad för intäktsram (baserat på Pre-DEA metod)
     print(f"\n  Steg 4/6: Förbereder kapitalkostnad (källa: {pre_dea.capex_method})...")
     
-    capex_for_intaktsram = _prepare_capex_for_intaktsram(
-        pre_dea=pre_dea,
-        baseline=baseline
-    )
+    capex_for_intaktsram = get_period_capex(pre_dea, baseline)
     
     print(f"    [OK] Kapitalkostnad förberedd för {len(capex_for_intaktsram)} företag")
     
@@ -136,7 +144,7 @@ def stage_post_dea(
         pre_dea=pre_dea,
         baseline=baseline,
         config=config,
-        user_reid=user_reid  # Skicka med user_reid för variable_overrides
+        user_reid=user_reid
     )
     
     if all_incentives is not None:
@@ -192,194 +200,16 @@ def stage_post_dea(
     )
 
 
-def _log_incentive_params(incentive_config) -> None:
-    """Loggar incitament-parametrar som avviker från baseline."""
-    # Baseline-värden för jämförelse
-    BASELINE = {
-        'adj_max_agg': 1/3,
-        'adj_max_cemi4': 0.25,
-        'sharing_netloss': 0.75,
-        'kpi': {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
-        'k_nf': {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44},
-    }
-    
-    changes = []
-    
-    # Enkla parametrar
-    if hasattr(incentive_config, 'adj_max_agg') and incentive_config.adj_max_agg != BASELINE['adj_max_agg']:
-        changes.append(f"adj_max_agg={incentive_config.adj_max_agg:.3f}")
-    if hasattr(incentive_config, 'adj_max_cemi4') and incentive_config.adj_max_cemi4 != BASELINE['adj_max_cemi4']:
-        changes.append(f"adj_max_cemi4={incentive_config.adj_max_cemi4:.3f}")
-    if hasattr(incentive_config, 'sharing_netloss') and incentive_config.sharing_netloss != BASELINE['sharing_netloss']:
-        changes.append(f"sharing_netloss={incentive_config.sharing_netloss:.2f}")
-    
-    # Dict-parametrar (kpi, k_nf)
-    if hasattr(incentive_config, 'kpi') and incentive_config.kpi is not None:
-        if incentive_config.kpi != BASELINE['kpi']:
-            changes.append("kpi=ändrad")
-    if hasattr(incentive_config, 'k_nf') and incentive_config.k_nf is not None:
-        if incentive_config.k_nf != BASELINE['k_nf']:
-            changes.append("k_nf=ändrad")
-    
-    # AIT/AIF-kostnader
-    if hasattr(incentive_config, 'ait_costs') and incentive_config.ait_costs is not None:
-        changes.append("ait_costs=ändrad")
-    if hasattr(incentive_config, 'aif_costs') and incentive_config.aif_costs is not None:
-        changes.append("aif_costs=ändrad")
-    
-    # On/off
-    if hasattr(incentive_config, 'enable_quality') and not incentive_config.enable_quality:
-        changes.append("enable_quality=False")
-    if hasattr(incentive_config, 'enable_netloss') and not incentive_config.enable_netloss:
-        changes.append("enable_netloss=False")
-    if hasattr(incentive_config, 'enable_load') and not incentive_config.enable_load:
-        changes.append("enable_load=False")
-    
-    # Variable overrides (NYA)
-    if hasattr(incentive_config, 'variable_overrides') and incentive_config.variable_overrides:
-        n = len(incentive_config.variable_overrides)
-        changes.append(f"variable_overrides={n} st")
-    
-    if changes:
-        print(f"    Parametrar: {', '.join(changes)}")
+# =============================================================================
+# KAPITALKOSTNAD PERIODSUMMA
+# =============================================================================
 
-
-def _calculate_incentive_adjustments(
-    pre_dea: PreDeaStageOutput,
-    baseline: BaselineStageOutput,
-    config: PostDeaConfig = None,
-    user_reid: str = None
-) -> pd.DataFrame:
-    """
-    Beräknar incitamentjusteringar för alla företag.
-    
-    Tre typer av incitament:
-    1. Kvalitetsincitamentet (AIT/AIF)
-    2. Nätförlustincitamentet
-    3. Belastningsincitamentet
-    
-    Varje incitament begränsas till +/-1/3 av avkastningen per år (konfigurerbart).
-    
-    Args:
-        pre_dea: Output från Pre-DEA stage
-        baseline: Output från Baseline stage
-        config: PostDeaConfig med incentive-parametrar (None = baseline)
-        user_reid: REId för användarens företag (för variable_overrides)
-    
-    Returns:
-        DataFrame med periodsummor per REId (tkr):
-        - Kvalitetsjustering_Total
-        - Natforlustjustering_Total
-        - Belastningsjustering_Total
-        - Incitamentjustering_Total
-        - Missing_Incentive_Data (bool)
-        
-        Returnerar None om incitamentdata saknas.
-    """
-    try:
-        # Ladda incitamentdata
-        incentive_data = load_incentive_data()
-        
-        # Hämta avkastning per år
-        return_per_year = get_return_per_year(pre_dea, baseline)
-        
-        # Förbered input med faktisk avkastning
-        df_input = prepare_incentive_input(incentive_data, return_per_year)
-        
-        # Applicera variable_overrides om de finns
-        if config and hasattr(config, 'incentive') and config.incentive:
-            variable_overrides = getattr(config.incentive, 'variable_overrides', None)
-            if variable_overrides and user_reid:
-                df_input = apply_variable_overrides(df_input, user_reid, variable_overrides)
-        
-        # Extrahera incitament-parametrar från config
-        incentive_params = _extract_incentive_params(config)
-        
-        # Kör beräkning med parametrar
-        df_calc = calculate_all_incentives(df_input, ret_period_col='ret_period', **incentive_params)
-        
-        # Aggregera till periodsummor per REId
-        df_summary = get_incentive_summary_by_reid(df_calc)
-        
-        return df_summary
-        
-    except FileNotFoundError as e:
-        print(f"    [VARNING] Incitamentdata saknas: {e}")
-        return None
-    except Exception as e:
-        print(f"    [FEL] Kunde inte beräkna incitament: {e}")
-        return None
-
-
-def _extract_incentive_params(config: PostDeaConfig) -> dict:
-    """
-    Extraherar incitament-parametrar från PostDeaConfig.
-    
-    Args:
-        config: PostDeaConfig (kan vara None eller sakna incentive-attribut)
-        
-    Returns:
-        Dict med parametrar för calculate_all_incentives
-    """
-    params = {}
-    
-    # Om ingen config eller ingen incentive-attribut, returnera tom dict (använd baseline)
-    if config is None:
-        return params
-    
-    incentive = getattr(config, 'incentive', None)
-    if incentive is None:
-        return params
-    
-    # Extrahera parametrar om de finns
-    if hasattr(incentive, 'adj_max_agg') and incentive.adj_max_agg is not None:
-        params['adj_max_agg'] = incentive.adj_max_agg
-    
-    if hasattr(incentive, 'adj_max_cemi4') and incentive.adj_max_cemi4 is not None:
-        params['adj_max_cemi4'] = incentive.adj_max_cemi4
-    
-    if hasattr(incentive, 'sharing_netloss') and incentive.sharing_netloss is not None:
-        params['sharing_netloss'] = incentive.sharing_netloss
-    
-    if hasattr(incentive, 'kpi') and incentive.kpi is not None:
-        # KPI är en dict per år - om användaren anger ett värde, använd samma för alla år
-        if isinstance(incentive.kpi, (int, float)):
-            params['kpi'] = {year: incentive.kpi for year in [2024, 2025, 2026, 2027]}
-        else:
-            params['kpi'] = incentive.kpi
-    
-    if hasattr(incentive, 'k_nf') and incentive.k_nf is not None:
-        # k_nf är en dict per år - om användaren anger ett värde, använd samma för alla år
-        if isinstance(incentive.k_nf, (int, float)):
-            params['k_nf'] = {year: incentive.k_nf for year in [2024, 2025, 2026, 2027]}
-        else:
-            params['k_nf'] = incentive.k_nf
-    
-    if hasattr(incentive, 'ait_costs') and incentive.ait_costs is not None:
-        params['ait_costs'] = incentive.ait_costs
-    
-    if hasattr(incentive, 'aif_costs') and incentive.aif_costs is not None:
-        params['aif_costs'] = incentive.aif_costs
-    
-    # Aktivera/inaktivera
-    if hasattr(incentive, 'enable_quality'):
-        params['enable_quality'] = incentive.enable_quality
-    
-    if hasattr(incentive, 'enable_netloss'):
-        params['enable_netloss'] = incentive.enable_netloss
-    
-    if hasattr(incentive, 'enable_load'):
-        params['enable_load'] = incentive.enable_load
-    
-    return params
-
-
-def _prepare_capex_for_intaktsram(
+def get_period_capex(
     pre_dea: PreDeaStageOutput,
     baseline: BaselineStageOutput
 ) -> pd.DataFrame:
     """
-    Förbereder kapitalkostnad-data för intäktsram assembly.
+    Hämtar kapitalkostnad periodsumma för alla företag.
     
     KRITISKT: Returnerar PERIODSUMMA (4 år), INTE årsvärde!
     
@@ -399,15 +229,12 @@ def _prepare_capex_for_intaktsram(
     method = pre_dea.capex_method
     
     if method == 'baseline':
-        # Direkt från SDF - redan periodsumma
         return _get_capex_from_sdf(baseline)
     
     elif method == 'wacc_scaling':
-        # Skala periodsummor (inte årsvärde × 4)
         return _calculate_wacc_scaled_period_capex(pre_dea, baseline)
     
     elif method in ['kent_upload', 'parameter_change']:
-        # KENT-output - verifiera att det är periodsumma
         df_kent = pre_dea.df_all_companies
         
         if 'Kapitalkostnad_Period' in df_kent.columns:
@@ -417,11 +244,21 @@ def _prepare_capex_for_intaktsram(
         elif 'Kapitalkostnad_Total' in df_kent.columns:
             return df_kent[['REId', 'Kapitalkostnad_Total']]
         else:
-            raise ValueError(
-                f"KENT-output saknar periodsumma för kapitalkostnad. "
-                f"Förväntade kolumner: 'Kapitalkostnad_Period' eller 'Kapitalkostnad_Total'. "
-                "Kontrollera KENT-output och kör om pre-dea-steget."
-            )
+            # Fallback: summera per-år om de finns
+            yearly_cols = ['Kapitalkostnad_2024', 'Kapitalkostnad_2025',
+                          'Kapitalkostnad_2026', 'Kapitalkostnad_2027']
+            if all(col in df_kent.columns for col in yearly_cols):
+                df = df_kent[['REId']].copy()
+                df['Kapitalkostnad_Total'] = (
+                    df_kent['Kapitalkostnad_2024'] + df_kent['Kapitalkostnad_2025'] +
+                    df_kent['Kapitalkostnad_2026'] + df_kent['Kapitalkostnad_2027']
+                )
+                return df
+            else:
+                raise ValueError(
+                    f"KENT-output saknar periodsumma för kapitalkostnad. "
+                    f"Tillgängliga kolumner: {list(df_kent.columns)}"
+                )
     
     else:
         raise ValueError(
@@ -460,51 +297,28 @@ def _calculate_wacc_scaled_period_capex(
     2. Beräkna skalningsfaktor: ny_WACC / baseline_WACC
     3. Skala ENDAST kapitalbindningen (avkastning ändras med WACC)
     4. Ny periodsumma = Kapitalförslitning + Skalad Kapitalbindning
-    
-    Varför detta är korrekt:
-    - Kapitalförslitning (avskrivning) beror på NUAV och livslängd, inte på WACC
-    - Kapitalbindning (avkastning) = kapitalbas x WACC, proportionell mot WACC
-    - Att ta årsvärde x 4 är FEL eftersom kapitalbindningen avtar varje halvår
-      när tillgångarna åldras
-    
-    Args:
-        pre_dea: Output från Pre-DEA stage (innehåller wacc_used)
-        baseline: Output från Baseline stage (innehåller SDF IR med periodsummor)
-    
-    Returns:
-        DataFrame med: REId, Kapitalkostnad_Total (korrekt skalad periodsumma)
     """
     
-    # Validera att vi har WACC
     if pre_dea.wacc_used is None:
         raise ValueError(
-            "wacc_used saknas i PreDeaStageOutput för wacc_scaling metod. "
-            "Kontrollera att pre_dea.py sätter wacc_used korrekt."
+            "wacc_used saknas i PreDeaStageOutput för wacc_scaling metod."
         )
     
     new_wacc = pre_dea.wacc_used
     baseline_wacc = baseline.wacc
     
-    # Validera SDF-kolumner
     sdf = baseline.sdf_ir.copy()
     
-    if SDF_COL_KAPITALFORSLITNING not in sdf.columns:
-        raise ValueError(
-            f"Kolumn '{SDF_COL_KAPITALFORSLITNING}' saknas i SDF IR. "
-            f"Tillgängliga kolumner: {list(sdf.columns)}"
-        )
+    for col in [SDF_COL_KAPITALFORSLITNING, SDF_COL_KAPITALBINDNING]:
+        if col not in sdf.columns:
+            raise ValueError(
+                f"Kolumn '{col}' saknas i SDF IR. "
+                f"Tillgängliga kolumner: {list(sdf.columns)}"
+            )
     
-    if SDF_COL_KAPITALBINDNING not in sdf.columns:
-        raise ValueError(
-            f"Kolumn '{SDF_COL_KAPITALBINDNING}' saknas i SDF IR. "
-            f"Tillgängliga kolumner: {list(sdf.columns)}"
-        )
-    
-    # Extrahera periodsummor
     df = sdf[['REId', SDF_COL_KAPITALFORSLITNING, SDF_COL_KAPITALBINDNING]].copy()
     df.columns = ['REId', 'Kapitalforslitning_Period', 'Kapitalbindning_Period']
     
-    # Konvertera till numeriska värden
     df['Kapitalforslitning_Period'] = pd.to_numeric(
         df['Kapitalforslitning_Period'], errors='coerce'
     ).fillna(0)
@@ -512,7 +326,6 @@ def _calculate_wacc_scaled_period_capex(
         df['Kapitalbindning_Period'], errors='coerce'
     ).fillna(0)
     
-    # Beräkna skalningsfaktor
     scaling_factor = new_wacc / baseline_wacc
     
     print(f"    WACC-skalning av periodsummor:")
@@ -520,23 +333,15 @@ def _calculate_wacc_scaled_period_capex(
     print(f"      Ny WACC: {new_wacc:.4f} ({new_wacc*100:.2f}%)")
     print(f"      Skalningsfaktor: {scaling_factor:.4f}")
     
-    # Skala endast kapitalbindningen
     df['Kapitalbindning_Skalad'] = df['Kapitalbindning_Period'] * scaling_factor
-    
-    # Ny periodsumma = Kapitalförslitning (oförändrad) + Kapitalbindning (skalad)
     df['Kapitalkostnad_Total'] = df['Kapitalforslitning_Period'] + df['Kapitalbindning_Skalad']
-    
-    # Logga förändring för verifiering
-    total_baseline = df['Kapitalforslitning_Period'].sum() + df['Kapitalbindning_Period'].sum()
-    total_scaled = df['Kapitalkostnad_Total'].sum()
-    delta_pct = (total_scaled / total_baseline - 1) * 100
-    
-    print(f"      Baseline periodsumma (alla): {total_baseline:,.0f} tkr")
-    print(f"      Skalad periodsumma (alla): {total_scaled:,.0f} tkr")
-    print(f"      Förändring: {delta_pct:+.2f}%")
     
     return df[['REId', 'Kapitalkostnad_Total']]
 
+
+# =============================================================================
+# AVKASTNING PER ÅR (FÖRBÄTTRAD - använder baseline per-år kolumner)
+# =============================================================================
 
 def get_return_per_year(
     pre_dea: PreDeaStageOutput,
@@ -547,11 +352,15 @@ def get_return_per_year(
     
     Används för incitamentjusteringens 1/3-cap som appliceras per år.
     
+    FÖRBÄTTRAD VERSION:
+    - Baseline har nu Avkastning_2024-2027 direkt i df_all_companies
+    - Eliminerar approximationen "periodsumma / 4"
+    - Korrekt per-år variation bevaras
+    
     Källor beroende på capex_method:
-    - 'baseline': SDF "varav Kapital-bindning" / 4
-    - 'wacc_scaling': SDF "varav Kapital-bindning" x (ny_WACC / baseline_WACC) / 4
-    - 'kent_upload': KENT-output Avkastning_{year}
-    - 'parameter_change': KENT-output Avkastning_{year}
+    - 'baseline': Direkt från baseline.df_all_companies
+    - 'wacc_scaling': Skala baseline per-år avkastning med WACC-kvot
+    - 'kent_upload' / 'parameter_change': Från KENT-output (har redan per-år)
     
     Args:
         pre_dea: Output från Pre-DEA stage
@@ -564,23 +373,16 @@ def get_return_per_year(
     
     method = pre_dea.capex_method
     years = [2024, 2025, 2026, 2027]
+    yearly_cols = [f'Avkastning_{year}' for year in years]
     
     if method == 'baseline':
-        # Hämta periodsumma från SDF och dela med 4
-        return _get_return_from_sdf(baseline, scaling_factor=1.0)
+        return _get_return_from_baseline(baseline, yearly_cols)
     
     elif method == 'wacc_scaling':
-        # Skala periodsumma med WACC-kvot och dela med 4
-        if pre_dea.wacc_used is None:
-            raise ValueError(
-                "wacc_used saknas i PreDeaStageOutput för wacc_scaling metod."
-            )
-        scaling_factor = pre_dea.wacc_used / baseline.wacc
-        return _get_return_from_sdf(baseline, scaling_factor=scaling_factor)
+        return _get_return_wacc_scaled(pre_dea, baseline, yearly_cols)
     
     elif method in ['kent_upload', 'parameter_change']:
-        # Hämta per-år avkastning från KENT-output
-        return _get_return_from_kent(pre_dea, years)
+        return _get_return_from_kent(pre_dea, yearly_cols)
     
     else:
         raise ValueError(
@@ -589,64 +391,210 @@ def get_return_per_year(
         )
 
 
-def _get_return_from_sdf(
+def _get_return_from_baseline(
     baseline: BaselineStageOutput,
-    scaling_factor: float = 1.0
+    yearly_cols: list
 ) -> pd.DataFrame:
     """
-    Hämtar avkastning per år från SDF (för baseline och wacc_scaling).
+    Hämtar avkastning per år direkt från baseline df_all_companies.
     
-    Approximerar per-år genom att ta periodsumma / 4.
+    FÖRBÄTTRING: Använder faktiska per-år värden istället för periodsumma/4.
     """
-    sdf = baseline.sdf_ir.copy()
+    df = baseline.df_all_companies
     
-    if SDF_COL_KAPITALBINDNING not in sdf.columns:
+    missing_cols = [col for col in yearly_cols if col not in df.columns]
+    
+    if missing_cols:
+        print(f"    [VARNING] Per-år avkastning saknas: {missing_cols}")
+        print(f"    -> Använder fallback (Avkastning för alla år)")
+        
+        # Fallback till aggregerad avkastning
+        result = df[['REId']].copy()
+        for col in yearly_cols:
+            if 'Avkastning' in df.columns:
+                result[col] = df['Avkastning']
+            else:
+                result[col] = 0
+        return result
+    
+    return df[['REId'] + yearly_cols].copy()
+
+
+def _get_return_wacc_scaled(
+    pre_dea: PreDeaStageOutput,
+    baseline: BaselineStageOutput,
+    yearly_cols: list
+) -> pd.DataFrame:
+    """
+    Skalar baseline per-år avkastning med WACC-kvot.
+    
+    FÖRBÄTTRING: Skalar varje års avkastning individuellt istället för 
+    att approximera med periodsumma/4.
+    """
+    if pre_dea.wacc_used is None:
         raise ValueError(
-            f"Kolumn '{SDF_COL_KAPITALBINDNING}' saknas i SDF IR."
+            "wacc_used saknas i PreDeaStageOutput för wacc_scaling metod."
         )
     
-    df = sdf[['REId']].copy()
+    scaling_factor = pre_dea.wacc_used / baseline.wacc
     
-    # Hämta periodsumma och skala
-    kapitalbindning_period = pd.to_numeric(
-        sdf[SDF_COL_KAPITALBINDNING], errors='coerce'
-    ).fillna(0)
+    df_baseline = _get_return_from_baseline(baseline, yearly_cols)
     
-    kapitalbindning_skalad = kapitalbindning_period * scaling_factor
+    df_result = df_baseline[['REId']].copy()
+    for col in yearly_cols:
+        df_result[col] = df_baseline[col] * scaling_factor
     
-    # Approximera per år (periodsumma / 4)
-    avkastning_per_year = kapitalbindning_skalad / 4
+    print(f"    Skalade per-år avkastning med faktor {scaling_factor:.4f}")
     
-    # Sätt samma värde för alla år (approximation)
-    for year in [2024, 2025, 2026, 2027]:
-        df[f'Avkastning_{year}'] = avkastning_per_year
-    
-    return df
+    return df_result
 
 
 def _get_return_from_kent(
     pre_dea: PreDeaStageOutput,
-    years: list
+    yearly_cols: list
 ) -> pd.DataFrame:
     """
     Hämtar avkastning per år från KENT-output (för kent_upload och parameter_change).
     """
     df_kent = pre_dea.df_all_companies
     
-    # Verifiera att per-år kolumner finns
-    missing_years = []
-    for year in years:
-        col = f'Avkastning_{year}'
-        if col not in df_kent.columns:
-            missing_years.append(year)
+    missing_cols = [col for col in yearly_cols if col not in df_kent.columns]
     
-    if missing_years:
+    if missing_cols:
         raise ValueError(
-            f"Avkastning per år saknas i KENT-output för år: {missing_years}. "
-            "Förväntade kolumner: Avkastning_2024, Avkastning_2025, etc. "
+            f"Avkastning per år saknas i KENT-output: {missing_cols}. "
             "Kontrollera att kent_calculations.py genererar dessa kolumner."
         )
     
-    # Extrahera relevanta kolumner
-    cols = ['REId'] + [f'Avkastning_{year}' for year in years]
-    return df_kent[cols].copy()
+    return df_kent[['REId'] + yearly_cols].copy()
+
+
+# =============================================================================
+# INCITAMENTJUSTERINGAR
+# =============================================================================
+
+def _calculate_incentive_adjustments(
+    pre_dea: PreDeaStageOutput,
+    baseline: BaselineStageOutput,
+    config: PostDeaConfig,
+    user_reid: str
+) -> Optional[pd.DataFrame]:
+    """
+    Beräknar incitamentjusteringar för alla företag.
+    
+    Tre typer av incitament:
+    1. Kvalitetsincitamentet (AIT/AIF)
+    2. Nätförlustincitamentet
+    3. Belastningsincitamentet
+    
+    Varje incitament begränsas till +/-1/3 av avkastningen per år (konfigurerbart).
+    """
+    try:
+        incentive_data = load_incentive_data()
+        
+        # Hämta avkastning per år (nu med korrekt per-år värden!)
+        return_per_year = get_return_per_year(pre_dea, baseline)
+        
+        df_input = prepare_incentive_input(incentive_data, return_per_year)
+        
+        # Applicera variable_overrides om de finns
+        incentive_config = getattr(config, 'incentive', None)
+        if incentive_config:
+            variable_overrides = getattr(incentive_config, 'variable_overrides', None)
+            if variable_overrides and user_reid:
+                df_input = apply_variable_overrides(df_input, user_reid, variable_overrides)
+        
+        incentive_params = _extract_incentive_params(config)
+        
+        df_calc = calculate_all_incentives(
+            df_input, 
+            ret_period_col='ret_period', 
+            **incentive_params
+        )
+        
+        df_summary = get_incentive_summary_by_reid(df_calc)
+        
+        return df_summary
+        
+    except FileNotFoundError as e:
+        print(f"    [VARNING] Incitamentdata saknas: {e}")
+        return None
+    except Exception as e:
+        print(f"    [FEL] Kunde inte beräkna incitament: {e}")
+        return None
+
+
+def _extract_incentive_params(config: Optional[PostDeaConfig]) -> dict:
+    """
+    Extraherar incitament-parametrar från PostDeaConfig.
+    """
+    params = {}
+    
+    if config is None:
+        return params
+    
+    incentive_config = getattr(config, 'incentive', None)
+    if incentive_config is None:
+        return params
+    
+    param_mapping = {
+        'kpi': 'kpi',
+        'k_nf': 'k_nf',
+        'sharing_netloss': 'sharing_netloss',
+        'adj_max_agg': 'adj_max_agg',
+        'adj_max_cemi4': 'adj_max_cemi4',
+        'ait_costs': 'ait_costs',
+        'aif_costs': 'aif_costs',
+        'enable_quality': 'enable_quality',
+        'enable_netloss': 'enable_netloss',
+        'enable_load': 'enable_load',
+    }
+    
+    for config_attr, param_name in param_mapping.items():
+        if hasattr(incentive_config, config_attr):
+            value = getattr(incentive_config, config_attr)
+            if value is not None:
+                params[param_name] = value
+    
+    return params
+
+
+def _log_incentive_params(incentive_config) -> None:
+    """Loggar incitament-parametrar som avviker från baseline."""
+    BASELINE = {
+        'adj_max_agg': 1/3,
+        'adj_max_cemi4': 0.25,
+        'sharing_netloss': 0.75,
+        'kpi': {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
+        'k_nf': {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44},
+    }
+    
+    changes = []
+    
+    # Enkla parametrar - kolla is not None FÖRE jämförelse
+    if (hasattr(incentive_config, 'adj_max_agg') 
+        and incentive_config.adj_max_agg is not None 
+        and incentive_config.adj_max_agg != BASELINE['adj_max_agg']):
+        changes.append(f"adj_max_agg={incentive_config.adj_max_agg:.3f}")
+    
+    if (hasattr(incentive_config, 'adj_max_cemi4') 
+        and incentive_config.adj_max_cemi4 is not None 
+        and incentive_config.adj_max_cemi4 != BASELINE['adj_max_cemi4']):
+        changes.append(f"adj_max_cemi4={incentive_config.adj_max_cemi4:.3f}")
+    
+    if (hasattr(incentive_config, 'sharing_netloss') 
+        and incentive_config.sharing_netloss is not None 
+        and incentive_config.sharing_netloss != BASELINE['sharing_netloss']):
+        changes.append(f"sharing_netloss={incentive_config.sharing_netloss:.2f}")
+    
+    # Dict-parametrar (kpi, k_nf)
+    if hasattr(incentive_config, 'kpi') and incentive_config.kpi is not None:
+        if incentive_config.kpi != BASELINE['kpi']:
+            changes.append("kpi=modified")
+    
+    if hasattr(incentive_config, 'k_nf') and incentive_config.k_nf is not None:
+        if incentive_config.k_nf != BASELINE['k_nf']:
+            changes.append("k_nf=modified")
+    
+    if changes:
+        print(f"    Incitament-parametrar: {', '.join(changes)}")

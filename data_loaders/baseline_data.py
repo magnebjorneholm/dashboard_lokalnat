@@ -3,6 +3,10 @@ data_loaders/baseline_data.py
 
 Baseline data loader.
 Laddar all data som behövs för baseline-beräkningar.
+
+Uppdaterad för Data_modeller med per-år avkastning:
+- Avkastning_2024, Avkastning_2025, Avkastning_2026, Avkastning_2027
+- Avkastning_Period (periodsumma)
 """
 
 from dataclasses import dataclass
@@ -18,7 +22,7 @@ class BaselineData:
     Frozen = read-only, kan inte ändras efter skapande.
     """
     # Main data
-    df_all_companies: pd.DataFrame  # 148 rader med CAPEX, OPEX, volymer
+    df_all_companies: pd.DataFrame  # 148 rader med CAPEX, OPEX, volymer, avkastning per år
     dea_results: pd.DataFrame       # 148 rader från EIs_DEA.xlsx
     sdf_ir: pd.DataFrame
     sdf_paverkbara: pd.DataFrame
@@ -31,7 +35,7 @@ class BaselineData:
 
 def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
     """
-    Laddar Data_modeller.xlsx med DEA-data.
+    Laddar Data_modeller.xlsx med DEA-data och per-år avkastning.
     
     Args:
         data_path: Sökväg till data-mapp. Om None, använd standardsökvägar.
@@ -39,7 +43,9 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
     Returns:
         DataFrame med kolumner:
         ['DMU', 'REId', 'Företag', 'OPEXp', 'CAPEX', 'Avskrivning', 'Avkastning',
-         'CU', 'MW', 'NS', 'MWhl', 'MWhh', 'TOTEX']
+         'CU', 'MW', 'NS', 'MWhl', 'MWhh', 'TOTEX', 'Kapitalkostnad_2024',
+         'Avkastning_2024', 'Avkastning_2025', 'Avkastning_2026', 'Avkastning_2027',
+         'Avkastning_Period']
     """
     # Sökvägar att prova
     search_paths = []
@@ -64,15 +70,26 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
             f"Provade: {[str(p) for p in search_paths]}"
         )
     
-    # Läs från Körning-sheet
-    try:
-        df = pd.read_excel(data_file, sheet_name="Körning", engine="openpyxl")
-    except Exception as e:
-        raise RuntimeError(f"Fel vid inläsning av Data_modeller.xlsx: {e}")
+    # Försök läsa från olika sheet-namn (för bakåtkompatibilitet)
+    df = None
+    sheet_names_to_try = ["Körning", "Sheet1", 0]
     
-    # Validera kolumner
-    expected = ['DMU', 'REId', 'Företag', 'OPEXp', 'CAPEX', 'CU', 'MW', 'NS', 'MWhl', 'MWhh']
-    missing = [c for c in expected if c not in df.columns]
+    for sheet_name in sheet_names_to_try:
+        try:
+            df = pd.read_excel(data_file, sheet_name=sheet_name, engine="openpyxl")
+            break
+        except Exception:
+            continue
+    
+    if df is None:
+        raise RuntimeError(
+            f"Kunde inte läsa Data_modeller.xlsx. "
+            f"Provade sheets: {sheet_names_to_try}"
+        )
+    
+    # Validera grundläggande kolumner
+    required_cols = ['DMU', 'REId', 'Företag', 'OPEXp', 'CAPEX', 'CU', 'MW', 'NS', 'MWhl', 'MWhh']
+    missing = [c for c in required_cols if c not in df.columns]
     if missing:
         raise ValueError(f"Saknade kolumner i Data_modeller.xlsx: {missing}")
     
@@ -81,21 +98,46 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     
-    # Hantera Avskrivning och Avkastning om de finns
+    # Hantera Avskrivning och Avkastning (aggregat)
     if 'Avskrivning' in df.columns:
         df['Avskrivning'] = pd.to_numeric(df['Avskrivning'], errors="coerce")
     else:
-        # Placeholder
+        # Fallback om kolumn saknas
         df['Avskrivning'] = df['CAPEX'] * 0.5
+        print("  VARNING: Avskrivning saknas, använder approximation (CAPEX * 0.5)")
     
     if 'Avkastning' in df.columns:
         df['Avkastning'] = pd.to_numeric(df['Avkastning'], errors="coerce")
     else:
-        # Placeholder
+        # Fallback om kolumn saknas
         df['Avkastning'] = df['CAPEX'] * 0.5
+        print("  VARNING: Avkastning saknas, använder approximation (CAPEX * 0.5)")
+    
+    # Hantera per-år avkastningskolumner (nya i utökad Data_modeller)
+    yearly_return_cols = ['Avkastning_2024', 'Avkastning_2025', 
+                          'Avkastning_2026', 'Avkastning_2027']
+    
+    for col in yearly_return_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        else:
+            # Fallback: approximera med aggregerad avkastning
+            df[col] = df['Avkastning']
+            print(f"  VARNING: {col} saknas, använder Avkastning som approximation")
+    
+    # Hantera Avkastning_Period (periodsumma)
+    if 'Avkastning_Period' in df.columns:
+        df['Avkastning_Period'] = pd.to_numeric(df['Avkastning_Period'], errors="coerce")
+    else:
+        # Beräkna från per-år kolumner
+        df['Avkastning_Period'] = (
+            df['Avkastning_2024'] + df['Avkastning_2025'] + 
+            df['Avkastning_2026'] + df['Avkastning_2027']
+        )
+        print("  VARNING: Avkastning_Period saknas, beräknad från per-år värden")
     
     # Explicit alias för årsvärde (CAPEX är källnamn i Excel)
-    df["Kapitalkostnad_2024"] = df["CAPEX"]  # Byt namn från Excel-kolumn till intern standard
+    df["Kapitalkostnad_2024"] = df["CAPEX"]
 
     # Beräkna TOTEX med intern standardkolumn
     df["TOTEX"] = df["OPEXp"] + df["Kapitalkostnad_2024"]
@@ -121,7 +163,7 @@ def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
         - Effkrav_proc: Årligt effektiviseringskrav
         - is_outlier: Boolean flag
     """
-    # SÃ¶kvÃ¤gar att prova
+    # Sökvägar att prova
     search_paths = []
     if data_path:
         search_paths.append(Path(data_path) / "EIs_DEA.xlsx")
@@ -185,36 +227,21 @@ def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
 
 def _load_sdf_data(data_path: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     """
-    # Laddar Löpande kostnader från SDF 2024-27.xlsx.
-
-    Laddar 3 sheets:
-    - 'IR 2024-2027': Huvudsheet med totala intäktsramar
-    - 'Opåverkbara': Opåverkbara kostnader uppdelade
-    - 'Påverkbara': Påverkbara kostnader uppdelade
-
+    Laddar SDF-data från "Löpande kostnader från SDF" Excel-fil.
+    
     Args:
-        data_path: Sökväg till data-mapp. Om None, använd standardsökvägar.
-
+        data_path: Sökväg till data-mapp
+        
     Returns:
-        Dict med DataFrames per sheet: {'ir': df1, 'opaverkbara': df2, 'paverkbara': df3}
+        Dict med tre DataFrames: 'ir', 'paverkbara', 'opaverkbara'
     """
-    # SÃ¶kvÃ¤gar att prova (med olika varianter av filnamn)
     search_paths = []
     if data_path:
         search_paths.append(Path(data_path) / "Löpande kostnader från SDF 2024-27.xlsx")
-        search_paths.append(Path(data_path) / "Löpande_kostnader_från_SDF_202427.xlsx")
-        search_paths.append(Path(data_path) / "Löpande kostnader från SDF 202427.xlsx")
     
     search_paths.extend([
         Path("Löpande kostnader från SDF 2024-27.xlsx"),
         Path("data/Löpande kostnader från SDF 2024-27.xlsx"),
-        Path("Löpande_kostnader_från_SDF_202427.xlsx"),
-        Path("Löpande kostnader från SDF 202427.xlsx"),
-        Path("data/Löpande_kostnader_från_SDF_202427.xlsx"),
-        Path("data/Löpande kostnader från SDF 202427.xlsx"),
-        Path("/mnt/project/Löpande kostnader från SDF 2024-27.xlsx"),
-        Path("/mnt/project/Löpande_kostnader_från_SDF_202427.xlsx"),
-        Path("/mnt/project/Löpande kostnader från SDF 202427.xlsx")
     ])
     
     data_file = None
@@ -224,44 +251,46 @@ def _load_sdf_data(data_path: Optional[str] = None) -> Dict[str, pd.DataFrame]:
             break
     
     if data_file is None:
-        print("  ⚠️ SDF-fil hittades inte - returnerar tomma DataFrames")
-        return {
-            'ir': pd.DataFrame(),
-            'opaverkbara': pd.DataFrame(),
-            'paverkbara': pd.DataFrame()
-        }
-    try:
-        # Läs alla 3 sheets
-        ir_sheet = pd.read_excel(data_file, sheet_name='IR 2024-2027', engine='openpyxl')
-        opav_sheet = pd.read_excel(data_file, sheet_name='Opåverkbara', engine='openpyxl')
-        pav_sheet = pd.read_excel(data_file, sheet_name='Påverkbara', engine='openpyxl')
-
-        return {
-            'ir': ir_sheet,
-            'opaverkbara': opav_sheet,
-            'paverkbara': pav_sheet
-        }
-
-    except Exception as e:
-        print(f"  ⚠️ Kunde inte ladda SDF-data: {e}")
-        return {
-            'ir': pd.DataFrame(),
-            'opaverkbara': pd.DataFrame(),
-            'paverkbara': pd.DataFrame()
-        }
+        raise FileNotFoundError(
+            "Kunde inte hitta SDF-fil. "
+            f"Provade: {[str(p) for p in search_paths]}"
+        )
+    
+    result = {}
+    
+    # Sheet-namn att försöka för varje typ
+    sheet_mappings = {
+        'ir': ['IR 2024-2027', 'IR 2024-27', 'IR'],
+        'paverkbara': ['Påverkbara', 'Paverkbara'],
+        'opaverkbara': ['Opåverkbara', 'Opaverkbara'],
+    }
+    
+    for key, sheet_names in sheet_mappings.items():
+        for sheet_name in sheet_names:
+            try:
+                df = pd.read_excel(data_file, sheet_name=sheet_name, engine="openpyxl")
+                result[key] = df
+                break
+            except Exception:
+                continue
+        
+        if key not in result:
+            print(f"  VARNING: Kunde inte läsa SDF sheet '{key}'")
+            result[key] = pd.DataFrame()
+    
+    return result
 
 
 def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     """
-    Laddar reconciliation mapping.
+    Laddar reconciliation mapping mellan REId, id_network och DMU.
     
     Args:
-        data_path: SÃ¶kvÃ¤g till data-mapp. Om None, anvÃ¤nd standardsÃ¶kvÃ¤gar.
-    
+        data_path: Sökväg till data-mapp
+        
     Returns:
-        DataFrame med kolumner: ['id_network', 'DMU', 'REId', 'FÃ¶retag']
+        DataFrame med mappningar
     """
-    # Sökvägar att prova
     search_paths = []
     if data_path:
         search_paths.append(Path(data_path) / "reconciliation_id_network_firm_dmu.csv")
@@ -269,7 +298,7 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     search_paths.extend([
         Path("reconciliation_id_network_firm_dmu.csv"),
         Path("data/reconciliation_id_network_firm_dmu.csv"),
-        Path("/mnt/project/reconciliation_id_network_firm_dmu.csv")
+        Path("/mnt/project/reconciliation_id_network_firm_dmu.csv"),
     ])
     
     data_file = None
@@ -284,44 +313,22 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
             f"Provade: {[str(p) for p in search_paths]}"
         )
     
-    try:
-        rec = pd.read_csv(data_file)
-        
-        # Standardisera kolumnnamn (case-insensitive)
-        rec.columns = [c.strip() for c in rec.columns]
-        
-        # Behåll endast relevanta kolumner
-        keep_cols = []
-        for col in ['id_network', 'DMU', 'REId', 'FÃ¶retag', 'id_firm']:
-            if col in rec.columns:
-                keep_cols.append(col)
-        
-        rec = rec[keep_cols].drop_duplicates()
-        
-        # Konvertera datatyper
-        if "DMU" in rec.columns:
-            rec["DMU"] = pd.to_numeric(rec["DMU"], errors='coerce').astype('Int64')
-        if "REId" in rec.columns:
-            rec["REId"] = rec["REId"].astype(str).str.strip()
-        if "id_network" in rec.columns:
-            rec["id_network"] = pd.to_numeric(rec["id_network"], errors='coerce').astype('Int64')
-        
-        # Rensa bort rader utan DMU eller REId
-        rec = rec.dropna(subset=['DMU', 'REId'])
-        
-        return rec
-        
-    except Exception as e:
-        raise RuntimeError(f"Fel vid inlÃ¤sning av reconciliation: {e}")
+    df = pd.read_csv(data_file)
+    
+    # Hantera olika kolumnnamn (REId vs id_network_string)
+    if 'id_network_string' in df.columns and 'REId' not in df.columns:
+        df['REId'] = df['id_network_string']
+    
+    return df
 
 
 def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     """
-    Laddar all baseline data från projektets datafiler.
-
+    Huvudfunktion för att ladda all baseline-data.
+    
     Args:
         data_path: Sökväg till data-mapp. Om None, använd standardsökvägar.
-
+        
     Returns:
         BaselineData objekt med all data
         
@@ -333,12 +340,21 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     # 1. Ladda Data_modeller.xlsx
     print("Laddar Data_modeller.xlsx...")
     df_all_companies = _load_data_modeller(data_path)
-    print(f"  ✔ Laddade {len(df_all_companies)} företag")
+    print(f"  ✓ Laddade {len(df_all_companies)} företag")
+    
+    # Verifiera per-år avkastning
+    yearly_cols = ['Avkastning_2024', 'Avkastning_2025', 
+                   'Avkastning_2026', 'Avkastning_2027']
+    has_yearly = all(col in df_all_companies.columns for col in yearly_cols)
+    if has_yearly:
+        print(f"  ✓ Per-år avkastning tillgänglig (2024-2027)")
+    else:
+        print(f"  ⚠ Per-år avkastning saknas eller approximerad")
     
     # 2. Ladda EIs_DEA.xlsx
     print("Laddar EIs_DEA.xlsx...")
     dea_results = _load_eis_dea(data_path)
-    print(f"  ✔ Laddade DEA-resultat för {len(dea_results)} företag")
+    print(f"  ✓ Laddade DEA-resultat för {len(dea_results)} företag")
     
     # 3. Ladda SDF data
     print("Laddar Löpande kostnader från SDF...")
@@ -346,14 +362,14 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     n_ir = len(sdf_data.get('ir', pd.DataFrame()))
     n_opav = len(sdf_data.get('opaverkbara', pd.DataFrame()))
     n_pav = len(sdf_data.get('paverkbara', pd.DataFrame()))
-    print(f"  ✔ Laddade SDF-data (IR: {n_ir}, Opåverkbara: {n_opav}, Påverkbara: {n_pav} rader)")
+    print(f"  ✓ Laddade SDF-data (IR: {n_ir}, Opåverkbara: {n_opav}, Påverkbara: {n_pav} rader)")
     
     # 4. Ladda reconciliation mapping
     print("Laddar reconciliation...")
     reconciliation = _load_reconciliation(data_path)
-    print(f"  ✔ Laddade reconciliation ({len(reconciliation)} mappningar)")
+    print(f"  ✓ Laddade reconciliation ({len(reconciliation)} mappningar)")
     
-    # 5. Validera att alla dataset har samma antal fÃ¶retag
+    # 5. Validera att alla dataset har samma antal företag
     n_companies = len(df_all_companies)
     n_dea = len(dea_results)
     
@@ -373,7 +389,7 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
 
 def get_baseline_summary(baseline: BaselineData) -> Dict:
     """
-    HÃ¤mta sammanfattning av baseline data.
+    Hämta sammanfattning av baseline data.
     
     Args:
         baseline: BaselineData objekt
@@ -383,12 +399,7 @@ def get_baseline_summary(baseline: BaselineData) -> Dict:
     """
     df = baseline.df_all_companies
     
-    # RÃ¤kna SDF-rader (separata attribut)
-    n_sdf_ir = len(baseline.sdf_ir)
-    n_sdf_opav = len(baseline.sdf_opaverkbara)
-    n_sdf_pav = len(baseline.sdf_paverkbara)
-    
-    return {
+    summary = {
         'n_dmu': len(df),
         'total_capex_tsek': float(df['Kapitalkostnad_2024'].sum()),
         'total_opex_tsek': float(df['OPEXp'].sum()),
@@ -403,5 +414,16 @@ def get_baseline_summary(baseline: BaselineData) -> Dict:
         'n_sdf_ir': len(baseline.sdf_ir),
         'n_sdf_paverkbara': len(baseline.sdf_paverkbara),
         'n_sdf_opaverkbara': len(baseline.sdf_opaverkbara),
-        'n_reconciliation': len(baseline.reconciliation)
+        'n_reconciliation': len(baseline.reconciliation),
     }
+    
+    # Lägg till per-år avkastning om tillgängligt
+    yearly_cols = ['Avkastning_2024', 'Avkastning_2025', 
+                   'Avkastning_2026', 'Avkastning_2027']
+    if all(col in df.columns for col in yearly_cols):
+        summary['has_yearly_returns'] = True
+        summary['total_avkastning_period'] = float(df['Avkastning_Period'].sum())
+    else:
+        summary['has_yearly_returns'] = False
+    
+    return summary
