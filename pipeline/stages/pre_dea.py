@@ -25,6 +25,10 @@ from calculations.kent_calculations import (
 from calculations.data_mapping import merge_kent_with_baseline
 
 
+# =============================================================================
+# HUVUDFUNKTION
+# =============================================================================
+
 def stage_pre_dea(
     baseline: BaselineStageOutput,
     config: PreDeaConfig
@@ -44,6 +48,12 @@ def stage_pre_dea(
         - wacc_used: WACC som användes (för wacc_scaling)
     """
     
+    # Stage header
+    print("\n" + "="*60)
+    print("STAGE 2: PRE-DEA")
+    print(f"  Metod: {config.method.value}")
+    print("="*60)
+    
     if config.method == CapexMethod.BASELINE:
         return _pre_dea_baseline(baseline)
     
@@ -60,8 +70,22 @@ def stage_pre_dea(
         raise ValueError(f"Okänd CAPEX-metod: {config.method}")
 
 
+# =============================================================================
+# METOD 1: BASELINE
+# =============================================================================
+
 def _pre_dea_baseline(baseline: BaselineStageOutput) -> PreDeaStageOutput:
-    """Metod 1: Baseline - ingen ändring."""
+    """Metod 1: Baseline - ingen ändring, använd befintliga värden."""
+    
+    print("\n  Steg 1/1: Kopierar baseline-data...")
+    print(f"    Källa: Data_modeller.xlsx ({len(baseline.df_all_companies)} företag)")
+    print(f"    WACC: {baseline.wacc:.4f} (baseline)")
+    print("    [OK] Ingen CAPEX-modifikation")
+    
+    print("\n" + "-"*60)
+    print("  Resultat: capex_modified=False, capex_method='baseline'")
+    print("="*60 + "\n")
+    
     return PreDeaStageOutput(
         df_all_companies=baseline.df_all_companies.copy(),
         capex_method="baseline",
@@ -69,6 +93,10 @@ def _pre_dea_baseline(baseline: BaselineStageOutput) -> PreDeaStageOutput:
         wacc_used=None
     )
 
+
+# =============================================================================
+# METOD 2: WACC-SCALING
+# =============================================================================
 
 def _pre_dea_wacc_scaling(
     baseline: BaselineStageOutput,
@@ -79,17 +107,19 @@ def _pre_dea_wacc_scaling(
     
     Producerar Kapitalkostnad_2024 (årsvärde) för DEA.
     Post-DEA använder wacc_used för att skala periodsummor från SDF.
-    
-    Formel för DEA (årsvärde):
-        Ny Avkastning = Baseline Avkastning * (ny_WACC / baseline_WACC)
-        Ny CAPEX = Avskrivning + Ny Avkastning
-        Ny TOTEX = OPEXp + Ny CAPEX
     """
     
     if config.wacc is None:
         raise ValueError("WACC måste anges för wacc_scaling metod")
     
-    print(f"WACC-scaling: {baseline.wacc:.4f} -> {config.wacc:.4f}")
+    print("\n  Steg 1/2: Beräknar skalningsfaktor...")
+    scaling_factor = config.wacc / baseline.wacc
+    print(f"    Baseline WACC: {baseline.wacc:.4f}")
+    print(f"    Ny WACC:       {config.wacc:.4f}")
+    print(f"    Skalningsfaktor: {scaling_factor:.4f}")
+    
+    print("\n  Steg 2/2: Skalar avkastning för alla företag...")
+    print(f"    Källa: Data_modeller.xlsx ({len(baseline.df_all_companies)} företag)")
     
     df_scaled = calculate_wacc_scaled_capex(
         baseline.df_all_companies,
@@ -97,15 +127,32 @@ def _pre_dea_wacc_scaling(
         baseline_wacc=baseline.wacc
     )
     
-    print(f"CAPEX skalad för alla {len(df_scaled)} företag")
+    print(f"    [OK] CAPEX skalad för {len(df_scaled)} företag")
+    
+    # Visa exempel på förändring
+    sample_reid = df_scaled['REId'].iloc[0]
+    old_capex = baseline.df_all_companies[
+        baseline.df_all_companies['REId'] == sample_reid
+    ]['Kapitalkostnad_2024'].iloc[0]
+    new_capex = df_scaled[df_scaled['REId'] == sample_reid]['Kapitalkostnad_2024'].iloc[0]
+    print(f"    Exempel ({sample_reid}): {old_capex:,.0f} -> {new_capex:,.0f} tkr")
+    
+    print("\n" + "-"*60)
+    print(f"  Resultat: capex_modified=True, capex_method='wacc_scaling'")
+    print(f"            wacc_used={config.wacc:.4f}")
+    print("="*60 + "\n")
     
     return PreDeaStageOutput(
         df_all_companies=df_scaled,
         capex_method="wacc_scaling",
         capex_modified=True,
-        wacc_used=config.wacc  # Spara för post_dea periodsumme-beräkning
+        wacc_used=config.wacc
     )
 
+
+# =============================================================================
+# METOD 3: PARAMETER_CHANGE
+# =============================================================================
 
 def _pre_dea_parameter_change(
     baseline: BaselineStageOutput,
@@ -122,45 +169,78 @@ def _pre_dea_parameter_change(
     5. Merge med baseline för övrig data
     """
     
-    print("Parameter-ändringar: Kör KENT-beräkningar...")
+    wacc_to_use = config.wacc if config.wacc else baseline.wacc
     
+    # Steg 1: Ladda capbase_a
+    print("\n  Steg 1/4: Laddar kapitalbas...")
     try:
         capbase_data = load_capbase_a()
-        print(f"  Laddade capbase_a: {len(capbase_data):,} komponenter")
+        n_components = len(capbase_data)
+        n_networks = capbase_data['id_network'].nunique()
+        print(f"    Källa: capbase_a.parquet")
+        print(f"    Komponenter: {n_components:,}")
+        print(f"    Nätverk: {n_networks}")
     except FileNotFoundError as e:
-        print(f"  {e}")
-        print("  Använder baseline CAPEX")
+        print(f"    [FALLBACK: BASELINE] {e}")
+        print("    Kunde inte ladda capbase_a, använder baseline CAPEX")
         return _pre_dea_baseline(baseline)
     
+    # Steg 2: Logga parameterjusteringar
+    print("\n  Steg 2/4: Applicerar parameterjusteringar...")
+    if config.normvalue_adjustments:
+        print(f"    Normvärde-justeringar: {len(config.normvalue_adjustments)} kategorier")
+        for cat_id, factor in config.normvalue_adjustments.items():
+            print(f"      - Kategori {cat_id}: x{factor:.2f}")
+    else:
+        print("    Normvärde-justeringar: Inga")
+    
+    if config.lifetime_adjustments:
+        print(f"    Livslängd-justeringar: {len(config.lifetime_adjustments)} kategorier")
+    else:
+        print("    Livslängd-justeringar: Inga")
+    
+    print(f"    WACC: {wacc_to_use:.4f}")
+    
+    # Steg 3: Kör KENT-beräkningar
+    print("\n  Steg 3/4: Kör KENT-beräkningar (steg 5-8)...")
     try:
         df_detailed, df_network = run_kent_calculations_batch(
             capbase_data,
-            wacc=config.wacc if config.wacc else baseline.wacc,
+            wacc=wacc_to_use,
             normvalue_adjustments=config.normvalue_adjustments,
             lifetime_adjustments=config.lifetime_adjustments
         )
-        print(f"  KENT-beräkningar klara: {len(df_network)} nätverk")
-        
-        # Skicka med sdf_ir för DEV FALLBACK av Kapitalkostnad_Period
-        df_result = merge_kent_with_baseline(
-            df_network,
-            baseline.df_all_companies,
-            sdf_ir=baseline.sdf_ir  # Fallback för företag utan KENT-data
-        )
-        print(f"  Mergat med baseline: {len(df_result)} företag")
-        
-        return PreDeaStageOutput(
-            df_all_companies=df_result,
-            capex_method="parameter_change",
-            capex_modified=True,
-            wacc_used=config.wacc if config.wacc else baseline.wacc
-        )
+        print(f"    [OK] Beräknade {len(df_network)} nätverk")
         
     except Exception as e:
-        print(f"  Fel i KENT-beräkningar: {e}")
-        print("  Använder baseline CAPEX")
+        print(f"    [FALLBACK: BASELINE] KENT-beräkning misslyckades: {e}")
+        print("    Använder baseline CAPEX")
         return _pre_dea_baseline(baseline)
+    
+    # Steg 4: Merge med baseline
+    print("\n  Steg 4/4: Mergar KENT-resultat med baseline...")
+    df_result = merge_kent_with_baseline(
+        df_network,
+        baseline.df_all_companies,
+        sdf_ir=baseline.sdf_ir
+    )
+    
+    print("\n" + "-"*60)
+    print(f"  Resultat: capex_modified=True, capex_method='parameter_change'")
+    print(f"            {len(df_result)} företag, wacc_used={wacc_to_use:.4f}")
+    print("="*60 + "\n")
+    
+    return PreDeaStageOutput(
+        df_all_companies=df_result,
+        capex_method="parameter_change",
+        capex_modified=True,
+        wacc_used=wacc_to_use
+    )
 
+
+# =============================================================================
+# METOD 4: KENT_UPLOAD
+# =============================================================================
 
 def _pre_dea_kent_upload(
     baseline: BaselineStageOutput,
@@ -187,8 +267,7 @@ def _pre_dea_kent_upload(
             get_kent_upload_summary
         )
     except ImportError as e:
-        print(f"  Kunde inte importera kent_capbase_prep: {e}")
-        print("  Använder baseline CAPEX")
+        print(f"  [FALLBACK: BASELINE] Kunde inte importera kent_capbase_prep: {e}")
         return _pre_dea_baseline(baseline)
     
     # Validera input
@@ -198,9 +277,11 @@ def _pre_dea_kent_upload(
     if config.kent_user_id_network is None:
         raise ValueError("kent_user_id_network måste anges för kent_upload metod")
     
-    print("KENT-upload: Processar uppladdad fil...")
+    # Steg 1: Konvertera KENT Excel till capbase_a format
+    print("\n  Steg 1/3: Processar uppladdad KENT-fil...")
+    print(f"    id_network: {config.kent_user_id_network}")
+    print(f"    Filstorlek: {len(config.kent_file_bytes):,} bytes")
     
-    # Steg 1-4: Konvertera KENT Excel till capbase_a format
     try:
         kent_file = BytesIO(config.kent_file_bytes)
         
@@ -211,14 +292,13 @@ def _pre_dea_kent_upload(
         )
         
         summary = get_kent_upload_summary(user_capbase_a)
-        print(f"  KENT steg 1-4 klara:")
-        print(f"    - {summary['n_components']} komponenter")
-        print(f"    - {summary['n_existing']} befintliga, {summary['n_investments']} investeringar")
-        print(f"    - Total NUAV: {summary['total_nuav_mkr']:.1f} Mkr")
+        print(f"    [OK] KENT steg 1-4 klara:")
+        print(f"         - {summary['n_components']} komponenter")
+        print(f"         - {summary['n_existing']} befintliga, {summary['n_investments']} investeringar")
+        print(f"         - Total NUAV: {summary['total_nuav_mkr']:.1f} Mkr")
         
     except Exception as e:
-        print(f"  Fel vid KENT-processning: {e}")
-        print("  Använder baseline CAPEX")
+        print(f"    [FALLBACK: BASELINE] KENT-processning misslyckades: {e}")
         return _pre_dea_baseline(baseline)
     
     # Bestäm scenario baserat på parametrar
@@ -228,13 +308,11 @@ def _pre_dea_kent_upload(
     )
     
     if has_parameter_changes:
-        return _kent_upload_with_parameters(
-            baseline, config, user_capbase_a
-        )
+        print("\n  Scenario: KENT + parametrar (alla företag omberäknas)")
+        return _kent_upload_with_parameters(baseline, config, user_capbase_a)
     else:
-        return _kent_upload_only(
-            baseline, config, user_capbase_a
-        )
+        print("\n  Scenario: KENT-only (endast användarens företag)")
+        return _kent_upload_only(baseline, config, user_capbase_a)
 
 
 def _kent_upload_only(
@@ -246,16 +324,13 @@ def _kent_upload_only(
     Scenario 1: KENT-only
     
     Kör steg 5-8 för ENDAST användarens företag.
-    Övriga 147 företag använder baseline CAPEX.
-    
-    Kritiskt: Både Kapitalkostnad_2024 (för DEA) och Kapitalkostnad_Period 
-    (för intäktsram) måste hämtas från KENT-output.
+    Övriga 147 företag använder baseline CAPEX med SDF periodsummor.
     """
-    print("  Scenario: KENT-only (inget annat ändrat)")
     
     wacc_to_use = config.wacc if config.wacc else baseline.wacc
     
-    # Kör steg 5-8 för användarens data
+    # Steg 2: Kör KENT steg 5-8 för användaren
+    print("\n  Steg 2/3: Kör KENT steg 5-8 för användaren...")
     try:
         _, df_user_network = run_kent_calculations_batch(
             user_capbase_a,
@@ -268,91 +343,79 @@ def _kent_upload_only(
             raise ValueError("Inga nätverk beräknades från KENT-data")
         
         user_capex = df_user_network.iloc[0]['Kapitalkostnad_2024']
-        print(f"  Användarens nya CAPEX: {user_capex:,.0f} tkr")
+        print(f"    [OK] Kapitalkostnad_2024: {user_capex:,.0f} tkr")
         
-        # Hämta periodsumma från KENT-output
         if 'Kapitalkostnad_Period' in df_user_network.columns:
             user_period = df_user_network.iloc[0]['Kapitalkostnad_Period']
-            print(f"  Användarens periodsumma: {user_period:,.0f} tkr")
+            print(f"    [OK] Kapitalkostnad_Period: {user_period:,.0f} tkr")
         else:
-            raise ValueError(
-                "Kapitalkostnad_Period saknas i KENT-output. "
-                "Kontrollera att kent_calculations.py producerar periodsummor korrekt.")
+            raise ValueError("Kapitalkostnad_Period saknas i KENT-output")
         
     except Exception as e:
-        print(f"  Fel vid KENT steg 5-8: {e}")
-        print("  Använder baseline CAPEX")
+        print(f"    [FALLBACK: BASELINE] KENT steg 5-8 misslyckades: {e}")
         return _pre_dea_baseline(baseline)
     
-    # Kopiera baseline och berika med periodsummor från SDF
+    # Steg 3: Bygg resultat-DataFrame
+    print("\n  Steg 3/3: Bygger resultat...")
     df_result = baseline.df_all_companies.copy()
     
-    # Lägg till periodsummor från SDF för alla 148 företag (baseline-värden)
-    # sdf_ir innehåller 'Kapitalkostnad' som är periodsumman
+    # Lägg till periodsummor från SDF för alla företag (baseline)
     if 'Kapitalkostnad_Period' not in df_result.columns:
         sdf_period = baseline.sdf_ir[['REId', 'Kapitalkostnad']].rename(
             columns={'Kapitalkostnad': 'Kapitalkostnad_Period'}
         )
         df_result = df_result.merge(sdf_period, on='REId', how='left')
-        print(f"  Lade till baseline periodsummor för {len(df_result)} företag")
+        print(f"    [FALLBACK: SDF] Periodsummor för {len(df_result)} företag från SDF")
     
-    # Hitta användarens rad via id_network
+    # Hitta och uppdatera användarens rad
     user_id_network = config.kent_user_id_network
-    
-    # Skapa REId från id_network
     user_reid = f"REL{user_id_network:05d}"
     
     mask = df_result['REId'] == user_reid
     if mask.sum() == 0:
-        # Försök med id_network direkt
         if 'id_network' in df_result.columns:
             mask = df_result['id_network'] == user_id_network
     
     if mask.sum() == 0:
-        print(f"  Kunde inte hitta företag {user_reid} i baseline")
-        print("  Använder baseline CAPEX")
+        print(f"    [FALLBACK: BASELINE] Kunde inte hitta {user_reid} i baseline")
         return _pre_dea_baseline(baseline)
     
-    # Uppdatera CAPEX-relaterade kolumner för användaren
+    # Spara gamla värden för loggning
     old_capex = df_result.loc[mask, 'Kapitalkostnad_2024'].values[0]
     old_period = df_result.loc[mask, 'Kapitalkostnad_Period'].values[0] if 'Kapitalkostnad_Period' in df_result.columns else None
     
-    # Kapitalkostnad_2024 (för DEA)
+    # Uppdatera CAPEX-relaterade kolumner för användaren
     df_result.loc[mask, 'Kapitalkostnad_2024'] = user_capex
-    
-    # Kapitalkostnad_Period (för intäktsram)
     df_result.loc[mask, 'Kapitalkostnad_Period'] = user_period
     
-    # Uppdatera CAPEX alias om det finns
     if 'CAPEX' in df_result.columns:
         df_result.loc[mask, 'CAPEX'] = user_capex
     
-    # Uppdatera TOTEX om det finns
     if 'TOTEX' in df_result.columns and 'OPEXp' in df_result.columns:
         opex = df_result.loc[mask, 'OPEXp'].values[0]
         df_result.loc[mask, 'TOTEX'] = opex + user_capex
     
-    # Uppdatera Avskrivning och Avkastning om de finns i df_user_network
-    if 'Avskrivning' in df_user_network.columns:
-        avskriv = df_user_network.iloc[0].get('Avskrivning', 0)
-        if 'Avskrivning' in df_result.columns:
-            df_result.loc[mask, 'Avskrivning'] = avskriv
+    # Uppdatera övriga kolumner om de finns
+    if 'Avskrivning' in df_user_network.columns and 'Avskrivning' in df_result.columns:
+        df_result.loc[mask, 'Avskrivning'] = df_user_network.iloc[0]['Avskrivning']
     
-    if 'Avkastning' in df_user_network.columns:
-        avkast = df_user_network.iloc[0].get('Avkastning', 0)
-        if 'Avkastning' in df_result.columns:
-            df_result.loc[mask, 'Avkastning'] = avkast
+    if 'Avkastning' in df_user_network.columns and 'Avkastning' in df_result.columns:
+        df_result.loc[mask, 'Avkastning'] = df_user_network.iloc[0]['Avkastning']
     
-    # Uppdatera årsvisa kapitalkostnader om de finns
     for year in [2025, 2026, 2027]:
         col = f'Kapitalkostnad_{year}'
         if col in df_user_network.columns and col in df_result.columns:
             df_result.loc[mask, col] = df_user_network.iloc[0][col]
     
-    print(f"  Ersatte för {user_reid}:")
-    print(f"    - Kapitalkostnad_2024: {old_capex:,.0f} -> {user_capex:,.0f} tkr")
+    print(f"    Uppdaterade {user_reid}:")
+    print(f"      Kapitalkostnad_2024: {old_capex:,.0f} -> {user_capex:,.0f} tkr")
     if old_period is not None:
-        print(f"    - Kapitalkostnad_Period: {old_period:,.0f} -> {user_period:,.0f} tkr")
+        print(f"      Kapitalkostnad_Period: {old_period:,.0f} -> {user_period:,.0f} tkr")
+    
+    print("\n" + "-"*60)
+    print(f"  Resultat: capex_modified=True, capex_method='kent_upload'")
+    print(f"            KENT: 1 företag ({user_reid}), SDF-baseline: {len(df_result)-1} företag")
+    print("="*60 + "\n")
     
     return PreDeaStageOutput(
         df_all_companies=df_result,
@@ -372,38 +435,42 @@ def _kent_upload_with_parameters(
     
     Ersätter användarens data i capbase_a och kör steg 5-8
     för ALLA 148 företag (eftersom parametrar ändrats).
-    
-    merge_kent_with_baseline() hanterar Kapitalkostnad_Period automatiskt.
     """
-    print("  Scenario: KENT + parametrar (alla företag omberäknas)")
     
     wacc_to_use = config.wacc if config.wacc else baseline.wacc
     
-    # Ladda baseline capbase_a
+    # Steg 2: Ladda baseline capbase_a
+    print("\n  Steg 2/4: Laddar baseline kapitalbas...")
     try:
         capbase_data = load_capbase_a()
-        print(f"  Laddade capbase_a: {len(capbase_data):,} komponenter")
+        n_components = len(capbase_data)
+        print(f"    [OK] capbase_a.parquet: {n_components:,} komponenter")
     except FileNotFoundError as e:
-        print(f"  {e}")
-        # Fallback: Kör bara för användarens företag
+        print(f"    [FALLBACK: KENT-ONLY] {e}")
         return _kent_upload_only(baseline, config, user_capbase_a)
     
-    # Ersätt användarens komponenter i capbase_a
+    # Steg 3: Ersätt användarens komponenter
+    print("\n  Steg 3/4: Ersätter användarens komponenter...")
     user_id_network = config.kent_user_id_network
     
-    # Ta bort användarens befintliga komponenter
     mask_not_user = capbase_data['id_network'] != user_id_network
     capbase_without_user = capbase_data[mask_not_user].copy()
     
     n_removed = len(capbase_data) - len(capbase_without_user)
-    print(f"  Tog bort {n_removed} komponenter för id_network={user_id_network}")
+    print(f"    Tog bort: {n_removed} komponenter (id_network={user_id_network})")
     
-    # Lägg till användarens nya komponenter
     capbase_combined = pd.concat([capbase_without_user, user_capbase_a], ignore_index=True)
-    print(f"  Lade till {len(user_capbase_a)} nya komponenter")
-    print(f"  Total capbase_a: {len(capbase_combined):,} komponenter")
+    print(f"    Lade till: {len(user_capbase_a)} nya komponenter")
+    print(f"    Total: {len(capbase_combined):,} komponenter")
     
-    # Kör steg 5-8 för alla företag med parameterjusteringar
+    # Steg 4: Kör KENT för alla
+    print("\n  Steg 4/4: Kör KENT steg 5-8 för alla företag...")
+    if config.normvalue_adjustments:
+        print(f"    Normvärde-justeringar: {len(config.normvalue_adjustments)} kategorier")
+    if config.lifetime_adjustments:
+        print(f"    Livslängd-justeringar: {len(config.lifetime_adjustments)} kategorier")
+    print(f"    WACC: {wacc_to_use:.4f}")
+    
     try:
         df_detailed, df_network = run_kent_calculations_batch(
             capbase_combined,
@@ -411,21 +478,24 @@ def _kent_upload_with_parameters(
             normvalue_adjustments=config.normvalue_adjustments,
             lifetime_adjustments=config.lifetime_adjustments
         )
-        print(f"  KENT-beräkningar klara: {len(df_network)} nätverk")
+        print(f"    [OK] Beräknade {len(df_network)} nätverk")
         
     except Exception as e:
-        print(f"  Fel i KENT-beräkningar: {e}")
-        print("  Använder baseline CAPEX")
+        print(f"    [FALLBACK: BASELINE] KENT-beräkning misslyckades: {e}")
         return _pre_dea_baseline(baseline)
     
-    # Merge med baseline för övrig data
-    # Skicka med sdf_ir för DEV FALLBACK av Kapitalkostnad_Period
+    # Merge med baseline (inkl. SDF-fallback för periodsummor)
+    print("\n  Mergar KENT-resultat med baseline...")
     df_result = merge_kent_with_baseline(
         df_network,
         baseline.df_all_companies,
-        sdf_ir=baseline.sdf_ir  # Fallback för företag utan KENT-data
+        sdf_ir=baseline.sdf_ir
     )
-    print(f"  Mergat med baseline: {len(df_result)} företag")
+    
+    print("\n" + "-"*60)
+    print(f"  Resultat: capex_modified=True, capex_method='kent_upload'")
+    print(f"            {len(df_result)} företag, wacc_used={wacc_to_use:.4f}")
+    print("="*60 + "\n")
     
     return PreDeaStageOutput(
         df_all_companies=df_result,

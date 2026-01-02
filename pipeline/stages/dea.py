@@ -51,18 +51,40 @@ def stage_dea(
         - dea_executed: True om ny DEA kördes
     """
     
-    # Kontrollera om CAPEX modifierats - då måste vi köra ny DEA
     capex_modified = pre_dea.capex_modified
     
+    # =========================================================================
+    # SCENARIO 1: Baseline DEA (ingen CAPEX-modifikation)
+    # =========================================================================
     if config.method == EfficiencyMethod.BASELINE and not capex_modified:
-        # Använd baseline DEA-resultat från Ei (endast om CAPEX oförändrad)
+        
         if baseline is None:
             raise ValueError("Baseline krävs för baseline DEA-metod")
         
         print("\n" + "="*60)
-        print("STAGE 3: DEA (Baseline)")
+        print("STAGE 3: DEA")
+        print(f"  Metod: baseline (Ei's officiella resultat)")
         print("="*60)
-        print("✓ Använder Ei's baseline DEA-resultat")
+        
+        print("\n  Steg 1/1: Laddar baseline DEA-resultat...")
+        print(f"    Källa: EIs_DEA.xlsx")
+        print(f"    Företag: {len(baseline.dea_baseline)}")
+        print("    [OK] Använder Ei's baseline DEA-resultat (ingen omberäkning)")
+        
+        # Statistik
+        df = baseline.dea_baseline
+        mean_eff = df['Effektivitet'].mean()
+        n_efficient = (df['Effektivitet'] >= 1.0).sum()
+        n_outliers = df['is_outlier'].sum() if 'is_outlier' in df.columns else 0
+        
+        print(f"\n  Statistik:")
+        print(f"    Medel-effektivitet: {mean_eff:.3f}")
+        print(f"    Effektiva (>=100%): {n_efficient} företag")
+        print(f"    Outliers: {n_outliers} företag")
+        
+        print("\n" + "-"*60)
+        print("  Resultat: dea_executed=False, dea_method='baseline'")
+        print("="*60 + "\n")
         
         return DeaStageOutput(
             dea_results=baseline.dea_baseline.copy(),
@@ -70,19 +92,46 @@ def stage_dea(
             dea_executed=False
         )
     
+    # =========================================================================
+    # SCENARIO 2: Baseline spec med modifierad CAPEX (kör ny DEA)
+    # =========================================================================
     elif config.method == EfficiencyMethod.BASELINE and capex_modified:
-        # CAPEX ändrad men användaren valde baseline-metod
-        # Kör DEA med baseline-specifikation men nya CAPEX-värden
+        
         print("\n" + "="*60)
-        print("STAGE 3: DEA (Baseline spec, modifierad CAPEX)")
+        print("STAGE 3: DEA")
+        print(f"  Metod: baseline_recalculated")
+        print(f"  OBS: CAPEX modifierad via '{pre_dea.capex_method}' - kör ny DEA")
         print("="*60)
-        print(f"⚠ CAPEX modifierad via '{pre_dea.capex_method}' - kör ny DEA för konsistens")
+        
+        print("\n  Steg 1/2: Förbereder DEA-input...")
+        print(f"    Källa: Pre-DEA output ({len(pre_dea.df_all_companies)} företag)")
+        print(f"    CAPEX-metod: {pre_dea.capex_method}")
+        if pre_dea.wacc_used:
+            print(f"    WACC: {pre_dea.wacc_used:.4f}")
+        
+        print("\n  Steg 2/2: Kör DEA med baseline-specifikation...")
+        print(f"    Inputs: {BASELINE_DEA_SPEC['inputs']}")
+        print(f"    Outputs: {BASELINE_DEA_SPEC['outputs']}")
+        print(f"    RTS: {BASELINE_DEA_SPEC['rts']}, Orientation: {BASELINE_DEA_SPEC['orientation']}")
         
         dea_results = run_dea_analysis(
             df=pre_dea.df_all_companies,
             model_spec=BASELINE_DEA_SPEC
         )
         
+        # Statistik
+        mean_eff = dea_results['Effektivitet'].mean()
+        n_efficient = (dea_results['Effektivitet'] >= 1.0).sum()
+        n_outliers = dea_results['is_outlier'].sum() if 'is_outlier' in dea_results.columns else 0
+        
+        print(f"\n  Resultat:")
+        print(f"    Företag: {len(dea_results)}")
+        print(f"    Medel-effektivitet: {mean_eff:.3f}")
+        print(f"    Effektiva (>=100%): {n_efficient} företag")
+        print(f"    Outliers: {n_outliers} företag")
+        
+        print("\n" + "-"*60)
+        print("  Resultat: dea_executed=True, dea_method='baseline_recalculated'")
         print("="*60 + "\n")
         
         return DeaStageOutput(
@@ -91,11 +140,18 @@ def stage_dea(
             dea_executed=True
         )
     
+    # =========================================================================
+    # SCENARIO 3: Custom DEA
+    # =========================================================================
     elif config.method == EfficiencyMethod.DEA:
-        # Kör ny DEA-analys med custom specifikation
+        
         print("\n" + "="*60)
-        print("STAGE 3: DEA (Custom)")
+        print("STAGE 3: DEA")
+        print(f"  Metod: custom (användardefinierad)")
         print("="*60)
+        
+        print("\n  Steg 1/2: Förbereder DEA-input...")
+        print(f"    Källa: Pre-DEA output ({len(pre_dea.df_all_companies)} företag)")
         
         # Extrahera modellspecifikation från config
         model_spec = {
@@ -110,12 +166,30 @@ def stage_dea(
             }
         }
         
-        # Kör DEA
+        print("\n  Steg 2/2: Kör custom DEA...")
+        print(f"    Inputs: {model_spec['inputs']}")
+        print(f"    Outputs: {model_spec['outputs']}")
+        print(f"    RTS: {model_spec['rts']}, Orientation: {model_spec['orientation']}")
+        print(f"    Outlier-params: q=[{config.q_lower}, {config.q_upper}], mult={config.multiplier}")
+        
         dea_results = run_dea_analysis(
             df=pre_dea.df_all_companies,
             model_spec=model_spec
         )
         
+        # Statistik
+        mean_eff = dea_results['Effektivitet'].mean()
+        n_efficient = (dea_results['Effektivitet'] >= 1.0).sum()
+        n_outliers = dea_results['is_outlier'].sum() if 'is_outlier' in dea_results.columns else 0
+        
+        print(f"\n  Resultat:")
+        print(f"    Företag: {len(dea_results)}")
+        print(f"    Medel-effektivitet: {mean_eff:.3f}")
+        print(f"    Effektiva (>=100%): {n_efficient} företag")
+        print(f"    Outliers: {n_outliers} företag")
+        
+        print("\n" + "-"*60)
+        print("  Resultat: dea_executed=True, dea_method='dea'")
         print("="*60 + "\n")
         
         return DeaStageOutput(
