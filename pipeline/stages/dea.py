@@ -199,4 +199,4 @@ def stage_dea(
         )
     
     else:
-        raise ValueError(f"Okänd DEA-metod: {config.method}")
+        raise ValueError(f"Okänd DEA metod: {config.method}")
