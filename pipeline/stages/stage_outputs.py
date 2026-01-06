@@ -1,8 +1,11 @@
 """
-stage_outputs.py
+pipeline/stages/stage_outputs.py
 
 Output dataclasses för varje pipeline stage.
 Alla outputs är frozen (immutable) för att säkerställa data integrity.
+
+REFAKTORISERAD: PreDeaStageOutput innehåller nu metadata om både 
+capbase_source och capex_method.
 """
 
 from dataclasses import dataclass
@@ -30,14 +33,31 @@ class BaselineStageOutput:
 class PreDeaStageOutput:
     """
     Output från Pre-DEA stage.
-    DataFrame med alla 148 företag, potentiellt modifierad Kapitalkostnad_2024.
-    """
-    df_all_companies: pd.DataFrame  # 148 rows, potentially modified Kapitalkostnad_2024/OPEXp
-    capex_method: str               # Metod som användes: baseline, wacc_scaling, etc.
-    capex_modified: bool            # True om Kapitalkostnad_2024 ändrades från baseline
     
-    # WACC som användes vid skalning (behövs för korrekt periodsumma i post_dea)
+    Innehåller metadata om både datakälla (capbase_source) och 
+    beräkningsmetod (capex_method) för spårbarhet och korrekt
+    hantering i efterföljande stages.
+    
+    Attributes:
+        df_all_companies: DataFrame med alla 148 företag, potentiellt
+            modifierad Kapitalkostnad_2024/OPEXp.
+        capbase_source: Källa för användarens data:
+            - "baseline": Baseline capbase_a
+            - "kent_upload": Uppladdad KENT-fil
+        capex_method: Beräkningsmetod som användes:
+            - "baseline": Ingen parameterändring
+            - "wacc_scaling": Skalad avkastning
+            - "parameter_change": Nya normvärden/livslängder
+        capex_modified: True om Kapitalkostnad_2024 ändrades från baseline.
+        wacc_used: WACC som användes (för post_dea periodsumma-beräkning).
+        user_id_network: Användarens id_network (för spårbarhet).
+    """
+    df_all_companies: pd.DataFrame
+    capbase_source: str
+    capex_method: str
+    capex_modified: bool
     wacc_used: Optional[float] = None
+    user_id_network: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -46,7 +66,7 @@ class DeaStageOutput:
     Output från DEA stage.
     DEA-resultat för alla 148 företag.
     """
-    dea_results: pd.DataFrame       # 148 rows: REId, efficiency, potential, is_outlier (har även DMU)
+    dea_results: pd.DataFrame       # 148 rows: REId, efficiency, potential, is_outlier
     dea_method: str                 # Metod: baseline eller dea
     dea_executed: bool              # True om ny DEA kördes (annars baseline)
 

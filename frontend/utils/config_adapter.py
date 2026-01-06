@@ -1,11 +1,15 @@
 """
-Config Adapter for Regumetrica UI.
+config/config_adapter.py
 
-Converts UI configuration to CaseDefinition for backend pipeline.
-This is the only bridge between frontend and backend.
+Config Adapter för Regumetrica UI.
+
+Konverterar UI-konfiguration till CaseDefinition för backend-pipeline.
+Detta är den enda bryggan mellan frontend och backend.
+
+REFAKTORISERAD: Hanterar CapbaseSource och CapexMethod som separata dimensioner.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from config.case_definition import (
     CaseDefinition,
@@ -13,254 +17,178 @@ from config.case_definition import (
     DeaConfig,
     PostDeaConfig,
     IncentiveConfig,
+    CapbaseSource,
     CapexMethod,
     EfficiencyMethod,
     PaverkbaraMethod,
 )
-from calculations.effektiviseringskrav import calculate_trunkering_min_from_outlier_krav
 
-# Parameter-ID -> (config_section, attribute_name, baseline_value)
-# Mapping according to User Manual Table 13
-PARAM_TO_CONFIG = {
-    # Module 3: Cost of capital (WACC)
-    "3.2.5": ("pre_dea", "wacc", 0.0453),
-    
-    # Module 3: Quality adjustments (3.3-3.6)
-    "3.3.1": ("incentive", "kpi", {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546}),
-    "3.4.1": ("incentive", "k_nf", {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44}),
-    "3.4.2": ("incentive", "sharing_netloss", 0.75),
-    "3.5.1": ("incentive", "adj_max_agg", 1/3),
-    "3.5.2": ("incentive", "adj_max_cemi4", 0.25),
-    "3.6.1": ("incentive", "enable_quality", True),
-    "3.6.2": ("incentive", "enable_netloss", True),
-    "3.6.3": ("incentive", "enable_load", True),
-    
-    # Module 5: Efficiency incentive (per UM Table 13)
-    "5.1.1": ("dea", "multiplier", 2.0),              # Outlier IQR threshold
-    "5.2.1": ("post_dea", "trunkering_max", 0.30),    # Maximum efficiency potential cap
-    "5.2.2": ("post_dea", "realiseringstid", 8),      # Realization time (years)
-    "5.2.3": ("post_dea", "kunddelning", 0.50),       # Customer sharing factor
-    "5.3.1": ("post_dea", "outlier_krav", 0.01),      # Minimum annual efficiency requirement
-    
-    # Module 4: Operating expenditures (via Module 5)
-    "5.4.1": ("post_dea", "paverkbara_method", "OPEX"),  # OPEX or TOTEX
-}
 
-# Column names for DEA (consistent with backend)
-DEA_INPUT_OPTIONS: List[str] = ["CAPEX", "OPEXp", "TOTEX"]
-DEA_OUTPUT_OPTIONS: List[str] = ["CU", "MW", "NS", "MWhl", "MWhh"]
+# =============================================================================
+# BASELINE VALUES
+# =============================================================================
 
-# Baseline values for incentives (not imported to avoid circular import)
+BASELINE_WACC = 0.0453
+
 BASELINE_INCENTIVE = {
     "kpi": {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
     "k_nf": {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44},
     "sharing_netloss": 0.75,
     "adj_max_agg": 1/3,
     "adj_max_cemi4": 0.25,
-    "ait_costs": {
-        ('o', 1): 34.35, ('o', 2): 159.96, ('o', 3): 175.06,
-        ('o', 4): 96.97, ('o', 5): 5.84, ('o', 6): 96.01,
-        ('a', 1): 14.10, ('a', 2): 76.00, ('a', 3): 79.31,
-        ('a', 4): 43.70, ('a', 5): 4.98, ('a', 6): 45.16,
-    },
-    "aif_costs": {
-        ('o', 1): 9.78, ('o', 2): 70.75, ('o', 3): 17.78,
-        ('o', 4): 7.65, ('o', 5): 1.95, ('o', 6): 22.18,
-        ('a', 1): 1.72, ('a', 2): 20.71, ('a', 3): 5.94,
-        ('a', 4): 0.92, ('a', 5): 1.85, ('a', 6): 7.08,
-    },
+    "ait_costs": None,  # Använd default från incentive_data
+    "aif_costs": None,
+}
+
+DEA_OUTPUT_OPTIONS = ['CU', 'MW', 'NS', 'MWhl', 'MWhh']
+
+# Typiska DEA-input options (används av UI/exports)
+DEA_INPUT_OPTIONS = ['Kapitalkostnad_2024', 'OPEXp']
+
+
+# Mappning av parameter-ID eller UI-nyckel till config-path (placeholder)
+# Håller namn som frontend.utils.__init__ förväntar sig. Kan utökas vid behov.
+PARAM_TO_CONFIG = {
+    "3.2.5": "m3_cost_of_capital.wacc_override",
+    "5.2.1": "m5_efficiency.trunkering_max",
 }
 
 
-def build_case_definition(user_reid: str, ui_config: Dict[str, Any]) -> CaseDefinition:
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
+
+def build_case_definition(
+    user_reid: str,
+    ui_config: Dict[str, Any]
+) -> CaseDefinition:
     """
-    Convert UI configuration to CaseDefinition.
+    Bygger CaseDefinition från UI-konfiguration.
+    
+    Konverterar session_state["ui_config"] till typad CaseDefinition
+    som kan skickas till pipeline.
     
     Args:
-        user_reid: User's REId (e.g., "REL00001")
-        ui_config: Complete UI configuration from session_state
-        
+        user_reid: Användarens REId
+        ui_config: Dict från session_state["ui_config"]
+    
     Returns:
-        CaseDefinition ready for pipeline execution
+        CaseDefinition redo för pipeline
+    
+    Raises:
+        ValueError: Om input är ogiltig
     """
-    pre_dea = _build_pre_dea_config(ui_config)
+    # Validera REId
+    if not user_reid:
+        raise ValueError("user_reid saknas")
+    if not user_reid.startswith("REL"):
+        raise ValueError(f"Ogiltigt REId-format: {user_reid}")
     
-    # If KENT upload, set user's id_network
-    if pre_dea.method == CapexMethod.KENT_UPLOAD:
-        pre_dea = PreDeaConfig(
-            method=pre_dea.method,
-            wacc=pre_dea.wacc,
-            normvalue_adjustments=pre_dea.normvalue_adjustments,
-            lifetime_adjustments=pre_dea.lifetime_adjustments,
-            kent_file_bytes=pre_dea.kent_file_bytes,
-            kent_user_id_network=_get_id_network_from_reid(user_reid),
-        )
+    # Hämta user_id_network för KENT-upload
+    user_id_network = _reid_to_id_network(user_reid)
     
+    # --- Pre-DEA ---
+    pre_dea = _build_pre_dea_config(ui_config, user_id_network)
+    
+    # --- DEA ---
     dea = _build_dea_config(ui_config)
+    
+    # --- Post-DEA (inkl. incitament) ---
     post_dea = _build_post_dea_config(ui_config)
     
     return CaseDefinition(
-        name=_generate_case_name(ui_config),
+        name="UI Case",
         user_reid=user_reid,
         pre_dea=pre_dea,
         dea=dea,
-        post_dea=post_dea,
+        post_dea=post_dea
     )
 
 
-def get_baseline_value(param_id: str) -> Any:
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def _reid_to_id_network(reid: str) -> int:
     """
-    Get baseline value for a parameter.
+    Konverterar REId till id_network.
     
-    Args:
-        param_id: Parameter ID (e.g., "3.2.5")
-        
-    Returns:
-        Baseline value or None if parameter not found
+    Ex: "REL00886" -> 886
     """
-    if param_id in PARAM_TO_CONFIG:
-        return PARAM_TO_CONFIG[param_id][2]
-    return None
+    try:
+        numeric_part = reid.replace("REL", "").lstrip("0")
+        if not numeric_part:
+            return 0
+        return int(numeric_part)
+    except (ValueError, AttributeError):
+        raise ValueError(f"Kunde inte konvertera REId till id_network: {reid}")
 
 
-def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
+def _build_pre_dea_config(
+    ui_config: Dict[str, Any],
+    user_id_network: int
+) -> PreDeaConfig:
     """
-    Returns list of modified parameters.
+    Bygger PreDeaConfig med separation av source och method.
     
-    Args:
-        ui_config: UI configuration
-        
-    Returns:
-        List of Parameter IDs that have been changed from baseline
-    """
-    changed = []
+    PRIORITERING FÖR SOURCE (dataförsörjning):
+    1. KENT_UPLOAD (om fil uppladdad)
+    2. BASELINE (ingen ändring)
     
-    # Module 1: Asset base
-    m1 = ui_config.get("m1_asset_base", {})
-    if m1.get("kent_file_bytes"):
-        changed.append("KENT file uploaded")
-    if m1.get("normvalue_adjustments"):
-        n = len(m1.get("normvalue_adjustments", {}))
-        level = m1.get("normvalue_level", "cat")
-        changed.append(f"1.X.X Norm values ({n} {level})")
+    PRIORITERING FÖR METHOD (beräkningsmetod):
+    1. PARAMETER_CHANGE (om normvärden/livslängder ändrats)
+    2. WACC_SCALING (om endast WACC ändrats)
+    3. BASELINE (ingen ändring)
     
-    # Module 2: Depreciation
-    m2 = ui_config.get("m2_depreciation", {})
-    if m2.get("lifetime_adjustments"):
-        n = len(m2.get("lifetime_adjustments", {}))
-        level = m2.get("lifetime_level", "cat")
-        changed.append(f"2.X.X Asset lifetimes ({n} {level})")
-    
-    # Module 3: Cost of capital (WACC)
-    m3 = ui_config.get("m3_cost_of_capital", {})
-    if m3.get("wacc_override") is not None:
-        changed.append("3.2.5 WACC")
-    
-    # Module 3: Quality adjustments (incentives)
-    m3q = ui_config.get("m3_quality_adjustments", {})
-    if m3q.get("kpi") is not None:
-        changed.append("3.7.X KPI factors")
-    if m3q.get("k_nf") is not None:
-        changed.append("3.4.1 Electricity price (K_NF)")
-    if m3q.get("sharing_netloss") is not None:
-        changed.append("3.4.2 Net loss sharing")
-    if m3q.get("adj_max_agg") is not None:
-        changed.append("3.6.1 Max aggregate incentive")
-    if m3q.get("adj_max_cemi4") is not None:
-        changed.append("3.3.X CEMI adjustment")
-    if m3q.get("ait_costs") is not None:
-        changed.append("3.3.X AIT costs")
-    if m3q.get("aif_costs") is not None:
-        changed.append("3.3.X AIF costs")
-    if not m3q.get("enable_quality", True):
-        changed.append("3.6.1 Quality incentive OFF")
-    if not m3q.get("enable_netloss", True):
-        changed.append("3.6.2 Net loss incentive OFF")
-    if not m3q.get("enable_load", True):
-        changed.append("3.6.3 Load incentive OFF")
-    
-    # Module 3: Incentive variables
-    m3v = ui_config.get("m3_incentive_variables", {})
-    if m3v:
-        overrides = {k: v for k, v in m3v.items() if v is not None and v != "NULL"}
-        if overrides:
-            changed.append(f"3.X.X Incentive variables ({len(overrides)})")
-    
-    # Module 4: Operating expenditures
-    m4 = ui_config.get("m4_operating_exp", {})
-    if m4.get("paverkbara_method") and m4.get("paverkbara_method") != "OPEX":
-        changed.append("5.4.1 Adjustable costs method")
-    
-    # Module 5: Efficiency
-    m5 = ui_config.get("m5_efficiency", {})
-    if m5.get("trunkering_max") is not None:
-        changed.append("5.2.1 Truncation max")
-    if m5.get("outlier_krav") is not None:
-        changed.append("5.3.1 Outlier requirement")
-    if m5.get("realiseringstid") is not None:
-        changed.append("5.2.2 Realization time")
-    if m5.get("kunddelning") is not None:
-        changed.append("5.2.3 Customer sharing")
-    
-    # Add-on: Benchmarking (DEA)
-    addon = ui_config.get("addon_benchmarking", {})
-    if addon.get("dea_method") == "custom":
-        changed.append("DEA: Custom model")
-    
-    return changed
-
-
-def _build_pre_dea_config(ui_config: Dict[str, Any]) -> PreDeaConfig:
-    """
-    Build PreDeaConfig based on m1, m2, m3.
-    
-    Priority order:
-    1. KENT upload (if file uploaded)
-    2. PARAMETER_CHANGE (if norm values/lifetimes changed)
-    3. WACC_SCALING (if only WACC changed)
-    4. BASELINE (no changes)
+    Source och method är oberoende dimensioner.
     """
     m1 = ui_config.get("m1_asset_base", {})
     m2 = ui_config.get("m2_depreciation", {})
     m3 = ui_config.get("m3_cost_of_capital", {})
     
+    # === Bestäm CAPBASE SOURCE ===
+    kent_file_bytes = m1.get("kent_file_bytes")
+    
+    if kent_file_bytes is not None:
+        capbase_source = CapbaseSource.KENT_UPLOAD
+    else:
+        capbase_source = CapbaseSource.BASELINE
+    
+    # === Bestäm CAPEX METHOD ===
     normvalue_adjustments = m1.get("normvalue_adjustments")
     lifetime_adjustments = m2.get("lifetime_adjustments")
     wacc_override = m3.get("wacc_override")
-    kent_file_bytes = m1.get("kent_file_bytes")
     
-    # Determine method based on what changed
-    has_kent_upload = (kent_file_bytes is not None)
-    has_parameter_changes = (normvalue_adjustments is not None or lifetime_adjustments is not None)
+    has_parameter_changes = (
+        normvalue_adjustments is not None or 
+        lifetime_adjustments is not None
+    )
     has_wacc_change = (wacc_override is not None)
     
-    if has_kent_upload:
-        return PreDeaConfig(
-            method=CapexMethod.KENT_UPLOAD,
-            wacc=wacc_override if wacc_override else 0.0453,
-            normvalue_adjustments=normvalue_adjustments,
-            lifetime_adjustments=lifetime_adjustments,
-            kent_file_bytes=kent_file_bytes,
-            kent_user_id_network=None,
-        )
-    elif has_parameter_changes:
-        return PreDeaConfig(
-            method=CapexMethod.PARAMETER_CHANGE,
-            wacc=wacc_override if wacc_override else 0.0453,
-            normvalue_adjustments=normvalue_adjustments,
-            lifetime_adjustments=lifetime_adjustments,
-        )
+    if has_parameter_changes:
+        capex_method = CapexMethod.PARAMETER_CHANGE
     elif has_wacc_change:
-        return PreDeaConfig(
-            method=CapexMethod.WACC_SCALING,
-            wacc=wacc_override
-        )
+        capex_method = CapexMethod.WACC_SCALING
     else:
-        return PreDeaConfig(method=CapexMethod.BASELINE)
+        capex_method = CapexMethod.BASELINE
+    
+    # === Bygg config ===
+    return PreDeaConfig(
+        # Source
+        capbase_source=capbase_source,
+        kent_file_bytes=kent_file_bytes if capbase_source == CapbaseSource.KENT_UPLOAD else None,
+        kent_user_id_network=user_id_network if capbase_source == CapbaseSource.KENT_UPLOAD else None,
+        
+        # Method
+        method=capex_method,
+        wacc=wacc_override,  # None = använd baseline
+        normvalue_adjustments=normvalue_adjustments,
+        lifetime_adjustments=lifetime_adjustments,
+    )
 
 
 def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
-    """Build DeaConfig based on addon_benchmarking."""
+    """Bygger DeaConfig baserat på addon_benchmarking."""
     addon = ui_config.get("addon_benchmarking", {})
     
     if addon.get("dea_method") == "custom":
@@ -277,53 +205,209 @@ def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
         return DeaConfig(method=EfficiencyMethod.BASELINE)
 
 
+def _is_empty_or_none(value: Any) -> bool:
+    """
+    Kontrollerar om ett värde är None eller en tom container.
+    
+    Hanterar edge cases där UI kan skicka tomma dicts/lists istället för None.
+    """
+    if value is None:
+        return True
+    if isinstance(value, (dict, list)) and len(value) == 0:
+        return True
+    return False
+
+
+def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
+    """
+    Bygger IncentiveConfig baserat på m3_quality_adjustments.
+    
+    FIX: Hanterar tomma dicts som None för korrekt baseline-fallback.
+    """
+    m3q = ui_config.get("m3_quality_adjustments", {})
+    m3v = ui_config.get("m3_incentive_variables", {})
+    
+    # Konvertera JSON-nycklar till backend-format
+    converted = _convert_incentive_keys(m3q)
+    
+    # Hämta värden - None ELLER tom dict betyder "använd baseline"
+    # FIX: Använd _is_empty_or_none() för robust kontroll
+    kpi_converted = converted.get("kpi")
+    kpi_raw = m3q.get("kpi")
+    kpi = None
+    if not _is_empty_or_none(kpi_converted):
+        kpi = kpi_converted
+    elif not _is_empty_or_none(kpi_raw):
+        kpi = kpi_raw
+    
+    k_nf_converted = converted.get("k_nf")
+    k_nf_raw = m3q.get("k_nf")
+    k_nf = None
+    if not _is_empty_or_none(k_nf_converted):
+        k_nf = k_nf_converted
+    elif not _is_empty_or_none(k_nf_raw):
+        k_nf = k_nf_raw
+    
+    sharing_netloss = m3q.get("sharing_netloss")
+    adj_max_agg = m3q.get("adj_max_agg")
+    adj_max_cemi4 = m3q.get("adj_max_cemi4")
+    
+    ait_costs_converted = converted.get("ait_costs")
+    ait_costs_raw = m3q.get("ait_costs")
+    ait_costs = None
+    if not _is_empty_or_none(ait_costs_converted):
+        ait_costs = ait_costs_converted
+    elif not _is_empty_or_none(ait_costs_raw):
+        ait_costs = ait_costs_raw
+    
+    aif_costs_converted = converted.get("aif_costs")
+    aif_costs_raw = m3q.get("aif_costs")
+    aif_costs = None
+    if not _is_empty_or_none(aif_costs_converted):
+        aif_costs = aif_costs_converted
+    elif not _is_empty_or_none(aif_costs_raw):
+        aif_costs = aif_costs_raw
+    
+    enable_quality = m3q.get("enable_quality", True)
+    enable_netloss = m3q.get("enable_netloss", True)
+    enable_load = m3q.get("enable_load", True)
+    
+    # Hämta variable_overrides från m3_incentive_variables
+    variable_overrides = None
+    if m3v:
+        overrides = {
+            k: v for k, v in m3v.items() 
+            if v is not None and v != "NULL" and v != "null"
+        }
+        if overrides:
+            variable_overrides = overrides
+    
+    return IncentiveConfig(
+        kpi=kpi if kpi is not None else BASELINE_INCENTIVE["kpi"],
+        k_nf=k_nf if k_nf is not None else BASELINE_INCENTIVE["k_nf"],
+        sharing_netloss=sharing_netloss if sharing_netloss is not None else BASELINE_INCENTIVE["sharing_netloss"],
+        adj_max_agg=adj_max_agg if adj_max_agg is not None else BASELINE_INCENTIVE["adj_max_agg"],
+        adj_max_cemi4=adj_max_cemi4 if adj_max_cemi4 is not None else BASELINE_INCENTIVE["adj_max_cemi4"],
+        ait_costs=ait_costs,  # None = använd default från incentive_data
+        aif_costs=aif_costs,
+        enable_quality=enable_quality,
+        enable_netloss=enable_netloss,
+        enable_load=enable_load,
+        variable_overrides=variable_overrides,
+    )
+
+
+def _convert_incentive_keys(m3q: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Konverterar JSON-nycklar till backend-format.
+    
+    Hanterar:
+    - kpi: {"2024": 1.0} -> {2024: 1.0}
+    - k_nf: {"2024": 753.44} -> {2024: 753.44}
+    - ait_costs: {"o_1": 34.35} -> {("o", 1): 34.35}
+    - aif_costs: {"a_1": 14.10} -> {("a", 1): 14.10}
+    """
+    converted: Dict[str, Any] = {}
+    
+    # Konvertera kpi (år som strängar -> int)
+    if "kpi" in m3q and m3q["kpi"]:
+        converted["kpi"] = {int(k): v for k, v in m3q["kpi"].items()}
+    
+    # Konvertera k_nf (år som strängar -> int)
+    if "k_nf" in m3q and m3q["k_nf"]:
+        converted["k_nf"] = {int(k): v for k, v in m3q["k_nf"].items()}
+    
+    # Konvertera ait_costs ("o_1" -> ("o", 1))
+    if "ait_costs" in m3q and m3q["ait_costs"]:
+        converted["ait_costs"] = {}
+        for key, value in m3q["ait_costs"].items():
+            parts = key.split("_")
+            if len(parts) == 2:
+                ann, sni = parts[0], int(parts[1])
+                converted["ait_costs"][(ann, sni)] = value
+    
+    # Konvertera aif_costs
+    if "aif_costs" in m3q and m3q["aif_costs"]:
+        converted["aif_costs"] = {}
+        for key, value in m3q["aif_costs"].items():
+            parts = key.split("_")
+            if len(parts) == 2:
+                ann, sni = parts[0], int(parts[1])
+                converted["aif_costs"][(ann, sni)] = value
+    
+    return converted
+
+
+def calculate_trunkering_min_from_outlier_krav(
+    outlier_krav: float,
+    kunddelning: float,
+    realiseringstid: int,
+    tillsynsperiod: int
+) -> float:
+    """
+    Beräknar trunkering_min som ger samma årskrav som outlier_krav.
+    
+    Detta är den OMVÄNDA beräkningen av effektiviseringskravsformeln:
+        årskrav = (1 + potential × kunddelning × T_p/T_r)^(1/T_p) - 1
+    
+    Löser ut potential:
+        total_eff = (1 + årskrav)^T_p - 1
+        potential = total_eff / (kunddelning × T_p/T_r)
+    
+    Med baseline-parametrar (outlier_krav=1%) ger detta trunkering_min ≈ 16.24%
+    
+    Args:
+        outlier_krav: Fast årligt krav för outliers (default 1%)
+        kunddelning: Andel av effektivisering som tillfaller kunder (default 50%)
+        realiseringstid: Antal år för att uppnå full effektivisering (default 8)
+        tillsynsperiod: Längd på tillsynsperiod i år (default 4)
+        
+    Returns:
+        trunkering_min (potential) som ger samma årskrav som outlier_krav
+    """
+    # Beräkna total effektivisering som krävs för att ge outlier_krav
+    total_eff = (1 + outlier_krav) ** tillsynsperiod - 1
+    
+    # Lös ut potential från: total_eff = potential × kunddelning × (T_p/T_r)
+    realization_factor = tillsynsperiod / realiseringstid
+    potential = total_eff / (kunddelning * realization_factor)
+    
+    return potential
+
+
 def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
     """
-    Build PostDeaConfig based on m4, m5, m3_quality_adjustments.
+    Bygger PostDeaConfig baserat på m4, m5, m3_quality_adjustments.
     
-    Note: trunkering_min is calculated automatically from outlier_krav to ensure
-    that non-outliers with low potential get the same minimum requirement.
+    trunkering_min beräknas alltid från formeln (som nu är korrekt).
+    Med baseline-parametrar ger detta 16.24%.
     """
     m5 = ui_config.get("m5_efficiency", {})
     m4 = ui_config.get("m4_operating_exp", {})
     
-    # Truncation max (5.2.1)
-    trunkering_max = m5.get("trunkering_max")
-    if trunkering_max is None:
-        trunkering_max = 0.30
+    # Hämta värden med baseline-fallback
+    trunkering_max = m5.get("trunkering_max") if m5.get("trunkering_max") is not None else 0.30
+    outlier_krav = m5.get("outlier_krav") if m5.get("outlier_krav") is not None else 0.01
+    realiseringstid = m5.get("realiseringstid") if m5.get("realiseringstid") is not None else 8
+    kunddelning = m5.get("kunddelning") if m5.get("kunddelning") is not None else 0.50
+    tillsynsperiod = m5.get("tillsynsperiod") if m5.get("tillsynsperiod") is not None else 4
     
-    # Minimum annual requirement (5.3.1)
-    outlier_krav = m5.get("outlier_krav")
-    if outlier_krav is None:
-        outlier_krav = 0.01
+    # Beräkna trunkering_min från formeln (eller använd explicit värde om satt)
+    trunkering_min_explicit = m5.get("trunkering_min")
+    if trunkering_min_explicit is not None:
+        trunkering_min = trunkering_min_explicit
+    else:
+        trunkering_min = calculate_trunkering_min_from_outlier_krav(
+            outlier_krav=outlier_krav,
+            kunddelning=kunddelning,
+            realiseringstid=realiseringstid,
+            tillsynsperiod=tillsynsperiod
+        )
     
-    # Realization time (5.2.2)
-    realiseringstid = m5.get("realiseringstid")
-    if realiseringstid is None:
-        realiseringstid = 8
-    
-    # Customer sharing factor (5.2.3)
-    kunddelning = m5.get("kunddelning")
-    if kunddelning is None:
-        kunddelning = 0.50
-    
-    # Regulatory period (fixed for 2024-2027)
-    tillsynsperiod = m5.get("tillsynsperiod")
-    if tillsynsperiod is None:
-        tillsynsperiod = 4
-    
-    # Calculate trunkering_min automatically from outlier_krav
-    trunkering_min = calculate_trunkering_min_from_outlier_krav(
-        outlier_krav=outlier_krav,
-        kunddelning=kunddelning,
-        realiseringstid=realiseringstid,
-        tillsynsperiod=tillsynsperiod
-    )
-    
-    # Adjustable costs method (5.4.1)
+    # Påverkbara metod (5.4.1)
     paverkbara_method_str = m4.get("paverkbara_method", "OPEX")
     
-    # Build incentive config
+    # Bygg incitament-config
     incentive = _build_incentive_config(ui_config)
     
     return PostDeaConfig(
@@ -338,124 +422,142 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
     )
 
 
-def _convert_incentive_keys(m3q: Dict[str, Any]) -> Dict[str, Any]:
-    """Converts JSON-compatible keys to backend format."""
-    converted = {}
-    
-    # Convert kpi from {"2024": 1.15, ...} to {2024: 1.15, ...}
-    if "kpi" in m3q and isinstance(m3q["kpi"], dict):
-        converted["kpi"] = {int(k): v for k, v in m3q["kpi"].items()}
-    
-    # Convert k_nf similarly
-    if "k_nf" in m3q and isinstance(m3q["k_nf"], dict):
-        converted["k_nf"] = {int(k): v for k, v in m3q["k_nf"].items()}
-    
-    # Convert ait_costs from {"o_1": 34.35, ...} to {('o', 1): 34.35, ...}
-    if "ait_costs" in m3q and isinstance(m3q["ait_costs"], dict):
-        converted["ait_costs"] = {}
-        for k, v in m3q["ait_costs"].items():
-            parts = k.split("_")
-            if len(parts) == 2:
-                converted["ait_costs"][(parts[0], int(parts[1]))] = v
-    
-    # Convert aif_costs similarly
-    if "aif_costs" in m3q and isinstance(m3q["aif_costs"], dict):
-        converted["aif_costs"] = {}
-        for k, v in m3q["aif_costs"].items():
-            parts = k.split("_")
-            if len(parts) == 2:
-                converted["aif_costs"][(parts[0], int(parts[1]))] = v
-    
-    return converted
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
 
-
-def _build_incentive_config(ui_config: Dict[str, Any]) -> IncentiveConfig:
+def get_baseline_value(param_id: str) -> Any:
     """
-    Build IncentiveConfig based on m3_quality_adjustments.
-    
-    Handles both simple values and Dict format (per year, per customer type).
-    Includes variable_overrides from m3_incentive_variables.
-    """
-    m3q = ui_config.get("m3_quality_adjustments", {})
-    m3v = ui_config.get("m3_incentive_variables", {})
-
-    # Convert JSON keys to backend format
-    converted = _convert_incentive_keys(m3q)
-    
-    # Get values - None means "use baseline"
-    kpi = converted.get("kpi") or m3q.get("kpi")
-    k_nf = converted.get("k_nf") or m3q.get("k_nf")
-    sharing_netloss = m3q.get("sharing_netloss")
-    adj_max_agg = m3q.get("adj_max_agg")
-    adj_max_cemi4 = m3q.get("adj_max_cemi4")
-    ait_costs = converted.get("ait_costs") or m3q.get("ait_costs")
-    aif_costs = converted.get("aif_costs") or m3q.get("aif_costs")
-
-    enable_quality = m3q.get("enable_quality", True)
-    enable_netloss = m3q.get("enable_netloss", True)
-    enable_load = m3q.get("enable_load", True)
-    
-    # Get variable_overrides from m3_incentive_variables
-    # Filter out None values and "NULL" strings (= use baseline)
-    variable_overrides = None
-    if m3v:
-        overrides = {
-            k: v for k, v in m3v.items() 
-            if v is not None and v != "NULL" and v != "null"
-        }
-        if overrides:
-            variable_overrides = overrides
-    
-    # Build config - use baseline if None
-    return IncentiveConfig(
-        kpi=kpi if kpi is not None else BASELINE_INCENTIVE["kpi"],
-        k_nf=k_nf if k_nf is not None else BASELINE_INCENTIVE["k_nf"],
-        sharing_netloss=sharing_netloss if sharing_netloss is not None else BASELINE_INCENTIVE["sharing_netloss"],
-        adj_max_agg=adj_max_agg if adj_max_agg is not None else BASELINE_INCENTIVE["adj_max_agg"],
-        adj_max_cemi4=adj_max_cemi4 if adj_max_cemi4 is not None else BASELINE_INCENTIVE["adj_max_cemi4"],
-        ait_costs=ait_costs if ait_costs is not None else BASELINE_INCENTIVE["ait_costs"],
-        aif_costs=aif_costs if aif_costs is not None else BASELINE_INCENTIVE["aif_costs"],
-        enable_quality=enable_quality,
-        enable_netloss=enable_netloss,
-        enable_load=enable_load,
-        variable_overrides=variable_overrides,
-    )
-
-
-def _generate_case_name(ui_config: Dict[str, Any]) -> str:
-    """Generate descriptive case name based on configuration."""
-    changed = get_changed_parameters(ui_config)
-    if not changed:
-        return "Baseline"
-    elif len(changed) == 1:
-        return changed[0]
-    else:
-        return f"Custom ({len(changed)} changes)"
-
-
-def _get_id_network_from_reid(user_reid: str) -> Optional[int]:
-    """
-    Get id_network from REId using reconciliation table.
+    Hämta baseline-värde för en parameter.
     
     Args:
-        user_reid: User's REId (e.g., "REL00001")
+        param_id: Parameter-ID (t.ex. "3.2.5")
         
     Returns:
-        id_network or None if not found
+        Baseline-värde eller None om parameter inte finns
     """
-    try:
-        import pandas as pd
-        from pathlib import Path
-        
-        recon_path = Path("data/reconciliation_id_network_firm_dmu.csv")
-        if not recon_path.exists():
-            return None
-        
-        df = pd.read_csv(recon_path)
-        match = df[df["REId"] == user_reid]
-        if not match.empty:
-            return int(match.iloc[0]["id_network"])
-    except Exception:
-        pass
+    # Mappning av Parameter-ID till baseline-värden
+    PARAM_BASELINE = {
+        "3.2.5": BASELINE_WACC,
+        "3.4.2": BASELINE_INCENTIVE["sharing_netloss"],
+        "3.6.1": BASELINE_INCENTIVE["adj_max_agg"],
+        "5.2.1": 0.30,  # trunkering_max
+        "5.2.2": 8,     # realiseringstid
+        "5.2.3": 0.50,  # kunddelning
+        "5.3.1": 0.01,  # outlier_krav
+        "5.3.2": 0.162416,  # trunkering_min (beräknat från baseline-parametrar)
+    }
+    return PARAM_BASELINE.get(param_id)
+
+
+def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
+    """
+    Returnerar lista med ändrade parametrar för visning i UI.
     
-    return None
+    Args:
+        ui_config: UI-konfiguration
+        
+    Returns:
+        Lista med beskrivningar av ändrade parametrar
+    """
+    changed = []
+    
+    # Module 1: Asset base
+    m1 = ui_config.get("m1_asset_base", {})
+    if m1.get("kent_file_bytes"):
+        changed.append("KENT-fil uppladdad")
+    if m1.get("normvalue_adjustments"):
+        n = len(m1.get("normvalue_adjustments", {}))
+        level = m1.get("normvalue_level", "cat")
+        changed.append(f"1.X.X Normvärden ({n} {level})")
+    
+    # Module 2: Depreciation
+    m2 = ui_config.get("m2_depreciation", {})
+    if m2.get("lifetime_adjustments"):
+        n = len(m2.get("lifetime_adjustments", {}))
+        level = m2.get("lifetime_level", "cat")
+        changed.append(f"2.X.X Livslängder ({n} {level})")
+    
+    # Module 3: Cost of capital (WACC)
+    m3 = ui_config.get("m3_cost_of_capital", {})
+    if m3.get("wacc_override") is not None:
+        changed.append("3.2.5 WACC")
+    
+    # Module 3: Quality adjustments (incitament)
+    m3q = ui_config.get("m3_quality_adjustments", {})
+    if not _is_empty_or_none(m3q.get("kpi")):
+        changed.append("3.7.X KPI-faktorer")
+    if not _is_empty_or_none(m3q.get("k_nf")):
+        changed.append("3.4.1 Elpris (K_NF)")
+    if m3q.get("sharing_netloss") is not None:
+        changed.append("3.4.2 Delning nätförlust")
+    if m3q.get("adj_max_agg") is not None:
+        changed.append("3.6.1 Max aggregerat incitament")
+    if m3q.get("adj_max_cemi4") is not None:
+        changed.append("3.3.X CEMI-korrigering")
+    if not m3q.get("enable_quality", True):
+        changed.append("3.6.1 Kvalitetsincitament AV")
+    if not m3q.get("enable_netloss", True):
+        changed.append("3.6.2 Nätförlustincitament AV")
+    if not m3q.get("enable_load", True):
+        changed.append("3.6.3 Belastningsincitament AV")
+    
+    # Module 5: Efficiency
+    m5 = ui_config.get("m5_efficiency", {})
+    if m5.get("trunkering_max") is not None:
+        changed.append("5.2.1 Trunkering max")
+    if m5.get("trunkering_min") is not None:
+        changed.append("5.3.2 Trunkering min")
+    if m5.get("realiseringstid") is not None:
+        changed.append("5.2.2 Realiseringstid")
+    if m5.get("kunddelning") is not None:
+        changed.append("5.2.3 Kunddelning")
+    if m5.get("outlier_krav") is not None:
+        changed.append("5.3.1 Outlier-krav")
+    
+    return changed
+
+
+def get_source_method_summary(ui_config: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Returnerar sammanfattning av vald source och method.
+    
+    Användbart för debugging och UI-visning.
+    """
+    m1 = ui_config.get("m1_asset_base", {})
+    m2 = ui_config.get("m2_depreciation", {})
+    m3 = ui_config.get("m3_cost_of_capital", {})
+    
+    # Source
+    if m1.get("kent_file_bytes"):
+        source = "KENT_UPLOAD"
+        source_desc = f"KENT-fil: {m1.get('kent_file_name', 'okänd')}"
+    else:
+        source = "BASELINE"
+        source_desc = "Baseline capbase_a"
+    
+    # Method
+    has_params = m1.get("normvalue_adjustments") or m2.get("lifetime_adjustments")
+    has_wacc = m3.get("wacc_override") is not None
+    
+    if has_params:
+        method = "PARAMETER_CHANGE"
+        parts = []
+        if m1.get("normvalue_adjustments"):
+            parts.append(f"{len(m1['normvalue_adjustments'])} normvärden")
+        if m2.get("lifetime_adjustments"):
+            parts.append(f"{len(m2['lifetime_adjustments'])} livslängder")
+        method_desc = "Parameter-ändringar: " + ", ".join(parts)
+    elif has_wacc:
+        method = "WACC_SCALING"
+        method_desc = f"WACC-skalning: {m3['wacc_override']:.4f}"
+    else:
+        method = "BASELINE"
+        method_desc = "Ingen parameterändring"
+    
+    return {
+        "source": source,
+        "source_description": source_desc,
+        "method": method,
+        "method_description": method_desc,
+    }

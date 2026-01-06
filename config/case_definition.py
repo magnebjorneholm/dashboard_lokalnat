@@ -3,6 +3,8 @@ config/case_definition.py
 
 Dataclasses för case definition.
 Definierar strukturen för alla pipeline-konfigurationer.
+
+REFAKTORISERAD: Separerar CapbaseSource (datakälla) från CapexMethod (beräkningsmetod).
 """
 
 from dataclasses import dataclass, field
@@ -10,17 +12,34 @@ from typing import Dict, List, Optional, Tuple, Union
 from enum import Enum
 
 
-# Enums för metodval
+# =============================================================================
+# ENUMS FÖR PRE-DEA STAGE
+# =============================================================================
+
+class CapbaseSource(str, Enum):
+    """
+    Källa för användarens capbase_a data.
+    
+    Påverkar endast det inloggade företagets data (Variables).
+    Övriga 147 företag använder alltid baseline.
+    """
+    BASELINE = "baseline"        # Använd baseline från capbase_a_mini.parquet
+    KENT_UPLOAD = "kent_upload"  # Uppladdad KENT Excel-fil (konverteras via steg 1-4)
+
+
 class CapexMethod(str, Enum):
-    """Metoder för kapitalkostnadsberäkning (Pre-DEA)"""
-    BASELINE = "baseline"
-    WACC_SCALING = "wacc_scaling"
-    PARAMETER_CHANGE = "parameter_change"
-    KENT_UPLOAD = "kent_upload"
+    """
+    Beräkningsmetod för kapitalkostnad.
+    
+    Appliceras uniformt på alla 148 företag (Parameters).
+    """
+    BASELINE = "baseline"              # Ingen parameterändring, baseline WACC
+    WACC_SCALING = "wacc_scaling"      # Skala avkastning med ny WACC
+    PARAMETER_CHANGE = "parameter_change"  # Ändra normvärden/livslängder, kör KENT 5-8
 
 
 class EfficiencyMethod(str, Enum):
-    """Metoder för effektivitetsanalys (DEA stage)"""
+    """Metoder för effektivitetsanalys (DEA stage)."""
     BASELINE = "baseline"
     DEA = "dea"
     # Fas 2: SFA = "sfa"
@@ -28,33 +47,51 @@ class EfficiencyMethod(str, Enum):
 
 
 class PaverkbaraMethod(str, Enum):
-    """Metod för påverkbara kostnader (Post-DEA)"""
+    """Metod för påverkbara kostnader (Post-DEA)."""
     OPEX = "OPEX"
     TOTEX = "TOTEX"
 
 
-# Config dataclasses per stage
+# =============================================================================
+# CONFIG DATACLASSES PER STAGE
+# =============================================================================
+
 @dataclass
 class PreDeaConfig:
-    """Configuration for Pre-DEA stage"""
+    """
+    Configuration för Pre-DEA stage.
+    
+    Separerar två koncept:
+    1. capbase_source - Var användarens capbase_a kommer ifrån (Variables)
+    2. method - Hur beräkningen görs för alla företag (Parameters)
+    
+    Dataflöde:
+    - BASELINE source: Ingen förberedelse, använd befintlig data
+    - KENT_UPLOAD source: Konvertera via kent_capbase_prep.py (steg 1-4)
+    - Sedan körs vald method (steg 5-8 om behövs)
+    """
+    
+    # === Dataförsörjning (per företag) ===
+    capbase_source: CapbaseSource = CapbaseSource.BASELINE
+    
+    # KENT-upload specifikt (om source = KENT_UPLOAD)
+    kent_file_bytes: Optional[bytes] = None
+    kent_user_id_network: Optional[int] = None
+    
+    # === Beräkningsmetod (uniformt för alla) ===
     method: CapexMethod = CapexMethod.BASELINE
     
-    # WACC-scaling specifikt
+    # WACC för beräkningar (None = använd baseline 0.0453)
     wacc: Optional[float] = None
     
-    # Parameter change specifikt
+    # Parameter change specifikt (normvärden/livslängder)
     normvalue_adjustments: Optional[Dict[int, float]] = None  # {cat_encode: multiplier}
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None  # {cat_encode: {'ekdep': X, 'maxdep': Y}}
-    
-    # KENT upload specifikt
-    kent_file_path: Optional[str] = None
-    kent_file_bytes: Optional[bytes] = None  # Uppladdad KENT Excel-fil som bytes
-    kent_user_id_network: Optional[int] = None  # id_network for det uppladdade foretagets data
 
 
 @dataclass
 class DeaConfig:
-    """Configuration för DEA stage"""
+    """Configuration för DEA stage."""
     method: EfficiencyMethod = EfficiencyMethod.BASELINE
     
     # Custom DEA model specification
@@ -64,9 +101,9 @@ class DeaConfig:
     orientation: str = "input"  # "input" eller "output"
     
     # Outlier detection parameters (IQR-metod)
-    q_lower: float = 25.0  # Nedre percentil
-    q_upper: float = 75.0  # Övre percentil
-    multiplier: float = 2.0  # IQR multiplier
+    q_lower: float = 25.0
+    q_upper: float = 75.0
+    multiplier: float = 2.0
 
 
 @dataclass
@@ -76,117 +113,74 @@ class IncentiveConfig:
     
     Fullständig parametrisering av kvalitets-, nätförlust- och 
     belastningsjustering enligt Ei's metodik.
-    
-    Parametrar kan vara:
-    - Enkla värden (float/bool)
-    - Dict per år: {2024: X, 2025: Y, ...}
-    - Dict per kundtyp: {('o', 1): X, ('a', 1): Y, ...}
     """
-    # === 3.3 Kvalitetsincitament ===
+    # KPI-faktorer per år {year: factor}
+    kpi: Optional[Dict[int, float]] = None
     
-    # KPI-faktorer per år (prisjustering till 2022 års priser)
-    # Dict[int, float] = {year: factor}
-    kpi: Optional[Dict[int, float]] = field(default_factory=lambda: {
-        2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546
-    })
+    # Elpris per år för nätförlust {year: kr/MWh}
+    k_nf: Optional[Dict[int, float]] = None
     
-    # AIT-kostnader per kundtyp (kr/kWh)
-    # Dict[Tuple[str, int], float] = {(ann, sni): kostnad}
-    # ann: 'a' = aviserade, 'o' = oaviserade
-    # sni: 1-6 (kundtyp)
-    ait_costs: Optional[Dict[Tuple[str, int], float]] = field(default_factory=lambda: {
-        ('o', 1): 34.35, ('o', 2): 159.96, ('o', 3): 175.06,
-        ('o', 4): 96.97, ('o', 5): 5.84, ('o', 6): 96.01,
-        ('a', 1): 14.10, ('a', 2): 76.00, ('a', 3): 79.31,
-        ('a', 4): 43.70, ('a', 5): 4.98, ('a', 6): 45.16,
-    })
-    
-    # AIF-kostnader per kundtyp (kr/kW)
-    # Samma struktur som ait_costs
-    aif_costs: Optional[Dict[Tuple[str, int], float]] = field(default_factory=lambda: {
-        ('o', 1): 9.78, ('o', 2): 70.75, ('o', 3): 17.78,
-        ('o', 4): 7.65, ('o', 5): 1.95, ('o', 6): 22.18,
-        ('a', 1): 1.72, ('a', 2): 20.71, ('a', 3): 5.94,
-        ('a', 4): 0.92, ('a', 5): 1.85, ('a', 6): 7.08,
-    })
-    
-    # Max CEMI4-korrigering (andel, 0-1)
-    adj_max_cemi4: float = 0.25
-    
-    # === 3.4 Nätförlustincitament ===
-    
-    # Elpris per år (kr/MWh)
-    # Dict[int, float] = {year: pris}
-    k_nf: Optional[Dict[int, float]] = field(default_factory=lambda: {
-        2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44
-    })
-    
-    # Delningsfaktor nätförlust (andel som tillfaller företaget)
+    # Delningsfaktor för nätförlust
     sharing_netloss: float = 0.75
     
-    # === 3.6 Begränsningar ===
-    
-    # Max aggregerat incitament per år (andel av avkastning)
+    # Max aggregerat incitament (andel av avkastning)
     adj_max_agg: float = 1/3
     
-    # === Aktivera/inaktivera ===
+    # CEMI4-korrigering max
+    adj_max_cemi4: float = 0.25
     
+    # AIT/AIF kostnader per kundtyp
+    ait_costs: Optional[Dict[Tuple[str, int], float]] = None
+    aif_costs: Optional[Dict[Tuple[str, int], float]] = None
+    
+    # On/off switchar
     enable_quality: bool = True
     enable_netloss: bool = True
     enable_load: bool = True
     
-    # === Variabel-overrides (företagsspecifika) ===
-    # 
-    # Dessa overrides appliceras ENDAST på användarens företag.
-    # Värdet appliceras på ALLA år (2024-2027).
-    # Om None -> använd baseline från all_adjust_vars.csv
-    # 
-    # Struktur: Dict[str, float] där nyckel är kolumnnamn
-    # Exempel:
-    # {
-    #     "nf_obs": 0.045,        # Nätförlust observerad
-    #     "ug_obs": 0.65,         # Utnyttjandegrad observerad
-    #     "ait_o_1_obs": 12.5,    # AIT oaviserad jordbruk
-    #     "ame_2": 150000,        # ÅME industri
-    # }
+    # Variable overrides (för företagsspecifika justeringar)
     variable_overrides: Optional[Dict[str, float]] = None
 
 
 @dataclass
 class PostDeaConfig:
-    """Configuration för Post-DEA stage"""
-    # Effektiviseringskrav - trunkering
-    trunkering_min: float = 0.162416      # Min potential för trunkering (16.24%)
-    trunkering_max: float = 0.30          # Max potential för trunkering (30%)
-    outlier_krav: float = 0.01            # Fast årligt krav för outliers (1%)
-    
-    # Effektiviseringskrav - omräkningsparametrar (enligt Ei's metod)
-    kunddelning: float = 0.50             # Andel som tillfaller kunder (50%)
-    realiseringstid: int = 8              # År för att uppnå full effektivisering
-    tillsynsperiod: int = 4               # Längd på tillsynsperiod i år
+    """Configuration för Post-DEA stage."""
+    # Effektiviseringskrav
+    trunkering_min: float = 0.01
+    trunkering_max: float = 0.30
+    outlier_krav: float = 0.01
+    kunddelning: float = 0.50
+    realiseringstid: int = 8
+    tillsynsperiod: int = 4
     
     # Påverkbara kostnader
     paverkbara_method: PaverkbaraMethod = PaverkbaraMethod.OPEX
     
-    # Incitamentjusteringar
+    # Incitament
     incentive: IncentiveConfig = field(default_factory=IncentiveConfig)
 
 
 @dataclass
 class CaseDefinition:
-    """Complete case definition"""
+    """
+    Komplett case definition.
+    Innehåller konfiguration för alla pipeline stages.
+    """
     name: str
     user_reid: str  # REId för användarens företag (ex: "REL00001")
     
-    # Stage configs
     pre_dea: PreDeaConfig = field(default_factory=PreDeaConfig)
     dea: DeaConfig = field(default_factory=DeaConfig)
     post_dea: PostDeaConfig = field(default_factory=PostDeaConfig)
 
 
+# =============================================================================
+# FACTORY FUNCTIONS
+# =============================================================================
+
 def get_baseline_config(user_reid: str) -> CaseDefinition:
     """
-    Create baseline config (alla defaults).
+    Skapar baseline case configuration.
     
     Args:
         user_reid: Användarens REId (ex: "REL00001")
@@ -197,7 +191,10 @@ def get_baseline_config(user_reid: str) -> CaseDefinition:
     return CaseDefinition(
         name="Baseline",
         user_reid=user_reid,
-        pre_dea=PreDeaConfig(method=CapexMethod.BASELINE),
+        pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.BASELINE,
+            method=CapexMethod.BASELINE
+        ),
         dea=DeaConfig(method=EfficiencyMethod.BASELINE),
         post_dea=PostDeaConfig()
     )
@@ -205,10 +202,10 @@ def get_baseline_config(user_reid: str) -> CaseDefinition:
 
 def create_wacc_scaling_config(user_reid: str, new_wacc: float) -> CaseDefinition:
     """
-    Create config för WACC-skalning.
+    Skapar config för WACC-skalning.
     
     Args:
-        user_reid: Användarens REId (ex: "REL00001")
+        user_reid: Användarens REId
         new_wacc: Ny WACC (real, före skatt)
         
     Returns:
@@ -218,8 +215,50 @@ def create_wacc_scaling_config(user_reid: str, new_wacc: float) -> CaseDefinitio
         name=f"WACC {new_wacc:.2%}",
         user_reid=user_reid,
         pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.BASELINE,
             method=CapexMethod.WACC_SCALING,
             wacc=new_wacc
+        ),
+        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
+        post_dea=PostDeaConfig()
+    )
+
+
+def create_kent_upload_config(
+    user_reid: str,
+    kent_file_bytes: bytes,
+    kent_user_id_network: int,
+    method: CapexMethod = CapexMethod.BASELINE,
+    wacc: Optional[float] = None,
+    normvalue_adjustments: Optional[Dict[int, float]] = None,
+    lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None
+) -> CaseDefinition:
+    """
+    Skapar config för KENT-upload med valfri beräkningsmetod.
+    
+    Args:
+        user_reid: Användarens REId
+        kent_file_bytes: KENT Excel-fil som bytes
+        kent_user_id_network: Användarens id_network
+        method: Beräkningsmetod (BASELINE, WACC_SCALING, PARAMETER_CHANGE)
+        wacc: WACC om method != BASELINE
+        normvalue_adjustments: Normvärdesjusteringar om PARAMETER_CHANGE
+        lifetime_adjustments: Livslängdsjusteringar om PARAMETER_CHANGE
+        
+    Returns:
+        CaseDefinition för KENT-upload
+    """
+    return CaseDefinition(
+        name=f"KENT Upload ({method.value})",
+        user_reid=user_reid,
+        pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.KENT_UPLOAD,
+            kent_file_bytes=kent_file_bytes,
+            kent_user_id_network=kent_user_id_network,
+            method=method,
+            wacc=wacc,
+            normvalue_adjustments=normvalue_adjustments,
+            lifetime_adjustments=lifetime_adjustments
         ),
         dea=DeaConfig(method=EfficiencyMethod.BASELINE),
         post_dea=PostDeaConfig()
@@ -233,11 +272,11 @@ def create_parameter_change_config(
     wacc: Optional[float] = None
 ) -> CaseDefinition:
     """
-    Create config för parameter-ändringar.
+    Skapar config för parameter-ändringar (utan KENT-upload).
     
     Args:
-        user_reid: Användarens REId (ex: "REL00001")
-        normvalue_adjustments: Dict {cat_encode: multiplier} ex {5: 1.2, 7: 0.9}
+        user_reid: Användarens REId
+        normvalue_adjustments: Dict {cat_encode: multiplier}
         lifetime_adjustments: Dict {cat_encode: {'ekdep': X, 'maxdep': Y}}
         wacc: WACC att använda (default: baseline 0.0453)
         
@@ -248,83 +287,12 @@ def create_parameter_change_config(
         name="Parameter ändringar",
         user_reid=user_reid,
         pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.BASELINE,
             method=CapexMethod.PARAMETER_CHANGE,
             wacc=wacc,
             normvalue_adjustments=normvalue_adjustments,
             lifetime_adjustments=lifetime_adjustments
         ),
         dea=DeaConfig(method=EfficiencyMethod.BASELINE),
-        post_dea=PostDeaConfig()
-    )
-
-
-def create_custom_dea_config(
-    user_reid: str,
-    inputs: List[str],
-    outputs: List[str],
-    rts: str = "VRS",
-    orientation: str = "input"
-) -> CaseDefinition:
-    """
-    Create config för custom DEA-modell.
-    
-    Args:
-        user_reid: Användarens REId (ex: "REL00001")
-        inputs: Lista med input-variabler
-        outputs: Lista med output-variabler
-        rts: Returns to scale ("VRS" eller "CRS")
-        orientation: "input" eller "output"
-        
-    Returns:
-        CaseDefinition för custom DEA
-    """
-    return CaseDefinition(
-        name="Custom DEA",
-        user_reid=user_reid,
-        pre_dea=PreDeaConfig(method=CapexMethod.BASELINE),
-        dea=DeaConfig(
-            method=EfficiencyMethod.DEA,
-            inputs=inputs,
-            outputs=outputs,
-            rts=rts,
-            orientation=orientation
-        ),
-        post_dea=PostDeaConfig()
-    )
-
-
-def create_baseline_dea_config(user_reid: str) -> CaseDefinition:
-    """
-    Create config för DEA med Ei's baseline-specifikation.
-    
-    Denna spec ska ge EXAKT samma resultat som EIs_DEA.xlsx.
-    
-    Baseline spec:
-    - Inputs: Kapitalkostnad_2024, OPEXp
-    - Outputs: CU, MW, NS, MWhl, MWhh
-    - RTS: CRS (Constant Returns to Scale)
-    - Orientation: input
-    - Outliers: Q25, Q75, multiplier=2.0
-    
-    Args:
-        user_reid: Användarens REId (ex: "REL00001")
-        
-    Returns:
-        CaseDefinition för baseline DEA (ska matcha Ei's resultat)
-    """
-    return CaseDefinition(
-        name="Baseline DEA",
-        user_reid=user_reid,
-        pre_dea=PreDeaConfig(method=CapexMethod.BASELINE),
-        dea=DeaConfig(
-            method=EfficiencyMethod.DEA,
-            inputs=['Kapitalkostnad_2024', 'OPEXp'],
-            outputs=['CU', 'MW', 'NS', 'MWhl', 'MWhh'],
-            rts='crs',
-            orientation='input',
-            q_lower=25.0,
-            q_upper=75.0,
-            multiplier=2.0
-        ),
         post_dea=PostDeaConfig()
     )
