@@ -11,6 +11,7 @@ from frontend.utils.config_adapter import build_case_definition, get_changed_par
 
 from frontend.modules.base import (
     m1_asset_base,
+    m1_rab_editor,
     m2_depreciation,
     m3_cost_of_capital,
     m3_incentive_variables,
@@ -117,7 +118,7 @@ with tab_addons:
 # Calculate button
 st.divider()
 
-if st.button("CALCULATE REVENUE FRAME", type="primary", use_container_width=True):
+if st.button("CALCULATE REVENUE FRAME", type="primary", width="stretch"):
     
     with st.status("Running calculation...", expanded=True) as status:
         

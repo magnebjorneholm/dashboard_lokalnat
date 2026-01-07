@@ -1,5 +1,5 @@
 """
-config/config_adapter.py
+frontend/utils/config_adapter.py
 
 Config Adapter för Regumetrica UI.
 
@@ -10,6 +10,8 @@ REFAKTORISERAD: Hanterar CapbaseSource och CapexMethod som separata dimensioner.
 """
 
 from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 from config.case_definition import (
     CaseDefinition,
@@ -132,8 +134,9 @@ def _build_pre_dea_config(
     Bygger PreDeaConfig med separation av source och method.
     
     PRIORITERING FÖR SOURCE (dataförsörjning):
-    1. KENT_UPLOAD (om fil uppladdad)
-    2. BASELINE (ingen ändring)
+    1. KENT_UPLOAD (om fil uppladdad) - högst prioritet
+    2. RAB_MODIFIED (om RAB-editor har ändringar)
+    3. BASELINE (ingen ändring)
     
     PRIORITERING FÖR METHOD (beräkningsmetod):
     1. PARAMETER_CHANGE (om normvärden/livslängder ändrats)
@@ -148,11 +151,19 @@ def _build_pre_dea_config(
     
     # === Bestäm CAPBASE SOURCE ===
     kent_file_bytes = m1.get("kent_file_bytes")
+    rab_has_changes = m1.get("rab_has_changes", False)
     
     if kent_file_bytes is not None:
+        # KENT har högst prioritet
         capbase_source = CapbaseSource.KENT_UPLOAD
+        rab_user_capbase = None
+    elif rab_has_changes:
+        # RAB-editor har ändringar
+        capbase_source = CapbaseSource.RAB_MODIFIED
+        rab_user_capbase = _get_rab_capbase(user_id_network)
     else:
         capbase_source = CapbaseSource.BASELINE
+        rab_user_capbase = None
     
     # === Bestäm CAPEX METHOD ===
     normvalue_adjustments = m1.get("normvalue_adjustments")
@@ -176,6 +187,7 @@ def _build_pre_dea_config(
     return PreDeaConfig(
         # Source
         capbase_source=capbase_source,
+        rab_user_capbase=rab_user_capbase,
         kent_file_bytes=kent_file_bytes if capbase_source == CapbaseSource.KENT_UPLOAD else None,
         kent_user_id_network=user_id_network if capbase_source == CapbaseSource.KENT_UPLOAD else None,
         
@@ -185,6 +197,27 @@ def _build_pre_dea_config(
         normvalue_adjustments=normvalue_adjustments,
         lifetime_adjustments=lifetime_adjustments,
     )
+
+
+def _get_rab_capbase(user_id_network: int) -> Optional[pd.DataFrame]:
+    """
+    Hämtar RAB-editor capbase från session state.
+    
+    Anropas endast om rab_has_changes=True, så vi förväntar oss
+    att rab_editor finns i session state.
+    
+    Returns:
+        DataFrame i capbase_a format eller None om något gick fel
+    """
+    try:
+        from calculations.rab_editor_utils import get_user_capbase_with_edits
+        return get_user_capbase_with_edits(user_id_network)
+    except ImportError:
+        print("VARNING: rab_editor_utils kunde inte importeras")
+        return None
+    except Exception as e:
+        print(f"VARNING: Kunde inte hämta RAB-capbase: {e}")
+        return None
 
 
 def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
@@ -466,6 +499,8 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     m1 = ui_config.get("m1_asset_base", {})
     if m1.get("kent_file_bytes"):
         changed.append("KENT-fil uppladdad")
+    if m1.get("rab_has_changes"):
+        changed.append("RAB-editor ändringar")
     if m1.get("normvalue_adjustments"):
         n = len(m1.get("normvalue_adjustments", {}))
         level = m1.get("normvalue_level", "cat")
@@ -532,6 +567,9 @@ def get_source_method_summary(ui_config: Dict[str, Any]) -> Dict[str, str]:
     if m1.get("kent_file_bytes"):
         source = "KENT_UPLOAD"
         source_desc = f"KENT-fil: {m1.get('kent_file_name', 'okänd')}"
+    elif m1.get("rab_has_changes"):
+        source = "RAB_MODIFIED"
+        source_desc = "RAB-editor ändringar"
     else:
         source = "BASELINE"
         source_desc = "Baseline capbase_a"

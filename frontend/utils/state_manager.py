@@ -1,4 +1,6 @@
 """
+frontend/utils/state_manager.py
+
 State Manager for Regumetrica UI.
 
 Hanterar session state initialisering, reset och åtkomst.
@@ -15,6 +17,7 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "normvalue_level": "cat",       # 'cat' eller 'subcat'
         "kent_file_bytes": None,        # Uppladdad KENT-fil som bytes
         "kent_file_name": None,         # Filnamn för visning
+        "rab_has_changes": False,       # True om RAB-editor har ändringar
     },
     "m2_depreciation": {
         "lifetime_adjustments": None,   # Dict[int, Dict[str, int]] {cat_encode: {'ekdep': val, 'maxdep': val}}
@@ -30,78 +33,34 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "enable_load": True,
         
         # === 3.3 Kvalitetsincitament ===
-        # CEMI-korrigering
         "adj_max_cemi4": None,  # None = baseline (0.25)
-        
-        # AIT-kostnader per kundtyp (kr/kWh)
-        # Dict med (ann, sni) -> float, t.ex. {('o', 1): 34.35, ('a', 1): 14.10, ...}
-        "ait_costs": None,  # None = baseline
-        
-        # AIF-kostnader per kundtyp (kr/kW)
-        # Dict med (ann, sni) -> float
-        "aif_costs": None,  # None = baseline
+        "ait_costs": None,      # None = baseline
+        "aif_costs": None,      # None = baseline
         
         # === 3.4 Nätförlustincitament ===
-        # Delningsfaktor
         "sharing_netloss": None,  # None = baseline (0.75)
-        
-        # Elpris per år (kr/MWh)
-        # Dict med year -> float, t.ex. {2024: 753.44, 2025: 753.44, ...}
-        "k_nf": None,  # None = baseline
+        "k_nf": None,             # None = baseline
         
         # === 3.6 Begränsningar ===
-        # Max aggregerat incitament (andel av avkastning)
         "adj_max_agg": None,  # None = baseline (1/3)
         
-        # === 3.7 KPI-faktorer (avancerat) ===
-        # Prisjustering till 2022 års priser, per år
-        # Dict med year -> float, t.ex. {2024: 1.1546, ...}
+        # === 3.7 KPI-faktorer ===
         "kpi": None,  # None = baseline
     },
     "m3_incentive_variables": {
-        # === Företagsspecifika incitamentvariabler ===
-        # Alla värden är None = använd baseline från all_adjust_vars.csv
-        # Om ett värde sätts, appliceras det på ALLA år (2024-2027)
+        "variable_overrides": None,  # Dict med företagsspecifika variabelvärden
         
-        # --- 30.2 Nätförlust ---
-        "nf_norm": None,      # Nätförlust norm (andel)
-        "nf_obs": None,       # Nätförlust observerad (andel)
-        "e_in": None,         # Energi in (MWh)
+        # Individuella variabler för kvalitet
+        "ait_obs": None,
+        "aif_obs": None,
+        "ait_norm": None,
+        "aif_norm": None,
         
-        # --- 30.3 Belastning ---
-        "ug_norm": None,      # Utnyttjandegrad norm (andel)
-        "ug_obs": None,       # Utnyttjandegrad observerad (andel)
-        "k_upstream": None,   # Kostnad överliggande nät (kr)
+        # Nätförlust
+        "netloss_obs": None,
+        "netloss_norm": None,
         
-        # --- 30.4 Kvalitet (CEMI4) ---
-        "cemi4_norm": None,   # CEMI4 norm (andel)
-        "cemi4_obs": None,    # CEMI4 observerad (andel)
-        
-        # --- 30.4 Kvalitet (AIF observerade) ---
-        "aif_a_1_obs": None, "aif_a_2_obs": None, "aif_a_3_obs": None,
-        "aif_a_4_obs": None, "aif_a_5_obs": None, "aif_a_6_obs": None,
-        "aif_o_1_obs": None, "aif_o_2_obs": None, "aif_o_3_obs": None,
-        "aif_o_4_obs": None, "aif_o_5_obs": None, "aif_o_6_obs": None,
-        
-        # --- 30.4 Kvalitet (AIF norm) ---
-        "aif_a_1_norm": None, "aif_a_2_norm": None, "aif_a_3_norm": None,
-        "aif_a_4_norm": None, "aif_a_5_norm": None, "aif_a_6_norm": None,
-        "aif_o_1_norm": None, "aif_o_2_norm": None, "aif_o_3_norm": None,
-        "aif_o_4_norm": None, "aif_o_5_norm": None, "aif_o_6_norm": None,
-        
-        # --- 30.4 Kvalitet (AIT observerade) ---
-        "ait_a_1_obs": None, "ait_a_2_obs": None, "ait_a_3_obs": None,
-        "ait_a_4_obs": None, "ait_a_5_obs": None, "ait_a_6_obs": None,
-        "ait_o_1_obs": None, "ait_o_2_obs": None, "ait_o_3_obs": None,
-        "ait_o_4_obs": None, "ait_o_5_obs": None, "ait_o_6_obs": None,
-        
-        # --- 30.4 Kvalitet (AIT norm) ---
-        "ait_a_1_norm": None, "ait_a_2_norm": None, "ait_a_3_norm": None,
-        "ait_a_4_norm": None, "ait_a_5_norm": None, "ait_a_6_norm": None,
-        "ait_o_1_norm": None, "ait_o_2_norm": None, "ait_o_3_norm": None,
-        "ait_o_4_norm": None, "ait_o_5_norm": None, "ait_o_6_norm": None,
-        
-        # --- 30.4 Kvalitet (ÅME per kundtyp) ---
+        # Belastning
         "ame_1": None, "ame_2": None, "ame_3": None,
         "ame_4": None, "ame_5": None, "ame_6": None,
     },
@@ -121,9 +80,9 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "dea_inputs": ["CAPEX", "OPEXp"],
         "dea_outputs": ["CU", "MW", "NS", "MWhl", "MWhh"],
         "dea_rts": "crs",
-        "dea_multiplier": 2.0,  # Outlier IQR multiplier
-        "dea_q_lower": 25.0,    # Nedre percentil
-        "dea_q_upper": 75.0,    # Övre percentil
+        "dea_multiplier": 2.0,
+        "dea_q_lower": 25.0,
+        "dea_q_upper": 75.0,
     }
 }
 
@@ -132,6 +91,7 @@ def init_session_state() -> None:
     """Initialisera session state vid app-start."""
     defaults = {
         "user_reid": None,
+        "user_id_network": None,
         "ui_config": copy.deepcopy(DEFAULT_UI_CONFIG),
         "baseline_result": None,
         "case_result": None,
@@ -147,6 +107,10 @@ def reset_case() -> None:
     st.session_state["ui_config"] = copy.deepcopy(DEFAULT_UI_CONFIG)
     st.session_state["case_result"] = None
     st.session_state["calculation_done"] = False
+    
+    # Återställ RAB-editor om den finns
+    if "rab_editor" in st.session_state:
+        del st.session_state["rab_editor"]
 
 
 def get_module_config(module_key: str) -> Dict[str, Any]:
@@ -167,5 +131,17 @@ def get_user_reid() -> str | None:
 
 
 def set_user_reid(reid: str) -> None:
-    """Sätt valt företags REId."""
+    """Sätt valt företags REId och uppdatera id_network."""
     st.session_state["user_reid"] = reid
+    
+    # Uppdatera även id_network
+    try:
+        numeric_part = reid.replace("REL", "").lstrip("0")
+        st.session_state["user_id_network"] = int(numeric_part) if numeric_part else 0
+    except (ValueError, AttributeError):
+        st.session_state["user_id_network"] = None
+
+
+def get_user_id_network() -> int | None:
+    """Hämta valt företags id_network."""
+    return st.session_state.get("user_id_network")

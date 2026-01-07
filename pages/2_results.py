@@ -67,12 +67,12 @@ st.divider()
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("NEW CASE", use_container_width=True):
+    if st.button("NEW CASE", width="stretch"):
         reset_case()
         st.switch_page("pages/1_case_config.py")
 
 with col2:
-    if st.button("MODIFY CASE", use_container_width=True):
+    if st.button("MODIFY CASE", width="stretch"):
         st.session_state["calculation_done"] = False
         st.switch_page("pages/1_case_config.py")
 

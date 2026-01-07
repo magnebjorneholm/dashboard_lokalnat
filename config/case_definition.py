@@ -8,8 +8,10 @@ REFAKTORISERAD: Separerar CapbaseSource (datakälla) från CapexMethod (beräkni
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, Any
 from enum import Enum
+
+import pandas as pd
 
 
 # =============================================================================
@@ -23,8 +25,9 @@ class CapbaseSource(str, Enum):
     Påverkar endast det inloggade företagets data (Variables).
     Övriga 147 företag använder alltid baseline.
     """
-    BASELINE = "baseline"        # Använd baseline från capbase_a_mini.parquet
-    KENT_UPLOAD = "kent_upload"  # Uppladdad KENT Excel-fil (konverteras via steg 1-4)
+    BASELINE = "baseline"          # Använd baseline från capbase_a_mini.parquet
+    RAB_MODIFIED = "rab_modified"  # RAB-editor ändringar från session state
+    KENT_UPLOAD = "kent_upload"    # Uppladdad KENT Excel-fil (konverteras via steg 1-4)
 
 
 class CapexMethod(str, Enum):
@@ -67,12 +70,25 @@ class PreDeaConfig:
     
     Dataflöde:
     - BASELINE source: Ingen förberedelse, använd befintlig data
+    - RAB_MODIFIED source: Från session state (redan capbase_a format)
     - KENT_UPLOAD source: Konvertera via kent_capbase_prep.py (steg 1-4)
     - Sedan körs vald method (steg 5-8 om behövs)
+    
+    Kombinationsmatris (9 kombinationer):
+    ┌─────────────────┬──────────────┬────────────────┬───────────────────┐
+    │ Source \ Method │ BASELINE     │ WACC_SCALING   │ PARAMETER_CHANGE  │
+    ├─────────────────┼──────────────┼────────────────┼───────────────────┤
+    │ BASELINE        │ Direkt       │ Skala alla     │ KENT 5-8 alla     │
+    │ RAB_MODIFIED    │ KENT för usr │ KENT+skala     │ Ersätt+KENT alla  │
+    │ KENT_UPLOAD     │ KENT för usr │ KENT+skala     │ Ersätt+KENT alla  │
+    └─────────────────┴──────────────┴────────────────┴───────────────────┘
     """
     
     # === Dataförsörjning (per företag) ===
     capbase_source: CapbaseSource = CapbaseSource.BASELINE
+    
+    # RAB-editor specifikt (om source = RAB_MODIFIED)
+    rab_user_capbase: Optional[Any] = None  # DataFrame, använder Any för att undvika pd import-problem
     
     # KENT-upload specifikt (om source = KENT_UPLOAD)
     kent_file_bytes: Optional[bytes] = None
@@ -224,6 +240,44 @@ def create_wacc_scaling_config(user_reid: str, new_wacc: float) -> CaseDefinitio
     )
 
 
+def create_rab_modified_config(
+    user_reid: str,
+    rab_user_capbase: Any,  # pd.DataFrame
+    method: CapexMethod = CapexMethod.BASELINE,
+    wacc: Optional[float] = None,
+    normvalue_adjustments: Optional[Dict[int, float]] = None,
+    lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None
+) -> CaseDefinition:
+    """
+    Skapar config för RAB-editor med valfri beräkningsmetod.
+    
+    Args:
+        user_reid: Användarens REId
+        rab_user_capbase: Modifierad capbase_a DataFrame från RAB-editor
+        method: Beräkningsmetod (BASELINE, WACC_SCALING, PARAMETER_CHANGE)
+        wacc: WACC om method != BASELINE
+        normvalue_adjustments: Normvärdesjusteringar om PARAMETER_CHANGE
+        lifetime_adjustments: Livslängdsjusteringar om PARAMETER_CHANGE
+        
+    Returns:
+        CaseDefinition för RAB-editor
+    """
+    return CaseDefinition(
+        name=f"RAB Modified ({method.value})",
+        user_reid=user_reid,
+        pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.RAB_MODIFIED,
+            rab_user_capbase=rab_user_capbase,
+            method=method,
+            wacc=wacc,
+            normvalue_adjustments=normvalue_adjustments,
+            lifetime_adjustments=lifetime_adjustments
+        ),
+        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
+        post_dea=PostDeaConfig()
+    )
+
+
 def create_kent_upload_config(
     user_reid: str,
     kent_file_bytes: bytes,
@@ -272,7 +326,7 @@ def create_parameter_change_config(
     wacc: Optional[float] = None
 ) -> CaseDefinition:
     """
-    Skapar config för parameter-ändringar (utan KENT-upload).
+    Skapar config för parameter-ändringar (utan KENT-upload eller RAB-editor).
     
     Args:
         user_reid: Användarens REId

@@ -26,7 +26,7 @@ def render_export_button(
         ui_config: UI configuration
     """
     
-    if st.button("Export to Excel", type="secondary", use_container_width=True):
+    if st.button("Export to Excel", type="secondary", width="stretch"):
         try:
             with st.spinner("Generating Excel file..."):
                 excel_data = create_case_export(
@@ -44,7 +44,7 @@ def render_export_button(
                 file_name=filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
-                use_container_width=True
+                width="stretch"
             )
             st.success(f"File ready: {filename}")
             
