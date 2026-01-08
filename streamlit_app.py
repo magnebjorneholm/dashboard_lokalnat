@@ -19,7 +19,6 @@ st.set_page_config(
 
 # Apply custom styling (fonts, refinements)
 apply_styling()
-st.write("Styling applied") 
 
 # Initialize state
 init_session_state()

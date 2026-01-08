@@ -211,7 +211,7 @@ def _get_rab_capbase(user_id_network: int) -> Optional[pd.DataFrame]:
     """
     try:
         from calculations.rab_editor_utils import get_user_capbase_with_edits
-        return get_user_capbase_with_edits(user_id_network)
+        return get_user_capbase_with_edits()
     except ImportError:
         print("VARNING: rab_editor_utils kunde inte importeras")
         return None

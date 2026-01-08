@@ -50,7 +50,6 @@ def render(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
                 "RAB-editor ändringar ignoreras när KENT-fil finns."
             )
         
-        m1_rab_editor.render_info_box()
         rab_config = m1_rab_editor.render()
         
         if rab_config.get("rab_has_changes"):
