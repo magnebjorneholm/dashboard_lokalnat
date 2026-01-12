@@ -3,9 +3,8 @@ calculations/rab_editor_utils.py
 
 Helper functions for RAB editor session state management.
 
-The RAB editor lets users edit their capital base directly in the UI.
-All changes are stored in session state and converted to capbase_a
-format for the calculation pipeline.
+UPDATED: Now filters to show only ordinarie components in UI,
+while keeping all data (ordinarie + tail) for calculations.
 
 Session state structure:
     st.session_state["rab_editor"] = {
@@ -41,6 +40,13 @@ from .prepare_capbase import (
     update_normvärde_from_techspec,
     create_new_investment,
     create_new_component_vtype1,
+)
+
+from .rab_classification import (
+    classify_components,
+    filter_for_display,
+    get_classification_summary,
+    get_tail_summary,
 )
 
 from data.normvärdelista import (
@@ -120,19 +126,15 @@ def clear_rab_editor() -> None:
 
 
 # =============================================================================
-# GET DATA
+# GET DATA (for calculations - returns ALL data)
 # =============================================================================
 
 def get_user_capbase_with_edits() -> pd.DataFrame:
     """
     Return user's capital base with all edits applied.
     
-    Creates a capbase_a DataFrame ready for run_kent_calculations_batch().
-    It:
-    1. Takes modified_components (with changes)
-    2. Excludes removed components
-    3. Adds new components
-    4. Recalculates nuav_2022 from raw data
+    IMPORTANT: Returns ALL data (ordinarie + tail + expired) for calculations.
+    The filtering to ordinarie/tail happens INSIDE kent_calculations.py.
     
     Returns:
         DataFrame ready for run_kent_calculations_batch()
@@ -152,7 +154,7 @@ def get_user_capbase_with_edits() -> pd.DataFrame:
     if id_network is None:
         raise ValueError("RAB editor missing id_network")
     
-    # Start with modified components
+    # Start with modified components (ALL of them)
     df = rab["modified_components"].copy()
     
     # Exclude removed
@@ -172,17 +174,17 @@ def get_user_capbase_with_edits() -> pd.DataFrame:
     # Recalculate nuav_2022 from raw data
     df = prepare_capbase_for_calculations(df)
     
-    return df
+    return df  # Returns ALL data - ordinarie, tail AND expired
 
 
 def get_original_components() -> Optional[pd.DataFrame]:
-    """Return original components (unmodified)."""
+    """Return original components (unmodified, ALL)."""
     rab = st.session_state.get("rab_editor", {})
     return rab.get("original_components")
 
 
 def get_modified_components() -> Optional[pd.DataFrame]:
-    """Return modified components."""
+    """Return modified components (ALL - unfiltered)."""
     rab = st.session_state.get("rab_editor", {})
     return rab.get("modified_components")
 
@@ -206,36 +208,65 @@ def get_current_id_network() -> Optional[int]:
 
 
 # =============================================================================
-# GET DATA PER VTYPE
+# GET DATA PER VTYPE (for UI display - filtered to ordinarie only)
 # =============================================================================
 
-def get_components_by_vtype(vtype: int) -> pd.DataFrame:
-    """Return components filtered by vtype."""
+def get_components_by_vtype(vtype: int, for_display: bool = True) -> pd.DataFrame:
+    """
+    Return components filtered by vtype.
+    
+    Args:
+        vtype: Valuation method type
+        for_display: If True, filter to show only ordinarie (default True)
+    """
     df = get_modified_components()
     if df is None or df.empty:
         return pd.DataFrame()
     
-    return df[df['vtype'] == vtype].copy()
+    if for_display:
+        return filter_for_display(df, vtype_filter=vtype)
+    else:
+        return df[df['vtype'] == vtype].copy()
 
 
 def get_normvärderade() -> pd.DataFrame:
-    """Return normvärde components (vtype=4)."""
-    return get_components_by_vtype(VType.NORMVÄRDE)
+    """
+    Return normvärde components (vtype=4) for UI display.
+    Only shows ordinarie components.
+    """
+    return get_components_by_vtype(VType.NORMVÄRDE, for_display=True)
 
 
 def get_övriga_metoder() -> pd.DataFrame:
-    """Return components with annat skäligt värde or anskaffningsvärde (vtype=1,2)."""
+    """
+    Return components with annat skäligt värde or anskaffningsvärde (vtype=1,2).
+    Only shows ordinarie components.
+    """
     df = get_modified_components()
     if df is None or df.empty:
         return pd.DataFrame()
     
+    # Filter by vtype first
     mask = df['vtype'].isin([VType.ANNAT_SKÄLIGT_VÄRDE, VType.ANSKAFFNINGSVÄRDE])
-    return df[mask].copy()
+    df_filtered = df[mask].copy()
+    
+    if df_filtered.empty:
+        return df_filtered
+    
+    # Then filter for display (ordinarie only)
+    return filter_for_display(df_filtered)
 
 
 def get_investeringar() -> pd.DataFrame:
-    """Return investments and retirements (vtype=5)."""
-    return get_components_by_vtype(VType.INVESTERING)
+    """
+    Return investments and retirements (vtype=5).
+    All investments are shown (they have capbase_existing=0).
+    """
+    df = get_modified_components()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    
+    return df[df['vtype'] == VType.INVESTERING].copy()
 
 
 # =============================================================================
@@ -634,7 +665,12 @@ def apply_value_scaling(
 # =============================================================================
 
 def load_user_components(user_id_network: int) -> pd.DataFrame:
-    """Load user's components from capbase_a."""
+    """
+    Load user's components from capbase_a.
+    
+    Returns ALL components (ordinarie + tail + expired).
+    Filtering for UI display happens in get_normvärderade() etc.
+    """
     # Dynamic import to avoid circular import
     from data_loaders.rab_data import load_capbase_a
     
@@ -722,21 +758,109 @@ def render_summary_metrics(show_delta: bool = True) -> Dict[str, Any]:
     }
 
 
+def render_summary_metrics_with_classification(show_delta: bool = True) -> Dict[str, Any]:
+    """
+    Extended summary metrics including classification breakdown.
+    Shows how many components are ordinarie vs tail.
+    """
+    df = get_modified_components()
+    
+    if df is None or df.empty:
+        return {
+            'n_components': 0,
+            'total_nuav_mkr': 0,
+            'delta_nuav_mkr': 0,
+            'n_ordinarie': 0,
+            'n_tail': 0,
+            'n_expired': 0,
+            'n_investments': 0,
+            'nuav_ordinarie_mkr': 0,
+            'nuav_tail_mkr': 0,
+        }
+    
+    summary = get_classification_summary(df, time=TIMECODE_PERIOD_START)
+    
+    n_ordinarie = summary['existing_components']['ordinarie']['count']
+    n_tail = summary['existing_components']['tail']['count']
+    n_expired = summary['existing_components']['expired']['count']
+    n_investments = summary['investments']['count']
+    
+    # Calculate total NUAV
+    try:
+        df_with_edits = get_user_capbase_with_edits()
+        total_nuav = df_with_edits['nuav_2022'].sum() / 1_000_000
+    except Exception:
+        total_nuav = df['nuav_2022'].sum() / 1_000_000
+    
+    # Calculate delta from original
+    delta_nuav = 0
+    if show_delta:
+        rab = st.session_state.get("rab_editor", {})
+        original = rab.get("original_components")
+        if original is not None:
+            original_nuav = original['nuav_2022'].sum() / 1_000_000
+            delta_nuav = total_nuav - original_nuav
+    
+    return {
+        'n_components': len(df) - len(get_removed_ids()) + len(get_added_components()),
+        'total_nuav_mkr': total_nuav,
+        'delta_nuav_mkr': delta_nuav,
+        'n_ordinarie': n_ordinarie,
+        'n_tail': n_tail,
+        'n_expired': n_expired,
+        'n_investments': n_investments,
+        'nuav_ordinarie_mkr': summary['existing_components']['ordinarie']['nuav_mkr'],
+        'nuav_tail_mkr': summary['existing_components']['tail']['nuav_mkr'],
+    }
+
+
 def get_vtype_summary() -> Dict[int, Dict[str, Any]]:
-    """Return summary per vtype."""
+    """
+    Return summary per vtype.
+    
+    NOTE: Counts are for UI display (ordinarie only for existing components).
+    """
     df = get_modified_components()
     if df is None or df.empty:
         return {}
     
     summary = {}
+    
     for vtype in [VType.NORMVÄRDE, VType.ANNAT_SKÄLIGT_VÄRDE, VType.ANSKAFFNINGSVÄRDE, VType.INVESTERING]:
-        subset = df[df['vtype'] == vtype]
+        # Use filtered data for display counts
+        if vtype == VType.INVESTERING:
+            subset = get_investeringar()
+        elif vtype in [VType.ANNAT_SKÄLIGT_VÄRDE, VType.ANSKAFFNINGSVÄRDE]:
+            # For övriga, we need to filter each separately
+            subset = filter_for_display(df[df['vtype'] == vtype])
+        else:
+            subset = get_normvärderade() if vtype == VType.NORMVÄRDE else pd.DataFrame()
+        
         if not subset.empty:
             summary[vtype] = {
                 'namn': VTYPE_NAMN.get(vtype, str(vtype)),
                 'n_components': len(subset),
                 'nuav_mkr': subset['nuav_2022'].sum() / 1_000_000,
-                'andel_pct': len(subset) / len(df) * 100,
+                'andel_pct': len(subset) / len(filter_for_display(df)) * 100 if len(filter_for_display(df)) > 0 else 0,
             }
     
     return summary
+
+
+def render_classification_info() -> None:
+    """
+    Render info about what's shown vs hidden.
+    Call this in the RAB editor UI to inform users.
+    """
+    df = get_modified_components()
+    if df is None or df.empty:
+        return
+    
+    tail_info = get_tail_summary(df)
+    
+    if tail_info['count'] > 0:
+        st.info(
+            f"Showing ordinarie components only. "
+            f"{tail_info['count']} tail components ({tail_info['nuav_mkr']:.1f} MSEK) "
+            f"are hidden but included in calculations."
+        )

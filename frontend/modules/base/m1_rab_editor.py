@@ -3,6 +3,9 @@ m1_rab_editor.py
 
 RAB editor (Regulatory Asset Base) for editing capital base.
 
+UPDATED: Now shows only ordinarie components in UI.
+Tail components are hidden but still included in calculations.
+
 UI structure:
 - Three tabs based on vtype (Normvärde, Alternative Methods, Investments)
 - Read-only table with clickable rows
@@ -22,7 +25,7 @@ from calculations.rab_editor_utils import (
     get_original_components,
     load_user_components,
     get_current_id_network,
-    # Per vtype
+    # Per vtype (filtered for display)
     get_normvärderade,
     get_övriga_metoder,
     get_investeringar,
@@ -46,7 +49,8 @@ from calculations.rab_editor_utils import (
     get_subcat_options,
     get_techspec_options,
     apply_filters,
-    render_summary_metrics,
+    render_summary_metrics_with_classification,
+    render_classification_info,
     time_code_to_year,
     year_to_time_code,
     get_halfyear_options,
@@ -94,8 +98,11 @@ def render() -> Dict[str, Any]:
         st.error(f"Failed to load asset base data: {e}")
         return config
     
-    # Summary
+    # Summary with classification info
     _render_header_summary()
+    
+    # Show info about hidden tail components
+    render_classification_info()
     
     st.divider()
     
@@ -134,32 +141,57 @@ def render() -> Dict[str, Any]:
 
 
 # =============================================================================
-# SUMMARY
+# SUMMARY (UPDATED with classification info)
 # =============================================================================
 
 def _render_header_summary():
-    """Render summary at the top."""
-    metrics = render_summary_metrics(show_delta=True)
-    vtype_summary = get_vtype_summary()
+    """Render summary at the top with classification breakdown."""
+    metrics = render_summary_metrics_with_classification(show_delta=True)
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        st.metric("Components", f"{metrics['n_components']:,}")
+        st.metric(
+            "Ordinarie",
+            f"{metrics['n_ordinarie']:,}",
+            help="Components within economic lifetime (age <= ekdep)"
+        )
     
     with col2:
-        st.metric("Total NUAV", f"{metrics['total_nuav_mkr']:.1f} MSEK")
+        st.metric(
+            "Investments",
+            f"{metrics['n_investments']:,}",
+            help="Planned investments and retirements 2024-2027"
+        )
     
     with col3:
-        delta = metrics['delta_nuav_mkr']
-        delta_str = f"{delta:+.2f} MSEK" if abs(delta) > 0.001 else None
-        st.metric("Change", f"{delta:+.2f} MSEK" if delta_str else "0", delta=delta_str)
+        st.metric(
+            "Total NUAV",
+            f"{metrics['total_nuav_mkr']:.1f} MSEK",
+            help="Total replacement value including tail components"
+        )
     
     with col4:
+        delta = metrics['delta_nuav_mkr']
+        delta_str = f"{delta:+.2f} MSEK" if abs(delta) > 0.001 else None
+        st.metric(
+            "Change",
+            f"{delta:+.2f} MSEK" if delta_str else "0",
+            delta=delta_str
+        )
+    
+    with col5:
         if st.button("Reset All Changes", type="secondary"):
             reset_rab_editor()
             _clear_edit_state()
             st.rerun()
+    
+    # Show tail info in caption
+    if metrics['n_tail'] > 0:
+        st.caption(
+            f"Hidden: {metrics['n_tail']} tail components "
+            f"({metrics['nuav_tail_mkr']:.1f} MSEK) - included in calculations"
+        )
 
 
 # =============================================================================
@@ -169,12 +201,12 @@ def _render_header_summary():
 def _render_normvärderade_tab():
     """Render tab for normvärde components."""
     st.subheader("Normvärde Components")
-    st.caption("Components valued using Ei normvärden. NUAV = normvärde × quantity")
+    st.caption("Components valued using Ei normvärden. NUAV = normvärde x quantity. Showing ordinarie only.")
     
-    df = get_normvärderade()
+    df = get_normvärderade()  # Already filtered to ordinarie
     
     if df.empty:
-        st.info("No normvärde components.")
+        st.info("No ordinarie normvärde components.")
         return
     
     # Filters
@@ -209,7 +241,7 @@ def _render_normvärderade_tab():
     if selected_subcat != "All subcategories":
         df_filtered = df_filtered[df_filtered['subcat'] == selected_subcat]
     
-    st.caption(f"Showing {len(df_filtered)} of {len(df)} components")
+    st.caption(f"Showing {len(df_filtered)} of {len(df)} ordinarie components")
     
     # Table and edit form
     _render_normvärderad_table_and_form(df_filtered, selected_cat, selected_subcat)
@@ -452,67 +484,62 @@ def _save_normvärderad_edit(
 
 
 # =============================================================================
-# TAB 2: ALTERNATIVE METHODS (vtype=1,2)
+# TAB 2: ÖVRIGA METODER (vtype=1, 2)
 # =============================================================================
 
 def _render_övriga_metoder_tab():
-    """Render tab for alternative valuation methods."""
+    """Render tab for annat skäligt värde and anskaffningsvärde components."""
     st.subheader("Alternative Valuation Methods")
-    st.caption("Components valued using annat skäligt värde (vtype=1) or anskaffningsvärde (vtype=2)")
+    st.caption("Components valued using annat skäligt värde or anskaffningsvärde. Showing ordinarie only.")
     
-    df = get_övriga_metoder()
+    df = get_övriga_metoder()  # Already filtered to ordinarie
     
     if df.empty:
-        st.info("No components with alternative valuation methods.")
+        st.info("No ordinarie components with alternative valuation methods.")
         return
     
-    # Separate by vtype
-    df_vtype1 = df[df['vtype'] == VType.ANNAT_SKÄLIGT_VÄRDE]
-    df_vtype2 = df[df['vtype'] == VType.ANSKAFFNINGSVÄRDE]
+    # Sub-tabs for vtype 1 and 2
+    vtype1_df = df[df['vtype'] == VType.ANNAT_SKÄLIGT_VÄRDE]
+    vtype2_df = df[df['vtype'] == VType.ANSKAFFNINGSVÄRDE]
     
-    # Display statistics
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Annat skäligt värde", f"{len(df_vtype1)} components")
-    with col2:
-        st.metric("Anskaffningsvärde", f"{len(df_vtype2)} components")
+    sub_tab1, sub_tab2 = st.tabs([
+        f"Annat skäligt värde ({len(vtype1_df)})",
+        f"Anskaffningsvärde ({len(vtype2_df)})",
+    ])
     
-    # Table for vtype=1
-    if not df_vtype1.empty:
-        st.markdown("#### Annat skäligt värde (vtype=1)")
-        st.caption("NUAV = annat skäligt värde × count")
-        _render_vtype1_table_and_form(df_vtype1)
+    with sub_tab1:
+        if vtype1_df.empty:
+            st.info("No components")
+        else:
+            _render_vtype1_table_and_form(vtype1_df)
     
-    # Table for vtype=2
-    if not df_vtype2.empty:
-        st.markdown("#### Anskaffningsvärde (vtype=2)")
-        st.caption("NUAV = reported NUAV (indexed)")
-        _render_vtype2_table_and_form(df_vtype2)
-    
-    # Add new component
-    with st.expander("Add Component (Annat skäligt värde)", expanded=False):
-        _render_add_vtype1_form()
+    with sub_tab2:
+        if vtype2_df.empty:
+            st.info("No components")
+        else:
+            _render_vtype2_table_and_form(vtype2_df)
 
 
 @st.fragment
 def _render_vtype1_table_and_form(df: pd.DataFrame):
-    """Render table for vtype=1 components."""
+    """Render table and form for annat skäligt värde (vtype=1)."""
+    
     df_display = df[['id_component', 'cat', 'subcat', 'annatskäligtvärde', 'count_comp', 'nuav_2022', 'time_from']].copy()
     df_display['year'] = df_display['time_from'].apply(time_code_to_year)
-    df_display['nuav_kkr'] = df_display['nuav_2022'] / 1_000
+    df_display['nuav_mkr'] = df_display['nuav_2022'] / 1_000_000
     df_display['värde_kkr'] = df_display['annatskäligtvärde'] / 1_000
     
     df_display = df_display.rename(columns={
         'id_component': 'ID',
         'cat': 'Category',
         'subcat': 'Subcategory',
-        'värde_kkr': 'Value/Unit (kSEK)',
-        'count_comp': 'Count',
-        'nuav_kkr': 'NUAV (kSEK)',
+        'värde_kkr': 'Value/unit (kSEK)',
+        'count_comp': 'Quantity',
+        'nuav_mkr': 'NUAV (MSEK)',
         'year': 'Commissioned',
     })
     
-    display_cols = ['ID', 'Category', 'Subcategory', 'Value/Unit (kSEK)', 'Count', 'NUAV (kSEK)', 'Commissioned']
+    display_cols = ['ID', 'Category', 'Subcategory', 'Value/unit (kSEK)', 'Quantity', 'NUAV (MSEK)', 'Commissioned']
     
     event = st.dataframe(
         df_display[display_cols],
@@ -535,62 +562,54 @@ def _render_vtype1_table_and_form(df: pd.DataFrame):
 
 
 def _render_vtype1_edit_form(row: pd.Series, component_id: int):
-    """Edit form for vtype=1."""
+    """Edit form for annat skäligt värde."""
+    
+    st.markdown(f"**Edit Component ID {component_id}**")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Category
-        cat_options = get_category_options()
-        current_cat = int(row['cat_encode'])
-        cat_list = list(cat_options.keys())
-        
-        new_cat = st.selectbox(
+        # Category (read-only display)
+        st.text_input(
             "Category",
-            cat_list,
-            index=cat_list.index(current_cat) if current_cat in cat_list else 0,
-            format_func=lambda x: cat_options[x],
+            value=row['cat'] if pd.notna(row['cat']) else "",
+            disabled=True,
             key=f"edit_cat_v1_{component_id}",
         )
         
-        # Subcategory (free text)
-        new_subcat = st.text_input(
+        st.text_input(
             "Subcategory",
             value=row['subcat'] if pd.notna(row['subcat']) else "",
+            disabled=True,
             key=f"edit_subcat_v1_{component_id}",
         )
         
-        # Commissioning year
-        current_year = time_code_to_year(row['time_from'])
         new_year = st.number_input(
             "Commissioning Year",
             min_value=1910,
             max_value=2023,
-            value=int(current_year) if current_year > 0 else 2000,
+            value=int(time_code_to_year(row['time_from'])),
             key=f"edit_year_v1_{component_id}",
         )
     
     with col2:
-        # Value per unit
-        new_värde = st.number_input(
-            "Annat skäligt värde (SEK/unit)",
+        new_value = st.number_input(
+            "Value per unit (SEK)",
             min_value=0.0,
             value=float(row['annatskäligtvärde']) if pd.notna(row['annatskäligtvärde']) else 0.0,
             format="%.0f",
-            key=f"edit_värde_v1_{component_id}",
+            key=f"edit_value_v1_{component_id}",
         )
         
-        # Count
         new_count = st.number_input(
-            "Count",
+            "Quantity",
             min_value=0.0001,
             value=float(row['count_comp']),
             format="%.4f",
             key=f"edit_count_v1_{component_id}",
         )
         
-        # Calculated NUAV
-        new_nuav = new_värde * new_count
+        new_nuav = new_value * new_count
         st.text_input(
             "Calculated NUAV (SEK)",
             value=f"{new_nuav:,.0f}",
@@ -604,13 +623,12 @@ def _render_vtype1_edit_form(row: pd.Series, component_id: int):
         if st.button("Save", type="primary", key=f"save_v1_{component_id}"):
             df = get_modified_components()
             mask = df['id_component'] == component_id
-            df.loc[mask, 'cat_encode'] = new_cat
-            df.loc[mask, 'cat'] = KATEGORIER[new_cat].namn
-            df.loc[mask, 'subcat'] = new_subcat
-            df.loc[mask, 'annatskäligtvärde'] = new_värde
+            
+            df.loc[mask, 'annatskäligtvärde'] = new_value
             df.loc[mask, 'count_comp'] = new_count
             df.loc[mask, 'time_from'] = year_to_time_code(new_year)
             df.loc[mask, 'nuav_2022'] = new_nuav
+            
             update_modified_components(df)
             st.success("Saved!")
             st.rerun()
@@ -622,21 +640,22 @@ def _render_vtype1_edit_form(row: pd.Series, component_id: int):
 
 @st.fragment
 def _render_vtype2_table_and_form(df: pd.DataFrame):
-    """Render table for vtype=2 components."""
-    df_display = df[['id_component', 'cat', 'subcat', 'anskaffningsvärde', 'rapporteradnuav', 'time_from']].copy()
+    """Render table and form for anskaffningsvärde (vtype=2)."""
+    
+    df_display = df[['id_component', 'cat', 'subcat', 'rapporteradnuav', 'nuav_2022', 'time_from']].copy()
     df_display['year'] = df_display['time_from'].apply(time_code_to_year)
-    df_display['nuav_kkr'] = df_display['rapporteradnuav'] / 1_000
+    df_display['nuav_mkr'] = df_display['nuav_2022'] / 1_000_000
     
     df_display = df_display.rename(columns={
         'id_component': 'ID',
         'cat': 'Category',
         'subcat': 'Subcategory',
-        'anskaffningsvärde': 'Anskaffningsvärde',
-        'nuav_kkr': 'NUAV (kSEK)',
-        'year': 'Acquisition Year',
+        'rapporteradnuav': 'Reported NUAV',
+        'nuav_mkr': 'NUAV (MSEK)',
+        'year': 'Commissioned',
     })
     
-    display_cols = ['ID', 'Category', 'Subcategory', 'Anskaffningsvärde', 'NUAV (kSEK)', 'Acquisition Year']
+    display_cols = ['ID', 'Category', 'Subcategory', 'NUAV (MSEK)', 'Commissioned']
     
     event = st.dataframe(
         df_display[display_cols],
@@ -659,26 +678,25 @@ def _render_vtype2_table_and_form(df: pd.DataFrame):
 
 
 def _render_vtype2_edit_form(row: pd.Series, component_id: int):
-    """Edit form for vtype=2."""
+    """Edit form for anskaffningsvärde."""
+    
+    st.markdown(f"**Edit Component ID {component_id}**")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        current_year = time_code_to_year(row['time_from'])
-        new_year = st.number_input(
-            "Acquisition Year",
-            min_value=1910,
-            max_value=2023,
-            value=int(current_year) if current_year > 0 else 2000,
-            key=f"edit_year_v2_{component_id}",
+        st.text_input(
+            "Category",
+            value=row['cat'] if pd.notna(row['cat']) else "",
+            disabled=True,
+            key=f"edit_cat_v2_{component_id}",
         )
         
-        new_anskaffning = st.number_input(
-            "Original acquisition value (SEK)",
-            min_value=0.0,
-            value=float(row['anskaffningsvärde']) if pd.notna(row['anskaffningsvärde']) else 0.0,
-            format="%.0f",
-            key=f"edit_anskaffning_v2_{component_id}",
+        st.text_input(
+            "Subcategory",
+            value=row['subcat'] if pd.notna(row['subcat']) else "",
+            disabled=True,
+            key=f"edit_subcat_v2_{component_id}",
         )
     
     with col2:
@@ -688,7 +706,14 @@ def _render_vtype2_edit_form(row: pd.Series, component_id: int):
             value=float(row['rapporteradnuav']) if pd.notna(row['rapporteradnuav']) else 0.0,
             format="%.0f",
             key=f"edit_nuav_v2_{component_id}",
-            help="Acquisition value indexed to 2022 price level using BKI",
+        )
+        
+        new_year = st.number_input(
+            "Commissioning Year",
+            min_value=1910,
+            max_value=2023,
+            value=int(time_code_to_year(row['time_from'])),
+            key=f"edit_year_v2_{component_id}",
         )
     
     col_save, col_cancel = st.columns(2)
@@ -697,10 +722,11 @@ def _render_vtype2_edit_form(row: pd.Series, component_id: int):
         if st.button("Save", type="primary", key=f"save_v2_{component_id}"):
             df = get_modified_components()
             mask = df['id_component'] == component_id
-            df.loc[mask, 'anskaffningsvärde'] = new_anskaffning
+            
             df.loc[mask, 'rapporteradnuav'] = new_nuav
             df.loc[mask, 'time_from'] = year_to_time_code(new_year)
             df.loc[mask, 'nuav_2022'] = new_nuav
+            
             update_modified_components(df)
             st.success("Saved!")
             st.rerun()
@@ -710,76 +736,8 @@ def _render_vtype2_edit_form(row: pd.Series, component_id: int):
             st.rerun()
 
 
-@st.fragment
-def _render_add_vtype1_form():
-    """Form for adding component with annat skäligt värde."""
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        cat_options = get_category_options()
-        new_cat = st.selectbox(
-            "Category",
-            list(cat_options.keys()),
-            format_func=lambda x: cat_options[x],
-            key="add_v1_cat",
-        )
-        
-        new_subcat = st.text_input(
-            "Subcategory",
-            value="",
-            key="add_v1_subcat",
-        )
-        
-        new_year = st.number_input(
-            "Commissioning Year",
-            min_value=1910,
-            max_value=2023,
-            value=2020,
-            key="add_v1_year",
-        )
-    
-    with col2:
-        new_värde = st.number_input(
-            "Annat skäligt värde (SEK/unit)",
-            min_value=0.0,
-            value=100000.0,
-            format="%.0f",
-            key="add_v1_värde",
-        )
-        
-        new_count = st.number_input(
-            "Count",
-            min_value=0.0001,
-            value=1.0,
-            format="%.4f",
-            key="add_v1_count",
-        )
-        
-        # Display calculated NUAV
-        st.text_input(
-            "Calculated NUAV",
-            value=f"{new_värde * new_count:,.0f} SEK",
-            disabled=True,
-        )
-    
-    if st.button("Add Component", type="primary", key="add_v1_submit"):
-        if new_subcat.strip() == "":
-            st.error("Enter subcategory")
-        else:
-            new_id = add_component_vtype1(
-                cat_encode=new_cat,
-                subcat=new_subcat,
-                annatskäligtvärde=new_värde,
-                count_comp=new_count,
-                time_from=year_to_time_code(new_year),
-            )
-            st.success(f"Component added (ID: {new_id})")
-            st.rerun()
-
-
 # =============================================================================
-# TAB 3: INVESTMENTS (vtype=5)
+# TAB 3: INVESTERINGAR (vtype=5)
 # =============================================================================
 
 def _render_investeringar_tab():
@@ -791,49 +749,64 @@ def _render_investeringar_tab():
     
     # Separate investments and retirements
     if not df.empty:
-        df_inv = df[df['invest'] == 1]
-        df_utr = df[df['invest'] == -1]
+        inv_df = df[df['invest'] == 1]
+        ret_df = df[df['invest'] == -1]
     else:
-        df_inv = pd.DataFrame()
-        df_utr = pd.DataFrame()
+        inv_df = pd.DataFrame()
+        ret_df = pd.DataFrame()
     
-    # Statistics
+    # Statistics metrics
     col1, col2, col3 = st.columns(3)
     with col1:
-        inv_sum = df_inv['nuav_2022'].sum() / 1_000_000 if not df_inv.empty else 0
-        st.metric("Investments", f"{len(df_inv)} components", f"+{inv_sum:.1f} MSEK")
+        inv_sum = inv_df['nuav_2022'].sum() / 1_000_000 if not inv_df.empty else 0
+        st.metric("Investments", f"{len(inv_df)} components", f"+{inv_sum:.1f} MSEK")
     with col2:
-        utr_sum = abs(df_utr['nuav_2022'].sum()) / 1_000_000 if not df_utr.empty else 0
-        st.metric("Retirements", f"{len(df_utr)} components", f"-{utr_sum:.1f} MSEK")
+        ret_sum = abs(ret_df['nuav_2022'].sum()) / 1_000_000 if not ret_df.empty else 0
+        st.metric("Retirements", f"{len(ret_df)} components", f"-{ret_sum:.1f} MSEK")
     with col3:
-        netto = inv_sum - utr_sum
+        netto = inv_sum - ret_sum
         st.metric("Net", f"{netto:+.1f} MSEK")
     
-    # Table
-    if not df.empty:
-        _render_investment_table_and_form(df)
+    # Tabs for investments and retirements
+    if df.empty:
+        st.info("No investments or retirements planned.")
     else:
-        st.info("No investments or retirements registered.")
+        inv_tab, ret_tab = st.tabs([
+            f"Investments ({len(inv_df)})",
+            f"Retirements ({len(ret_df)})",
+        ])
+        
+        with inv_tab:
+            if inv_df.empty:
+                st.info("No investments")
+            else:
+                _render_investment_table_and_form(inv_df, key_suffix="inv")
+        
+        with ret_tab:
+            if ret_df.empty:
+                st.info("No retirements")
+            else:
+                _render_investment_table_and_form(ret_df, key_suffix="ret")
     
     st.divider()
     
-    # Add new
-    col_inv, col_utr = st.columns(2)
+    # Add new - at the bottom
+    col_inv, col_ret = st.columns(2)
     
     with col_inv:
         with st.expander("Add Investment", expanded=False):
             _render_add_investment_form(is_retirement=False)
     
-    with col_utr:
+    with col_ret:
         with st.expander("Add Retirement", expanded=False):
             _render_add_investment_form(is_retirement=True)
 
 
 @st.fragment
-def _render_investment_table_and_form(df: pd.DataFrame):
-    """Render table for investments/retirements."""
+def _render_investment_table_and_form(df: pd.DataFrame, key_suffix: str = ""):
+    """Render table and edit form for investments/retirements."""
     
-    df_display = df[['id_component', 'cat', 'subcat', 'invest', 'value_invest', 'time_invest']].copy()
+    df_display = df[['id_component', 'cat', 'subcat', 'value_invest', 'invest', 'time_invest']].copy()
     df_display['typ'] = df_display['invest'].apply(lambda x: "Investment" if x == 1 else "Retirement")
     df_display['värde_mkr'] = df_display['value_invest'].abs() / 1_000_000
     df_display['halvår'] = df_display['time_invest'].apply(
@@ -857,7 +830,7 @@ def _render_investment_table_and_form(df: pd.DataFrame):
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
-        key="invest_table_select",
+        key=f"invest_table_select_{key_suffix}",
     )
     
     selected_rows = event.selection.rows if event.selection else []
