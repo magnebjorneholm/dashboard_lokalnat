@@ -1,25 +1,20 @@
 """
 calculations/rab_editor_utils.py
 
-Hjälpfunktioner för RAB-editor session state-hantering.
+Helper functions for RAB editor session state management.
 
-RAB-editorn låter användaren redigera sin kapitalbas direkt i UI.
-Alla ändringar lagras i session state och konverteras till capbase_a
-format för beräkningskedjan.
+The RAB editor lets users edit their capital base directly in the UI.
+All changes are stored in session state and converted to capbase_a
+format for the calculation pipeline.
 
-Session state struktur:
+Session state structure:
     st.session_state["rab_editor"] = {
-        "original_components": pd.DataFrame,   # Omodifierad kopia
-        "modified_components": pd.DataFrame,   # Med ändringar
-        "added_components": List[Dict],        # Nya komponenter
-        "removed_ids": Set[int],               # id_component att exkludera
-        "id_network": int,                     # Aktivt företag
+        "original_components": pd.DataFrame,   # Unmodified copy
+        "modified_components": pd.DataFrame,   # With changes
+        "added_components": List[Dict],        # New components
+        "removed_ids": Set[int],               # id_component to exclude
+        "id_network": int,                     # Active company
     }
-
-Integrerar med:
-    - rab_editor_variables.py: Tidskoder, vtype-definitioner, validering
-    - prepare_capbase.py: NUAV-beräkning från rådata
-    - normvärdeslista.py: Normvärde-lookup för techspec-ändringar
 """
 
 import pandas as pd
@@ -27,7 +22,6 @@ import numpy as np
 import streamlit as st
 from typing import Dict, List, Set, Optional, Any, Tuple
 
-# Importera från våra moduler (undvik duplicering)
 from .rab_editor_variables import (
     VType,
     VTYPE_NAMN,
@@ -61,81 +55,45 @@ from data.normvärdelista import (
 
 
 # =============================================================================
-# TIDSKOD-HJÄLPFUNKTIONER (re-exportera för bakåtkompatibilitet)
+# TIME CODE HELPERS (re-export for backwards compatibility)
 # =============================================================================
 
 def time_code_to_year(time_code: int) -> int:
-    """
-    Konverterar tidskod till år (ignorerar halvår).
-    
-    Args:
-        time_code: Tidskod (t.ex. 221)
-    
-    Returns:
-        År (t.ex. 2020)
-    """
+    """Convert time code to year (ignoring half-year)."""
     if pd.isna(time_code) or time_code <= 0:
         return 0
     return int(timecode_to_year(time_code))
 
 
 def year_to_time_code(year: int, half_year: int = 1) -> int:
-    """
-    Konverterar år (och halvår) till tidskod.
-    
-    Args:
-        year: År (t.ex. 2020)
-        half_year: Halvår (1 eller 2)
-    
-    Returns:
-        Tidskod (t.ex. 221 för 2020H1)
-    """
+    """Convert year (and half-year) to time code."""
     return year_to_timecode(year, half_year)
 
 
 def time_code_to_half_year(time_code: int) -> int:
-    """
-    Extraherar halvår från tidskod.
-    
-    Args:
-        time_code: Tidskod
-    
-    Returns:
-        Halvår (1 eller 2)
-    """
+    """Extract half-year from time code."""
     if pd.isna(time_code) or time_code <= 0:
         return 1
     return ((time_code - 1) % 2) + 1
 
 
 def get_halfyear_options() -> List[Tuple[str, int]]:
-    """
-    Returnerar lista med halvårsalternativ för dropdown.
-    
-    Returns:
-        Lista med tuples (visningstext, tidskod)
-    """
+    """Return list of half-year options for dropdown."""
     return [(label, code) for label, code in HALFYEAR_TO_TIMECODE.items()]
 
 
 # =============================================================================
-# INITIALISERING
+# INITIALIZATION
 # =============================================================================
 
 def initialize_rab_editor(user_components: pd.DataFrame, id_network: int) -> None:
     """
-    Initierar RAB-editor session state med användarens komponenter.
+    Initialize RAB editor session state with user's components.
     
-    Anropas när användaren öppnar RAB-editorn första gången eller
-    när företag byts.
-    
-    Args:
-        user_components: DataFrame med användarens komponenter från capbase_a
-        id_network: Användarens id_network
+    Called when user opens RAB editor for first time or when company changes.
     """
     current_id = st.session_state.get("rab_editor", {}).get("id_network")
     
-    # Initiera om RAB-editor inte finns eller om företag byts
     if "rab_editor" not in st.session_state or current_id != id_network:
         st.session_state["rab_editor"] = {
             "original_components": user_components.copy(),
@@ -147,7 +105,7 @@ def initialize_rab_editor(user_components: pd.DataFrame, id_network: int) -> Non
 
 
 def reset_rab_editor() -> None:
-    """Återställer alla ändringar till originaldata."""
+    """Reset all changes to original data."""
     rab = st.session_state.get("rab_editor", {})
     if rab and "original_components" in rab:
         rab["modified_components"] = rab["original_components"].copy()
@@ -156,111 +114,103 @@ def reset_rab_editor() -> None:
 
 
 def clear_rab_editor() -> None:
-    """Tar bort RAB-editor från session state helt."""
+    """Remove RAB editor from session state entirely."""
     if "rab_editor" in st.session_state:
         del st.session_state["rab_editor"]
 
 
 # =============================================================================
-# HÄMTA DATA
+# GET DATA
 # =============================================================================
 
 def get_user_capbase_with_edits() -> pd.DataFrame:
     """
-    Returnerar användarens kapitalbas med alla redigeringar applicerade.
+    Return user's capital base with all edits applied.
     
-    Denna funktion skapar en capbase_a DataFrame redo för 
-    run_kent_calculations_batch(). Den:
-    1. Tar modified_components (med ändringar)
-    2. Exkluderar borttagna komponenter
-    3. Lägger till nya komponenter
-    4. Beräknar om nuav_2022 från rådata
+    Creates a capbase_a DataFrame ready for run_kent_calculations_batch().
+    It:
+    1. Takes modified_components (with changes)
+    2. Excludes removed components
+    3. Adds new components
+    4. Recalculates nuav_2022 from raw data
     
     Returns:
-        DataFrame redo för run_kent_calculations_batch()
+        DataFrame ready for run_kent_calculations_batch()
     
     Raises:
-        ValueError: Om RAB-editor inte är initierad
+        ValueError: If RAB editor not initialized
     """
     rab = st.session_state.get("rab_editor", {})
     
     if not rab:
-        raise ValueError("RAB-editor inte initierad")
+        raise ValueError("RAB editor not initialized")
     
     if "modified_components" not in rab:
-        raise ValueError("RAB-editor saknar modified_components")
+        raise ValueError("RAB editor missing modified_components")
     
     id_network = rab.get("id_network")
     if id_network is None:
-        raise ValueError("RAB-editor saknar id_network")
+        raise ValueError("RAB editor missing id_network")
     
-    # Börja med modifierade komponenter
+    # Start with modified components
     df = rab["modified_components"].copy()
     
-    # Exkludera borttagna
+    # Exclude removed
     removed_ids = rab.get("removed_ids", set())
     if removed_ids:
         df = df[~df['id_component'].isin(removed_ids)]
     
-    # Lägg till nya komponenter
+    # Add new components
     added = rab.get("added_components", [])
     if added:
         df_added = pd.DataFrame(added)
         df = pd.concat([df, df_added], ignore_index=True)
     
-    # Säkerställ id_network
+    # Ensure id_network
     df['id_network'] = id_network
     
-    # Beräkna om nuav_2022 från rådata
+    # Recalculate nuav_2022 from raw data
     df = prepare_capbase_for_calculations(df)
     
     return df
 
 
 def get_original_components() -> Optional[pd.DataFrame]:
-    """Returnerar originalkomponenterna (omodifierade)."""
+    """Return original components (unmodified)."""
     rab = st.session_state.get("rab_editor", {})
     return rab.get("original_components")
 
 
 def get_modified_components() -> Optional[pd.DataFrame]:
-    """Returnerar modifierade komponenter."""
+    """Return modified components."""
     rab = st.session_state.get("rab_editor", {})
     return rab.get("modified_components")
 
 
 def get_added_components() -> List[Dict]:
-    """Returnerar lista med tillagda komponenter."""
+    """Return list of added components."""
     rab = st.session_state.get("rab_editor", {})
     return rab.get("added_components", [])
 
 
 def get_removed_ids() -> Set[int]:
-    """Returnerar set med borttagna id_component."""
+    """Return set of removed id_component."""
     rab = st.session_state.get("rab_editor", {})
     return rab.get("removed_ids", set())
 
 
 def get_current_id_network() -> Optional[int]:
-    """Returnerar aktivt id_network."""
+    """Return active id_network."""
     rab = st.session_state.get("rab_editor", {})
     return rab.get("id_network")
 
 
 # =============================================================================
-# HÄMTA DATA PER VTYPE
+# GET DATA PER VTYPE
 # =============================================================================
 
 def get_components_by_vtype(vtype: int) -> pd.DataFrame:
-    """
-    Returnerar komponenter filtrerade på vtype.
-    
-    Args:
-        vtype: Värderingsmetod (1, 2, 4, eller 5)
-    
-    Returns:
-        Filtrerad DataFrame
-    """
+    """Return components filtered by vtype."""
     df = get_modified_components()
     if df is None or df.empty:
         return pd.DataFrame()
@@ -269,12 +219,12 @@ def get_components_by_vtype(vtype: int) -> pd.DataFrame:
 
 
 def get_normvärderade() -> pd.DataFrame:
-    """Returnerar normvärderade komponenter (vtype=4)."""
+    """Return normvärde components (vtype=4)."""
     return get_components_by_vtype(VType.NORMVÄRDE)
 
 
 def get_övriga_metoder() -> pd.DataFrame:
-    """Returnerar komponenter med annat skäligt värde eller anskaffningsvärde (vtype=1,2)."""
+    """Return components with annat skäligt värde or anskaffningsvärde (vtype=1,2)."""
     df = get_modified_components()
     if df is None or df.empty:
         return pd.DataFrame()
@@ -284,42 +234,37 @@ def get_övriga_metoder() -> pd.DataFrame:
 
 
 def get_investeringar() -> pd.DataFrame:
-    """Returnerar investeringar och utrangeringar (vtype=5)."""
+    """Return investments and retirements (vtype=5)."""
     return get_components_by_vtype(VType.INVESTERING)
 
 
 # =============================================================================
-# ÄNDRINGSDETEKTERING
+# CHANGE DETECTION
 # =============================================================================
 
 def has_changes() -> bool:
-    """
-    Kontrollerar om RAB-editor har några ändringar.
-    
-    Returns:
-        True om det finns ändringar, annars False
-    """
+    """Check if RAB editor has any changes."""
     rab = st.session_state.get("rab_editor", {})
     
     if not rab:
         return False
     
-    # Kolla removed_ids
+    # Check removed_ids
     if rab.get("removed_ids"):
         return True
     
-    # Kolla added_components
+    # Check added_components
     if rab.get("added_components"):
         return True
     
-    # Kolla om modified_components skiljer sig från original
+    # Check if modified_components differs from original
     original = rab.get("original_components")
     modified = rab.get("modified_components")
     
     if original is None or modified is None:
         return False
     
-    # Jämför relevanta kolumner per vtype
+    # Compare relevant columns per vtype
     compare_cols_by_vtype = {
         VType.NORMVÄRDE: ['count_comp', 'time_from', 'techspec', 'volt', 'id_comptype'],
         VType.ANNAT_SKÄLIGT_VÄRDE: ['annatskäligtvärde', 'count_comp', 'time_from', 'cat_encode'],
@@ -339,9 +284,8 @@ def has_changes() -> bool:
                 orig_vals = orig_vtype[col].reset_index(drop=True)
                 mod_vals = mod_vtype[col].reset_index(drop=True)
                 
-                # Hantera NaN-jämförelse
+                # Handle NaN comparison
                 if not orig_vals.equals(mod_vals):
-                    # Dubbelkolla med fillna för att hantera NaN
                     if not orig_vals.fillna('__NA__').equals(mod_vals.fillna('__NA__')):
                         return True
     
@@ -349,12 +293,7 @@ def has_changes() -> bool:
 
 
 def get_change_summary() -> Dict[str, Any]:
-    """
-    Returnerar sammanfattning av ändringar.
-    
-    Returns:
-        Dict med ändringsstatistik
-    """
+    """Return summary of changes."""
     rab = st.session_state.get("rab_editor", {})
     if not rab:
         return _empty_summary()
@@ -375,7 +314,7 @@ def get_change_summary() -> Dict[str, Any]:
     if original.empty or modified.empty:
         return summary
     
-    # Räkna modifierade per vtype
+    # Count modified per vtype
     for vtype in [VType.NORMVÄRDE, VType.ANNAT_SKÄLIGT_VÄRDE, VType.ANSKAFFNINGSVÄRDE, VType.INVESTERING]:
         cols = get_redigerbara_fält(vtype)
         orig_vtype = original[original['vtype'] == vtype]
@@ -384,7 +323,6 @@ def get_change_summary() -> Dict[str, Any]:
         n_changed = 0
         for col in cols:
             if col in orig_vtype.columns and col in mod_vtype.columns:
-                # Jämför rad för rad
                 merged = orig_vtype[['id_component', col]].merge(
                     mod_vtype[['id_component', col]],
                     on='id_component',
@@ -400,21 +338,20 @@ def get_change_summary() -> Dict[str, Any]:
             summary['changes_by_vtype'][VTYPE_NAMN.get(vtype, str(vtype))] = n_changed
             summary['n_modified'] += n_changed
     
-    # Beräkna NUAV-förändring (via prepare_capbase för korrekthet)
+    # Calculate NUAV change (via prepare_capbase for correctness)
     try:
         df_with_edits = get_user_capbase_with_edits()
         original_nuav = original['nuav_2022'].sum()
         new_nuav = df_with_edits['nuav_2022'].sum()
         summary['nuav_change_mkr'] = (new_nuav - original_nuav) / 1_000_000
     except Exception:
-        # Fallback om något går fel
         pass
     
     return summary
 
 
 def _empty_summary() -> Dict[str, Any]:
-    """Returnerar tom sammanfattning."""
+    """Return empty summary."""
     return {
         'n_removed': 0,
         'n_added': 0,
@@ -425,30 +362,18 @@ def _empty_summary() -> Dict[str, Any]:
 
 
 # =============================================================================
-# MODIFIERING
+# MODIFICATION
 # =============================================================================
 
 def update_modified_components(df: pd.DataFrame) -> None:
-    """
-    Uppdaterar modified_components med ny DataFrame.
-    
-    Args:
-        df: Uppdaterad DataFrame
-    """
+    """Update modified_components with new DataFrame."""
     rab = st.session_state.get("rab_editor", {})
     if rab:
         rab["modified_components"] = df.copy()
 
 
 def update_component_field(id_component: int, field: str, value: Any) -> None:
-    """
-    Uppdaterar ett specifikt fält för en komponent.
-    
-    Args:
-        id_component: Komponentens ID
-        field: Fältnamn att uppdatera
-        value: Nytt värde
-    """
+    """Update a specific field for a component."""
     rab = st.session_state.get("rab_editor", {})
     if not rab or "modified_components" not in rab:
         return
@@ -462,17 +387,9 @@ def update_component_field(id_component: int, field: str, value: Any) -> None:
 
 def update_techspec(id_component: int, new_techspec: str, volt: str = None) -> bool:
     """
-    Uppdaterar techspec för en normvärderad komponent.
+    Update techspec for a normvärde component.
     
-    Slår upp nytt normvärde och uppdaterar id_comptype.
-    
-    Args:
-        id_component: Komponentens ID
-        new_techspec: Ny teknisk specifikation
-        volt: Spänningsnivå (valfritt)
-    
-    Returns:
-        True om lyckad, False annars
+    Looks up new normvärde and updates id_comptype.
     """
     rab = st.session_state.get("rab_editor", {})
     if not rab or "modified_components" not in rab:
@@ -501,19 +418,16 @@ def update_techspec(id_component: int, new_techspec: str, volt: str = None) -> b
 
 def add_component(component: Dict[str, Any]) -> int:
     """
-    Lägger till en ny komponent.
-    
-    Args:
-        component: Dict med komponentdata
+    Add a new component.
     
     Returns:
-        Nytt id_component för komponenten
+        New id_component for the component
     """
     rab = st.session_state.get("rab_editor", {})
     if not rab:
-        raise ValueError("RAB-editor inte initierad")
+        raise ValueError("RAB editor not initialized")
     
-    # Generera nytt id_component
+    # Generate new id_component
     existing_ids = set()
     if "original_components" in rab:
         existing_ids.update(rab["original_components"]['id_component'].tolist())
@@ -525,10 +439,10 @@ def add_component(component: Dict[str, Any]) -> int:
     new_id = max(existing_ids, default=0) + 1
     component['id_component'] = new_id
     
-    # Säkerställ id_network
+    # Ensure id_network
     component['id_network'] = rab.get('id_network')
     
-    # Lägg till i added_components
+    # Add to added_components
     rab["added_components"].append(component)
     
     return new_id
@@ -542,23 +456,23 @@ def add_investment(
     is_retirement: bool = False,
 ) -> int:
     """
-    Lägger till en ny investering eller utrangering.
+    Add a new investment or retirement.
     
     Args:
-        cat_encode: Anläggningskategori (1-17)
-        subcat: Underkategori
-        value: Belopp (positivt tal)
-        time_invest: Tidskod för halvår (229-236)
-        is_retirement: True för utrangering
+        cat_encode: Asset category (1-17)
+        subcat: Subcategory
+        value: Amount (positive number)
+        time_invest: Time code for half-year (229-236)
+        is_retirement: True for retirement
     
     Returns:
-        Nytt id_component
+        New id_component
     """
     rab = st.session_state.get("rab_editor", {})
     id_network = rab.get('id_network') if rab else None
     
     if id_network is None:
-        raise ValueError("RAB-editor inte initierad")
+        raise ValueError("RAB editor not initialized")
     
     component = create_new_investment(
         id_network=id_network,
@@ -580,23 +494,23 @@ def add_component_vtype1(
     time_from: int,
 ) -> int:
     """
-    Lägger till en ny komponent med annat skäligt värde.
+    Add a new component with annat skäligt värde.
     
     Args:
-        cat_encode: Anläggningskategori (1-17)
-        subcat: Underkategori
-        annatskäligtvärde: Värde per enhet
-        count_comp: Antal enheter
-        time_from: Tidskod för idrifttagande
+        cat_encode: Asset category (1-17)
+        subcat: Subcategory
+        annatskäligtvärde: Value per unit
+        count_comp: Number of units
+        time_from: Time code for commissioning
     
     Returns:
-        Nytt id_component
+        New id_component
     """
     rab = st.session_state.get("rab_editor", {})
     id_network = rab.get('id_network') if rab else None
     
     if id_network is None:
-        raise ValueError("RAB-editor inte initierad")
+        raise ValueError("RAB editor not initialized")
     
     component = create_new_component_vtype1(
         id_network=id_network,
@@ -611,31 +525,21 @@ def add_component_vtype1(
 
 
 def remove_component(id_component: int) -> None:
-    """
-    Markerar en komponent för borttagning.
-    
-    Args:
-        id_component: ID för komponenten att ta bort
-    """
+    """Mark a component for removal."""
     rab = st.session_state.get("rab_editor", {})
     if rab:
         rab["removed_ids"].add(id_component)
 
 
 def restore_component(id_component: int) -> None:
-    """
-    Återställer en borttagen komponent.
-    
-    Args:
-        id_component: ID för komponenten att återställa
-    """
+    """Restore a removed component."""
     rab = st.session_state.get("rab_editor", {})
     if rab and "removed_ids" in rab:
         rab["removed_ids"].discard(id_component)
 
 
 # =============================================================================
-# SKALNING
+# SCALING
 # =============================================================================
 
 def apply_count_scaling(
@@ -645,22 +549,22 @@ def apply_count_scaling(
     vtype: int = VType.NORMVÄRDE,
 ) -> int:
     """
-    Skalar count_comp för komponenter (vtype 1 eller 4).
+    Scale count_comp for components (vtype 1 or 4).
     
-    Till skillnad från den gamla apply_nuav_scaling() skalar denna
-    rådata (count_comp) istället för nuav_2022 direkt.
+    Unlike the old apply_nuav_scaling(), this scales raw data (count_comp)
+    instead of nuav_2022 directly.
     
     Args:
-        multiplier: Skalningsfaktor (t.ex. 1.1 för +10%)
-        cat_encode: Filtrera på kategori (None = alla)
-        subcat: Filtrera på subkategori (None = alla)
-        vtype: Värderingsmetod att skala (4 eller 1)
+        multiplier: Scaling factor (e.g. 1.1 for +10%)
+        cat_encode: Filter by category (None = all)
+        subcat: Filter by subcategory (None = all)
+        vtype: Valuation method to scale (4 or 1)
     
     Returns:
-        Antal skalade komponenter
+        Number of scaled components
     """
     if vtype not in [VType.NORMVÄRDE, VType.ANNAT_SKÄLIGT_VÄRDE]:
-        raise ValueError(f"Kan bara skala count_comp för vtype 1 eller 4, fick {vtype}")
+        raise ValueError(f"Can only scale count_comp for vtype 1 or 4, got {vtype}")
     
     rab = st.session_state.get("rab_editor", {})
     if not rab or "modified_components" not in rab:
@@ -668,7 +572,7 @@ def apply_count_scaling(
     
     df = rab["modified_components"]
     
-    # Bygg mask
+    # Build mask
     mask = df['vtype'] == vtype
     
     if cat_encode is not None:
@@ -691,15 +595,15 @@ def apply_value_scaling(
     is_investment: Optional[bool] = None,
 ) -> int:
     """
-    Skalar value_invest för investeringar/utrangeringar (vtype=5).
+    Scale value_invest for investments/retirements (vtype=5).
     
     Args:
-        multiplier: Skalningsfaktor
-        cat_encode: Filtrera på kategori (None = alla)
-        is_investment: True = bara inv, False = bara utr, None = alla
+        multiplier: Scaling factor
+        cat_encode: Filter by category (None = all)
+        is_investment: True = only inv, False = only ret, None = all
     
     Returns:
-        Antal skalade komponenter
+        Number of scaled components
     """
     rab = st.session_state.get("rab_editor", {})
     if not rab or "modified_components" not in rab:
@@ -726,20 +630,12 @@ def apply_value_scaling(
 
 
 # =============================================================================
-# DATA-LADDNING
+# DATA LOADING
 # =============================================================================
 
 def load_user_components(user_id_network: int) -> pd.DataFrame:
-    """
-    Laddar användarens komponenter från capbase_a.
-    
-    Args:
-        user_id_network: Användarens id_network
-    
-    Returns:
-        DataFrame med användarens komponenter
-    """
-    # Dynamisk import för att undvika cirkulär import
+    """Load user's components from capbase_a."""
+    # Dynamic import to avoid circular import
     from data_loaders.rab_data import load_capbase_a
     
     capbase = load_capbase_a()
@@ -749,16 +645,11 @@ def load_user_components(user_id_network: int) -> pd.DataFrame:
 
 
 # =============================================================================
-# UI-HJÄLPFUNKTIONER
+# UI HELPERS
 # =============================================================================
 
 def get_category_options() -> Dict[int, str]:
-    """
-    Returnerar kategorialternativ för dropdown.
-    
-    Returns:
-        Dict {cat_encode: visningstext}
-    """
+    """Return category options for dropdown."""
     return {
         cat_encode: f"{cat_encode} - {kat.namn}"
         for cat_encode, kat in KATEGORIER.items()
@@ -766,15 +657,7 @@ def get_category_options() -> Dict[int, str]:
 
 
 def get_subcat_options(cat_encode: int) -> List[str]:
-    """
-    Returnerar subkategorier för en kategori.
-    
-    Args:
-        cat_encode: Kategorikod
-    
-    Returns:
-        Lista med subkategorier
-    """
+    """Return subcategories for a category."""
     df = get_modified_components()
     if df is None or df.empty:
         return []
@@ -784,16 +667,7 @@ def get_subcat_options(cat_encode: int) -> List[str]:
 
 
 def get_techspec_options(kategori: str, typ_anläggning: str) -> List[Tuple[str, str, int]]:
-    """
-    Returnerar techspec-alternativ för dropdown.
-    
-    Args:
-        kategori: Anläggningskategori (text)
-        typ_anläggning: Subkategori (text)
-    
-    Returns:
-        Lista med tuples (techspec, volt, normvärde)
-    """
+    """Return techspec options for dropdown."""
     techspecs = list_techspecs_for_category(kategori, typ_anläggning)
     return [(ts, volt, nv) for ts, volt, kod, nv in techspecs]
 
@@ -804,18 +678,7 @@ def apply_filters(
     subcat: Optional[str] = None,
     vtype: Optional[int] = None,
 ) -> pd.DataFrame:
-    """
-    Applicerar filter på DataFrame.
-    
-    Args:
-        df: DataFrame att filtrera
-        cat_encode: Kategorikod eller None
-        subcat: Subkategori eller None
-        vtype: Värderingsmetod eller None
-    
-    Returns:
-        Filtrerad DataFrame
-    """
+    """Apply filters to DataFrame."""
     df_filtered = df.copy()
     
     if vtype is not None:
@@ -831,15 +694,7 @@ def apply_filters(
 
 
 def render_summary_metrics(show_delta: bool = True) -> Dict[str, Any]:
-    """
-    Beräknar sammanfattnings-metrics för kapitalbasen.
-    
-    Args:
-        show_delta: Om True, beräkna förändring mot original
-    
-    Returns:
-        Dict med metrics
-    """
+    """Calculate summary metrics for capital base."""
     df_original = get_original_components()
     df_modified = get_modified_components()
     
@@ -848,7 +703,7 @@ def render_summary_metrics(show_delta: bool = True) -> Dict[str, Any]:
     
     n_components = len(df_modified) - len(get_removed_ids()) + len(get_added_components())
     
-    # Beräkna NUAV med edits
+    # Calculate NUAV with edits
     try:
         df_with_edits = get_user_capbase_with_edits()
         total_nuav = df_with_edits['nuav_2022'].sum() / 1_000_000
@@ -868,12 +723,7 @@ def render_summary_metrics(show_delta: bool = True) -> Dict[str, Any]:
 
 
 def get_vtype_summary() -> Dict[int, Dict[str, Any]]:
-    """
-    Returnerar sammanfattning per vtype.
-    
-    Returns:
-        Dict {vtype: {n_components, nuav_mkr, ...}}
-    """
+    """Return summary per vtype."""
     df = get_modified_components()
     if df is None or df.empty:
         return {}

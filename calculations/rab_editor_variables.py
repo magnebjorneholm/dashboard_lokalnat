@@ -1,17 +1,17 @@
 """
 calculations/rab_editor_variables.py
 
-Dataklasser och variabeldefinitioner för RAB-editor.
+Dataclasses and variable definitions for RAB editor.
 
-Definierar vilka variabler som är redigerbara per värdetyp (vtype),
-hur NUAV beräknas, och valideringsregler.
+Defines which variables are editable per valuation type (vtype),
+how NUAV is calculated, and validation rules.
 
-Struktur:
-- BaseComponent: Gemensamma fält för alla komponenter
-- NormvärderadKomponent (vtype=4): 96% av data
-- AnnatSkäligtVärdeKomponent (vtype=1): ~1.4% av data  
-- AnskaffningsvärdeKomponent (vtype=2): ~0.1% av data
-- InvesteringKomponent (vtype=5): ~2.5% av data
+Structure:
+- BaseComponent: Common fields for all components
+- NormvärderadKomponent (vtype=4)
+- AnnatSkäligtVärdeKomponent (vtype=1)
+- AnskaffningsvärdeKomponent (vtype=2)
+- InvesteringKomponent (vtype=5)
 """
 
 from dataclasses import dataclass, field
@@ -20,23 +20,23 @@ from enum import IntEnum
 
 
 # =============================================================================
-# KONSTANTER
+# CONSTANTS
 # =============================================================================
 
 class VType(IntEnum):
-    """Värderingsmetoder enligt förordning 2018:1520."""
+    """Valuation methods per regulation 2018:1520."""
     ANNAT_SKÄLIGT_VÄRDE = 1
     ANSKAFFNINGSVÄRDE = 2
-    BOKFÖRT_VÄRDE = 3  # Förekommer ej i exempeldata
+    BOKFÖRT_VÄRDE = 3  # Not present in sample data
     NORMVÄRDE = 4
     INVESTERING = 5
 
 
-# Tidskoder för tillsynsperioden 2024-2027
+# Time codes for regulatory period 2024-2027
 TIMECODE_PERIOD_START = 229  # 2024 H1
 TIMECODE_PERIOD_END = 236    # 2027 H2
 
-# Mappning halvår till tidskod
+# Half-year to time code mapping
 HALFYEAR_TO_TIMECODE: Dict[str, int] = {
     "2024 H1": 229, "2024 H2": 230,
     "2025 H1": 231, "2025 H2": 232,
@@ -48,58 +48,58 @@ TIMECODE_TO_HALFYEAR: Dict[int, str] = {v: k for k, v in HALFYEAR_TO_TIMECODE.it
 
 
 # =============================================================================
-# HJÄLPFUNKTIONER FÖR TIDSKODER
+# TIME CODE HELPERS
 # =============================================================================
 
 def timecode_to_year(timecode: int) -> float:
     """
-    Konverterar tidskod till år.
+    Convert time code to year.
     
-    Tidskod = (år - 1910) × 2 + halvår
-    där halvår = 1 (H1) eller 2 (H2)
+    Time code = (year - 1910) × 2 + half
+    where half = 1 (H1) or 2 (H2)
     
     Args:
-        timecode: Tidskod (t.ex. 229 för 2024 H1)
+        timecode: Time code (e.g. 229 for 2024 H1)
     
     Returns:
-        År som float (t.ex. 2024.0 för H1, 2024.5 för H2)
+        Year as float (e.g. 2024.0 for H1, 2024.5 for H2)
     """
     return 1910 + (timecode - 1) / 2
 
 
 def year_to_timecode(year: int, half: int = 1) -> int:
     """
-    Konverterar år till tidskod.
+    Convert year to time code.
     
     Args:
-        year: År (t.ex. 2024)
-        half: Halvår (1 eller 2)
+        year: Year (e.g. 2024)
+        half: Half-year (1 or 2)
     
     Returns:
-        Tidskod (t.ex. 229 för 2024 H1)
+        Time code (e.g. 229 for 2024 H1)
     """
     return (year - 1910) * 2 + half
 
 
 # =============================================================================
-# KATEGORIER OCH LIVSLÄNGDER
+# CATEGORIES AND LIFETIMES
 # =============================================================================
 
 @dataclass(frozen=True)
 class Kategori:
     """
-    Anläggningskategori med baseline-livslängder.
+    Asset category with baseline lifetimes.
     
-    Livslängder anges i halvår enligt Ei:s metoddokument.
+    Lifetimes in half-years per Ei methodology.
     """
     cat_encode: int
     namn: str
-    ekdep: int  # Ekonomisk livslängd (halvår)
-    maxdep: int  # Maximal livslängd (halvår)
-    enhet: str  # Typisk enhet: "km" eller "st"
+    ekdep: int  # Economic lifetime (half-years)
+    maxdep: int  # Maximum lifetime (half-years)
+    enhet: str  # Typical unit: "km" or "st"
 
 
-# De 17 kategorierna enligt 4 kap 3 § EIFS 2023:4
+# The 17 categories per 4 kap 3 § EIFS 2023:4
 KATEGORIER: Dict[int, Kategori] = {
     1: Kategori(1, "Andra markarbeten och byggnader, linjekoncession", 100, 124, "st"),
     2: Kategori(2, "Annan ledning, linjekoncession", 100, 124, "km"),
@@ -122,43 +122,43 @@ KATEGORIER: Dict[int, Kategori] = {
 
 
 # =============================================================================
-# VARIABELDEFINITIONER
+# VARIABLE DEFINITIONS
 # =============================================================================
 
 @dataclass
 class VariabelDefinition:
     """
-    Definition av en variabel för RAB-editor.
+    Definition of a variable for RAB editor.
     
-    Används för att generera UI och validering.
+    Used to generate UI and validation.
     """
-    namn: str                    # Internt kolumnnamn i capbase_a
-    visningsnamn: str            # Namn i UI
+    namn: str                    # Internal column name in capbase_a
+    visningsnamn: str            # Display name in UI
     datatyp: str                 # "float", "int", "str"
-    redigerbar: bool             # Om fältet kan redigeras
+    redigerbar: bool             # If field is editable
     källa: str                   # "KENT", "Normvärdeslista", "Beräknad", "System"
-    beskrivning: str             # Förklaring
-    enhet: Optional[str] = None  # T.ex. "kr", "km", "st"
+    beskrivning: str             # Description
+    enhet: Optional[str] = None  # E.g. "kr", "km", "st"
     min_värde: Optional[float] = None
     max_värde: Optional[float] = None
 
 
 # =============================================================================
-# VTYPE=4: NORMVÄRDERADE KOMPONENTER (96% av data)
+# VTYPE=4: NORMVÄRDE COMPONENTS (96% of data)
 # =============================================================================
 
 @dataclass
 class NormvärderadKomponent:
     """
-    Komponent värderad med normvärde (vtype=4).
+    Component valued with normvärde (vtype=4).
     
-    NUAV-formel: nuav_2022 = normvärde × count_comp
+    NUAV formula: nuav_2022 = normvärde × count_comp
     
-    Detta är standardmetoden för ~96% av alla komponenter.
-    Normvärdet slås upp från Ei:s normvärdeslista baserat på
-    techspec (teknisk specifikation) och volt (spänningsnivå).
+    Standard method for ~96% of all components.
+    Normvärde is looked up from Ei's normvärdeslista based on
+    techspec (technical specification) and volt (voltage level).
     """
-    # Identifiering (ej redigerbara)
+    # Identification (not editable)
     id_component: int
     id_network: int
     cat_encode: int
@@ -166,26 +166,26 @@ class NormvärderadKomponent:
     subcat_encode: int
     subcat: str
     
-    # Redigerbara fält
-    count_comp: float           # Antal eller längd
-    time_from: int              # Tidskod för idrifttagande
-    techspec: str               # Teknisk specifikation (dropdown)
-    volt: str                   # Spänningsnivå (dropdown om flera finns)
+    # Editable fields
+    count_comp: float           # Count or length
+    time_from: int              # Time code for commissioning
+    techspec: str               # Technical specification (dropdown)
+    volt: str                   # Voltage level (dropdown if multiple exist)
     
-    # Lookup från normvärdeslistan (ej direkt redigerbar)
-    id_comptype: str            # Normvärdeskod (t.ex. NG14514)
-    normvärde: float            # Normvärde i kr per enhet
+    # Lookup from normvärdeslista (not directly editable)
+    id_comptype: str            # Normvärde code (e.g. NG14514)
+    normvärde: float            # Normvärde in SEK per unit
     
-    # Beräknade fält
+    # Calculated fields
     nuav_2022: float = field(init=False)
     
     # Metadata
-    owned: int = 1              # Rådighet: 1=ägd
-    capbase_existing: int = 1   # Alltid 1 för befintliga
+    owned: int = 1              # Ownership: 1=owned
+    capbase_existing: int = 1   # Always 1 for existing
     vtype: int = field(default=4, init=False)
     
     def __post_init__(self):
-        """Beräknar nuav_2022 från normvärde och count_comp."""
+        """Calculate nuav_2022 from normvärde and count_comp."""
         self.nuav_2022 = self.normvärde * self.count_comp
 
 
@@ -249,33 +249,33 @@ NORMVÄRDERAD_VARIABLER: List[VariabelDefinition] = [
 
 
 # =============================================================================
-# VTYPE=1: ANNAT SKÄLIGT VÄRDE (~1.4% av data)
+# VTYPE=1: ANNAT SKÄLIGT VÄRDE (~1.4% of data)
 # =============================================================================
 
 @dataclass
 class AnnatSkäligtVärdeKomponent:
     """
-    Komponent värderad med annat skäligt värde (vtype=1).
+    Component valued with annat skäligt värde (vtype=1).
     
-    NUAV-formel: nuav_2022 = annatskäligtvärde × count_comp
+    NUAV formula: nuav_2022 = annatskäligtvärde × count_comp
     
-    Används när normvärde, anskaffningsvärde och bokfört värde saknas.
-    Värdet ska motsvara nuanskaffningsvärdet i 2022 års prisnivå.
+    Used when normvärde, anskaffningsvärde and bokfört värde are missing.
+    Value should correspond to nuanskaffningsvärde in 2022 price level.
     """
-    # Identifiering
+    # Identification
     id_component: int
     id_network: int
-    cat_encode: int             # Redigerbar
+    cat_encode: int             # Editable
     cat: str
     subcat_encode: int
-    subcat: str                 # Redigerbar
+    subcat: str                 # Editable
     
-    # Redigerbara fält
-    annatskäligtvärde: float    # Värde per enhet i kr
-    count_comp: float           # Antal enheter
-    time_from: int              # Tidskod för idrifttagande
+    # Editable fields
+    annatskäligtvärde: float    # Value per unit in SEK
+    count_comp: float           # Number of units
+    time_from: int              # Time code for commissioning
     
-    # Beräknade fält
+    # Calculated fields
     nuav_2022: float = field(init=False)
     
     # Metadata
@@ -284,7 +284,7 @@ class AnnatSkäligtVärdeKomponent:
     vtype: int = field(default=1, init=False)
     
     def __post_init__(self):
-        """Beräknar nuav_2022 från annatskäligtvärde och count_comp."""
+        """Calculate nuav_2022 from annatskäligtvärde and count_comp."""
         self.nuav_2022 = self.annatskäligtvärde * self.count_comp
 
 
@@ -340,33 +340,33 @@ ANNAT_SKÄLIGT_VÄRDE_VARIABLER: List[VariabelDefinition] = [
 
 
 # =============================================================================
-# VTYPE=2: URSPRUNGLIGT ANSKAFFNINGSVÄRDE (~0.1% av data)
+# VTYPE=2: ANSKAFFNINGSVÄRDE (~0.1% of data)
 # =============================================================================
 
 @dataclass
 class AnskaffningsvärdeKomponent:
     """
-    Komponent värderad med ursprungligt anskaffningsvärde (vtype=2).
+    Component valued with anskaffningsvärde (vtype=2).
     
-    NUAV-formel: nuav_2022 = rapporteradnuav
+    NUAV formula: nuav_2022 = rapporteradnuav
     
-    Anskaffningsvärdet indexuppräknas till 2022 års prisnivå med BKI
-    (Byggkostnadsindex). Kräver särskilda skäl och verifikation.
+    Anskaffningsvärde is indexed to 2022 price level using BKI
+    (Byggkostnadsindex). Requires special justification and verification.
     """
-    # Identifiering
+    # Identification
     id_component: int
     id_network: int
-    cat_encode: int             # Redigerbar
+    cat_encode: int             # Editable
     cat: str
     subcat_encode: int
-    subcat: str                 # Redigerbar
+    subcat: str                 # Editable
     
-    # Redigerbara fält
-    anskaffningsvärde: float    # Ursprungligt värde i anskaffningsårets prisnivå
-    rapporteradnuav: float      # Indexuppräknat värde i 2022 års prisnivå
-    time_from: int              # Tidskod för idrifttagande (= anskaffningsår)
+    # Editable fields
+    anskaffningsvärde: float    # Original value in acquisition year price level
+    rapporteradnuav: float      # Indexed value in 2022 price level
+    time_from: int              # Time code for commissioning (= acquisition year)
     
-    # Beräknade fält (nuav_2022 = rapporteradnuav direkt)
+    # Calculated fields (nuav_2022 = rapporteradnuav directly)
     nuav_2022: float = field(init=False)
     
     # Metadata
@@ -375,7 +375,7 @@ class AnskaffningsvärdeKomponent:
     vtype: int = field(default=2, init=False)
     
     def __post_init__(self):
-        """Sätter nuav_2022 till rapporteradnuav."""
+        """Set nuav_2022 to rapporteradnuav."""
         self.nuav_2022 = self.rapporteradnuav
 
 
@@ -431,54 +431,54 @@ ANSKAFFNINGSVÄRDE_VARIABLER: List[VariabelDefinition] = [
 
 
 # =============================================================================
-# VTYPE=5: INVESTERINGAR OCH UTRANGERINGAR (~2.5% av data)
+# VTYPE=5: INVESTMENTS AND RETIREMENTS (~2.5% of data)
 # =============================================================================
 
 @dataclass
 class InvesteringKomponent:
     """
-    Investering eller utrangering (vtype=5).
+    Investment or retirement (vtype=5).
     
-    NUAV-formel: nuav_2022 = value_invest
+    NUAV formula: nuav_2022 = value_invest
     
-    I datan är value_invest redan teckensatt:
-    - Positivt för investeringar (ökar kapitalbas)
-    - Negativt för utrangeringar (minskar kapitalbas)
+    In the data, value_invest is already signed:
+    - Positive for investments (increases capital base)
+    - Negative for retirements (decreases capital base)
     
-    Fältet invest är en flagga: 1=investering, -1=utrangering.
+    The invest field is a flag: 1=investment, -1=retirement.
     
-    I UI ska användaren ange belopp som positivt tal och välja typ,
-    sedan sätter backend value_invest = belopp × invest.
+    In the UI, user enters amount as positive and selects type,
+    then backend sets value_invest = amount × invest.
     
-    Gäller för planerade förändringar under tillsynsperioden 2024-2027.
+    Applies to planned changes during regulatory period 2024-2027.
     """
-    # Identifiering
+    # Identification
     id_component: int
     id_network: int
-    cat_encode: int             # Redigerbar
+    cat_encode: int             # Editable
     cat: str
     subcat_encode: int
-    subcat: str                 # Redigerbar
+    subcat: str                 # Editable
     
-    # Redigerbara fält
-    value_invest: float         # Totalvärde (positivt=inv, negativt=utr)
-    time_invest: int            # Tidskod för investering/utrangering (229-236)
-    invest: Literal[-1, 1]      # 1=investering, -1=utrangering (flagga)
-    count_comp: float = 1.0     # Antal (för referens)
+    # Editable fields
+    value_invest: float         # Total value (positive=inv, negative=ret)
+    time_invest: int            # Time code for investment/retirement (229-236)
+    invest: Literal[-1, 1]      # 1=investment, -1=retirement (flag)
+    count_comp: float = 1.0     # Count (for reference)
     
-    # Beräknade fält
+    # Calculated fields
     nuav_2022: float = field(init=False)
     
     # Metadata
     owned: int = 1
-    capbase_existing: int = 0   # Alltid 0 för investeringar/utrangeringar
+    capbase_existing: int = 0   # Always 0 for investments/retirements
     vtype: int = field(default=5, init=False)
     
-    # time_from sätts till time_invest för nya investeringar
+    # time_from is set to time_invest for new investments
     time_from: int = field(init=False)
     
     def __post_init__(self):
-        """nuav_2022 = value_invest (redan teckensatt i datan)."""
+        """nuav_2022 = value_invest (already signed in data)."""
         self.nuav_2022 = self.value_invest
         self.time_from = self.time_invest
 
@@ -550,7 +550,7 @@ INVESTERING_VARIABLER: List[VariabelDefinition] = [
 
 
 # =============================================================================
-# SAMMANFATTNING: VARIABLER PER VTYPE
+# SUMMARY: VARIABLES PER VTYPE
 # =============================================================================
 
 VARIABLER_PER_VTYPE: Dict[int, List[VariabelDefinition]] = {
@@ -560,17 +560,18 @@ VARIABLER_PER_VTYPE: Dict[int, List[VariabelDefinition]] = {
     VType.INVESTERING: INVESTERING_VARIABLER,
 }
 
+# UI display names for vtypes
 VTYPE_NAMN: Dict[int, str] = {
     VType.ANNAT_SKÄLIGT_VÄRDE: "Annat skäligt värde",
-    VType.ANSKAFFNINGSVÄRDE: "Ursprungligt anskaffningsvärde",
+    VType.ANSKAFFNINGSVÄRDE: "Anskaffningsvärde",
     VType.BOKFÖRT_VÄRDE: "Bokfört värde",
     VType.NORMVÄRDE: "Normvärde",
-    VType.INVESTERING: "Investering/utrangering",
+    VType.INVESTERING: "Investment/Retirement",
 }
 
 
 # =============================================================================
-# NUAV-BERÄKNING (för backend)
+# NUAV CALCULATION (for backend)
 # =============================================================================
 
 def beräkna_nuav_2022(
@@ -583,25 +584,25 @@ def beräkna_nuav_2022(
     invest: int = 1,
 ) -> float:
     """
-    Beräknar nuav_2022 baserat på vtype.
+    Calculate nuav_2022 based on vtype.
     
-    Denna funktion används i backend för att beräkna NUAV
-    efter att användaren gjort ändringar i RAB-editor.
+    This function is used in backend to calculate NUAV
+    after user makes changes in RAB editor.
     
     Args:
-        vtype: Värderingsmetod (1, 2, 4, eller 5)
-        count_comp: Antal/längd (för vtype 1 och 4)
-        normvärde: Normvärde per enhet (för vtype 4)
-        annatskäligtvärde: Annat skäligt värde per enhet (för vtype 1)
-        rapporteradnuav: Rapporterad NUAV (för vtype 2)
-        value_invest: Investeringsvärde, redan teckensatt (för vtype 5)
-        invest: Investeringsflagga, 1 eller -1 (för vtype 5, används ej i beräkning)
+        vtype: Valuation method (1, 2, 4, or 5)
+        count_comp: Quantity/length (for vtype 1 and 4)
+        normvärde: Normvärde per unit (for vtype 4)
+        annatskäligtvärde: Annat skäligt värde per unit (for vtype 1)
+        rapporteradnuav: Reported NUAV (for vtype 2)
+        value_invest: Investment value, already signed (for vtype 5)
+        invest: Investment flag, 1 or -1 (for vtype 5, not used in calculation)
     
     Returns:
-        Beräknad nuav_2022
+        Calculated nuav_2022
     
     Raises:
-        ValueError: Om ogiltig vtype
+        ValueError: If invalid vtype
     """
     if vtype == VType.NORMVÄRDE:
         return normvärde * count_comp
@@ -610,20 +611,20 @@ def beräkna_nuav_2022(
     elif vtype == VType.ANSKAFFNINGSVÄRDE:
         return rapporteradnuav
     elif vtype == VType.INVESTERING:
-        return value_invest  # Redan teckensatt i datan
+        return value_invest  # Already signed in data
     else:
-        raise ValueError(f"Ogiltig vtype: {vtype}")
+        raise ValueError(f"Invalid vtype: {vtype}")
 
 
 def get_redigerbara_fält(vtype: int) -> List[str]:
     """
-    Returnerar lista med redigerbara fältnamn för given vtype.
+    Return list of editable field names for given vtype.
     
     Args:
-        vtype: Värderingsmetod (1, 2, 4, eller 5)
+        vtype: Valuation method (1, 2, 4, or 5)
     
     Returns:
-        Lista med kolumnnamn som är redigerbara
+        List of column names that are editable
     """
     variabler = VARIABLER_PER_VTYPE.get(vtype, [])
     return [v.namn for v in variabler if v.redigerbar]
@@ -631,13 +632,13 @@ def get_redigerbara_fält(vtype: int) -> List[str]:
 
 def get_nuav_inputs(vtype: int) -> List[str]:
     """
-    Returnerar lista med fält som används för NUAV-beräkning.
+    Return list of fields used for NUAV calculation.
     
     Args:
-        vtype: Värderingsmetod
+        vtype: Valuation method
     
     Returns:
-        Lista med kolumnnamn som ingår i NUAV-formeln
+        List of column names used in NUAV formula
     """
     if vtype == VType.NORMVÄRDE:
         return ["normvärde", "count_comp"]
@@ -646,65 +647,65 @@ def get_nuav_inputs(vtype: int) -> List[str]:
     elif vtype == VType.ANSKAFFNINGSVÄRDE:
         return ["rapporteradnuav"]
     elif vtype == VType.INVESTERING:
-        return ["value_invest"]  # Redan teckensatt
+        return ["value_invest"]  # Already signed
     else:
         return []
 
 
 # =============================================================================
-# VALIDERING
+# VALIDATION
 # =============================================================================
 
 def validera_komponent(vtype: int, data: dict) -> List[str]:
     """
-    Validerar komponentdata enligt vtype-specifika regler.
+    Validate component data according to vtype-specific rules.
     
     Args:
-        vtype: Värderingsmetod
-        data: Dict med komponentdata
+        vtype: Valuation method
+        data: Dict with component data
     
     Returns:
-        Lista med felmeddelanden (tom om valid)
+        List of error messages (empty if valid)
     """
     fel = []
     
-    # Gemensam validering
+    # Common validation
     if "time_from" in data:
         year = timecode_to_year(data["time_from"])
         if year < 1910 or year > 2023:
-            fel.append(f"Ogiltigt idrifttagandeår: {year}")
+            fel.append(f"Invalid commissioning year: {year}")
     
-    # vtype-specifik validering
+    # vtype-specific validation
     if vtype == VType.NORMVÄRDE:
         if data.get("count_comp", 0) <= 0:
-            fel.append("Antal/längd måste vara > 0")
+            fel.append("Quantity must be > 0")
         if data.get("normvärde", 0) <= 0:
-            fel.append("Normvärde saknas eller är ogiltigt")
+            fel.append("Normvärde missing or invalid")
     
     elif vtype == VType.ANNAT_SKÄLIGT_VÄRDE:
         if data.get("count_comp", 0) <= 0:
-            fel.append("Antal måste vara > 0")
+            fel.append("Count must be > 0")
         if data.get("annatskäligtvärde", 0) <= 0:
-            fel.append("Annat skäligt värde måste vara > 0")
+            fel.append("Annat skäligt värde must be > 0")
     
     elif vtype == VType.ANSKAFFNINGSVÄRDE:
         if data.get("rapporteradnuav", 0) <= 0:
-            fel.append("Rapporterad NUAV måste vara > 0")
+            fel.append("Reported NUAV must be > 0")
     
     elif vtype == VType.INVESTERING:
         if data.get("value_invest", 0) == 0:
-            fel.append("Investeringsvärde får inte vara 0")
+            fel.append("Investment value cannot be 0")
         if data.get("invest") not in [-1, 1]:
-            fel.append("Invest måste vara 1 (investering) eller -1 (utrangering)")
-        # Kontrollera att tecken stämmer med flagga
+            fel.append("Invest must be 1 (investment) or -1 (retirement)")
+        # Check that sign matches flag
         value = data.get("value_invest", 0)
         invest_flag = data.get("invest", 1)
         if invest_flag == 1 and value < 0:
-            fel.append("Investering ska ha positivt value_invest")
+            fel.append("Investment should have positive value_invest")
         if invest_flag == -1 and value > 0:
-            fel.append("Utrangering ska ha negativt value_invest")
+            fel.append("Retirement should have negative value_invest")
         time_invest = data.get("time_invest", 0)
         if time_invest < TIMECODE_PERIOD_START or time_invest > TIMECODE_PERIOD_END:
-            fel.append(f"Halvår måste vara inom 2024-2027 (tidskod {TIMECODE_PERIOD_START}-{TIMECODE_PERIOD_END})")
+            fel.append(f"Half-year must be within 2024-2027 (time code {TIMECODE_PERIOD_START}-{TIMECODE_PERIOD_END})")
     
     return fel

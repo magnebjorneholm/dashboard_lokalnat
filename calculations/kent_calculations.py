@@ -12,9 +12,6 @@ Uppdaterad med:
 import pandas as pd
 import numpy as np
 from typing import Dict, Optional, Tuple
-from pathlib import Path
-import streamlit as st
-
 
 # Halvårsmappning till år
 YEAR_TO_TIMECODES = {
