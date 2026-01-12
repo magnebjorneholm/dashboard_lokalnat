@@ -8,6 +8,7 @@ Separerar dataladdning från beräkningslogik i kent_calculations.py.
 import pandas as pd
 from pathlib import Path
 from typing import Optional, List
+import streamlit as st
 
 # Återanvänd befintlig flagga från data_mapping
 from calculations.data_mapping import TEST_MODE
@@ -16,7 +17,7 @@ from calculations.data_mapping import TEST_MODE
 CAPBASE_MINI_PATH = "data/capbase_a_mini.parquet"
 CAPBASE_FULL_PATH = "data/capbase_a.parquet"
 
-
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
     """
     Laddar capbase_a från parquet-fil.

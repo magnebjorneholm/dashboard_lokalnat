@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Optional, Tuple
 from pathlib import Path
+import streamlit as st
 
 
 # Halvårsmappning till år
@@ -22,36 +23,6 @@ YEAR_TO_TIMECODES = {
     2026: [233, 234],
     2027: [235, 236],
 }
-
-
-def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
-    """
-    Laddar capbase_a_mini.parquet.
-    
-    Args:
-        data_path: Sökväg till data-mapp
-        
-    Returns:
-        DataFrame med ~510k komponenter
-    """
-    search_paths = []
-    if data_path:
-        search_paths.append(Path(data_path) / "capbase_a_mini.parquet")
-    
-    search_paths.extend([
-        Path("capbase_a_mini.parquet"),
-        Path("data/capbase_a_mini.parquet"),
-    ])
-    
-    for path in search_paths:
-        if path.exists():
-            return pd.read_parquet(path)
-    
-    raise FileNotFoundError(
-        "capbase_a.parquet hittades inte. Sökvägar försökt: " + 
-        ", ".join(str(p) for p in search_paths)
-    )
-
 
 def run_kent_calculations_batch(
     capbase_data: pd.DataFrame,

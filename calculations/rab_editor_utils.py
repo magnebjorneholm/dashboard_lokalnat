@@ -740,7 +740,7 @@ def load_user_components(user_id_network: int) -> pd.DataFrame:
         DataFrame med användarens komponenter
     """
     # Dynamisk import för att undvika cirkulär import
-    from calculations.kent_calculations import load_capbase_a
+    from data_loaders.rab_data import load_capbase_a
     
     capbase = load_capbase_a()
     user_components = capbase[capbase['id_network'] == user_id_network].copy()

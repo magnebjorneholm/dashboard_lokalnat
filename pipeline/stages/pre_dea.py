@@ -29,8 +29,9 @@ from typing import Optional, Tuple
 from config.case_definition import PreDeaConfig, CapbaseSource, CapexMethod
 from pipeline.stages.stage_outputs import BaselineStageOutput, PreDeaStageOutput
 from calculations.wacc_scaling import calculate_wacc_scaled_capex
-from calculations.kent_calculations import load_capbase_a, run_kent_calculations_batch
+from calculations.kent_calculations import run_kent_calculations_batch
 from calculations.data_mapping import merge_kent_with_baseline
+from data_loaders.rab_data import load_capbase_a  
 
 
 # =============================================================================

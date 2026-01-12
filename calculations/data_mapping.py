@@ -14,6 +14,8 @@ Merge-strategi:
 import pandas as pd
 from typing import Dict, List, Optional, Tuple
 
+TEST_MODE = True  # Flagga för testläge (mini-dataset)
+
 # Korrekt halvårsmappning
 YEAR_TO_TIMECODES = {
     2024: [229, 230],  # H1 + H2

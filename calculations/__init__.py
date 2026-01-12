@@ -10,7 +10,6 @@ from .wacc_scaling import (
     get_wacc_scaling_summary
 )
 from .kent_calculations import (
-    load_capbase_a,
     calculate_ages_and_nuav_batch,
     calculate_depreciation_batch,
     calculate_returns_batch,
@@ -81,7 +80,6 @@ __all__ = [
     'get_wacc_scaling_summary',
     
     # KENT calculations
-    'load_capbase_a',
     'calculate_ages_and_nuav_batch',
     'calculate_depreciation_batch',
     'calculate_returns_batch',
