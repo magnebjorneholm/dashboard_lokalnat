@@ -237,7 +237,7 @@ def _render_normvärderade_tab():
             subcat_filter=None if selected_subcat == "Alla subkategorier" else selected_subcat,
         )
 
-
+@st.fragment
 def _render_normvärderad_table_and_form(df: pd.DataFrame, cat_filter: str, subcat_filter: str):
     """Renderar tabell och redigeringsformulär för normvärderade."""
     
@@ -507,7 +507,7 @@ def _render_övriga_metoder_tab():
     with st.expander("Lägg till komponent (annat skäligt värde)", expanded=False):
         _render_add_vtype1_form()
 
-
+@st.fragment
 def _render_vtype1_table_and_form(df: pd.DataFrame):
     """Renderar tabell för vtype=1 komponenter."""
     df_display = df[['id_component', 'cat', 'subcat', 'annatskäligtvärde', 'count_comp', 'nuav_2022', 'time_from']].copy()
@@ -632,7 +632,7 @@ def _render_vtype1_edit_form(row: pd.Series, component_id: int):
         if st.button("Avbryt", key=f"cancel_v1_{component_id}"):
             st.rerun()
 
-
+@st.fragment
 def _render_vtype2_table_and_form(df: pd.DataFrame):
     """Renderar tabell för vtype=2 komponenter."""
     df_display = df[['id_component', 'cat', 'subcat', 'anskaffningsvärde', 'rapporteradnuav', 'time_from']].copy()
@@ -721,7 +721,7 @@ def _render_vtype2_edit_form(row: pd.Series, component_id: int):
         if st.button("Avbryt", key=f"cancel_v2_{component_id}"):
             st.rerun()
 
-
+@st.fragment
 def _render_add_vtype1_form():
     """Formulär för att lägga till komponent med annat skäligt värde."""
     
@@ -839,7 +839,7 @@ def _render_investeringar_tab():
         with st.expander("Lägg till utrangering", expanded=False):
             _render_add_investment_form(is_retirement=True)
 
-
+@st.fragment
 def _render_investment_table_and_form(df: pd.DataFrame):
     """Renderar tabell för investeringar/utrangeringar."""
     
@@ -963,7 +963,7 @@ def _render_investment_edit_form(row: pd.Series, component_id: int):
             st.warning("Markerad för borttagning")
             st.rerun()
 
-
+@st.fragment
 def _render_add_investment_form(is_retirement: bool):
     """Formulär för att lägga till investering eller utrangering."""
     
@@ -1020,7 +1020,7 @@ def _render_add_investment_form(is_retirement: bool):
 # =============================================================================
 # SNABBÅTGÄRDER
 # =============================================================================
-
+@st.fragment
 def _render_count_scaling_form(
     vtype: int,
     cat_filter: Optional[str] = None,
