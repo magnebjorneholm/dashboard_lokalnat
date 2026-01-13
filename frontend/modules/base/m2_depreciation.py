@@ -32,7 +32,7 @@ def render(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
     
     with st.expander("2.1-2.17 Asset lifetimes", expanded=False):
         st.caption(
-            "Ordinary and maximum lifetime by category. Modified values override baseline."
+            "Ordinary and tail lifetime by category. Modified values override baseline."
         )
         
         # Select level (cat or subcat)
@@ -76,7 +76,7 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str]:
             'Category': cat.name,
             'Param-ID': f"{cat.param_id_ekdep} / {cat.param_id_maxdep}",
             'Ordinary lifetime': cat.ekdep,
-            'Maximum lifetime': cat.maxdep,
+            'Tail lifetime': cat.maxdep,
         })
     
     baseline_df = pd.DataFrame(data)
@@ -100,8 +100,8 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str]:
                 format="%d yrs",
                 width="small"
             ),
-            'Maximum lifetime': st.column_config.NumberColumn(
-                'Maximum lifetime',
+            'Tail lifetime': st.column_config.NumberColumn(
+                'Tail lifetime',
                 min_value=4,
                 max_value=150,
                 step=1,
@@ -127,10 +127,10 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
         'subcat_encode': 'Code',
         'subcat': 'Subcategory',
         'ekdep': 'Ordinary lifetime',
-        'maxdep': 'Maximum lifetime',
+        'maxdep': 'Tail lifetime',
     })
     
-    agg_df = agg_df[['Code', 'Subcategory', 'Ordinary lifetime', 'Maximum lifetime']].sort_values('Code').reset_index(drop=True)
+    agg_df = agg_df[['Code', 'Subcategory', 'Ordinary lifetime', 'Tail lifetime']].sort_values('Code').reset_index(drop=True)
     
     original_df = agg_df.copy()
     
@@ -151,8 +151,8 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
                 format="%d yrs",
                 width="small"
             ),
-            'Maximum lifetime': st.column_config.NumberColumn(
-                'Maximum lifetime',
+            'Tail lifetime': st.column_config.NumberColumn(
+                'Tail lifetime',
                 min_value=4,
                 max_value=150,
                 step=1,
@@ -188,8 +188,8 @@ def _extract_lifetime_changes(
         if edited_row['Ordinary lifetime'] != original_row['Ordinary lifetime']:
             changes['ekdep'] = int(edited_row['Ordinary lifetime'])
         
-        if edited_row['Maximum lifetime'] != original_row['Maximum lifetime']:
-            changes['maxdep'] = int(edited_row['Maximum lifetime'])
+        if edited_row['Tail lifetime'] != original_row['Tail lifetime']:
+            changes['maxdep'] = int(edited_row['Tail lifetime'])
         
         if changes:
             adjustments[code] = changes

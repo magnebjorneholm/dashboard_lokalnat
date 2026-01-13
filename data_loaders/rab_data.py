@@ -40,19 +40,18 @@ def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
             return pd.read_parquet(path)
         raise FileNotFoundError(f"Angiven fil finns inte: {data_path}")
     
-    # Sökordning: Full fil först, sedan mini (om TEST_MODE)
-    search_paths = [
-        CAPBASE_FULL_PATH,
-        "capbase_a.parquet",
-        "data/capbase_a.parquet",
-    ]
-    
     if TEST_MODE:
-        search_paths.extend([
-            CAPBASE_MINI_PATH,
+        search_paths = [
+            CAPBASE_MINI_PATH,           #
             "capbase_a_mini.parquet",
             "data/capbase_a_mini.parquet",
-        ])
+            ]
+    else:
+        search_paths = [
+                CAPBASE_FULL_PATH,
+                "capbase_a.parquet", 
+                "data/capbase_a.parquet",
+            ]
     
     for path_str in search_paths:
         path = Path(path_str)

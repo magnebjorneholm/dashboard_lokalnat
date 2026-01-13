@@ -161,7 +161,7 @@ def render() -> Dict[str, Any]:
     # === INPUT METHOD VIA RADIO ===
     input_method = st.radio(
         "Input method",
-        options=["CAPM components", "Derived parameters", "Direct input"],
+        options=["Base parameters", "Derived", "Direct input"],
         index=0,
         key=f"{MODULE_KEY}_input_method",
         horizontal=True,
@@ -169,11 +169,11 @@ def render() -> Dict[str, Any]:
     )
     
     # === 1. CAPM COMPONENTS ===
-    if input_method == "CAPM components":
+    if input_method == "Base parameters":
         _render_capm_section()
     
-    # === 2. DERIVED PARAMETERS ===
-    elif input_method == "Derived parameters":
+    # === 2. DERIVED ===
+    elif input_method == "Derived":
         _render_derived_section()
     
     # === 3. DIRECT INPUT ===
@@ -189,8 +189,8 @@ def render() -> Dict[str, Any]:
 
 
 def _render_capm_section() -> None:
-    """Render 3.1 CAPM components with LaTeX formulas."""
-    st.markdown("##### 3.1 CAPM components")
+    """Render 3.1 Base parameters with LaTeX formulas."""
+    st.markdown("##### 3.1 Base parameters")
     st.caption("WACC derived from CAPM inputs")
     
     col1, col2 = st.columns(2)
@@ -291,8 +291,8 @@ def _render_capm_section() -> None:
         
         # Show derived parameters (read-only)
         st.divider()
-        st.markdown("##### 3.2 Derived parameters (calculated)")
-        
+        st.markdown("##### 3.2 Derived")
+
         col1, col2 = st.columns(2)
         with col1:
             with st.container(border=True):
@@ -302,11 +302,9 @@ def _render_capm_section() -> None:
         with col2:
             with st.container(border=True):
                 st.metric("3.2.3 Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
-            with st.container(border=True):
-                st.metric("3.2.4 WACC nominal", format_percent(result.wacc_nominal_pre_tax))
-        
+
         with st.container(border=True):
-            st.metric("3.2.5 WACC real pre-tax", format_percent(calculated_wacc))
+            st.metric("Final WACC", format_percent(calculated_wacc))
         
         # === CALCULATION FORMULAS ===
         st.divider()
@@ -344,7 +342,7 @@ def _render_derived_section() -> None:
     Inputs: Re, Rd, S, τ, π
     Output: WACC nominal and real (calculated)
     """
-    st.markdown("##### 3.2 Derived parameters")
+    st.markdown("##### 3.2 Derived")
     st.caption("Direct input of equity and debt costs")
     
     col1, col2 = st.columns(2)
@@ -419,13 +417,12 @@ def _render_derived_section() -> None:
     
     col1, col2 = st.columns(2)
     with col1:
-        with st.container(border=True):
-            st.metric("3.2.4 WACC nominal pre-tax", format_percent(wacc_nominal))
+        pass
     with col2:
         delta = wacc_real - BASELINE_WACC
         with st.container(border=True):
             st.metric(
-                "3.2.5 WACC real pre-tax", 
+                "Final WACC",
                 format_percent(wacc_real),
                 delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
             )
