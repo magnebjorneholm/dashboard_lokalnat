@@ -1,7 +1,7 @@
 """
 frontend/utils/export_button.py
 
-Export button component for results view.
+Export-knapp komponent fÃ¶r resultatvyn.
 """
 
 import streamlit as st
@@ -16,19 +16,19 @@ def render_export_button(
     ui_config: dict
 ):
     """
-    Renders export button for Excel download.
+    Renderar export-knapp fÃ¶r Excel-nedladdning.
     
     Args:
-        user_reid: User's REId
-        foretag: Company name
-        baseline_result: Baseline pipeline result
-        case_result: Case pipeline result
-        ui_config: UI configuration
+        user_reid: AnvÃ¤ndarens REId
+        foretag: FÃ¶retagsnamn
+        baseline_result: Baseline pipeline-resultat
+        case_result: Case pipeline-resultat
+        ui_config: UI-konfiguration
     """
     
-    if st.button("Export to Excel", type="secondary", width="stretch"):
+    if st.button("Export to Excel", type="secondary", width='stretch'):
         try:
-            with st.spinner("Generating Excel file..."):
+            with st.spinner("Creating Excel file..."):
                 excel_data = create_case_export(
                     user_reid=user_reid,
                     foretag=foretag,
@@ -44,9 +44,9 @@ def render_export_button(
                 file_name=filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
-                width="stretch"
+                width='stretch'
             )
             st.success(f"File ready: {filename}")
             
         except Exception as e:
-            st.error(f"Failed to generate Excel: {e}")
+            st.error(f"Could not create Excel: {e}")
