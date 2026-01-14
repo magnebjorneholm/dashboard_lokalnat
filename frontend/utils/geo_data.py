@@ -3,12 +3,14 @@ frontend/utils/geo_data.py
 
 Loads and prepares geodata for efficiency visualization.
 Simplified for REL (local networks) only.
+Aggregates by REId (concession area), not by geometry.
 """
 
 import geopandas as gpd
 import pandas as pd
 from pathlib import Path
-from typing import Tuple, Optional, TYPE_CHECKING
+from shapely.ops import unary_union
+from typing import Tuple, Optional, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
@@ -52,70 +54,82 @@ def load_shapefile(shapefile_path: str | Path) -> gpd.GeoDataFrame:
     gdf = gdf.rename(columns={"FöretagNa": "Företag"})
     gdf = gdf[["REId", "Företag", "geometry"]].copy()
     
-    # Add geometry ID for later aggregation
-    gdf["geom_id"] = gdf["geometry"].apply(lambda g: g.wkb_hex)
-    
     return gdf
 
 
 def merge_with_dea_results(
     gdf: gpd.GeoDataFrame,
     dea_results: pd.DataFrame,
-    value_column: str = "Effektivitet"
+    value_columns: str | List[str] = "Effektivitet"
 ) -> gpd.GeoDataFrame:
     """
     Merge geodata with DEA results.
     
     Args:
         gdf: GeoDataFrame from load_shapefile()
-        dea_results: DataFrame with REId and value_column
-        value_column: Column to visualize
+        dea_results: DataFrame with REId and value columns
+        value_columns: Column(s) to include from DEA results
         
     Returns:
         Merged GeoDataFrame
     """
-    required_cols = ["REId", value_column]
-    missing = [c for c in required_cols if c not in dea_results.columns]
-    if missing:
-        raise ValueError(f"DEA results missing columns: {missing}")
+    if isinstance(value_columns, str):
+        value_columns = [value_columns]
     
-    # Prepare DEA data
-    df_merge = dea_results[["REId", value_column]].copy()
+    required_cols = ["REId"] + value_columns
+    available = [c for c in required_cols if c in dea_results.columns]
+    
+    if "REId" not in available:
+        raise ValueError("DEA results missing required column: REId")
+    
+    value_columns = [c for c in value_columns if c in dea_results.columns]
+    
+    cols_to_merge = ["REId"] + value_columns
+    df_merge = dea_results[cols_to_merge].copy()
     df_merge["REId"] = df_merge["REId"].str.strip().str.upper()
     
-    # Prepare geodata
     gdf = gdf.copy()
     gdf["REId"] = gdf["REId"].str.strip().str.upper()
     
-    # Merge
     gdf_merged = gdf.merge(df_merge, on="REId", how="left")
     
     return gdf_merged
 
 
-def aggregate_geometries(
+def aggregate_by_reid(
     gdf: gpd.GeoDataFrame,
-    value_column: str = "Effektivitet"
+    value_columns: str | List[str] = "Effektivitet"
 ) -> gpd.GeoDataFrame:
     """
-    Aggregate to unique geometries (handles multi-REId polygons).
+    Aggregate geometries by REId (concession area).
+    Each REL gets one row with unified geometry.
     
     Args:
-        gdf: Merged GeoDataFrame
-        value_column: Column to aggregate (mean)
+        gdf: Merged GeoDataFrame (may have multiple rows per REId)
+        value_columns: Column(s) to preserve
         
     Returns:
-        Aggregated GeoDataFrame with unique geometries
+        GeoDataFrame with one row per REId
     """
-    agg_dict = {
-        "geometry": "first",
-        value_column: "mean",
-        "Företag": "first",
-        "REId": lambda x: ", ".join(x.unique())
-    }
+    if isinstance(value_columns, str):
+        value_columns = [value_columns]
     
-    gdf_agg = gdf.groupby("geom_id").agg(agg_dict).reset_index(drop=True)
-    gdf_agg = gpd.GeoDataFrame(gdf_agg, geometry="geometry", crs=gdf.crs)
+    crs = gdf.crs
+    
+    def aggregate_group(group):
+        result = {
+            "geometry": unary_union(group.geometry.values),
+            "Företag": group["Företag"].iloc[0],
+        }
+        
+        for col in value_columns:
+            if col in group.columns:
+                result[col] = group[col].iloc[0]  # Same value for all rows in group
+        
+        return pd.Series(result)
+    
+    gdf_agg = gdf.groupby("REId").apply(aggregate_group, include_groups=False).reset_index()
+    gdf_agg = gpd.GeoDataFrame(gdf_agg, geometry="geometry", crs=crs)
     
     return gdf_agg
 
@@ -123,29 +137,29 @@ def aggregate_geometries(
 def prepare_map_data(
     shapefile_path: str | Path,
     dea_results: pd.DataFrame,
-    value_column: str = "Effektivitet"
+    value_columns: str | List[str] = "Effektivitet"
 ) -> gpd.GeoDataFrame:
     """
     Convenience function: load, merge, aggregate in one call.
     
     Args:
         shapefile_path: Path to shapefile
-        dea_results: DataFrame with REId and value_column
-        value_column: Column to visualize
+        dea_results: DataFrame with REId and value columns
+        value_columns: Column(s) to visualize
         
     Returns:
-        GeoDataFrame ready for visualization
+        GeoDataFrame ready for visualization (one row per REId)
     """
     gdf = load_shapefile(shapefile_path)
-    gdf = merge_with_dea_results(gdf, dea_results, value_column)
-    gdf = aggregate_geometries(gdf, value_column)
+    gdf = merge_with_dea_results(gdf, dea_results, value_columns)
+    gdf = aggregate_by_reid(gdf, value_columns)
     return gdf
 
 
 def prepare_map_data_from_pipeline(
     shapefile_path: str | Path,
     pipeline_result: "PipelineResult",
-    value_column: str = "Effektivitet"
+    value_columns: Optional[List[str]] = None
 ) -> Tuple[gpd.GeoDataFrame, Optional[gpd.GeoDataFrame]]:
     """
     Prepare map data from PipelineResult, with user company highlighted.
@@ -153,21 +167,21 @@ def prepare_map_data_from_pipeline(
     Args:
         shapefile_path: Path to shapefile
         pipeline_result: PipelineResult object
-        value_column: Column to visualize
+        value_columns: Columns to include (default: Effektivitet, Supereffektivitet)
         
     Returns:
         Tuple of (all_data, user_company_data)
     """
+    if value_columns is None:
+        value_columns = ["Effektivitet", "Supereffektivitet"]
+    
     dea_results = pipeline_result.dea.dea_results
-    user_reid = pipeline_result.user_reid
+    user_reid = pipeline_result.user_reid.strip().upper()
     
-    gdf = load_shapefile(shapefile_path)
-    gdf_merged = merge_with_dea_results(gdf, dea_results, value_column)
+    # Aggregate by REId
+    gdf_agg = prepare_map_data(shapefile_path, dea_results, value_columns)
     
-    # Extract user company geometries before aggregation
-    user_geoms = gdf_merged[gdf_merged["REId"].str.upper() == user_reid.upper()].copy()
-    
-    # Aggregate for main map
-    gdf_agg = aggregate_geometries(gdf_merged, value_column)
+    # Extract user company from aggregated data (same geometry source)
+    user_geoms = gdf_agg[gdf_agg["REId"] == user_reid].copy()
     
     return gdf_agg, user_geoms if not user_geoms.empty else None

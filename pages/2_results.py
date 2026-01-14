@@ -7,21 +7,28 @@ Follows Regumetrica User Manual nomenclature and variable IDs.
 
 import streamlit as st
 import pandas as pd
+import streamlit.components.v1 as components
+
 from frontend.utils.state_manager import init_session_state, reset_case, get_user_reid
 from frontend.utils.export_button import render_export_button
-import streamlit.components.v1 as components
 from frontend.utils.diagram_data import prepare_diagram_data
 from frontend.utils.diagram_utils import create_interactive_diagram_html
 from frontend.utils.geo_data import prepare_map_data_from_pipeline
-from frontend.utils.geo_visualization import create_efficiency_map
+from frontend.utils.geo_visualization import (
+    create_efficiency_map, 
+    get_available_value_columns,
+    get_column_label
+)
 
 init_session_state()
 
+SHAPEFILE_PATH = "data/shapefiles/Samtliga nätföretags del- och verksamhetsområden.shp"
 
-# --- Helper functions ---
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
 def format_tkr(value: float, show_sign: bool = False) -> str:
-    """Format value as tkr with thousand separators."""
     if pd.isna(value):
         return "-"
     if show_sign and value > 0:
@@ -30,7 +37,6 @@ def format_tkr(value: float, show_sign: bool = False) -> str:
 
 
 def format_percent(value: float, show_sign: bool = False) -> str:
-    """Format value as percentage."""
     if pd.isna(value):
         return "-"
     if show_sign and value > 0:
@@ -39,7 +45,6 @@ def format_percent(value: float, show_sign: bool = False) -> str:
 
 
 def calc_delta(case_val: float, baseline_val: float) -> tuple:
-    """Calculate absolute and percentage delta."""
     if pd.isna(case_val) or pd.isna(baseline_val):
         return None, None
     delta_abs = case_val - baseline_val
@@ -55,9 +60,7 @@ def render_metric_row(
     unit: str = "tkr",
     indent: int = 0
 ) -> dict:
-    """Create a row dict for the metrics table."""
     delta_abs, delta_pct = calc_delta(case_val, baseline_val)
-    
     prefix = "  " * indent
     
     return {
@@ -70,7 +73,9 @@ def render_metric_row(
     }
 
 
-# --- Page content ---
+# =============================================================================
+# PAGE GUARD
+# =============================================================================
 
 st.title("6. Model outputs")
 
@@ -80,47 +85,64 @@ if not st.session_state.get("calculation_done"):
         st.switch_page("pages/1_case_config.py")
     st.stop()
 
-# Get results from session state
 baseline = st.session_state.get("baseline_result")
 case = st.session_state.get("case_result")
 user_reid = get_user_reid()
 
-# Extract data
 case_ir = case.post_dea.user_intaktsram
 baseline_ir = baseline.post_dea.user_intaktsram
 foretag = case.extraction.foretag
 
 st.subheader(f"{foretag} ({user_reid})")
 
-# =============================================================================
-# SECTION A: VISUALIZATIONS (Placeholder)
-# =============================================================================
 
+# =============================================================================
+# SECTION A: VISUALIZATIONS
+# =============================================================================
 
 col_diagram, col_map = st.columns([0.50, 0.50])
 
 with col_diagram:
     st.markdown("##### Revenue frame decomposition")
-    
     diagram_data = prepare_diagram_data(case_result=case, baseline_result=baseline)
     html_content = create_interactive_diagram_html(diagram_data)
-    components.html(html_content, height=520, scrolling=False)
+    components.html(html_content, height=560, scrolling=False)
 
 with col_map:
-    st.markdown("##### Geographic overview")
+    st.markdown("##### Geographic efficiency")
     
     try:
-        SHAPEFILE_PATH = "data/shapefiles/Samtliga nätföretags del- och verksamhetsområden.shp"
         gdf, user_geoms = prepare_map_data_from_pipeline(
-            SHAPEFILE_PATH, 
-            case, 
-            value_column="Effektivitet"
+            SHAPEFILE_PATH,
+            case,
+            value_columns=["Effektivitet", "Supereffektivitet"]
         )
-        fig = create_efficiency_map(gdf, user_geoms, "Effektivitet", height=520)
-        st.plotly_chart(fig, use_container_width=True)
+        
+        available_cols = get_available_value_columns(gdf)
+        if available_cols:
+            selected_var = st.selectbox(
+                "Variable",
+                options=available_cols,
+                index=0,
+                format_func=get_column_label,
+                label_visibility="collapsed"
+            )
+            
+            fig = create_efficiency_map(
+                gdf,
+                user_geoms,
+                value_column=selected_var,
+                height=500,
+                zoom=3.0
+            )
+            st.plotly_chart(fig, key="efficiency_map", width="stretch")
+        else:
+            st.info("No efficiency data available for map visualization.")
+            
+    except FileNotFoundError:
+        st.caption("Shapefile not found. Map visualization unavailable.")
     except Exception as e:
         st.caption(f"Map unavailable: {e}")
-
 
 st.divider()
 
@@ -131,7 +153,6 @@ st.divider()
 
 st.markdown("##### Revenue frame summary")
 
-# Headline metrics
 total_case = case_ir['Intaktsram_Total']
 total_baseline = baseline_ir['Intaktsram_Total']
 delta_abs, delta_pct = calc_delta(total_case, total_baseline)
@@ -146,10 +167,7 @@ with col1:
     )
 
 with col2:
-    st.metric(
-        label="Baseline",
-        value=f"{total_baseline:,.0f} tkr"
-    )
+    st.metric(label="Baseline", value=f"{total_baseline:,.0f} tkr")
 
 with col3:
     cap_case = case_ir['Kapitalkostnad_Total']
@@ -163,8 +181,7 @@ with col3:
 
 st.markdown("")
 
-# Component breakdown table
-components = [
+component_list = [
     ("30.1", "Capital cost", "Kapitalkostnad_Total", "tkr"),
     ("40.1.1", "Controllable costs (påverkbara)", "Paverkbara_Periodsumma", "tkr"),
     ("40.2.1", "Non-controllable costs", "Opaverkbara_Kostnader", "tkr"),
@@ -175,18 +192,16 @@ components = [
 ]
 
 rows = []
-for var_id, label, col, unit in components:
+for var_id, label, col, unit in component_list:
     case_val = case_ir.get(col, 0)
     baseline_val = baseline_ir.get(col, 0)
     
-    # State aid is subtracted, so show as negative
     if col == "Avdrag_Statligt_Stod":
         case_val = -case_val if case_val else 0
         baseline_val = -baseline_val if baseline_val else 0
     
     rows.append(render_metric_row(var_id, label, case_val, baseline_val, unit))
 
-# Add total row
 rows.append({
     "ID": "",
     "Component": "TOTAL REVENUE FRAME",
@@ -201,10 +216,10 @@ df_summary = pd.DataFrame(rows)
 st.dataframe(
     df_summary,
     hide_index=True,
-    width='stretch',
+    width="stretch",
     column_config={
         "ID": st.column_config.TextColumn("ID", width="small"),
-        "Component": st.column_config.TextColumn("Component", width="stretch"),
+        "Component": st.column_config.TextColumn("Component", width="large"),
         "Case": st.column_config.TextColumn("Case (tkr)", width="small"),
         "Baseline": st.column_config.TextColumn("Baseline (tkr)", width="small"),
         "Δ (tkr)": st.column_config.TextColumn("Δ (tkr)", width="small"),
@@ -214,20 +229,17 @@ st.dataframe(
 
 st.divider()
 
+
 # =============================================================================
-# SECTION C: MODULE OUTPUTS (Collapsible)
+# SECTION C: MODULE OUTPUTS
 # =============================================================================
 
 st.markdown("##### Module outputs")
 
-# --- Module 1: Regulatory asset base valuation ---
 with st.expander("1. Regulatory asset base valuation", expanded=False):
-    # Estimate asset base from capital cost / WACC
     wacc_case = case.pre_dea.wacc_used or 0.0453
     wacc_baseline = 0.0453
     
-    # Rough estimate: asset base ≈ return / WACC, return ≈ capital cost - depreciation
-    # For now, show placeholder
     st.markdown("**11.1 Total asset value**")
     st.caption("Detailed asset base calculation requires KENT data.")
     
@@ -239,10 +251,8 @@ with st.expander("1. Regulatory asset base valuation", expanded=False):
     
     st.info("Per-category breakdown (11.2-11.17) coming soon.")
 
-# --- Module 2: Depreciation ---
 with st.expander("2. Depreciation", expanded=False):
     st.markdown("**Depreciation outputs**")
-    
     st.markdown("""
     | ID | Description | Status |
     |---|---|---|
@@ -250,10 +260,8 @@ with st.expander("2. Depreciation", expanded=False):
     | 20.1.2 | Total depreciation (tail) | Coming soon |
     | 20.2-20.18 | Per-category breakdown | Coming soon |
     """)
-    
     st.info("Depreciation breakdown requires detailed KENT capital base data.")
 
-# --- Module 3: Cost of capital ---
 with st.expander("3. Cost of capital", expanded=True):
     st.markdown("**WACC parameters**")
     
@@ -288,17 +296,11 @@ with st.expander("3. Cost of capital", expanded=True):
             "Δ (tkr)": format_tkr(delta, show_sign=True) if delta is not None else "-"
         })
     
-    st.dataframe(
-        pd.DataFrame(inc_data),
-        hide_index=True,
-        width='stretch'
-    )
+    st.dataframe(pd.DataFrame(inc_data), hide_index=True, width="stretch")
     
-    # Missing data warning
     if case_ir.get('Missing_Incentive_Data', False):
         st.warning("Incentive data incomplete for this company.")
 
-# --- Module 4: Operating expenditures ---
 with st.expander("4. Operating expenditures", expanded=False):
     st.markdown("**OPEX components**")
     
@@ -328,15 +330,12 @@ with st.expander("4. Operating expenditures", expanded=False):
         f"{opav_pct:+.1f}%" if opav_pct else None
     )
 
-# --- Module 5: Efficiency incentive ---
 with st.expander("5. Efficiency incentive", expanded=True):
     st.markdown("**DEA efficiency results**")
     
-    # Get efficiency data
     eff_case = case.extraction.efficiency
     eff_baseline = baseline.extraction.efficiency
     potential_case = case.extraction.potential
-    potential_baseline = baseline.extraction.potential
     effkrav_case = case.post_dea.user_effkrav_proc
     effkrav_baseline = baseline.post_dea.user_effkrav_proc
     
@@ -364,7 +363,6 @@ with st.expander("5. Efficiency incentive", expanded=True):
     
     st.markdown("")
     
-    # Super-efficiency from DEA results if available
     if hasattr(case.dea, 'dea_results') and case.dea.dea_results is not None:
         dea_df = case.dea.dea_results
         user_row = dea_df[dea_df['REId'] == user_reid]
@@ -373,6 +371,7 @@ with st.expander("5. Efficiency incentive", expanded=True):
             st.metric("50.3.2 Super-efficiency score", f"{super_eff:.3f}")
 
 st.divider()
+
 
 # =============================================================================
 # SECTION D: EXPORT
@@ -390,6 +389,7 @@ render_export_button(
 
 st.divider()
 
+
 # =============================================================================
 # ACTIONS
 # =============================================================================
@@ -397,11 +397,11 @@ st.divider()
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("NEW CASE", width='stretch', type="secondary"):
+    if st.button("NEW CASE", width="stretch", type="secondary"):
         reset_case()
         st.switch_page("pages/1_case_config.py")
 
 with col2:
-    if st.button("MODIFY CASE", width='stretch', type="primary"):
+    if st.button("MODIFY CASE", width="stretch", type="primary"):
         st.session_state["calculation_done"] = False
         st.switch_page("pages/1_case_config.py")
