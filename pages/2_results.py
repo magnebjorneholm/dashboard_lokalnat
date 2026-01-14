@@ -9,6 +9,9 @@ import streamlit as st
 import pandas as pd
 from frontend.utils.state_manager import init_session_state, reset_case, get_user_reid
 from frontend.utils.export_button import render_export_button
+import streamlit.components.v1 as components
+from frontend.utils.diagram_data import prepare_diagram_data
+from frontend.utils.diagram_utils import create_interactive_diagram_html
 
 init_session_state()
 
@@ -91,14 +94,22 @@ st.subheader(f"{foretag} ({user_reid})")
 # SECTION A: VISUALIZATIONS (Placeholder)
 # =============================================================================
 
+
 with st.container():
-    st.markdown("##### Visualizations")
-    st.info(
-        "Revenue frame diagram and geographic analysis coming in a future release.",
-        icon="📊"
+    st.markdown("##### Revenue frame decomposition")
+    
+    # Prepare diagram data
+    diagram_data = prepare_diagram_data(
+        case_result=case,
+        baseline_result=baseline
     )
+    
+    # Generate and render HTML diagram
+    html_content = create_interactive_diagram_html(diagram_data)
+    components.html(html_content, height=520, scrolling=False)
 
 st.divider()
+
 
 # =============================================================================
 # SECTION B: REVENUE FRAME SUMMARY
