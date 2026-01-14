@@ -12,6 +12,8 @@ from frontend.utils.export_button import render_export_button
 import streamlit.components.v1 as components
 from frontend.utils.diagram_data import prepare_diagram_data
 from frontend.utils.diagram_utils import create_interactive_diagram_html
+from frontend.utils.geo_data import prepare_map_data_from_pipeline
+from frontend.utils.geo_visualization import create_efficiency_map
 
 init_session_state()
 
@@ -106,6 +108,19 @@ with col_diagram:
 
 with col_map:
     st.markdown("##### Geographic overview")
+    
+    try:
+        SHAPEFILE_PATH = "data/shapefiles/Samtliga nätföretags del- och verksamhetsområden.shp"
+        gdf, user_geoms = prepare_map_data_from_pipeline(
+            SHAPEFILE_PATH, 
+            case, 
+            value_column="Effektivitet"
+        )
+        fig = create_efficiency_map(gdf, user_geoms, "Effektivitet", height=520)
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.caption(f"Map unavailable: {e}")
+
 
 st.divider()
 
