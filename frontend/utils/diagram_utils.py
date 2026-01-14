@@ -50,7 +50,6 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
         return f"{val/1000:,.1f}".replace(",", " ")
     
     def fmt_signed(val):
-        """Format efficiency as negative deduction."""
         abs_val = abs(val)
         return f"-{fmt(abs_val)}"
     
@@ -72,10 +71,19 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
     def get_var_id(key: str) -> str:
         return VARIABLE_IDS.get(key, '')
     
-    y1, y2, y3, y4, y5, y6 = 0, 95, 175, 260, 345, 440
+    # Y positions
+    y1, y2, y3, y4, y5, y6 = 0, 95, 180, 265, 350, 445
+    
+    # X positions
     col1, col2, col3, col4 = 0, 175, 365, 530
+    
+    # Widths
     w_small, w_medium, w_large = 150, 175, 315
     w_wide, w_result = 505, 340
+    
+    # Vertical line x-positions (aligned)
+    line_left = 87      # Center line for left column (OPEX flow)
+    line_right = 605    # Center line for right column (Capital flow)
     
     html = f"""<!DOCTYPE html>
 <html>
@@ -93,7 +101,7 @@ body {{
     width: 680px;
     margin: 0 auto;
     position: relative;
-    height: 540px;
+    height: 545px;
 }}
 .box {{
     background: #FFFFFF;
@@ -221,10 +229,10 @@ body {{
     </div>
     
     <!-- Flow lines row 1 -->
-    <div class="flow-line" style="left: {col1 + 75}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
+    <div class="flow-line" style="left: {line_left}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
     <div class="flow-line" style="left: {col2 + 75}px; top: {y1 + 52}px; height: {y4 - y1 - 52}px;"></div>
-    <div class="flow-line" style="left: {col3 + 78}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
-    <div class="flow-line" style="left: {col3 + 236}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
+    <div class="flow-line" style="left: {col3 + 75}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
+    <div class="flow-line" style="left: {line_right}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
     
     <!-- ROW 2 -->
     <div class="box {get_box_class(effektivisering)}" style="left: {col1}px; top: {y2}px; width: {w_medium}px;">
@@ -247,19 +255,19 @@ body {{
     </div>
     
     <!-- Flow lines row 2 -->
-    <div class="flow-line" style="left: {col1 + 87}px; top: {y2 + 52}px; height: {y4 - y2 - 52}px;"></div>
+    <div class="flow-line" style="left: {line_left}px; top: {y2 + 52}px; height: {y4 - y2 - 52}px;"></div>
     <div class="flow-line" style="left: {col3 + 75}px; top: {y2 + 52}px; height: {y4 - y2 - 52}px;"></div>
-    <div class="flow-line" style="left: {col4 + 75}px; top: {y2 + 52}px; height: {y3 - y2 - 52}px;"></div>
+    <div class="flow-line" style="left: {line_right}px; top: {y2 + 52}px; height: {y3 - y2 - 52}px;"></div>
     
-    <!-- ROW 3 -->
-    <div class="box {get_box_class(kvalitet)}" style="left: {col4 - 35}px; top: {y3}px; width: {w_medium + 40}px;">
+    <!-- ROW 3: Quality aligned with col4 -->
+    <div class="box {get_box_class(kvalitet)}" style="left: {col4}px; top: {y3}px; width: {w_small}px;">
         <div class="box-id">{get_var_id('kvalitet')}</div>
         <div class="tooltip">{create_tooltip('Quality & incentive adjustment', kvalitet)}</div>
-        <div class="box-title">Quality & incentive adjustment</div>
+        <div class="box-title">Quality & incentive<br>adjustment</div>
         <div class="box-value">{fmt(kvalitet['value'])} MSEK</div>
     </div>
     
-    <div class="flow-line" style="left: {col4 + 30}px; top: {y3 + 52}px; height: {y4 - y3 - 52}px;"></div>
+    <div class="flow-line" style="left: {line_right}px; top: {y3 + 58}px; height: {y4 - y3 - 58}px;"></div>
     
     <!-- ROW 4 -->
     <div class="box {get_box_class(lopande)}" style="left: {col1}px; top: {y4}px; width: {w_large}px;">
