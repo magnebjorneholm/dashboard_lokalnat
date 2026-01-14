@@ -95,18 +95,17 @@ st.subheader(f"{foretag} ({user_reid})")
 # =============================================================================
 
 
-with st.container():
+col_diagram, col_map = st.columns([0.50, 0.50])
+
+with col_diagram:
     st.markdown("##### Revenue frame decomposition")
     
-    # Prepare diagram data
-    diagram_data = prepare_diagram_data(
-        case_result=case,
-        baseline_result=baseline
-    )
-    
-    # Generate and render HTML diagram
+    diagram_data = prepare_diagram_data(case_result=case, baseline_result=baseline)
     html_content = create_interactive_diagram_html(diagram_data)
     components.html(html_content, height=520, scrolling=False)
+
+with col_map:
+    st.markdown("##### Geographic overview")
 
 st.divider()
 
