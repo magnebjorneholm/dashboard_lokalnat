@@ -225,8 +225,11 @@ def render_module_card(module: ModuleDefinition, is_addon: bool = False) -> bool
     
     Returns True if module is selected.
     """
-    # Determine if currently selected
-    is_selected = module.key in current_selection
+    widget_key = f"module_select_{module.key}"
+    
+    # Set default value if not already in session_state
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = module.key in current_selection
     
     # Module header with checkbox
     col_check, col_title = st.columns([0.08, 0.92])
@@ -234,8 +237,7 @@ def render_module_card(module: ModuleDefinition, is_addon: bool = False) -> bool
     with col_check:
         selected = st.checkbox(
             module.title,
-            value=is_selected,
-            key=f"module_select_{module.key}",
+            key=widget_key,
             label_visibility="collapsed"
         )
     
