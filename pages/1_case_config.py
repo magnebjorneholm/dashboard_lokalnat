@@ -2,6 +2,7 @@
 Case Configuration Page.
 
 Main page for configuring a regulatory case.
+Renders only selected modules as scrollable sections.
 """
 
 import streamlit as st
@@ -11,6 +12,9 @@ from frontend.utils.state_manager import (
     set_module_config,
     get_user_reid,
     get_user_id_network,
+    get_case_name,
+    get_selected_modules,
+    is_module_selected,
 )
 from frontend.utils.config_adapter import get_changed_parameters
 
@@ -29,9 +33,18 @@ from frontend.modules.addons import benchmarking
 init_session_state()
 
 
-# --- Page content ---
+# =============================================================================
+# PAGE HEADER
+# =============================================================================
 
-st.title("Regumetrica - Case Configuration")
+st.title("Regumetrica")
+
+# Show case name
+case_name = get_case_name()
+if case_name:
+    st.subheader(f"Case: {case_name}")
+else:
+    st.subheader("Case Configuration")
 
 # Check that company is selected
 user_reid = get_user_reid()
@@ -45,7 +58,20 @@ user_id_network = get_user_id_network()
 # Show selected company
 st.info(f"Company: **{user_reid}**")
 
-# Show changed parameters in sidebar
+# Check which modules are selected
+selected_modules = get_selected_modules()
+has_selection = len(selected_modules) > 0
+
+if has_selection:
+    st.caption(f"Configuring {len(selected_modules)} selected module(s). Other modules use baseline values.")
+else:
+    st.caption("No modules selected - running baseline simulation.")
+
+
+# =============================================================================
+# SIDEBAR: MODIFIED PARAMETERS
+# =============================================================================
+
 if "ui_config" in st.session_state:
     changed = get_changed_parameters(st.session_state["ui_config"])
     if changed:
@@ -57,53 +83,110 @@ if "ui_config" in st.session_state:
         with st.sidebar:
             st.caption("All parameters at baseline")
 
-# Tabs for modules
-tab1, tab2, tab3, tab4, tab5, tab_addons, tab_summary = st.tabs([
-    "1. Regulatory asset base valuation",
-    "2. Depreciation",
-    "3. Cost of capital",
-    "4. Operating expenditures",
-    "5. Efficiency incentive",
-    "7. Add-on modules",
-    "Case summary"
-])
 
-with tab1:
+# =============================================================================
+# MODULE SECTIONS (Conditional rendering)
+# =============================================================================
+
+def render_module_section(
+    module_key: str,
+    title: str,
+    render_func,
+    config_key: str,
+    **render_kwargs
+) -> None:
+    """
+    Render a module section if selected.
+    
+    Args:
+        module_key: Module key (e.g., "m1")
+        title: Section title
+        render_func: Function to render the module
+        config_key: Key for set_module_config
+        **render_kwargs: Additional kwargs passed to render_func
+    """
+    if not is_module_selected(module_key):
+        return
+    
+    st.divider()
+    
+    with st.container():
+        config = render_func(**render_kwargs)
+        set_module_config(config_key, config)
+
+
+# --- Module 1: Regulatory asset base valuation ---
+if is_module_selected("m1"):
+    st.divider()
     config = m1_asset_base.render(user_id_network=user_id_network)
     set_module_config("m1_asset_base", config)
 
-with tab2:
+
+# --- Module 2: Depreciation ---
+if is_module_selected("m2"):
+    st.divider()
     config = m2_depreciation.render()
     set_module_config("m2_depreciation", config)
 
-with tab3:
+
+# --- Module 3: Cost of capital ---
+if is_module_selected("m3"):
+    st.divider()
+    
     # WACC parameters
     config = m3_cost_of_capital.render()
     set_module_config("m3_cost_of_capital", config)
     
-    st.divider()
+    st.markdown("")
     
     # Quality adjustments (parameters affecting all companies)
     qa_config = m3_cost_of_capital.render_quality_adjustments()
     set_module_config("m3_quality_adjustments", qa_config)
     
-    st.divider()
+    st.markdown("")
     
     # Incentive variables (company-specific observed/norm values)
     var_config = m3_incentive_variables.render()
     set_module_config("m3_incentive_variables", var_config)
 
-with tab4:
+
+# --- Module 4: Operating expenditures ---
+if is_module_selected("m4"):
+    st.divider()
     config = m4_operating_exp.render()
     set_module_config("m4_operating_exp", config)
 
-with tab5:
+
+# --- Module 5: Efficiency incentive ---
+if is_module_selected("m5"):
+    st.divider()
     config = m5_efficiency.render()
     set_module_config("m5_efficiency", config)
 
-with tab_addons:
+
+# --- Module 7: Add-on modules (Benchmarking) ---
+if is_module_selected("m7"):
+    st.divider()
     config = benchmarking.render()
     set_module_config("addon_benchmarking", config)
 
-with tab_summary:
-    case_summary.render()
+
+# =============================================================================
+# CASE SUMMARY & CALCULATE
+# =============================================================================
+
+st.divider()
+case_summary.render()
+
+
+# =============================================================================
+# NAVIGATION
+# =============================================================================
+
+st.divider()
+
+col_left, col_right = st.columns([1, 1])
+
+with col_left:
+    if st.button("Back to Case Definition", type="secondary", use_container_width=True):
+        st.switch_page("pages/0_case_definition.py")

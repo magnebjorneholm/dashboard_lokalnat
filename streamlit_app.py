@@ -1,7 +1,7 @@
 """
 Regumetrica Streamlit Application.
 
-Entry point för frontend-applikationen.
+Entry point for the frontend application.
 """
 
 import streamlit as st
@@ -69,11 +69,20 @@ with st.sidebar:
         st.info("Sign in to view your company")
         # TODO: Implement Firebase integration
 
-# Navigation
+
+# =============================================================================
+# NAVIGATION
+# =============================================================================
+
+case_definition = st.Page(
+    "pages/0_case_definition.py",
+    title="Case Definition",
+    default=True
+)
+
 case_config = st.Page(
     "pages/1_case_config.py",
-    title="Case Config",
-    default=True
+    title="Case Configuration",
 )
 
 results = st.Page(
@@ -82,5 +91,5 @@ results = st.Page(
 )
 
 # Run navigation
-pg = st.navigation([case_config, results])
+pg = st.navigation([case_definition, case_config, results])
 pg.run()

@@ -9,7 +9,15 @@ import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
 
-from frontend.utils.state_manager import init_session_state, reset_case, get_user_reid
+from frontend.utils.state_manager import (
+    init_session_state, 
+    reset_case, 
+    get_user_reid,
+    get_case_name,
+    get_case_notes,
+    is_case_saved,
+    mark_case_saved,
+)
 from frontend.utils.export_button import render_export_button
 from frontend.utils.diagram_data import prepare_diagram_data
 from frontend.utils.diagram_utils import create_interactive_diagram_html
@@ -22,7 +30,7 @@ from frontend.utils.geo_visualization import (
 
 init_session_state()
 
-SHAPEFILE_PATH = "data/shapefiles/Samtliga nätföretags del- och verksamhetsområden.shp"
+SHAPEFILE_PATH = "data/shapefiles/Samtliga natforetags del- och verksamhetsomraden.shp"
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -68,8 +76,8 @@ def render_metric_row(
         "Component": f"{prefix}{label}",
         "Case": format_tkr(case_val) if unit == "tkr" else f"{case_val:.2%}" if unit == "%" else str(case_val),
         "Baseline": format_tkr(baseline_val) if unit == "tkr" else f"{baseline_val:.2%}" if unit == "%" else str(baseline_val),
-        "Δ (tkr)": format_tkr(delta_abs, show_sign=True) if delta_abs is not None and unit == "tkr" else "-",
-        "Δ (%)": format_percent(delta_pct, show_sign=True) if delta_pct is not None else "-"
+        "Delta (tkr)": format_tkr(delta_abs, show_sign=True) if delta_abs is not None and unit == "tkr" else "-",
+        "Delta (%)": format_percent(delta_pct, show_sign=True) if delta_pct is not None else "-"
     }
 
 
@@ -77,12 +85,19 @@ def render_metric_row(
 # PAGE GUARD
 # =============================================================================
 
-st.title("6. Model outputs")
+st.title("Regumetrica")
+
+# Show case name
+case_name = get_case_name()
+if case_name:
+    st.subheader(f"Results: {case_name}")
+else:
+    st.subheader("Results")
 
 if not st.session_state.get("calculation_done"):
     st.warning("No calculation performed yet.")
-    if st.button("Go to Case Configuration"):
-        st.switch_page("pages/1_case_config.py")
+    if st.button("Go to Case Definition"):
+        st.switch_page("pages/0_case_definition.py")
     st.stop()
 
 baseline = st.session_state.get("baseline_result")
@@ -93,7 +108,13 @@ case_ir = case.post_dea.user_intaktsram
 baseline_ir = baseline.post_dea.user_intaktsram
 foretag = case.extraction.foretag
 
-st.subheader(f"{foretag} ({user_reid})")
+st.markdown(f"**{foretag}** ({user_reid})")
+
+# Show case notes if present
+case_notes = get_case_notes()
+if case_notes:
+    with st.expander("Case notes", expanded=False):
+        st.caption(case_notes)
 
 
 # =============================================================================
@@ -183,7 +204,7 @@ st.markdown("")
 
 component_list = [
     ("30.1", "Capital cost", "Kapitalkostnad_Total", "tkr"),
-    ("40.1.1", "Controllable costs (påverkbara)", "Paverkbara_Periodsumma", "tkr"),
+    ("40.1.1", "Controllable costs (paverkbara)", "Paverkbara_Periodsumma", "tkr"),
     ("40.2.1", "Non-controllable costs", "Opaverkbara_Kostnader", "tkr"),
     ("40.1.2", "Flexibility services", "Flexibilitetstjanster", "tkr"),
     ("-", "Interruption compensation (12-24h)", "Avbrottsersattning_12_24h", "tkr"),
@@ -207,8 +228,8 @@ rows.append({
     "Component": "TOTAL REVENUE FRAME",
     "Case": format_tkr(total_case),
     "Baseline": format_tkr(total_baseline),
-    "Δ (tkr)": format_tkr(delta_abs, show_sign=True),
-    "Δ (%)": format_percent(delta_pct, show_sign=True)
+    "Delta (tkr)": format_tkr(delta_abs, show_sign=True),
+    "Delta (%)": format_percent(delta_pct, show_sign=True)
 })
 
 df_summary = pd.DataFrame(rows)
@@ -216,14 +237,14 @@ df_summary = pd.DataFrame(rows)
 st.dataframe(
     df_summary,
     hide_index=True,
-    width="stretch",
+    use_container_width=True,
     column_config={
         "ID": st.column_config.TextColumn("ID", width="small"),
         "Component": st.column_config.TextColumn("Component", width="large"),
         "Case": st.column_config.TextColumn("Case (tkr)", width="small"),
         "Baseline": st.column_config.TextColumn("Baseline (tkr)", width="small"),
-        "Δ (tkr)": st.column_config.TextColumn("Δ (tkr)", width="small"),
-        "Δ (%)": st.column_config.TextColumn("Δ (%)", width="small"),
+        "Delta (tkr)": st.column_config.TextColumn("Delta (tkr)", width="small"),
+        "Delta (%)": st.column_config.TextColumn("Delta (%)", width="small"),
     }
 )
 
@@ -293,10 +314,10 @@ with st.expander("3. Cost of capital", expanded=True):
             "Adjustment": label,
             "Case (tkr)": format_tkr(case_val, show_sign=True),
             "Baseline (tkr)": format_tkr(baseline_val, show_sign=True),
-            "Δ (tkr)": format_tkr(delta, show_sign=True) if delta is not None else "-"
+            "Delta (tkr)": format_tkr(delta, show_sign=True) if delta is not None else "-"
         })
     
-    st.dataframe(pd.DataFrame(inc_data), hide_index=True, width="stretch")
+    st.dataframe(pd.DataFrame(inc_data), hide_index=True, use_container_width=True)
     
     if case_ir.get('Missing_Incentive_Data', False):
         st.warning("Incentive data incomplete for this company.")
@@ -374,18 +395,36 @@ st.divider()
 
 
 # =============================================================================
-# SECTION D: EXPORT
+# SECTION D: EXPORT & SAVE
 # =============================================================================
 
-st.markdown("##### Export")
+st.markdown("##### Export & Save")
 
-render_export_button(
-    user_reid=user_reid,
-    foretag=foretag,
-    baseline_result=baseline,
-    case_result=case,
-    ui_config=st.session_state.get("ui_config", {})
-)
+col_export, col_save = st.columns(2)
+
+with col_export:
+    render_export_button(
+        user_reid=user_reid,
+        foretag=foretag,
+        baseline_result=baseline,
+        case_result=case,
+        ui_config=st.session_state.get("ui_config", {})
+    )
+
+with col_save:
+    # SAVE CASE - Placeholder for Phase 2
+    if is_case_saved():
+        st.success("Case saved")
+        if st.button("Update saved case", type="secondary", use_container_width=True):
+            # TODO: Implement update in phase 2
+            st.info("Case update will be implemented in phase 2")
+    else:
+        if st.button("Save case", type="primary", use_container_width=True):
+            # TODO: Implement save in phase 2
+            # For now, just mark as saved (placeholder)
+            mark_case_saved()
+            st.success("Case saved (placeholder - storage coming in phase 2)")
+            st.rerun()
 
 st.divider()
 
@@ -394,14 +433,18 @@ st.divider()
 # ACTIONS
 # =============================================================================
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
 with col1:
-    if st.button("NEW CASE", width="stretch", type="secondary"):
+    if st.button("New case", use_container_width=True, type="secondary"):
         reset_case()
-        st.switch_page("pages/1_case_config.py")
+        st.switch_page("pages/0_case_definition.py")
 
 with col2:
-    if st.button("MODIFY CASE", width="stretch", type="primary"):
+    if st.button("Modify case", use_container_width=True, type="secondary"):
         st.session_state["calculation_done"] = False
         st.switch_page("pages/1_case_config.py")
+
+with col3:
+    if st.button("Back to definition", use_container_width=True, type="secondary"):
+        st.switch_page("pages/0_case_definition.py")

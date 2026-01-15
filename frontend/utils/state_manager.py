@@ -6,7 +6,7 @@ Handles session state initialization, reset and access.
 
 import streamlit as st
 import copy
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Set
 
 
 # Explicit default structure for all modules
@@ -123,12 +123,25 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
 def init_session_state() -> None:
     """Initialize session state at app start."""
     defaults = {
+        # Company selection
         "user_reid": None,
         "user_id_network": None,
+        
+        # Module configuration
         "ui_config": copy.deepcopy(DEFAULT_UI_CONFIG),
+        
+        # Calculation results
         "baseline_result": None,
         "case_result": None,
         "calculation_done": False,
+        
+        # Case management (new)
+        "case_id": None,              # UUID if saved, None if new
+        "case_name": None,            # User-provided name
+        "case_notes": "",             # User's detailed notes
+        "selected_modules": set(),    # Modules to configure (empty = all)
+        "saved_cases_count": 0,       # For default naming "Case N"
+        "case_saved": False,          # True after successful save
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -136,10 +149,18 @@ def init_session_state() -> None:
 
 
 def reset_case() -> None:
-    """Reset to new case (keep user_reid)."""
+    """Reset to new case (keep user_reid and saved_cases_count)."""
     st.session_state["ui_config"] = copy.deepcopy(DEFAULT_UI_CONFIG)
     st.session_state["case_result"] = None
+    st.session_state["baseline_result"] = None
     st.session_state["calculation_done"] = False
+    
+    # Reset case management state
+    st.session_state["case_id"] = None
+    st.session_state["case_name"] = None
+    st.session_state["case_notes"] = ""
+    st.session_state["selected_modules"] = set()
+    st.session_state["case_saved"] = False
 
 
 def get_module_config(module_key: str) -> Dict[str, Any]:
@@ -174,3 +195,91 @@ def set_user_reid(reid: str) -> None:
 def get_user_id_network() -> Optional[int]:
     """Get selected company's id_network."""
     return st.session_state.get("user_id_network")
+
+
+# =============================================================================
+# CASE MANAGEMENT FUNCTIONS
+# =============================================================================
+
+def get_case_name() -> Optional[str]:
+    """Get current case name."""
+    return st.session_state.get("case_name")
+
+
+def set_case_name(name: str) -> None:
+    """Set current case name."""
+    st.session_state["case_name"] = name
+
+
+def get_case_notes() -> str:
+    """Get current case notes."""
+    return st.session_state.get("case_notes", "")
+
+
+def set_case_notes(notes: str) -> None:
+    """Set current case notes."""
+    st.session_state["case_notes"] = notes
+
+
+def get_selected_modules() -> Set[str]:
+    """Get set of selected module keys."""
+    return st.session_state.get("selected_modules", set())
+
+
+def set_selected_modules(modules: Set[str]) -> None:
+    """Set selected module keys."""
+    st.session_state["selected_modules"] = modules
+
+
+def is_module_selected(module_key: str) -> bool:
+    """
+    Check if a module should be rendered.
+    
+    Returns True if:
+    - No modules selected (empty set = show all)
+    - Module is in the selected set
+    """
+    selected = get_selected_modules()
+    return len(selected) == 0 or module_key in selected
+
+
+def get_default_case_name() -> str:
+    """Generate default case name based on saved cases count."""
+    count = st.session_state.get("saved_cases_count", 0)
+    return f"Case {count + 1}"
+
+
+def increment_saved_cases_count() -> None:
+    """Increment the saved cases counter."""
+    current = st.session_state.get("saved_cases_count", 0)
+    st.session_state["saved_cases_count"] = current + 1
+
+
+def set_saved_cases_count(count: int) -> None:
+    """Set the saved cases count (used when loading from storage)."""
+    st.session_state["saved_cases_count"] = count
+
+
+def get_case_id() -> Optional[str]:
+    """Get current case ID (None if not saved)."""
+    return st.session_state.get("case_id")
+
+
+def set_case_id(case_id: str) -> None:
+    """Set current case ID."""
+    st.session_state["case_id"] = case_id
+
+
+def is_case_saved() -> bool:
+    """Check if current case has been saved."""
+    return st.session_state.get("case_saved", False)
+
+
+def mark_case_saved() -> None:
+    """Mark current case as saved."""
+    st.session_state["case_saved"] = True
+
+
+def mark_case_unsaved() -> None:
+    """Mark current case as unsaved (after modifications)."""
+    st.session_state["case_saved"] = False
