@@ -23,12 +23,23 @@ from frontend.utils.state_manager import (
     get_selected_modules,
     set_selected_modules,
     get_default_case_name,
+    set_saved_cases_count,
+    get_case_id,
+    is_case_saved,
 )
 from frontend.common.module_registry import (
     ALL_MODULES,
     BASE_MODULES,
     ADDON_MODULES,
     ModuleDefinition,
+)
+from frontend.utils.case_storage import (
+    list_cases,
+    load_case,
+    delete_case,
+    apply_case_to_session,
+    get_case_display_info,
+    get_case_count,
 )
 
 # Initialize state
@@ -50,6 +61,10 @@ if user_reid is None:
 
 st.info(f"Company: **{user_reid}**")
 
+# Update saved cases count for default naming
+case_count = get_case_count(user_reid)
+set_saved_cases_count(case_count)
+
 st.caption(
     "Define your case by selecting which regulatory modules to configure. "
     "Each module contains parameters (regulatory constants) and variables "
@@ -60,10 +75,83 @@ st.divider()
 
 
 # =============================================================================
+# LOAD SAVED CASE
+# =============================================================================
+
+st.markdown("##### Load saved case")
+
+saved_cases = list_cases(user_reid)
+
+if saved_cases:
+    st.caption(f"You have {len(saved_cases)} saved case(s). Select one to load or continue with a new case.")
+    
+    # Create options for selectbox
+    case_options = {case.id: case for case in saved_cases}
+    case_names = ["-- Create new case --"] + [
+        f"{case.name} (updated {get_case_display_info(case)['updated']})"
+        for case in saved_cases
+    ]
+    case_ids = [None] + [case.id for case in saved_cases]
+    
+    selected_idx = st.selectbox(
+        "Select case",
+        range(len(case_names)),
+        format_func=lambda i: case_names[i],
+        key="load_case_select",
+        label_visibility="collapsed"
+    )
+    
+    if selected_idx > 0:
+        selected_case_id = case_ids[selected_idx]
+        selected_case = case_options[selected_case_id]
+        
+        # Show case details
+        info = get_case_display_info(selected_case)
+        
+        col_info, col_actions = st.columns([3, 1])
+        
+        with col_info:
+            st.markdown(f"**{selected_case.name}**")
+            if selected_case.notes:
+                st.caption(info["notes"])
+            st.caption(f"Created: {info['created']} | Modules: {info['modules']}")
+            
+            if info["had_kent"]:
+                st.warning(
+                    f"This case originally included a KENT file ({info['kent_name']}). "
+                    "You will need to re-upload it after loading."
+                )
+        
+        with col_actions:
+            if st.button("Load", type="primary", use_container_width=True):
+                apply_case_to_session(selected_case, st.session_state)
+                st.success(f"Loaded: {selected_case.name}")
+                st.rerun()
+            
+            if st.button("Delete", type="secondary", use_container_width=True):
+                if delete_case(user_reid, selected_case_id):
+                    st.success("Case deleted")
+                    st.rerun()
+                else:
+                    st.error("Failed to delete case")
+
+else:
+    st.info("No saved cases yet. Cases can be saved after running a calculation.")
+
+
+st.divider()
+
+
+# =============================================================================
 # CASE METADATA
 # =============================================================================
 
 st.markdown("##### Case identification")
+
+# Show if editing existing case
+current_case_id = get_case_id()
+if current_case_id and is_case_saved():
+    st.caption(f"Editing saved case (ID: {current_case_id[:8]}...)")
 
 col1, col2 = st.columns([1, 2])
 
@@ -193,37 +281,6 @@ st.divider()
 
 
 # =============================================================================
-# LOAD SAVED CASE (PLACEHOLDER FOR PHASE 2)
-# =============================================================================
-
-st.markdown("##### Load saved case")
-
-# Placeholder - will be implemented in phase 2
-st.caption("Load a previously saved case to continue working on it.")
-
-# Placeholder selectbox
-saved_cases = []  # Will be populated from storage in phase 2
-
-if saved_cases:
-    selected_case = st.selectbox(
-        "Select saved case",
-        options=[""] + saved_cases,
-        format_func=lambda x: "Choose a case..." if x == "" else x,
-        key="load_case_select"
-    )
-    
-    if selected_case:
-        if st.button("Load case", type="secondary"):
-            # TODO: Implement in phase 2
-            st.info("Case loading will be implemented in phase 2")
-else:
-    st.info("No saved cases yet. Cases can be saved after running a calculation.")
-
-
-st.divider()
-
-
-# =============================================================================
 # NAVIGATION
 # =============================================================================
 
@@ -253,6 +310,9 @@ with st.sidebar:
     name = get_case_name() or get_default_case_name()
     st.markdown(f"**{name}**")
     
+    if current_case_id:
+        st.caption("(saved)")
+    
     selected = get_selected_modules()
     if selected:
         st.caption(f"{len(selected)} module(s) selected:")
@@ -261,3 +321,6 @@ with st.sidebar:
                 st.caption(f"- {module.title}")
     else:
         st.caption("No modules selected (baseline only)")
+    
+    st.divider()
+    st.caption(f"Saved cases: {len(saved_cases)}/{10}")

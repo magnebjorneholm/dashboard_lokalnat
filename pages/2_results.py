@@ -15,8 +15,12 @@ from frontend.utils.state_manager import (
     get_user_reid,
     get_case_name,
     get_case_notes,
+    get_case_id,
+    set_case_id,
+    get_selected_modules,
     is_case_saved,
     mark_case_saved,
+    increment_saved_cases_count,
 )
 from frontend.utils.export_button import render_export_button
 from frontend.utils.diagram_data import prepare_diagram_data
@@ -27,6 +31,7 @@ from frontend.utils.geo_visualization import (
     get_available_value_columns,
     get_column_label
 )
+from frontend.utils.case_storage import save_case, get_case_count, MAX_CASES_PER_USER
 
 init_session_state()
 
@@ -79,6 +84,48 @@ def render_metric_row(
         "Delta (tkr)": format_tkr(delta_abs, show_sign=True) if delta_abs is not None and unit == "tkr" else "-",
         "Delta (%)": format_percent(delta_pct, show_sign=True) if delta_pct is not None else "-"
     }
+
+
+def do_save_case() -> bool:
+    """
+    Save the current case to storage.
+    
+    Returns:
+        True if save successful, False otherwise
+    """
+    user_reid = get_user_reid()
+    case_name = get_case_name() or "Untitled Case"
+    case_notes = get_case_notes()
+    case_id = get_case_id()  # None for new, existing ID for update
+    ui_config = st.session_state.get("ui_config", {})
+    selected_modules = get_selected_modules()
+    
+    try:
+        saved = save_case(
+            user_reid=user_reid,
+            case_name=case_name,
+            case_notes=case_notes,
+            ui_config=ui_config,
+            selected_modules=selected_modules,
+            case_id=case_id,
+        )
+        
+        # Update session state
+        set_case_id(saved.id)
+        mark_case_saved()
+        
+        if case_id is None:
+            # New case - increment counter
+            increment_saved_cases_count()
+        
+        return True
+        
+    except ValueError as e:
+        st.error(str(e))
+        return False
+    except Exception as e:
+        st.error(f"Failed to save case: {e}")
+        return False
 
 
 # =============================================================================
@@ -156,7 +203,7 @@ with col_map:
                 height=500,
                 zoom=3.0
             )
-            st.plotly_chart(fig, key="efficiency_map", width="stretch")
+            st.plotly_chart(fig, key="efficiency_map", use_container_width=True)
         else:
             st.info("No efficiency data available for map visualization.")
             
@@ -412,19 +459,31 @@ with col_export:
     )
 
 with col_save:
-    # SAVE CASE - Placeholder for Phase 2
-    if is_case_saved():
+    # Check current state
+    case_id = get_case_id()
+    saved = is_case_saved()
+    case_count = get_case_count(user_reid)
+    can_save_new = case_count < MAX_CASES_PER_USER
+    
+    if saved and case_id:
+        # Existing saved case - show update option
         st.success("Case saved")
         if st.button("Update saved case", type="secondary", use_container_width=True):
-            # TODO: Implement update in phase 2
-            st.info("Case update will be implemented in phase 2")
+            if do_save_case():
+                st.success("Case updated")
+                st.rerun()
     else:
-        if st.button("Save case", type="primary", use_container_width=True):
-            # TODO: Implement save in phase 2
-            # For now, just mark as saved (placeholder)
-            mark_case_saved()
-            st.success("Case saved (placeholder - storage coming in phase 2)")
-            st.rerun()
+        # New case - show save option
+        if can_save_new:
+            if st.button("Save case", type="primary", use_container_width=True):
+                if do_save_case():
+                    st.success("Case saved")
+                    st.rerun()
+        else:
+            st.warning(f"Maximum {MAX_CASES_PER_USER} cases reached. Delete a case to save new ones.")
+            st.button("Save case", type="primary", use_container_width=True, disabled=True)
+
+st.caption(f"Saved cases: {case_count}/{MAX_CASES_PER_USER}")
 
 st.divider()
 
