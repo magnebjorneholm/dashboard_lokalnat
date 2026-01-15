@@ -45,6 +45,11 @@ from frontend.utils.case_storage import (
 # Initialize state
 init_session_state()
 
+# Show pending toast messages (must be after init, before page content)
+if st.session_state.get("_toast_message"):
+    st.toast(st.session_state["_toast_message"])
+    st.session_state["_toast_message"] = None
+
 
 # =============================================================================
 # PAGE CONTENT
@@ -68,7 +73,8 @@ set_saved_cases_count(case_count)
 st.caption(
     "Define your case by selecting which regulatory modules to configure. "
     "Each module contains parameters (regulatory constants) and variables "
-    "(company-specific data) that can be modified from baseline values."
+    "(company-specific data) that can be modified from baseline values. "
+    "**Only selected modules will be applied** - unselected modules use baseline."
 )
 
 st.divider()
@@ -108,32 +114,42 @@ if saved_cases:
         # Show case details
         info = get_case_display_info(selected_case)
         
-        col_info, col_actions = st.columns([3, 1])
-        
-        with col_info:
+        with st.container(border=True):
             st.markdown(f"**{selected_case.name}**")
             if selected_case.notes:
                 st.caption(info["notes"])
-            st.caption(f"Created: {info['created']} | Modules: {info['modules']}")
+            
+            # Show which modules are included
+            if selected_case.selected_modules:
+                module_names = []
+                for m in ALL_MODULES:
+                    if m.key in selected_case.selected_modules:
+                        module_names.append(m.key.upper())
+                st.caption(f"Modules: {', '.join(module_names)} | Created: {info['created']}")
+            else:
+                st.caption(f"Baseline only | Created: {info['created']}")
             
             if info["had_kent"]:
                 st.warning(
                     f"This case originally included a KENT file ({info['kent_name']}). "
                     "You will need to re-upload it after loading."
                 )
-        
-        with col_actions:
-            if st.button("Load", type="primary", use_container_width=True):
-                apply_case_to_session(selected_case, st.session_state)
-                st.success(f"Loaded: {selected_case.name}")
-                st.rerun()
             
-            if st.button("Delete", type="secondary", use_container_width=True):
-                if delete_case(user_reid, selected_case_id):
-                    st.success("Case deleted")
+            col_load, col_delete = st.columns([1, 1])
+            
+            with col_load:
+                if st.button("Load case", type="primary", use_container_width=True):
+                    apply_case_to_session(selected_case, st.session_state)
+                    st.session_state["_toast_message"] = f"Loaded: {selected_case.name}"
                     st.rerun()
-                else:
-                    st.error("Failed to delete case")
+            
+            with col_delete:
+                if st.button("Delete case", type="secondary", use_container_width=True):
+                    if delete_case(user_reid, selected_case_id):
+                        st.session_state["_toast_message"] = "Case deleted"
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete case")
 
 else:
     st.info("No saved cases yet. Cases can be saved after running a calculation.")
@@ -192,8 +208,8 @@ st.divider()
 
 st.markdown("##### Select modules to configure")
 st.caption(
-    "Check the modules you want to modify. Unchecked modules will use baseline values. "
-    "You can run a baseline-only simulation by leaving all modules unchecked."
+    "Check the modules you want to modify. **Only checked modules will affect the calculation.** "
+    "Leave all unchecked for a baseline-only simulation."
 )
 
 # Get current selection
@@ -315,7 +331,7 @@ with st.sidebar:
     
     selected = get_selected_modules()
     if selected:
-        st.caption(f"{len(selected)} module(s) selected:")
+        st.caption(f"{len(selected)} module(s) will be applied:")
         for module in ALL_MODULES:
             if module.key in selected:
                 st.caption(f"- {module.title}")

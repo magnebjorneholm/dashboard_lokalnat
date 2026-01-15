@@ -119,6 +119,16 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
     }
 }
 
+# Mapping: module_key -> list of ui_config keys
+MODULE_TO_CONFIG_KEYS: Dict[str, list] = {
+    "m1": ["m1_asset_base"],
+    "m2": ["m2_depreciation"],
+    "m3": ["m3_cost_of_capital", "m3_quality_adjustments", "m3_incentive_variables"],
+    "m4": ["m4_operating_exp"],
+    "m5": ["m5_efficiency"],
+    "m7": ["addon_benchmarking"],
+}
+
 
 def init_session_state() -> None:
     """Initialize session state at app start."""
@@ -135,7 +145,7 @@ def init_session_state() -> None:
         "case_result": None,
         "calculation_done": False,
         
-        # Case management (new)
+        # Case management
         "case_id": None,              # UUID if saved, None if new
         "case_name": None,            # User-provided name
         "case_notes": "",             # User's detailed notes
@@ -161,6 +171,17 @@ def reset_case() -> None:
     st.session_state["case_notes"] = ""
     st.session_state["selected_modules"] = set()
     st.session_state["case_saved"] = False
+    
+    # Clear module checkbox widget keys
+    _clear_module_checkbox_keys()
+
+
+def _clear_module_checkbox_keys() -> None:
+    """Clear module checkbox widget keys to force re-initialization."""
+    for module_key in MODULE_TO_CONFIG_KEYS.keys():
+        widget_key = f"module_select_{module_key}"
+        if widget_key in st.session_state:
+            del st.session_state[widget_key]
 
 
 def get_module_config(module_key: str) -> Dict[str, Any]:
@@ -233,14 +254,13 @@ def set_selected_modules(modules: Set[str]) -> None:
 
 def is_module_selected(module_key: str) -> bool:
     """
-    Check if a module should be rendered.
+    Check if a module should be rendered/applied.
     
-    Returns True if:
-    - No modules selected (empty set = show all)
-    - Module is in the selected set
+    Returns True only if module is explicitly selected.
+    Empty selection = baseline only (no modules rendered/applied).
     """
     selected = get_selected_modules()
-    return len(selected) == 0 or module_key in selected
+    return module_key in selected
 
 
 def get_default_case_name() -> str:
@@ -283,3 +303,75 @@ def mark_case_saved() -> None:
 def mark_case_unsaved() -> None:
     """Mark current case as unsaved (after modifications)."""
     st.session_state["case_saved"] = False
+
+
+# =============================================================================
+# FILTERED CONFIG FOR CALCULATION
+# =============================================================================
+
+def get_filtered_ui_config() -> Dict[str, Any]:
+    """
+    Get ui_config filtered by selected_modules.
+    
+    Only modules in selected_modules retain their modified values.
+    Unselected modules are reset to baseline defaults.
+    
+    This ensures that only explicitly selected modules affect the calculation.
+    
+    Returns:
+        Filtered ui_config dict (deep copy, safe to modify)
+    """
+    ui_config = st.session_state.get("ui_config", {})
+    selected = get_selected_modules()
+    
+    # If no modules selected, return defaults (baseline run)
+    if len(selected) == 0:
+        return copy.deepcopy(DEFAULT_UI_CONFIG)
+    
+    # Start with deep copy of current config
+    filtered = copy.deepcopy(ui_config)
+    
+    # Reset unselected modules to defaults
+    for module_key, config_keys in MODULE_TO_CONFIG_KEYS.items():
+        if module_key not in selected:
+            for config_key in config_keys:
+                if config_key in DEFAULT_UI_CONFIG:
+                    filtered[config_key] = copy.deepcopy(DEFAULT_UI_CONFIG[config_key])
+    
+    return filtered
+
+
+def get_active_module_changes() -> Dict[str, bool]:
+    """
+    Get which modules have active (applied) changes.
+    
+    A module has active changes if:
+    1. It is selected in selected_modules
+    2. Its ui_config differs from defaults
+    
+    Returns:
+        Dict mapping module_key to has_changes bool
+    """
+    ui_config = st.session_state.get("ui_config", {})
+    selected = get_selected_modules()
+    
+    result = {}
+    
+    for module_key, config_keys in MODULE_TO_CONFIG_KEYS.items():
+        # If not selected, no active changes
+        if len(selected) > 0 and module_key not in selected:
+            result[module_key] = False
+            continue
+        
+        # Check if any config differs from default
+        has_changes = False
+        for config_key in config_keys:
+            current = ui_config.get(config_key, {})
+            default = DEFAULT_UI_CONFIG.get(config_key, {})
+            if current != default:
+                has_changes = True
+                break
+        
+        result[module_key] = has_changes
+    
+    return result

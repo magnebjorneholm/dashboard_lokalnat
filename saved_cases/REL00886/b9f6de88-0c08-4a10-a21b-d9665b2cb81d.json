@@ -1,0 +1,132 @@
+{
+  "id": "b9f6de88-0c08-4a10-a21b-d9665b2cb81d",
+  "name": "Case wjc wc",
+  "notes": "cewcwc",
+  "user_reid": "REL00886",
+  "created_at": "2026-01-15T11:15:57.931547",
+  "updated_at": "2026-01-15T11:15:57.931547",
+  "ui_config": {
+    "m1_asset_base": {
+      "var_scaling": {
+        "3": 1.2
+      }
+    },
+    "m2_depreciation": {
+      "lifetime_adjustments": null,
+      "lifetime_level": "cat"
+    },
+    "m3_cost_of_capital": {
+      "wacc_override": null
+    },
+    "m3_quality_adjustments": {
+      "enable_quality": true,
+      "enable_netloss": true,
+      "enable_load": true,
+      "adj_max_cemi4": null,
+      "ait_costs": null,
+      "aif_costs": null,
+      "sharing_netloss": null,
+      "k_nf": null,
+      "adj_max_agg": null,
+      "kpi": null
+    },
+    "m3_incentive_variables": {
+      "nf_norm": null,
+      "nf_obs": null,
+      "e_in": null,
+      "ug_norm": null,
+      "ug_obs": null,
+      "k_upstream": null,
+      "cemi4_norm": null,
+      "cemi4_obs": null,
+      "aif_a_1_obs": null,
+      "aif_a_2_obs": null,
+      "aif_a_3_obs": null,
+      "aif_a_4_obs": null,
+      "aif_a_5_obs": null,
+      "aif_a_6_obs": null,
+      "aif_o_1_obs": null,
+      "aif_o_2_obs": null,
+      "aif_o_3_obs": null,
+      "aif_o_4_obs": null,
+      "aif_o_5_obs": null,
+      "aif_o_6_obs": null,
+      "aif_a_1_norm": null,
+      "aif_a_2_norm": null,
+      "aif_a_3_norm": null,
+      "aif_a_4_norm": null,
+      "aif_a_5_norm": null,
+      "aif_a_6_norm": null,
+      "aif_o_1_norm": null,
+      "aif_o_2_norm": null,
+      "aif_o_3_norm": null,
+      "aif_o_4_norm": null,
+      "aif_o_5_norm": null,
+      "aif_o_6_norm": null,
+      "ait_a_1_obs": null,
+      "ait_a_2_obs": null,
+      "ait_a_3_obs": null,
+      "ait_a_4_obs": null,
+      "ait_a_5_obs": null,
+      "ait_a_6_obs": null,
+      "ait_o_1_obs": null,
+      "ait_o_2_obs": null,
+      "ait_o_3_obs": null,
+      "ait_o_4_obs": null,
+      "ait_o_5_obs": null,
+      "ait_o_6_obs": null,
+      "ait_a_1_norm": null,
+      "ait_a_2_norm": null,
+      "ait_a_3_norm": null,
+      "ait_a_4_norm": null,
+      "ait_a_5_norm": null,
+      "ait_a_6_norm": null,
+      "ait_o_1_norm": null,
+      "ait_o_2_norm": null,
+      "ait_o_3_norm": null,
+      "ait_o_4_norm": null,
+      "ait_o_5_norm": null,
+      "ait_o_6_norm": null,
+      "ame_1": null,
+      "ame_2": null,
+      "ame_3": null,
+      "ame_4": null,
+      "ame_5": null,
+      "ame_6": null
+    },
+    "m4_operating_exp": {
+      "paverkbara_method": "OPEX"
+    },
+    "m5_efficiency": {
+      "trunkering_max": null,
+      "trunkering_min": null,
+      "outlier_krav": null,
+      "kunddelning": null,
+      "realiseringstid": null,
+      "tillsynsperiod": null
+    },
+    "addon_benchmarking": {
+      "dea_method": "baseline",
+      "dea_inputs": [
+        "CAPEX",
+        "OPEXp"
+      ],
+      "dea_outputs": [
+        "CU",
+        "MW",
+        "NS",
+        "MWhl",
+        "MWhh"
+      ],
+      "dea_rts": "crs",
+      "dea_multiplier": 2.0,
+      "dea_q_lower": 25.0,
+      "dea_q_upper": 75.0
+    }
+  },
+  "selected_modules": [
+    "m1"
+  ],
+  "had_kent_file": false,
+  "kent_file_name": null
+}

@@ -20,6 +20,9 @@ from typing import Any, Dict, List, Optional, Set
 STORAGE_DIR = Path("saved_cases")
 MAX_CASES_PER_USER = 10
 
+# Module keys for checkbox clearing
+MODULE_KEYS = ["m1", "m2", "m3", "m4", "m5", "m7"]
+
 
 @dataclass
 class SavedCase:
@@ -287,10 +290,24 @@ def apply_case_to_session(
     """
     Apply a loaded case to session state.
     
+    Explicitly sets module checkbox widget values to ensure they sync.
+    
     Args:
         case: The SavedCase to apply
         session_state: Streamlit session_state dict
     """
+    selected_set = set(case.selected_modules)
+    
+    # Explicitly set checkbox widget values to match loaded selection
+    # This ensures checkboxes display correctly after rerun
+    for module_key in MODULE_KEYS:
+        widget_key = f"module_select_{module_key}"
+        session_state[widget_key] = module_key in selected_set
+    
+    # Clear the load selectbox to reset it
+    if "load_case_select" in session_state:
+        del session_state["load_case_select"]
+    
     # Deserialize and apply ui_config
     session_state["ui_config"] = _deserialize_ui_config(case.ui_config)
     
@@ -298,7 +315,7 @@ def apply_case_to_session(
     session_state["case_id"] = case.id
     session_state["case_name"] = case.name
     session_state["case_notes"] = case.notes
-    session_state["selected_modules"] = set(case.selected_modules)
+    session_state["selected_modules"] = selected_set
     session_state["case_saved"] = True
     
     # Reset calculation state (user needs to recalculate)
