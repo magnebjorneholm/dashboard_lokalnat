@@ -2,295 +2,411 @@
 Module 1: Regulatory Asset Base Valuation
 
 Handles:
-- RAB-editor för redigering av användarens kapitalbas
-- KENT-upload för uppladdning av kapitalbas-fil
-- Scaling factor adjustments för normvärden
+- 1.1 General scaling factor (Param 1.1.1) - all companies
+- 1.2 Category scaling factors (Param 1.2.1-1.2.17) - all companies
+- 1.3 Asset quantities scaling (Var 10.2-10.18) - logged-in company only
+- 1.4 KENT upload - logged-in company only (overrides 1.3)
 
-Parameter-IDs: 1.1.1 (general), 1.2.1-1.2.17 (per category)
+Per User Manual Tables 1-3.
 """
 
 import streamlit as st
 import pandas as pd
 from typing import Dict, Any, Optional
 
-from frontend.common.asset_categories import ASSET_CATEGORIES
-from frontend.modules.base import m1_rab_editor
+from frontend.common.asset_categories import (
+    ASSET_CATEGORIES,
+    CATEGORY_BY_CODE,
+    GENERAL_SCALING_FACTOR_BASELINE,
+)
 
 MODULE_KEY = "m1_asset_base"
 
+# Time code for period start (2024 H1)
+TIMECODE_PERIOD_START = 229
 
-def render(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
+
+def render(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     """
     Render Module 1: Regulatory Asset Base Valuation.
     
     Args:
-        capbase_data: If available, DataFrame with subcategories for subcat mode
+        user_id_network: Logged-in company's id_network (for Variables section)
     
     Returns:
-        Dict with user selections:
-        - normvalue_adjustments: Dict[int, float] or None (multipliers)
-        - normvalue_level: 'cat' or 'subcat'
+        Dict with:
+        - general_scaling: float (Param 1.1.1)
+        - cat_scaling: Dict[int, float] (Param 1.2.X, only non-1.0 values)
+        - var_scaling: Dict[int, float] (Var 10.X, only non-1.0 values)
         - kent_file_bytes: bytes or None
         - kent_file_name: str or None
-        - rab_has_changes: bool
     """
     config: Dict[str, Any] = {}
     
     st.subheader("1. Regulatory Asset Base Valuation")
     
-    # === RAB-EDITOR ===
-    # Visar info om prioritering om KENT är uppladdad
-    current_config = st.session_state.get("ui_config", {}).get(MODULE_KEY, {})
-    kent_uploaded = current_config.get("kent_file_bytes") is not None
+    # === 1.1 GENERAL SCALING FACTOR ===
+    general_scaling = _render_general_scaling()
+    if general_scaling != GENERAL_SCALING_FACTOR_BASELINE:
+        config["general_scaling"] = general_scaling
     
-    with st.expander("1.1 Edit capital base (RAB-editor)", expanded=False):
-        if kent_uploaded:
-            st.warning(
-                "KENT-fil är uppladdad och har prioritet. "
-                "RAB-editor ändringar ignoreras när KENT-fil finns."
-            )
-        
-        rab_config = m1_rab_editor.render()
-        
-        if rab_config.get("rab_has_changes"):
-            config["rab_has_changes"] = True
-            if kent_uploaded:
-                st.caption(":orange[Ändringar sparade men KENT-fil prioriteras]")
-        else:
-            config["rab_has_changes"] = False
+    # === 1.2 CATEGORY SCALING FACTORS ===
+    cat_scaling = _render_category_scaling()
+    if cat_scaling:
+        config["cat_scaling"] = cat_scaling
     
-    # === KENT UPLOAD ===
-    with st.expander("1.2 Upload KENT file", expanded=False):
-        st.caption(
-            "Upload custom capital base data from KENT. "
-            "This overrides both RAB-editor changes and regulatory baseline."
+    # === 1.3 & 1.4: Company-specific sections ===
+    if user_id_network:
+        # First check existing session state for KENT (for priority handling)
+        existing_kent = st.session_state.get("ui_config", {}).get("m1_asset_base", {}).get("kent_file_bytes")
+        
+        # 1.3 Variables section first
+        var_scaling = _render_variables_scaling(
+            user_id_network, 
+            disabled=(existing_kent is not None)
         )
+        if var_scaling:
+            config["var_scaling"] = var_scaling
+        
+        # 1.4 KENT upload section
         kent_result = _render_kent_upload()
-        if kent_result["kent_file_bytes"]:
+        if kent_result.get("kent_file_bytes") is not None:
             config["kent_file_bytes"] = kent_result["kent_file_bytes"]
             config["kent_file_name"] = kent_result["kent_file_name"]
-            
-            # Visa varning om RAB har ändringar
-            if config.get("rab_has_changes"):
-                st.info("RAB-editor har ändringar som ignoreras pga KENT-fil.")
-    
-    # === SCALING FACTORS ===
-    with st.expander("1.3 Scaling factors", expanded=False):
-        st.caption(
-            "Percentage adjustment to baseline norm values. "
-            "Applies to all companies (parameter change)."
-        )
-        
-        # Select level (cat or subcat)
-        has_subcat = capbase_data is not None and 'subcat_encode' in capbase_data.columns
-        
-        if has_subcat:
-            level = st.radio(
-                "Adjustment level:",
-                ["Category level", "Subcategory level"],
-                horizontal=True,
-                key=f"{MODULE_KEY}_level"
-            )
-            use_subcat = (level == "Subcategory level")
-        else:
-            use_subcat = False
-        
-        if use_subcat and capbase_data is not None:
-            adjustments, level_used = _render_subcat_editor(capbase_data)
-        else:
-            adjustments, level_used = _render_cat_editor()
-        
-        if adjustments:
-            config["normvalue_adjustments"] = adjustments
-            config["normvalue_level"] = level_used
-            st.success(f"{len(adjustments)} scaling factor adjustment(s) active")
+            # If KENT uploaded, clear var_scaling
+            config.pop("var_scaling", None)
+    else:
+        st.info("Log in to access company-specific asset quantity adjustments.")
     
     return config
 
 
-def _render_kent_upload() -> Dict[str, Any]:
-    """
-    Render KENT file upload UI.
+# =============================================================================
+# 1.1 GENERAL SCALING FACTOR
+# =============================================================================
+
+def _render_general_scaling() -> float:
+    """Render general scaling factor input (Param 1.1.1)."""
+    with st.expander("1.1 General scaling factor", expanded=False):
+        st.caption(
+            "Applied multiplicatively to all asset norm values. "
+            "Affects all companies uniformly. (Parameter-ID: 1.1.1)"
+        )
+        
+        value = st.number_input(
+            "General scaling factor",
+            min_value=0.5,
+            max_value=2.0,
+            value=1.0,
+            step=0.01,
+            format="%.2f",
+            key=f"{MODULE_KEY}_general_scaling",
+            help="1.0 = no change, 1.2 = +20%, 0.8 = -20%"
+        )
+        
+        if value != 1.0:
+            pct = (value - 1) * 100
+            st.success(f"General scaling: {value:.2f} ({pct:+.0f}%)")
     
-    Returns:
-        Dict with kent_file_bytes, kent_file_name
+    return value
+
+
+# =============================================================================
+# 1.2 CATEGORY SCALING FACTORS
+# =============================================================================
+
+def _render_category_scaling() -> Optional[Dict[int, float]]:
+    """Render category-level scaling factors (Param 1.2.1-1.2.17)."""
+    with st.expander("1.2 Category scaling factors", expanded=False):
+        st.caption(
+            "Scaling factors per asset category. Affects all companies uniformly. "
+            "(Parameter-IDs: 1.2.1-1.2.17)"
+        )
+        
+        # Build dataframe for editor
+        data = []
+        for cat in ASSET_CATEGORIES:
+            data.append({
+                'cat_encode': cat.cat_encode,
+                'Category': cat.name,
+                'Param-ID': cat.scaling_param_id,
+                'Scaling': 1.0,
+            })
+        
+        df = pd.DataFrame(data)
+        
+        edited_df = st.data_editor(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            disabled=['cat_encode', 'Category', 'Param-ID'],
+            column_config={
+                'cat_encode': st.column_config.NumberColumn(
+                    'Code', format="%d", width="small"
+                ),
+                'Category': st.column_config.TextColumn(
+                    'Category', width="large"
+                ),
+                'Param-ID': st.column_config.TextColumn(
+                    'Param-ID', width="small"
+                ),
+                'Scaling': st.column_config.NumberColumn(
+                    'Scaling',
+                    min_value=0.5,
+                    max_value=2.0,
+                    step=0.01,
+                    format="%.2f",
+                    width="small",
+                    help="1.0 = no change"
+                )
+            },
+            key=f"{MODULE_KEY}_cat_scaling"
+        )
+        
+        # Extract non-default values
+        adjustments = {}
+        for _, row in edited_df.iterrows():
+            if row['Scaling'] != 1.0:
+                adjustments[int(row['cat_encode'])] = float(row['Scaling'])
+        
+        if adjustments:
+            st.success(f"{len(adjustments)} category scaling adjustment(s) active")
+        
+        return adjustments if adjustments else None
+
+
+# =============================================================================
+# 1.3 ASSET QUANTITIES (VARIABLES)
+# =============================================================================
+
+def _render_variables_scaling(
+    user_id_network: int,
+    disabled: bool = False
+) -> Optional[Dict[int, float]]:
     """
+    Render asset quantities scaling for logged-in company (Var 10.2-10.18).
+    
+    Shows ordinarie capital base per category with scaling option.
+    """
+    with st.expander("1.3 Asset quantities (company-specific)", expanded=False):
+        if disabled:
+            st.warning(
+                "KENT file uploaded - asset quantity scaling is disabled. "
+                "Remove KENT file to enable manual scaling."
+            )
+            return None
+        
+        st.caption(
+            "Scale asset quantities per category for your company only. "
+            "Only affects ordinarie capital base (tail is unchanged). "
+            "(Variable-IDs: 10.2-10.18)"
+        )
+        
+        # Load user's capital base data
+        try:
+            summary_df = _get_ordinarie_summary(user_id_network)
+        except Exception as e:
+            st.error(f"Could not load capital base data: {e}")
+            return None
+        
+        if summary_df.empty:
+            st.warning("No capital base data found for this company.")
+            return None
+        
+        # Add scaling column
+        summary_df['Scaling'] = 1.0
+        
+        edited_df = st.data_editor(
+            summary_df,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            disabled=['cat_encode', 'Category', 'Var-ID', 'Components', 'NUAV (Mkr)'],
+            column_config={
+                'cat_encode': st.column_config.NumberColumn(
+                    'Code', format="%d", width="small"
+                ),
+                'Category': st.column_config.TextColumn(
+                    'Category', width="medium"
+                ),
+                'Var-ID': st.column_config.TextColumn(
+                    'Var-ID', width="small"
+                ),
+                'Components': st.column_config.NumberColumn(
+                    'Components', format="%d", width="small"
+                ),
+                'NUAV (Mkr)': st.column_config.NumberColumn(
+                    'NUAV (Mkr)', format="%.1f", width="small"
+                ),
+                'Scaling': st.column_config.NumberColumn(
+                    'Scaling',
+                    min_value=0.5,
+                    max_value=2.0,
+                    step=0.01,
+                    format="%.2f",
+                    width="small",
+                    help="1.0 = no change"
+                )
+            },
+            key=f"{MODULE_KEY}_var_scaling"
+        )
+        
+        # Extract non-default values
+        adjustments = {}
+        for _, row in edited_df.iterrows():
+            if row['Scaling'] != 1.0:
+                adjustments[int(row['cat_encode'])] = float(row['Scaling'])
+        
+        if adjustments:
+            st.success(f"{len(adjustments)} variable scaling adjustment(s) active")
+        
+        return adjustments if adjustments else None
+
+
+def _get_ordinarie_summary(user_id_network: int) -> pd.DataFrame:
+    """
+    Load user's capital base and return ordinarie summary per category.
+    
+    Ordinarie = components where age <= ekdep at period start (t=229).
+    """
+    from data_loaders.rab_data import load_user_capbase
+    
+    df = load_user_capbase(user_id_network)
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    # Classify ordinarie at period start
+    df = _classify_ordinarie(df)
+    
+    # Filter to ordinarie only
+    df_ord = df[df['is_ordinarie']].copy()
+    
+    if df_ord.empty:
+        return pd.DataFrame()
+    
+    # Aggregate per category
+    summary = df_ord.groupby('cat_encode').agg(
+        Components=('id_component', 'count'),
+        NUAV_total=('nuav_2022', 'sum')
+    ).reset_index()
+    
+    # Add category names and Variable-IDs
+    summary['Category'] = summary['cat_encode'].map(
+        lambda x: CATEGORY_BY_CODE[x].name if x in CATEGORY_BY_CODE else f"Unknown ({x})"
+    )
+    summary['Var-ID'] = summary['cat_encode'].map(
+        lambda x: f"10.{x + 1}"  # 10.2 for cat_encode=1, etc.
+    )
+    summary['NUAV (Mkr)'] = summary['NUAV_total'] / 1_000_000
+    
+    # Reorder columns
+    summary = summary[['cat_encode', 'Category', 'Var-ID', 'Components', 'NUAV (Mkr)']]
+    summary = summary.sort_values('cat_encode').reset_index(drop=True)
+    
+    return summary
+
+
+def _classify_ordinarie(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Classify components as ordinarie or tail at period start.
+    
+    Ordinarie: 0 < age <= ekdep (at t=229)
+    Tail: ekdep < age <= maxdep
+    Expired: age > maxdep
+    """
+    df = df.copy()
+    
+    # Calculate age at period start (time code 229 = 2024 H1)
+    df['age_229'] = TIMECODE_PERIOD_START - df['time_from']
+    
+    # Check if capbase_existing column exists
+    if 'capbase_existing' in df.columns:
+        existing_check = (df['capbase_existing'] == 1)
+    else:
+        existing_check = True  # Assume all are existing if column missing
+    
+    # Ordinarie: age > 0 and age <= ekdep, and existing asset
+    df['is_ordinarie'] = (
+        (df['age_229'] > 0) & 
+        (df['age_229'] <= df['ekdep']) &
+        existing_check
+    )
+    
+    return df
+
+
+# =============================================================================
+# 1.4 KENT UPLOAD
+# =============================================================================
+
+def _render_kent_upload() -> Dict[str, Any]:
+    """Render KENT file upload UI."""
     result = {
         "kent_file_bytes": None,
         "kent_file_name": None,
     }
     
-    uploaded_file = st.file_uploader(
-        "KENT Excel file",
-        type=["xlsx", "xls"],
-        key=f"{MODULE_KEY}_kent_upload",
-        help="Export from KENT and upload here"
-    )
-    
-    if uploaded_file is not None:
-        result["kent_file_bytes"] = uploaded_file.getvalue()
-        result["kent_file_name"] = uploaded_file.name
-        st.success(f"File loaded: {uploaded_file.name}")
+    with st.expander("1.4 Upload KENT file", expanded=False):
+        st.caption(
+            "Upload custom capital base data from KENT. "
+            "This overrides asset quantity scaling above."
+        )
         
-        # Visa sammanfattning av filen
-        try:
-            from calculations.kent_capbase_prep import get_kent_upload_summary, build_capbase_a_from_kent
-            from frontend.utils.state_manager import get_user_id_network
-            from io import BytesIO
-            
-            user_id = get_user_id_network()
-            if user_id:
-                kent_file = BytesIO(result["kent_file_bytes"])
-                capbase = build_capbase_a_from_kent(kent_file, network_id=user_id)
-                summary = get_kent_upload_summary(capbase)
-                
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Komponenter", f"{summary['n_components']:,}")
-                col2.metric("Total NUAV", f"{summary['total_nuav_mkr']:.1f} Mkr")
-                col3.metric("Investeringar", summary['n_investments'])
-        except Exception as e:
-            st.caption(f"Kunde inte läsa filsammanfattning: {e}")
-    
-    # Knapp för att ta bort uppladdad fil
-    current_config = st.session_state.get("ui_config", {}).get(MODULE_KEY, {})
-    if current_config.get("kent_file_bytes") and uploaded_file is None:
-        if st.button("Ta bort KENT-fil", key="remove_kent"):
-            # Rensa från config
-            st.session_state["ui_config"][MODULE_KEY]["kent_file_bytes"] = None
-            st.session_state["ui_config"][MODULE_KEY]["kent_file_name"] = None
-            st.rerun()
+        uploaded_file = st.file_uploader(
+            "KENT Excel file",
+            type=["xlsx", "xls"],
+            key=f"{MODULE_KEY}_kent_upload",
+            help="Export from KENT regulatory template"
+        )
+        
+        if uploaded_file is not None:
+            result["kent_file_bytes"] = uploaded_file.getvalue()
+            result["kent_file_name"] = uploaded_file.name
+            st.success(f"KENT file loaded: {uploaded_file.name}")
+            st.info(
+                "KENT file will be used for capital base calculations. "
+                "Parameter scaling factors (1.1, 1.2) still apply."
+            )
     
     return result
 
 
-def _render_cat_editor() -> tuple[Optional[Dict[int, float]], str]:
+# =============================================================================
+# HELPER: Apply variable scaling to capbase
+# =============================================================================
+
+def apply_variable_scaling(
+    capbase_df: pd.DataFrame,
+    var_scaling: Dict[int, float]
+) -> pd.DataFrame:
     """
-    Render editor for category-level adjustments with hardcoded baseline values.
+    Apply variable scaling to ordinarie components only.
+    
+    Used by config_adapter when preparing data for calculations.
+    
+    Args:
+        capbase_df: User's capital base DataFrame
+        var_scaling: {cat_encode: scaling_factor}
     
     Returns:
-        (adjustments dict or None, 'cat')
+        DataFrame with scaled nuav_2022 for ordinarie components
     """
-    data = []
-    for cat in ASSET_CATEGORIES:
-        data.append({
-            'Code': cat.cat_encode,
-            'Category': cat.name,
-            'Param-ID': cat.scaling_param_id,
-            'Adjustment (%)': 0,
-        })
+    if not var_scaling:
+        return capbase_df
     
-    baseline_df = pd.DataFrame(data)
+    df = capbase_df.copy()
     
-    edited_df = st.data_editor(
-        baseline_df,
-        width="stretch",
-        hide_index=True,
-        num_rows="fixed",
-        disabled=['Code', 'Category', 'Param-ID'],
-        column_config={
-            'Code': st.column_config.NumberColumn('Code', format="%d", width="small"),
-            'Category': st.column_config.TextColumn('Category', width="large"),
-            'Param-ID': st.column_config.TextColumn('Param-ID', width="small"),
-            'Adjustment (%)': st.column_config.NumberColumn(
-                'Adjustment (%)',
-                min_value=-50,
-                max_value=100,
-                step=1,
-                format="%d",
-                width="small"
-            )
-        },
-        key=f"{MODULE_KEY}_cat_editor"
-    )
+    # Classify ordinarie
+    df = _classify_ordinarie(df)
     
-    adjustments = _extract_normvalue_changes(edited_df)
-    return adjustments, 'cat'
-
-
-def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int, float]], str]:
-    """
-    Render editor for subcategory-level adjustments.
+    # Apply scaling to ordinarie components only
+    for cat_encode, factor in var_scaling.items():
+        mask = (df['cat_encode'] == cat_encode) & (df['is_ordinarie'])
+        df.loc[mask, 'nuav_2022'] = df.loc[mask, 'nuav_2022'] * factor
     
-    Returns:
-        (adjustments dict or None, 'subcat')
-    """
-    # Gruppera per subcat_encode
-    subcats = capbase_data.groupby(['cat_encode', 'subcat_encode', 'subcat']).size().reset_index()
-    subcats = subcats.rename(columns={0: 'count'})
+    # Drop helper columns
+    df = df.drop(columns=['is_ordinarie', 'age_229'], errors='ignore')
     
-    data = []
-    for _, row in subcats.iterrows():
-        cat = next((c for c in ASSET_CATEGORIES if c.cat_encode == row['cat_encode']), None)
-        cat_name = cat.name if cat else f"Kategori {row['cat_encode']}"
-        
-        data.append({
-            'Cat': row['cat_encode'],
-            'Subcat': row['subcat_encode'],
-            'Category': cat_name,
-            'Subcategory': row['subcat'],
-            'Components': row['count'],
-            'Adjustment (%)': 0,
-        })
-    
-    baseline_df = pd.DataFrame(data)
-    
-    edited_df = st.data_editor(
-        baseline_df,
-        width="stretch",
-        hide_index=True,
-        num_rows="fixed",
-        disabled=['Cat', 'Subcat', 'Category', 'Subcategory', 'Components'],
-        column_config={
-            'Cat': st.column_config.NumberColumn('Cat', format="%d", width="small"),
-            'Subcat': st.column_config.NumberColumn('Subcat', format="%d", width="small"),
-            'Category': st.column_config.TextColumn('Category', width="medium"),
-            'Subcategory': st.column_config.TextColumn('Subcategory', width="medium"),
-            'Components': st.column_config.NumberColumn('N', format="%d", width="small"),
-            'Adjustment (%)': st.column_config.NumberColumn(
-                'Adj (%)',
-                min_value=-50,
-                max_value=100,
-                step=1,
-                format="%d",
-                width="small"
-            )
-        },
-        key=f"{MODULE_KEY}_subcat_editor"
-    )
-    
-    adjustments = _extract_subcat_changes(edited_df)
-    return adjustments, 'subcat'
-
-
-def _extract_normvalue_changes(df: pd.DataFrame) -> Optional[Dict[int, float]]:
-    """
-    Extract non-zero adjustments from category editor.
-    
-    Returns:
-        Dict mapping cat_encode to multiplier (1.0 + adj/100), or None if no changes
-    """
-    changes = {}
-    for _, row in df.iterrows():
-        adj = row.get('Adjustment (%)', 0)
-        if adj != 0:
-            multiplier = 1.0 + (adj / 100.0)
-            changes[int(row['Code'])] = multiplier
-    
-    return changes if changes else None
-
-
-def _extract_subcat_changes(df: pd.DataFrame) -> Optional[Dict[int, float]]:
-    """
-    Extract non-zero adjustments from subcategory editor.
-    
-    Returns:
-        Dict mapping subcat_encode to multiplier, or None if no changes
-    """
-    changes = {}
-    for _, row in df.iterrows():
-        adj = row.get('Adjustment (%)', 0)
-        if adj != 0:
-            multiplier = 1.0 + (adj / 100.0)
-            changes[int(row['Subcat'])] = multiplier
-    
-    return changes if changes else None
+    return df

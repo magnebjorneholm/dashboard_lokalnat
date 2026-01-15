@@ -1,71 +1,104 @@
 """
-frontend/utils/state_manager.py
-
 State Manager for Regumetrica UI.
 
-Hanterar session state initialisering, reset och åtkomst.
+Handles session state initialization, reset and access.
 """
 
 import streamlit as st
 import copy
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-# Explicit default-struktur för alla modules
+
+# Explicit default structure for all modules
 DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
     "m1_asset_base": {
-        "normvalue_adjustments": None,  # Dict[int, float] {cat_encode: multiplier}
-        "normvalue_level": "cat",       # 'cat' eller 'subcat'
-        "kent_file_bytes": None,        # Uppladdad KENT-fil som bytes
-        "kent_file_name": None,         # Filnamn för visning
-        "rab_has_changes": False,       # True om RAB-editor har ändringar
+        # Parameters (affect all companies)
+        "general_scaling": None,    # float, 1.0 = no change (Param 1.1.1)
+        "cat_scaling": None,        # Dict[int, float] {cat_encode: factor} (Param 1.2.X)
+        
+        # Variables (affect logged-in company only)
+        "var_scaling": None,        # Dict[int, float] {cat_encode: factor} (Var 10.X)
+        
+        # KENT upload (overrides var_scaling)
+        "kent_file_bytes": None,    # Uploaded KENT file as bytes
+        "kent_file_name": None,     # Filename for display
     },
     "m2_depreciation": {
         "lifetime_adjustments": None,   # Dict[int, Dict[str, int]] {cat_encode: {'ekdep': val, 'maxdep': val}}
-        "lifetime_level": "cat",        # 'cat' eller 'subcat'
+        "lifetime_level": "cat",        # 'cat' or 'subcat'
     },
     "m3_cost_of_capital": {
-        "wacc_override": None,  # None = använd baseline (0.0453)
+        "wacc_override": None,  # None = use baseline (0.0453)
     },
     "m3_quality_adjustments": {
-        # === On/off switchar ===
+        # === On/off switches ===
         "enable_quality": True,
         "enable_netloss": True,
         "enable_load": True,
         
-        # === 3.3 Kvalitetsincitament ===
+        # === 3.3 Quality incentive ===
         "adj_max_cemi4": None,  # None = baseline (0.25)
-        "ait_costs": None,      # None = baseline
-        "aif_costs": None,      # None = baseline
+        "ait_costs": None,      # Dict with (ann, sni) -> float
+        "aif_costs": None,      # Dict with (ann, sni) -> float
         
-        # === 3.4 Nätförlustincitament ===
+        # === 3.4 Network loss incentive ===
         "sharing_netloss": None,  # None = baseline (0.75)
-        "k_nf": None,             # None = baseline
+        "k_nf": None,             # Dict with year -> float
         
-        # === 3.6 Begränsningar ===
+        # === 3.6 Limits ===
         "adj_max_agg": None,  # None = baseline (1/3)
         
-        # === 3.7 KPI-faktorer ===
-        "kpi": None,  # None = baseline
+        # === 3.7 KPI factors ===
+        "kpi": None,  # Dict with year -> float
     },
     "m3_incentive_variables": {
-        "variable_overrides": None,  # Dict med företagsspecifika variabelvärden
+        # === Company-specific incentive variables ===
+        # All values None = use baseline from all_adjust_vars.csv
         
-        # Individuella variabler för kvalitet
-        "ait_obs": None,
-        "aif_obs": None,
-        "ait_norm": None,
-        "aif_norm": None,
+        # --- 30.2 Network loss ---
+        "nf_norm": None,
+        "nf_obs": None,
+        "e_in": None,
         
-        # Nätförlust
-        "netloss_obs": None,
-        "netloss_norm": None,
+        # --- 30.3 Load ---
+        "ug_norm": None,
+        "ug_obs": None,
+        "k_upstream": None,
         
-        # Belastning
+        # --- 30.4 Quality (CEMI4) ---
+        "cemi4_norm": None,
+        "cemi4_obs": None,
+        
+        # --- 30.4 Quality (AIF observed) ---
+        "aif_a_1_obs": None, "aif_a_2_obs": None, "aif_a_3_obs": None,
+        "aif_a_4_obs": None, "aif_a_5_obs": None, "aif_a_6_obs": None,
+        "aif_o_1_obs": None, "aif_o_2_obs": None, "aif_o_3_obs": None,
+        "aif_o_4_obs": None, "aif_o_5_obs": None, "aif_o_6_obs": None,
+        
+        # --- 30.4 Quality (AIF norm) ---
+        "aif_a_1_norm": None, "aif_a_2_norm": None, "aif_a_3_norm": None,
+        "aif_a_4_norm": None, "aif_a_5_norm": None, "aif_a_6_norm": None,
+        "aif_o_1_norm": None, "aif_o_2_norm": None, "aif_o_3_norm": None,
+        "aif_o_4_norm": None, "aif_o_5_norm": None, "aif_o_6_norm": None,
+        
+        # --- 30.4 Quality (AIT observed) ---
+        "ait_a_1_obs": None, "ait_a_2_obs": None, "ait_a_3_obs": None,
+        "ait_a_4_obs": None, "ait_a_5_obs": None, "ait_a_6_obs": None,
+        "ait_o_1_obs": None, "ait_o_2_obs": None, "ait_o_3_obs": None,
+        "ait_o_4_obs": None, "ait_o_5_obs": None, "ait_o_6_obs": None,
+        
+        # --- 30.4 Quality (AIT norm) ---
+        "ait_a_1_norm": None, "ait_a_2_norm": None, "ait_a_3_norm": None,
+        "ait_a_4_norm": None, "ait_a_5_norm": None, "ait_a_6_norm": None,
+        "ait_o_1_norm": None, "ait_o_2_norm": None, "ait_o_3_norm": None,
+        "ait_o_4_norm": None, "ait_o_5_norm": None, "ait_o_6_norm": None,
+        
+        # --- 30.4 Quality (AME per customer type) ---
         "ame_1": None, "ame_2": None, "ame_3": None,
         "ame_4": None, "ame_5": None, "ame_6": None,
     },
     "m4_operating_exp": {
-        "paverkbara_method": "OPEX",  # "OPEX" eller "TOTEX"
+        "paverkbara_method": "OPEX",  # "OPEX" or "TOTEX"
     },
     "m5_efficiency": {
         "trunkering_max": None,    # None = baseline (0.30)
@@ -76,7 +109,7 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "tillsynsperiod": None,    # None = baseline (4)
     },
     "addon_benchmarking": {
-        "dea_method": "baseline",  # "baseline" eller "custom"
+        "dea_method": "baseline",  # "baseline" or "custom"
         "dea_inputs": ["CAPEX", "OPEXp"],
         "dea_outputs": ["CU", "MW", "NS", "MWhl", "MWhh"],
         "dea_rts": "crs",
@@ -88,7 +121,7 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
 
 
 def init_session_state() -> None:
-    """Initialisera session state vid app-start."""
+    """Initialize session state at app start."""
     defaults = {
         "user_reid": None,
         "user_id_network": None,
@@ -103,45 +136,41 @@ def init_session_state() -> None:
 
 
 def reset_case() -> None:
-    """Återställ till nytt case (behåll user_reid)."""
+    """Reset to new case (keep user_reid)."""
     st.session_state["ui_config"] = copy.deepcopy(DEFAULT_UI_CONFIG)
     st.session_state["case_result"] = None
     st.session_state["calculation_done"] = False
-    
-    # Återställ RAB-editor om den finns
-    if "rab_editor" in st.session_state:
-        del st.session_state["rab_editor"]
 
 
 def get_module_config(module_key: str) -> Dict[str, Any]:
-    """Hämta config för en specifik module."""
+    """Get config for a specific module."""
     return st.session_state.get("ui_config", {}).get(module_key, {})
 
 
 def set_module_config(module_key: str, config: Dict[str, Any]) -> None:
-    """Sätt config för en specifik module."""
+    """Set config for a specific module."""
     if "ui_config" not in st.session_state:
         st.session_state["ui_config"] = copy.deepcopy(DEFAULT_UI_CONFIG)
     st.session_state["ui_config"][module_key] = config
 
 
-def get_user_reid() -> str | None:
-    """Hämta valt företags REId."""
+def get_user_reid() -> Optional[str]:
+    """Get selected company's REId."""
     return st.session_state.get("user_reid")
 
 
 def set_user_reid(reid: str) -> None:
-    """Sätt valt företags REId och uppdatera id_network."""
+    """Set selected company's REId."""
     st.session_state["user_reid"] = reid
-    
-    # Uppdatera även id_network
-    try:
-        numeric_part = reid.replace("REL", "").lstrip("0")
-        st.session_state["user_id_network"] = int(numeric_part) if numeric_part else 0
-    except (ValueError, AttributeError):
-        st.session_state["user_id_network"] = None
+    # Also set id_network
+    if reid and reid.startswith("REL"):
+        try:
+            numeric_part = reid.replace("REL", "").lstrip("0")
+            st.session_state["user_id_network"] = int(numeric_part) if numeric_part else 0
+        except ValueError:
+            st.session_state["user_id_network"] = None
 
 
-def get_user_id_network() -> int | None:
-    """Hämta valt företags id_network."""
+def get_user_id_network() -> Optional[int]:
+    """Get selected company's id_network."""
     return st.session_state.get("user_id_network")

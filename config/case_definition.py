@@ -1,10 +1,10 @@
 """
 config/case_definition.py
 
-Dataclasses för case definition.
-Definierar strukturen för alla pipeline-konfigurationer.
+Dataclasses for case definition.
+Defines structure for all pipeline configurations.
 
-REFAKTORISERAD: Separerar CapbaseSource (datakälla) från CapexMethod (beräkningsmetod).
+UPDATED: Replaced RAB_MODIFIED with VAR_SCALED for simplified asset base handling.
 """
 
 from dataclasses import dataclass, field
@@ -15,42 +15,42 @@ import pandas as pd
 
 
 # =============================================================================
-# ENUMS FÖR PRE-DEA STAGE
+# ENUMS FOR PRE-DEA STAGE
 # =============================================================================
 
 class CapbaseSource(str, Enum):
     """
-    Källa för användarens capbase_a data.
+    Source for user's capbase_a data.
     
-    Påverkar endast det inloggade företagets data (Variables).
-    Övriga 147 företag använder alltid baseline.
+    Affects only the logged-in company's data (Variables).
+    Other 147 companies always use baseline.
     """
-    BASELINE = "baseline"          # Använd baseline från capbase_a_mini.parquet
-    RAB_MODIFIED = "rab_modified"  # RAB-editor ändringar från session state
-    KENT_UPLOAD = "kent_upload"    # Uppladdad KENT Excel-fil (konverteras via steg 1-4)
+    BASELINE = "baseline"        # Use baseline from capbase_a.parquet
+    VAR_SCALED = "var_scaled"    # Variable scaling applied to ordinarie components
+    KENT_UPLOAD = "kent_upload"  # Uploaded KENT Excel file (converted via steps 1-4)
 
 
 class CapexMethod(str, Enum):
     """
-    Beräkningsmetod för kapitalkostnad.
+    Calculation method for capital costs.
     
-    Appliceras uniformt på alla 148 företag (Parameters).
+    Applied uniformly to all 148 companies (Parameters).
     """
-    BASELINE = "baseline"              # Ingen parameterändring, baseline WACC
-    WACC_SCALING = "wacc_scaling"      # Skala avkastning med ny WACC
-    PARAMETER_CHANGE = "parameter_change"  # Ändra normvärden/livslängder, kör KENT 5-8
+    BASELINE = "baseline"              # No parameter change, baseline WACC
+    WACC_SCALING = "wacc_scaling"      # Scale returns with new WACC
+    PARAMETER_CHANGE = "parameter_change"  # Change normvalues/lifetimes, run KENT 5-8
 
 
 class EfficiencyMethod(str, Enum):
-    """Metoder för effektivitetsanalys (DEA stage)."""
+    """Methods for efficiency analysis (DEA stage)."""
     BASELINE = "baseline"
     DEA = "dea"
-    # Fas 2: SFA = "sfa"
-    # Fas 2: STONED = "stoned"
+    # Phase 2: SFA = "sfa"
+    # Phase 2: STONED = "stoned"
 
 
 class PaverkbaraMethod(str, Enum):
-    """Metod för påverkbara kostnader (Post-DEA)."""
+    """Method for adjustable costs (Post-DEA)."""
     OPEX = "OPEX"
     TOTEX = "TOTEX"
 
@@ -62,61 +62,61 @@ class PaverkbaraMethod(str, Enum):
 @dataclass
 class PreDeaConfig:
     """
-    Configuration för Pre-DEA stage.
+    Configuration for Pre-DEA stage.
     
-    Separerar två koncept:
-    1. capbase_source - Var användarens capbase_a kommer ifrån (Variables)
-    2. method - Hur beräkningen görs för alla företag (Parameters)
+    Separates two concepts:
+    1. capbase_source - Where user's capbase_a comes from (Variables)
+    2. method - How calculation is done for all companies (Parameters)
     
-    Dataflöde:
-    - BASELINE source: Ingen förberedelse, använd befintlig data
-    - RAB_MODIFIED source: Från session state (redan capbase_a format)
-    - KENT_UPLOAD source: Konvertera via kent_capbase_prep.py (steg 1-4)
-    - Sedan körs vald method (steg 5-8 om behövs)
+    Data flow:
+    - BASELINE source: No preparation, use existing data
+    - VAR_SCALED source: Apply variable scaling to ordinarie components
+    - KENT_UPLOAD source: Convert via kent_capbase_prep.py (steps 1-4)
+    - Then run selected method (steps 5-8 if needed)
     
-    Kombinationsmatris (9 kombinationer):
-    ┌─────────────────┬──────────────┬────────────────┬───────────────────┐
-    │ Source \ Method │ BASELINE     │ WACC_SCALING   │ PARAMETER_CHANGE  │
-    ├─────────────────┼──────────────┼────────────────┼───────────────────┤
-    │ BASELINE        │ Direkt       │ Skala alla     │ KENT 5-8 alla     │
-    │ RAB_MODIFIED    │ KENT för usr │ KENT+skala     │ Ersätt+KENT alla  │
-    │ KENT_UPLOAD     │ KENT för usr │ KENT+skala     │ Ersätt+KENT alla  │
-    └─────────────────┴──────────────┴────────────────┴───────────────────┘
+    Combination matrix (9 combinations):
+    +------------------+--------------+----------------+-------------------+
+    | Source \ Method  | BASELINE     | WACC_SCALING   | PARAMETER_CHANGE  |
+    +------------------+--------------+----------------+-------------------+
+    | BASELINE         | Direct       | Scale all      | KENT 5-8 all      |
+    | VAR_SCALED       | KENT for usr | KENT+scale     | Replace+KENT all  |
+    | KENT_UPLOAD      | KENT for usr | KENT+scale     | Replace+KENT all  |
+    +------------------+--------------+----------------+-------------------+
     """
     
-    # === Dataförsörjning (per företag) ===
+    # === Data supply (per company) ===
     capbase_source: CapbaseSource = CapbaseSource.BASELINE
     
-    # RAB-editor specifikt (om source = RAB_MODIFIED)
-    rab_user_capbase: Optional[Any] = None  # DataFrame, använder Any för att undvika pd import-problem
+    # Variable scaling (if source = VAR_SCALED)
+    user_capbase_scaled: Optional[Any] = None  # DataFrame with scaled ordinarie
     
-    # KENT-upload specifikt (om source = KENT_UPLOAD)
+    # KENT upload specific (if source = KENT_UPLOAD)
     kent_file_bytes: Optional[bytes] = None
     kent_user_id_network: Optional[int] = None
     
-    # === Beräkningsmetod (uniformt för alla) ===
+    # === Calculation method (uniform for all) ===
     method: CapexMethod = CapexMethod.BASELINE
     
-    # WACC för beräkningar (None = använd baseline 0.0453)
+    # WACC for calculations (None = use baseline 0.0453)
     wacc: Optional[float] = None
     
-    # Parameter change specifikt (normvärden/livslängder)
+    # Parameter change specific (normvalues/lifetimes)
     normvalue_adjustments: Optional[Dict[int, float]] = None  # {cat_encode: multiplier}
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None  # {cat_encode: {'ekdep': X, 'maxdep': Y}}
 
 
 @dataclass
 class DeaConfig:
-    """Configuration för DEA stage."""
+    """Configuration for DEA stage."""
     method: EfficiencyMethod = EfficiencyMethod.BASELINE
     
     # Custom DEA model specification
     inputs: List[str] = field(default_factory=lambda: ['Kapitalkostnad_2024', 'OPEXp'])
     outputs: List[str] = field(default_factory=lambda: ['CU', 'MW', 'NS', 'MWhl', 'MWhh'])
-    rts: str = "crs"  # "crs" eller "vrs"
-    orientation: str = "input"  # "input" eller "output"
+    rts: str = "crs"  # "crs" or "vrs"
+    orientation: str = "input"  # "input" or "output"
     
-    # Outlier detection parameters (IQR-metod)
+    # Outlier detection parameters (IQR method)
     q_lower: float = 25.0
     q_upper: float = 75.0
     multiplier: float = 2.0
@@ -125,43 +125,43 @@ class DeaConfig:
 @dataclass
 class IncentiveConfig:
     """
-    Configuration för incitamentjusteringar (3.3-3.6).
+    Configuration for incentive adjustments (3.3-3.6).
     
-    Fullständig parametrisering av kvalitets-, nätförlust- och 
-    belastningsjustering enligt Ei's metodik.
+    Full parameterization of quality, network loss and
+    load adjustment according to Ei methodology.
     """
-    # KPI-faktorer per år {year: factor}
+    # KPI factors per year {year: factor}
     kpi: Optional[Dict[int, float]] = None
     
-    # Elpris per år för nätförlust {year: kr/MWh}
+    # Electricity price per year for network loss {year: kr/MWh}
     k_nf: Optional[Dict[int, float]] = None
     
-    # Delningsfaktor för nätförlust
+    # Sharing factor for network loss
     sharing_netloss: float = 0.75
     
-    # Max aggregerat incitament (andel av avkastning)
+    # Max aggregate incentive (share of return)
     adj_max_agg: float = 1/3
     
-    # CEMI4-korrigering max
+    # CEMI4 correction max
     adj_max_cemi4: float = 0.25
     
-    # AIT/AIF kostnader per kundtyp
+    # AIT/AIF costs per customer type
     ait_costs: Optional[Dict[Tuple[str, int], float]] = None
     aif_costs: Optional[Dict[Tuple[str, int], float]] = None
     
-    # On/off switchar
+    # On/off switches
     enable_quality: bool = True
     enable_netloss: bool = True
     enable_load: bool = True
     
-    # Variable overrides (för företagsspecifika justeringar)
+    # Variable overrides (for company-specific adjustments)
     variable_overrides: Optional[Dict[str, float]] = None
 
 
 @dataclass
 class PostDeaConfig:
-    """Configuration för Post-DEA stage."""
-    # Effektiviseringskrav
+    """Configuration for Post-DEA stage."""
+    # Efficiency requirements
     trunkering_min: float = 0.01
     trunkering_max: float = 0.30
     outlier_krav: float = 0.01
@@ -169,21 +169,21 @@ class PostDeaConfig:
     realiseringstid: int = 8
     tillsynsperiod: int = 4
     
-    # Påverkbara kostnader
+    # Adjustable costs
     paverkbara_method: PaverkbaraMethod = PaverkbaraMethod.OPEX
     
-    # Incitament
+    # Incentives
     incentive: IncentiveConfig = field(default_factory=IncentiveConfig)
 
 
 @dataclass
 class CaseDefinition:
     """
-    Komplett case definition.
-    Innehåller konfiguration för alla pipeline stages.
+    Complete case definition.
+    Contains configuration for all pipeline stages.
     """
     name: str
-    user_reid: str  # REId för användarens företag (ex: "REL00001")
+    user_reid: str  # REId for user's company (ex: "REL00001")
     
     pre_dea: PreDeaConfig = field(default_factory=PreDeaConfig)
     dea: DeaConfig = field(default_factory=DeaConfig)
@@ -196,13 +196,13 @@ class CaseDefinition:
 
 def get_baseline_config(user_reid: str) -> CaseDefinition:
     """
-    Skapar baseline case configuration.
+    Create baseline case configuration.
     
     Args:
-        user_reid: Användarens REId (ex: "REL00001")
+        user_reid: User's REId (ex: "REL00001")
         
     Returns:
-        CaseDefinition med alla baseline-inställningar
+        CaseDefinition with all baseline settings
     """
     return CaseDefinition(
         name="Baseline",
@@ -218,14 +218,14 @@ def get_baseline_config(user_reid: str) -> CaseDefinition:
 
 def create_wacc_scaling_config(user_reid: str, new_wacc: float) -> CaseDefinition:
     """
-    Skapar config för WACC-skalning.
+    Create config for WACC scaling.
     
     Args:
-        user_reid: Användarens REId
-        new_wacc: Ny WACC (real, före skatt)
+        user_reid: User's REId
+        new_wacc: New WACC (real, before tax)
         
     Returns:
-        CaseDefinition för WACC-skalning
+        CaseDefinition for WACC scaling
     """
     return CaseDefinition(
         name=f"WACC {new_wacc:.2%}",
@@ -240,34 +240,34 @@ def create_wacc_scaling_config(user_reid: str, new_wacc: float) -> CaseDefinitio
     )
 
 
-def create_rab_modified_config(
+def create_var_scaled_config(
     user_reid: str,
-    rab_user_capbase: Any,  # pd.DataFrame
+    user_capbase_scaled: Any,  # pd.DataFrame
     method: CapexMethod = CapexMethod.BASELINE,
     wacc: Optional[float] = None,
     normvalue_adjustments: Optional[Dict[int, float]] = None,
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None
 ) -> CaseDefinition:
     """
-    Skapar config för RAB-editor med valfri beräkningsmetod.
+    Create config for variable-scaled capital base with optional calculation method.
     
     Args:
-        user_reid: Användarens REId
-        rab_user_capbase: Modifierad capbase_a DataFrame från RAB-editor
-        method: Beräkningsmetod (BASELINE, WACC_SCALING, PARAMETER_CHANGE)
-        wacc: WACC om method != BASELINE
-        normvalue_adjustments: Normvärdesjusteringar om PARAMETER_CHANGE
-        lifetime_adjustments: Livslängdsjusteringar om PARAMETER_CHANGE
+        user_reid: User's REId
+        user_capbase_scaled: Scaled capbase_a DataFrame (ordinarie scaled)
+        method: Calculation method (BASELINE, WACC_SCALING, PARAMETER_CHANGE)
+        wacc: WACC if method != BASELINE
+        normvalue_adjustments: Normvalue adjustments if PARAMETER_CHANGE
+        lifetime_adjustments: Lifetime adjustments if PARAMETER_CHANGE
         
     Returns:
-        CaseDefinition för RAB-editor
+        CaseDefinition for variable scaling
     """
     return CaseDefinition(
-        name=f"RAB Modified ({method.value})",
+        name=f"Var Scaled ({method.value})",
         user_reid=user_reid,
         pre_dea=PreDeaConfig(
-            capbase_source=CapbaseSource.RAB_MODIFIED,
-            rab_user_capbase=rab_user_capbase,
+            capbase_source=CapbaseSource.VAR_SCALED,
+            user_capbase_scaled=user_capbase_scaled,
             method=method,
             wacc=wacc,
             normvalue_adjustments=normvalue_adjustments,
@@ -288,19 +288,19 @@ def create_kent_upload_config(
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None
 ) -> CaseDefinition:
     """
-    Skapar config för KENT-upload med valfri beräkningsmetod.
+    Create config for KENT upload with optional calculation method.
     
     Args:
-        user_reid: Användarens REId
-        kent_file_bytes: KENT Excel-fil som bytes
-        kent_user_id_network: Användarens id_network
-        method: Beräkningsmetod (BASELINE, WACC_SCALING, PARAMETER_CHANGE)
-        wacc: WACC om method != BASELINE
-        normvalue_adjustments: Normvärdesjusteringar om PARAMETER_CHANGE
-        lifetime_adjustments: Livslängdsjusteringar om PARAMETER_CHANGE
+        user_reid: User's REId
+        kent_file_bytes: KENT Excel file as bytes
+        kent_user_id_network: User's id_network
+        method: Calculation method (BASELINE, WACC_SCALING, PARAMETER_CHANGE)
+        wacc: WACC if method != BASELINE
+        normvalue_adjustments: Normvalue adjustments if PARAMETER_CHANGE
+        lifetime_adjustments: Lifetime adjustments if PARAMETER_CHANGE
         
     Returns:
-        CaseDefinition för KENT-upload
+        CaseDefinition for KENT upload
     """
     return CaseDefinition(
         name=f"KENT Upload ({method.value})",
@@ -326,19 +326,19 @@ def create_parameter_change_config(
     wacc: Optional[float] = None
 ) -> CaseDefinition:
     """
-    Skapar config för parameter-ändringar (utan KENT-upload eller RAB-editor).
+    Create config for parameter changes (without KENT upload or variable scaling).
     
     Args:
-        user_reid: Användarens REId
+        user_reid: User's REId
         normvalue_adjustments: Dict {cat_encode: multiplier}
         lifetime_adjustments: Dict {cat_encode: {'ekdep': X, 'maxdep': Y}}
-        wacc: WACC att använda (default: baseline 0.0453)
+        wacc: WACC to use (default: baseline 0.0453)
         
     Returns:
-        CaseDefinition för parameter-ändringar
+        CaseDefinition for parameter changes
     """
     return CaseDefinition(
-        name="Parameter ändringar",
+        name="Parameter changes",
         user_reid=user_reid,
         pre_dea=PreDeaConfig(
             capbase_source=CapbaseSource.BASELINE,

@@ -47,10 +47,8 @@ def render() -> None:
     st.subheader("Case Summary")
     st.caption("Review all parameters before running the calculation.")
     
-    # Get current ui_config
     ui_config = st.session_state.get("ui_config", {})
     
-    # Track if any changes exist
     has_any_changes = False
     
     # --- Module 1: Regulatory asset base valuation ---
@@ -98,12 +96,17 @@ def _render_module_1(ui_config: Dict[str, Any]) -> bool:
     
     has_changes = False
     
-    # Check for changes
+    # Check for changes (new keys)
     kent_uploaded = m1.get("kent_file_bytes") is not None
-    rab_modified = m1.get("rab_has_changes", False)
-    normvalue_adj = m1.get("normvalue_adjustments")
+    general_scaling = m1.get("general_scaling")
+    cat_scaling = m1.get("cat_scaling")
+    var_scaling = m1.get("var_scaling")
     
-    if kent_uploaded or rab_modified or normvalue_adj:
+    has_general = general_scaling is not None and general_scaling != 1.0
+    has_cat = cat_scaling is not None and len(cat_scaling) > 0
+    has_var = var_scaling is not None and len(var_scaling) > 0
+    
+    if kent_uploaded or has_general or has_cat or has_var:
         has_changes = True
     
     # Header with reset button
@@ -112,7 +115,7 @@ def _render_module_1(ui_config: Dict[str, Any]) -> bool:
         expander_label = "1. Regulatory asset base valuation"
         if has_changes:
             expander_label += " :orange[(modified)]"
-        expanded = has_changes  # Auto-expand if has changes
+        expanded = has_changes
     with col2:
         if has_changes:
             if st.button("Reset", key=f"{MODULE_KEY}_reset_m1", use_container_width=True):
@@ -120,38 +123,67 @@ def _render_module_1(ui_config: Dict[str, Any]) -> bool:
                 st.rerun()
     
     with st.expander(expander_label, expanded=expanded):
-        # Data source
-        st.markdown("**Data source**")
+        # Data source (company-specific)
+        st.markdown("**Data source (company-specific)**")
         if kent_uploaded:
             kent_name = m1.get("kent_file_name", "Unknown")
             st.markdown(f":orange[KENT upload: {kent_name}]")
-        elif rab_modified:
-            st.markdown(":orange[RAB editor (modified)]")
+        elif has_var:
+            n_var = len(var_scaling)
+            st.markdown(f":orange[Variable scaling: {n_var} categories adjusted]")
         else:
             st.markdown("Baseline (capbase_a)")
         
         st.markdown("")
         
-        # Scaling factors
-        st.markdown("**Scaling factors (1.2.X)**")
-        if normvalue_adj:
+        # General scaling factor (1.1.1)
+        st.markdown("**General scaling factor (1.1.1)**")
+        if has_general:
+            pct = (general_scaling - 1.0) * 100
+            st.markdown(f":orange[{general_scaling:.2f} ({pct:+.1f}%)]")
+        else:
+            st.markdown("1.00 (baseline)")
+        
+        st.markdown("")
+        
+        # Category scaling factors (1.2.X)
+        st.markdown("**Category scaling factors (1.2.X)**")
+        if has_cat:
             rows = []
-            for cat_encode, multiplier in normvalue_adj.items():
+            for cat_encode, factor in cat_scaling.items():
                 cat_name = get_category_name(int(cat_encode))
                 cat = CATEGORY_BY_CODE.get(int(cat_encode))
                 param_id = cat.scaling_param_id if cat else f"1.2.{cat_encode}"
-                pct_change = (multiplier - 1.0) * 100
+                pct_change = (factor - 1.0) * 100
                 rows.append({
-                    "Parameter-ID": param_id,
+                    "Param-ID": param_id,
                     "Category": cat_name[:40] + "..." if len(cat_name) > 40 else cat_name,
                     "Baseline": "1.00",
-                    "Value": f"{multiplier:.2f}",
+                    "Value": f"{factor:.2f}",
                     "Change": f"{pct_change:+.1f}%",
                 })
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
-            st.caption("All scaling factors at baseline (1.00)")
+            st.caption("All category scaling factors at baseline (1.00)")
+        
+        # Variable scaling (10.X) - company specific
+        if has_var:
+            st.markdown("")
+            st.markdown("**Asset quantity scaling (10.X) - company specific**")
+            rows = []
+            for cat_encode, factor in var_scaling.items():
+                cat_name = get_category_name(int(cat_encode))
+                var_id = f"10.{int(cat_encode) + 1}"
+                pct_change = (factor - 1.0) * 100
+                rows.append({
+                    "Var-ID": var_id,
+                    "Category": cat_name[:40] + "..." if len(cat_name) > 40 else cat_name,
+                    "Scaling": f"{factor:.2f}",
+                    "Change": f"{pct_change:+.1f}%",
+                })
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
     
     return has_changes
 
@@ -163,7 +195,6 @@ def _render_module_2(ui_config: Dict[str, Any]) -> bool:
     lifetime_adj = m2.get("lifetime_adjustments")
     has_changes = lifetime_adj is not None and len(lifetime_adj) > 0
     
-    # Header with reset button
     col1, col2 = st.columns([5, 1])
     with col1:
         expander_label = "2. Depreciation"
@@ -187,7 +218,7 @@ def _render_module_2(ui_config: Dict[str, Any]) -> bool:
                 if 'ekdep' in changes:
                     baseline_ek = cat.ekdep if cat else "?"
                     rows.append({
-                        "Parameter-ID": cat.param_id_ekdep if cat else f"2.{cat_encode}.1",
+                        "Param-ID": cat.param_id_ekdep if cat else f"2.{cat_encode}.1",
                         "Category": cat_name[:35] + "..." if len(cat_name) > 35 else cat_name,
                         "Type": "Ordinary",
                         "Baseline": f"{baseline_ek} yrs",
@@ -197,7 +228,7 @@ def _render_module_2(ui_config: Dict[str, Any]) -> bool:
                 if 'maxdep' in changes:
                     baseline_max = cat.maxdep if cat else "?"
                     rows.append({
-                        "Parameter-ID": cat.param_id_maxdep if cat else f"2.{cat_encode}.2",
+                        "Param-ID": cat.param_id_maxdep if cat else f"2.{cat_encode}.2",
                         "Category": cat_name[:35] + "..." if len(cat_name) > 35 else cat_name,
                         "Type": "Tail",
                         "Baseline": f"{baseline_max} yrs",
@@ -218,7 +249,6 @@ def _render_module_3(ui_config: Dict[str, Any]) -> bool:
     m3_qual = ui_config.get("m3_quality_adjustments", {})
     m3_vars = ui_config.get("m3_incentive_variables", {})
     
-    # Check for changes
     wacc_changed = m3_wacc.get("wacc_override") is not None
     
     qual_changes = []
@@ -243,12 +273,10 @@ def _render_module_3(ui_config: Dict[str, Any]) -> bool:
     if not m3_qual.get("enable_load", True):
         qual_changes.append("Load incentive OFF")
     
-    # Check incentive variables
     var_changes = [k for k, v in m3_vars.items() if v is not None]
     
     has_changes = wacc_changed or len(qual_changes) > 0 or len(var_changes) > 0
     
-    # Header with reset button
     col1, col2 = st.columns([5, 1])
     with col1:
         expander_label = "3. Cost of capital"
@@ -266,49 +294,23 @@ def _render_module_3(ui_config: Dict[str, Any]) -> bool:
         # WACC
         st.markdown("**WACC (3.2.5)**")
         if wacc_changed:
-            wacc_val = m3_wacc.get("wacc_override")
-            st.markdown(f":orange[{wacc_val:.4f}] (baseline: {BASELINE_WACC:.4f})")
+            wacc = m3_wacc["wacc_override"]
+            st.markdown(f":orange[{wacc:.4f} ({wacc*100:.2f}%)]")
         else:
-            st.markdown(f"{BASELINE_WACC:.4f} (baseline)")
-        
-        st.markdown("")
+            st.markdown(f"{BASELINE_WACC:.4f} ({BASELINE_WACC*100:.2f}%) - baseline")
         
         # Quality adjustments
-        st.markdown("**Cost of capital adjustments (3.3-3.6)**")
         if qual_changes:
+            st.markdown("")
+            st.markdown("**Quality adjustments**")
             for change in qual_changes:
-                st.markdown(f"- :orange[{change}]")
-        else:
-            st.caption("All adjustment parameters at baseline")
+                st.markdown(f":orange[- {change}]")
         
-        # Incentive toggles
-        st.markdown("")
-        st.markdown("**Incentive toggles**")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            qual_on = m3_qual.get("enable_quality", True)
-            if qual_on:
-                st.markdown("Quality: ON")
-            else:
-                st.markdown(":orange[Quality: OFF]")
-        with col2:
-            netloss_on = m3_qual.get("enable_netloss", True)
-            if netloss_on:
-                st.markdown("Network loss: ON")
-            else:
-                st.markdown(":orange[Network loss: OFF]")
-        with col3:
-            load_on = m3_qual.get("enable_load", True)
-            if load_on:
-                st.markdown("Load: ON")
-            else:
-                st.markdown(":orange[Load: OFF]")
-        
-        # Incentive variables
+        # Variable overrides
         if var_changes:
             st.markdown("")
-            st.markdown("**Company-specific incentive variables**")
-            st.markdown(f":orange[{len(var_changes)} variable(s) modified]")
+            st.markdown("**Incentive variable overrides**")
+            st.caption(f"{len(var_changes)} variable(s) modified")
     
     return has_changes
 
@@ -320,7 +322,6 @@ def _render_module_4(ui_config: Dict[str, Any]) -> bool:
     method = m4.get("paverkbara_method", "OPEX")
     has_changes = method != "OPEX"
     
-    # Header with reset button
     col1, col2 = st.columns([5, 1])
     with col1:
         expander_label = "4. Operating expenditures"
@@ -333,11 +334,11 @@ def _render_module_4(ui_config: Dict[str, Any]) -> bool:
                 st.rerun()
     
     with st.expander(expander_label, expanded=has_changes):
-        st.markdown("**Cost base for efficiency requirement (5.4.1)**")
+        st.markdown("**Adjustable costs method (5.4.1)**")
         if has_changes:
-            st.markdown(f":orange[{method}] (baseline: OPEX)")
+            st.markdown(f":orange[{method}]")
         else:
-            st.markdown(f"{method} (baseline)")
+            st.markdown("OPEX (baseline)")
     
     return has_changes
 
@@ -346,22 +347,20 @@ def _render_module_5(ui_config: Dict[str, Any]) -> bool:
     """Render Module 5: Efficiency incentive. Returns True if has changes."""
     m5 = ui_config.get("m5_efficiency", {})
     
-    # Build parameter list
-    params = [
-        ("5.2.1", "Maximum efficiency potential cap", 
-         m5.get("trunkering_max"), BASELINE_MAX_POTENTIAL, "{:.0%}"),
-        ("5.2.2", "Realization time", 
-         m5.get("realiseringstid"), BASELINE_REALIZATION_TIME, "{} years"),
-        ("5.2.3", "Customer sharing factor", 
-         m5.get("kunddelning"), BASELINE_CUSTOMER_SHARING, "{:.0%}"),
-        ("5.3.1", "Minimum annual requirement", 
-         m5.get("outlier_krav"), BASELINE_MIN_REQUIREMENT, "{:.1%}"),
-    ]
+    changes = []
+    if m5.get("trunkering_max") is not None:
+        changes.append(("5.2.1 Truncation max", BASELINE_MAX_POTENTIAL, m5["trunkering_max"]))
+    if m5.get("realiseringstid") is not None:
+        changes.append(("5.2.2 Realization time", BASELINE_REALIZATION_TIME, m5["realiseringstid"]))
+    if m5.get("kunddelning") is not None:
+        changes.append(("5.2.3 Customer sharing", BASELINE_CUSTOMER_SHARING, m5["kunddelning"]))
+    if m5.get("outlier_krav") is not None:
+        changes.append(("5.3.1 Outlier requirement", BASELINE_MIN_REQUIREMENT, m5["outlier_krav"]))
+    if m5.get("trunkering_min") is not None:
+        changes.append(("5.3.2 Truncation min", 0.162416, m5["trunkering_min"]))
     
-    changes = [(p[0], p[1], p[2], p[3], p[4]) for p in params if p[2] is not None]
     has_changes = len(changes) > 0
     
-    # Header with reset button
     col1, col2 = st.columns([5, 1])
     with col1:
         expander_label = "5. Efficiency incentive"
@@ -374,31 +373,25 @@ def _render_module_5(ui_config: Dict[str, Any]) -> bool:
                 st.rerun()
     
     with st.expander(expander_label, expanded=has_changes):
-        st.markdown("**Efficiency requirement parameters**")
-        
-        rows = []
-        for param_id, desc, value, baseline, fmt in params:
-            if value is not None:
-                rows.append({
-                    "Parameter-ID": param_id,
-                    "Description": desc,
-                    "Baseline": fmt.format(baseline),
-                    "Value": f":orange[{fmt.format(value)}]",
-                })
-            else:
-                rows.append({
-                    "Parameter-ID": param_id,
-                    "Description": desc,
-                    "Baseline": fmt.format(baseline),
-                    "Value": fmt.format(baseline),
-                })
-        
-        # Display as formatted text instead of dataframe for orange highlighting
-        for row in rows:
-            if ":orange[" in row["Value"]:
-                st.markdown(f"**{row['Parameter-ID']}** {row['Description']}: {row['Value']} (baseline: {row['Baseline']})")
-            else:
-                st.caption(f"{row['Parameter-ID']} {row['Description']}: {row['Value']}")
+        if changes:
+            rows = []
+            for param_id, baseline, value in changes:
+                if isinstance(baseline, float) and baseline < 1:
+                    rows.append({
+                        "Parameter": param_id,
+                        "Baseline": f"{baseline:.2%}",
+                        "Value": f"{value:.2%}",
+                    })
+                else:
+                    rows.append({
+                        "Parameter": param_id,
+                        "Baseline": str(baseline),
+                        "Value": str(value),
+                    })
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("All efficiency parameters at baseline")
     
     return has_changes
 
@@ -407,10 +400,8 @@ def _render_module_7(ui_config: Dict[str, Any]) -> bool:
     """Render Module 7: Add-on modules. Returns True if has changes."""
     addon = ui_config.get("addon_benchmarking", {})
     
-    dea_method = addon.get("dea_method", "baseline")
-    has_changes = dea_method != "baseline"
+    has_changes = addon.get("dea_method") == "custom"
     
-    # Header with reset button
     col1, col2 = st.columns([5, 1])
     with col1:
         expander_label = "7. Add-on modules"
@@ -418,34 +409,30 @@ def _render_module_7(ui_config: Dict[str, Any]) -> bool:
             expander_label += " :orange[(modified)]"
     with col2:
         if has_changes:
-            if st.button("Reset", key=f"{MODULE_KEY}_reset_addon", use_container_width=True):
+            if st.button("Reset", key=f"{MODULE_KEY}_reset_m7", use_container_width=True):
                 _reset_module("addon_benchmarking")
                 st.rerun()
     
     with st.expander(expander_label, expanded=has_changes):
-        st.markdown("**Benchmarking module (7.1)**")
-        
-        if dea_method == "custom":
-            st.markdown(":orange[Custom DEA configuration]")
-            
-            inputs = addon.get("dea_inputs", [])
-            outputs = addon.get("dea_outputs", [])
-            rts = addon.get("dea_rts", "crs")
-            
-            st.markdown(f"- Inputs: {', '.join(inputs)}")
-            st.markdown(f"- Outputs: {', '.join(outputs)}")
-            st.markdown(f"- Returns to scale: {rts.upper()}")
+        st.markdown("**DEA Benchmarking**")
+        if has_changes:
+            st.markdown(":orange[Custom DEA model]")
+            st.caption(f"Inputs: {addon.get('dea_inputs', [])}")
+            st.caption(f"Outputs: {addon.get('dea_outputs', [])}")
+            st.caption(f"RTS: {addon.get('dea_rts', 'crs')}")
         else:
-            st.markdown("DEA method: Baseline (Ei's official model)")
+            st.markdown("Baseline DEA model")
     
     return has_changes
 
 
 def _reset_module(module_key: str) -> None:
-    """Reset a module to default values."""
-    if module_key in DEFAULT_UI_CONFIG:
-        default = copy.deepcopy(DEFAULT_UI_CONFIG[module_key])
-        st.session_state["ui_config"][module_key] = default
+    """Reset a module to its default configuration."""
+    if "ui_config" in st.session_state:
+        if module_key in DEFAULT_UI_CONFIG:
+            st.session_state["ui_config"][module_key] = copy.deepcopy(
+                DEFAULT_UI_CONFIG[module_key]
+            )
 
 
 def _run_calculation() -> None:
@@ -461,12 +448,10 @@ def _run_calculation() -> None:
     
     with st.status("Running calculation...", expanded=True) as status:
         try:
-            # Load baseline data (cached)
             st.write("Loading baseline data...")
             from data_loaders.baseline_data import load_baseline_data
             baseline_data = load_baseline_data()
             
-            # Get baseline result (cached per company)
             st.write("Retrieving baseline...")
             from config.case_definition import get_baseline_config
             from pipeline.core import run_pipeline
@@ -475,14 +460,12 @@ def _run_calculation() -> None:
             baseline_result = run_pipeline(baseline_data, baseline_config)
             st.session_state["baseline_result"] = baseline_result
             
-            # Build case definition
             st.write("Building case...")
             case_definition = build_case_definition(
                 user_reid,
                 st.session_state["ui_config"]
             )
             
-            # Run pipeline
             st.write("Calculating revenue frame...")
             case_result = run_pipeline(baseline_data, case_definition)
             st.session_state["case_result"] = case_result
@@ -501,5 +484,4 @@ def _run_calculation() -> None:
             status.update(label="Error", state="error")
             return
     
-    # Navigate to results
     st.switch_page("pages/2_results.py")

@@ -6,12 +6,16 @@ Main page for configuring a regulatory case.
 
 import streamlit as st
 
-from frontend.utils.state_manager import init_session_state, set_module_config, get_user_reid
+from frontend.utils.state_manager import (
+    init_session_state,
+    set_module_config,
+    get_user_reid,
+    get_user_id_network,
+)
 from frontend.utils.config_adapter import get_changed_parameters
 
 from frontend.modules.base import (
     m1_asset_base,
-    m1_rab_editor,
     m2_depreciation,
     m3_cost_of_capital,
     m3_incentive_variables,
@@ -34,6 +38,9 @@ user_reid = get_user_reid()
 if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")
     st.stop()
+
+# Get user_id_network for company-specific sections
+user_id_network = get_user_id_network()
 
 # Show selected company
 st.info(f"Company: **{user_reid}**")
@@ -62,7 +69,7 @@ tab1, tab2, tab3, tab4, tab5, tab_addons, tab_summary = st.tabs([
 ])
 
 with tab1:
-    config = m1_asset_base.render()
+    config = m1_asset_base.render(user_id_network=user_id_network)
     set_module_config("m1_asset_base", config)
 
 with tab2:

@@ -2,24 +2,24 @@
 pipeline/stages/pre_dea.py
 
 Stage 2: Pre-DEA
-Förbereder CAPEX/OPEX data för DEA-analys.
+Prepares CAPEX/OPEX data for DEA analysis.
 
-REFAKTORISERAD ARKITEKTUR:
-- Steg 1: Bestäm användarens capbase_a (CapbaseSource)
-- Steg 2: Applicera beräkningsmetod (CapexMethod)
+REFACTORED ARCHITECTURE:
+- Step 1: Determine user's capbase_a (CapbaseSource)
+- Step 2: Apply calculation method (CapexMethod)
 
-Denna separation möjliggör alla kombinationer av:
-- Datakälla: baseline / rab_modified / kent_upload
-- Metod: baseline / wacc_scaling / parameter_change
+This separation enables all combinations of:
+- Data source: baseline / var_scaled / kent_upload
+- Method: baseline / wacc_scaling / parameter_change
 
-Kombinationsmatris (9 kombinationer):
-┌─────────────────┬──────────────┬────────────────┬───────────────────┐
-│ Source \ Method │ BASELINE     │ WACC_SCALING   │ PARAMETER_CHANGE  │
-├─────────────────┼──────────────┼────────────────┼───────────────────┤
-│ BASELINE        │ Direkt       │ Skala alla     │ KENT 5-8 alla     │
-│ RAB_MODIFIED    │ KENT för usr │ KENT+skala     │ Ersätt+KENT alla  │
-│ KENT_UPLOAD     │ KENT för usr │ KENT+skala     │ Ersätt+KENT alla  │
-└─────────────────┴──────────────┴────────────────┴───────────────────┘
+Combination matrix (9 combinations):
++------------------+--------------+----------------+-------------------+
+| Source \ Method  | BASELINE     | WACC_SCALING   | PARAMETER_CHANGE  |
++------------------+--------------+----------------+-------------------+
+| BASELINE         | Direct       | Scale all      | KENT 5-8 all      |
+| VAR_SCALED       | KENT for usr | KENT+scale     | Replace+KENT all  |
+| KENT_UPLOAD      | KENT for usr | KENT+scale     | Replace+KENT all  |
++------------------+--------------+----------------+-------------------+
 """
 
 import pandas as pd
@@ -35,7 +35,7 @@ from data_loaders.rab_data import load_capbase_a
 
 
 # =============================================================================
-# HUVUDFUNKTION
+# MAIN FUNCTION
 # =============================================================================
 
 def stage_pre_dea(
@@ -44,33 +44,33 @@ def stage_pre_dea(
     user_id_network: int
 ) -> PreDeaStageOutput:
     """
-    Stage 2: Förbered data för DEA-analys.
+    Stage 2: Prepare data for DEA analysis.
     
-    Tvåstegsprocess:
-    1. Hämta användarens capbase_a baserat på CapbaseSource
-    2. Applicera beräkningsmetod baserat på CapexMethod
+    Two-step process:
+    1. Get user's capbase_a based on CapbaseSource
+    2. Apply calculation method based on CapexMethod
     
     Args:
-        baseline: Output från Baseline stage
-        config: PreDeaConfig med source och method
-        user_id_network: Användarens id_network
+        baseline: Output from Baseline stage
+        config: PreDeaConfig with source and method
+        user_id_network: User's id_network
         
     Returns:
-        PreDeaStageOutput med:
-        - df_all_companies: 148 rows, potentiellt modifierad CAPEX/OPEX
-        - capbase_source: Källa som användes
-        - capex_method: Metod som användes
-        - capex_modified: True om CAPEX ändrades
-        - wacc_used: WACC som användes
+        PreDeaStageOutput with:
+        - df_all_companies: 148 rows, potentially modified CAPEX/OPEX
+        - capbase_source: Source that was used
+        - capex_method: Method that was used
+        - capex_modified: True if CAPEX was changed
+        - wacc_used: WACC that was used
     """
     print(f"\n=== Pre-DEA Stage ===")
     print(f"  CapbaseSource: {config.capbase_source.value}")
     print(f"  CapexMethod: {config.method.value}")
     
-    # STEG 1: Hämta användarens capbase_a
+    # STEP 1: Get user's capbase_a
     user_capbase, source_used = _get_user_capbase(config, user_id_network)
     
-    # STEG 2: Applicera beräkningsmetod
+    # STEP 2: Apply calculation method
     result = _apply_capex_method(
         baseline=baseline,
         config=config,
@@ -79,15 +79,15 @@ def stage_pre_dea(
         source_used=source_used
     )
     
-    print(f"  Resultat: capex_modified={result.capex_modified}")
+    print(f"  Result: capex_modified={result.capex_modified}")
     if result.wacc_used:
-        print(f"  WACC använd: {result.wacc_used:.4f}")
+        print(f"  WACC used: {result.wacc_used:.4f}")
     
     return result
 
 
 # =============================================================================
-# STEG 1: CAPBASE SOURCE - Hämta användarens capbase_a
+# STEP 1: CAPBASE SOURCE - Get user's capbase_a
 # =============================================================================
 
 def _get_user_capbase(
@@ -95,73 +95,76 @@ def _get_user_capbase(
     user_id_network: int
 ) -> Tuple[Optional[pd.DataFrame], str]:
     """
-    Hämtar användarens capbase_a baserat på CapbaseSource.
+    Get user's capbase_a based on CapbaseSource.
     
-    VIKTIGT: Denna funktion returnerar data i capbase_a format.
-    - BASELINE: Returnerar None (baseline data används direkt i method-steget)
-    - RAB_MODIFIED: Returnerar DataFrame från session state (redan capbase_a format)
-    - KENT_UPLOAD: Konverteras via kent_capbase_prep.py (steg 1-4)
+    IMPORTANT: This function returns data in capbase_a format.
+    - BASELINE: Returns None (baseline data used directly in method step)
+    - VAR_SCALED: Returns DataFrame from config (already capbase_a format with scaling applied)
+    - KENT_UPLOAD: Converted via kent_capbase_prep.py (steps 1-4)
     
-    Steg 5-8 (KENT-beräkningar) körs sedan i _apply_capex_method().
+    Steps 5-8 (KENT calculations) are then run in _apply_capex_method().
     
     Args:
-        config: PreDeaConfig med source-inställningar
-        user_id_network: Användarens id_network
+        config: PreDeaConfig with source settings
+        user_id_network: User's id_network
         
     Returns:
-        Tuple av (user_capbase DataFrame eller None, source_used sträng)
+        Tuple of (user_capbase DataFrame or None, source_used string)
     """
     
     if config.capbase_source == CapbaseSource.BASELINE:
-        # Baseline: Ingen custom capbase, använd befintlig data
-        print("  Source: Baseline (ingen custom capbase)")
+        # Baseline: No custom capbase, use existing data
+        print("  Source: Baseline (no custom capbase)")
         return None, "baseline"
     
-    elif config.capbase_source == CapbaseSource.RAB_MODIFIED:
-        # RAB-editor: Redan i capbase_a format från session state
-        print("  Source: RAB-editor (från session state)")
-        user_capbase = _load_rab_modified(config, user_id_network)
-        return user_capbase, "rab_modified"
+    elif config.capbase_source == CapbaseSource.VAR_SCALED:
+        # Variable scaled: Already in capbase_a format with scaling applied
+        print("  Source: Variable scaled (from config)")
+        user_capbase = _load_var_scaled(config, user_id_network)
+        return user_capbase, "var_scaled"
     
     elif config.capbase_source == CapbaseSource.KENT_UPLOAD:
-        # KENT-upload: Kräver konvertering via steg 1-4
-        print("  Source: KENT-upload (konverterar fil...)")
+        # KENT upload: Requires conversion via steps 1-4
+        print("  Source: KENT upload (converting file...)")
         user_capbase = _load_kent_upload(config, user_id_network)
         return user_capbase, "kent_upload"
     
     else:
-        raise ValueError(f"Okänd CapbaseSource: {config.capbase_source}")
+        raise ValueError(f"Unknown CapbaseSource: {config.capbase_source}")
 
 
-def _load_rab_modified(config: PreDeaConfig, user_id_network: int) -> pd.DataFrame:
+def _load_var_scaled(config: PreDeaConfig, user_id_network: int) -> pd.DataFrame:
     """
-    Hämtar RAB-editor capbase från config.
+    Get variable-scaled capbase from config.
     
-    RAB-editor data är redan i capbase_a format - ingen konvertering behövs.
-    Detta skiljer sig från KENT_UPLOAD som kräver konvertering via steg 1-4.
+    Variable-scaled data is already in capbase_a format with scaling applied
+    to ordinarie components - no conversion needed.
     
     Args:
-        config: PreDeaConfig med rab_user_capbase
-        user_id_network: Användarens id_network
+        config: PreDeaConfig with user_capbase_scaled
+        user_id_network: User's id_network
         
     Returns:
-        DataFrame i capbase_a format
+        DataFrame in capbase_a format
     """
-    if config.rab_user_capbase is None:
-        raise ValueError("CapbaseSource=RAB_MODIFIED men rab_user_capbase=None")
+    if config.user_capbase_scaled is None:
+        raise ValueError("CapbaseSource=VAR_SCALED but user_capbase_scaled=None")
     
-    user_capbase = config.rab_user_capbase.copy()
+    user_capbase = config.user_capbase_scaled.copy()
     
-    # Säkerställ att id_network är korrekt
+    # Ensure id_network is correct
     user_capbase['id_network'] = user_id_network
     
     n_components = len(user_capbase)
-    n_existing = (user_capbase.get('capbase_existing', pd.Series([1]*len(user_capbase))) == 1).sum()
+    if 'capbase_existing' in user_capbase.columns:
+        n_existing = (user_capbase['capbase_existing'] == 1).sum()
+    else:
+        n_existing = n_components
     total_nuav = user_capbase['nuav_2022'].sum() / 1e6
     
-    print(f"    RAB-editor data:")
-    print(f"      - {n_components} komponenter")
-    print(f"      - {n_existing} befintliga, {n_components - n_existing} investeringar/utrangeringar")
+    print(f"    Variable-scaled data:")
+    print(f"      - {n_components} components")
+    print(f"      - {n_existing} existing, {n_components - n_existing} investments/retirements")
     print(f"      - Total NUAV: {total_nuav:.1f} Mkr")
     
     return user_capbase
@@ -169,44 +172,44 @@ def _load_rab_modified(config: PreDeaConfig, user_id_network: int) -> pd.DataFra
 
 def _load_kent_upload(config: PreDeaConfig, user_id_network: int) -> pd.DataFrame:
     """
-    Konverterar uppladdad KENT-fil till capbase_a format.
+    Convert uploaded KENT file to capbase_a format.
     
-    Detta är ENDAST steg 1-4 (konvertering från Ei:s Excel-mall).
-    Steg 5-8 (beräkning av kapitalkostnader) körs senare i _apply_capex_method()
-    beroende på vald CapexMethod.
+    This is ONLY steps 1-4 (conversion from Ei's Excel template).
+    Steps 5-8 (capital cost calculation) are run later in _apply_capex_method()
+    depending on selected CapexMethod.
     
     Args:
-        config: PreDeaConfig med kent_file_bytes
-        user_id_network: Användarens id_network
+        config: PreDeaConfig with kent_file_bytes
+        user_id_network: User's id_network
         
     Returns:
-        DataFrame i capbase_a format
+        DataFrame in capbase_a format
     """
     from calculations.kent_capbase_prep import build_capbase_a_from_kent, get_kent_upload_summary
     
     if config.kent_file_bytes is None:
-        raise ValueError("kent_file_bytes måste anges för KENT_UPLOAD source")
+        raise ValueError("kent_file_bytes must be provided for KENT_UPLOAD source")
     
-    print("    Konverterar KENT-fil till capbase_a format (steg 1-4)...")
+    print("    Converting KENT file to capbase_a format (steps 1-4)...")
     
     kent_file = BytesIO(config.kent_file_bytes)
     user_capbase = build_capbase_a_from_kent(
         kent_file,
         network_id=user_id_network,
-        lifetime_adjustments=None  # Livslängder appliceras i steg 5-8, inte här
+        lifetime_adjustments=None  # Lifetimes applied in steps 5-8, not here
     )
     
     summary = get_kent_upload_summary(user_capbase)
-    print(f"    KENT steg 1-4 klara:")
-    print(f"      - {summary['n_components']} komponenter")
-    print(f"      - {summary['n_existing']} befintliga, {summary['n_investments']} investeringar")
+    print(f"    KENT steps 1-4 complete:")
+    print(f"      - {summary['n_components']} components")
+    print(f"      - {summary['n_existing']} existing, {summary['n_investments']} investments")
     print(f"      - Total NUAV: {summary['total_nuav_mkr']:.1f} Mkr")
     
     return user_capbase
 
 
 # =============================================================================
-# STEG 2: CAPEX METHOD - Applicera beräkningsmetod
+# STEP 2: CAPEX METHOD - Apply calculation method
 # =============================================================================
 
 def _apply_capex_method(
@@ -217,38 +220,26 @@ def _apply_capex_method(
     source_used: str
 ) -> PreDeaStageOutput:
     """
-    Applicerar beräkningsmetod på data.
+    Apply calculation method to data.
     
-    Logik:
-    - BASELINE method + baseline source → Direkt från baseline
-    - BASELINE method + custom source → KENT 5-8 för användaren, baseline för övriga
-    - WACC_SCALING → Skala avkastning för alla (efter ev. KENT för användaren)
-    - PARAMETER_CHANGE → KENT 5-8 för alla (med ev. ersättning av användaren)
-    
-    Args:
-        baseline: Output från Baseline stage
-        config: PreDeaConfig med method-inställningar
-        user_capbase: Användarens capbase_a (None om baseline source)
-        user_id_network: Användarens id_network
-        source_used: Sträng som beskriver källan
-        
-    Returns:
-        PreDeaStageOutput med resultat
+    Logic:
+    - BASELINE method + baseline source -> Direct from baseline
+    - BASELINE method + custom source -> KENT 5-8 for user, baseline for others
+    - WACC_SCALING -> Scale return for all (after optional KENT for user)
+    - PARAMETER_CHANGE -> KENT 5-8 for all with new parameters
     """
-    
     method = config.method
-    has_custom_source = (source_used != "baseline")
-    
-    print(f"  Method: {method.value}" + (f" (med custom source: {source_used})" if has_custom_source else ""))
     
     # === BASELINE method ===
     if method == CapexMethod.BASELINE:
-        if has_custom_source:
+        if user_capbase is None:
+            # Pure baseline - no custom source
+            return _method_baseline_pure(baseline, user_id_network)
+        else:
+            # Custom source with baseline parameters
             return _method_baseline_with_custom_source(
                 baseline, user_capbase, user_id_network, source_used
             )
-        else:
-            return _method_baseline_pure(baseline, user_id_network)
     
     # === WACC_SCALING method ===
     elif method == CapexMethod.WACC_SCALING:
@@ -263,7 +254,7 @@ def _apply_capex_method(
         )
     
     else:
-        raise ValueError(f"Okänd CapexMethod: {method}")
+        raise ValueError(f"Unknown CapexMethod: {method}")
 
 
 # =============================================================================
@@ -275,11 +266,11 @@ def _method_baseline_pure(
     user_id_network: int
 ) -> PreDeaStageOutput:
     """
-    BASELINE method med BASELINE source.
+    BASELINE method with BASELINE source.
     
-    Enklaste fallet: returnera baseline direkt utan modifiering.
+    Simplest case: return baseline directly without modification.
     """
-    print("    → Direkt baseline (ingen beräkning)")
+    print("    -> Direct baseline (no calculation)")
     
     return PreDeaStageOutput(
         df_all_companies=baseline.df_all_companies.copy(),
@@ -298,19 +289,19 @@ def _method_baseline_with_custom_source(
     source_used: str
 ) -> PreDeaStageOutput:
     """
-    BASELINE method med custom source (RAB_MODIFIED eller KENT_UPLOAD).
+    BASELINE method with custom source (VAR_SCALED or KENT_UPLOAD).
     
-    Kör KENT steg 5-8 för ENDAST användarens företag med baseline parametrar.
-    Övriga 147 företag använder baseline direkt (ingen omberäkning).
+    Run KENT steps 5-8 for ONLY user's company with baseline parameters.
+    Other 147 companies use baseline directly (no recalculation).
     
-    Detta är scenariot där användaren har modifierat sin capbase men
-    inte vill ändra några parametrar - bara se resultatet med sin egen data.
+    This is the scenario where user has modified their capbase but
+    doesn't want to change any parameters - just see result with their own data.
     """
-    print("    → KENT steg 5-8 för användaren, baseline för övriga")
+    print("    -> KENT steps 5-8 for user, baseline for others")
     
     wacc_to_use = baseline.wacc
     
-    # Kör KENT steg 5-8 för användarens capbase
+    # Run KENT steps 5-8 for user's capbase
     try:
         _, df_network = run_kent_calculations_batch(
             user_capbase,
@@ -318,13 +309,13 @@ def _method_baseline_with_custom_source(
             normvalue_adjustments=None,
             lifetime_adjustments=None
         )
-        print(f"    KENT-beräkningar klara för användaren")
+        print(f"    KENT calculations complete for user")
     except Exception as e:
-        print(f"    FEL i KENT-beräkningar: {e}")
-        print("    → Fallback till baseline")
+        print(f"    ERROR in KENT calculations: {e}")
+        print("    -> Fallback to baseline")
         return _method_baseline_pure(baseline, user_id_network)
     
-    # Merge med baseline för övriga 147 företag
+    # Merge with baseline for other 147 companies
     df_result = merge_kent_with_baseline(
         df_network,
         baseline.df_all_companies,
@@ -351,23 +342,23 @@ def _method_wacc_scaling(
     """
     WACC_SCALING method.
     
-    Om custom source: Kör KENT steg 5-8 för användaren först (med baseline WACC),
-    sedan skala ALLA 148 företag med WACC-kvot.
+    If custom source: Run KENT steps 5-8 for user first (with baseline WACC),
+    then scale ALL 148 companies with WACC ratio.
     
-    Om baseline source: Skala direkt från baseline.
+    If baseline source: Scale directly from baseline.
     """
-    print("    → WACC-skalning för alla 148 företag")
+    print("    -> WACC scaling for all 148 companies")
     
     new_wacc = config.wacc
     if new_wacc is None:
-        print("    VARNING: WACC_SCALING utan wacc, använder baseline")
+        print("    WARNING: WACC_SCALING without wacc, using baseline")
         new_wacc = baseline.wacc
     
-    print(f"    WACC: {baseline.wacc:.4f} → {new_wacc:.4f}")
+    print(f"    WACC: {baseline.wacc:.4f} -> {new_wacc:.4f}")
     
-    # Steg 1: Om custom source, kör KENT för användaren med baseline WACC
+    # Step 1: If custom source, run KENT for user with baseline WACC
     if user_capbase is not None:
-        print("    Steg 1: KENT för användaren med baseline WACC...")
+        print("    Step 1: KENT for user with baseline WACC...")
         try:
             _, df_network = run_kent_calculations_batch(
                 user_capbase,
@@ -381,13 +372,13 @@ def _method_wacc_scaling(
                 sdf_ir=baseline.sdf_ir
             )
         except Exception as e:
-            print(f"    FEL i KENT-beräkningar: {e}")
+            print(f"    ERROR in KENT calculations: {e}")
             df_base = baseline.df_all_companies.copy()
     else:
         df_base = baseline.df_all_companies.copy()
     
-    # Steg 2: Skala alla 148 med WACC-kvot
-    print("    Steg 2: Skala alla med WACC-kvot...")
+    # Step 2: Scale all 148 with WACC ratio
+    print("    Step 2: Scale all with WACC ratio...")
     df_result = calculate_wacc_scaled_capex(
         df_base,
         baseline_wacc=baseline.wacc,
@@ -414,44 +405,44 @@ def _method_parameter_change(
     """
     PARAMETER_CHANGE method.
     
-    Kör KENT steg 5-8 för ALLA 148 företag med nya parametrar.
-    Om custom source: Ersätt användarens komponenter i capbase_a först.
+    Run KENT steps 5-8 for ALL 148 companies with new parameters.
+    If custom source: Replace user's components in capbase_a first.
     
-    VIKTIGT: Normvärden och livslängder appliceras här i steg 5-8,
-    INTE i steg 1-4 (KENT-konvertering). Detta säkerställer att
-    parameterändringar gäller för ALLA företag, inte bara det uppladdade.
+    IMPORTANT: Normvalues and lifetimes are applied here in steps 5-8,
+    NOT in steps 1-4 (KENT conversion). This ensures that parameter
+    changes apply to ALL companies, not just the uploaded one.
     """
-    print("    Parameter-ändringar: Kör KENT steg 5-8 för alla 148 företag")
+    print("    Parameter changes: Run KENT steps 5-8 for all 148 companies")
     if config.normvalue_adjustments:
-        print(f"      - {len(config.normvalue_adjustments)} normvärdesjusteringar")
+        print(f"      - {len(config.normvalue_adjustments)} normvalue adjustments")
     if config.lifetime_adjustments:
-        print(f"      - {len(config.lifetime_adjustments)} livslängdsjusteringar")
+        print(f"      - {len(config.lifetime_adjustments)} lifetime adjustments")
     
     wacc_to_use = config.wacc if config.wacc else baseline.wacc
     
-    # Ladda baseline capbase_a
+    # Load baseline capbase_a
     try:
         capbase_data = load_capbase_a()
-        print(f"    Laddade capbase_a: {len(capbase_data):,} komponenter")
+        print(f"    Loaded capbase_a: {len(capbase_data):,} components")
     except FileNotFoundError as e:
-        print(f"    FEL: {e}")
-        print("    → Fallback till baseline")
+        print(f"    ERROR: {e}")
+        print("    -> Fallback to baseline")
         return _method_baseline_pure(baseline, user_id_network)
     
-    # Om custom source: ersätt användarens komponenter
+    # If custom source: replace user's components
     if user_capbase is not None:
         n_user_original = (capbase_data['id_network'] == user_id_network).sum()
-        print(f"    Ersätter användarens komponenter: {n_user_original} → {len(user_capbase)}")
+        print(f"    Replacing user's components: {n_user_original} -> {len(user_capbase)}")
         
-        # Ta bort befintliga komponenter för användaren
+        # Remove existing components for user
         mask_not_user = capbase_data['id_network'] != user_id_network
         capbase_without_user = capbase_data[mask_not_user].copy()
         
-        # Lägg till användarens nya/modifierade komponenter
+        # Add user's new/modified components
         capbase_data = pd.concat([capbase_without_user, user_capbase], ignore_index=True)
-        print(f"    Total capbase_a: {len(capbase_data):,} komponenter")
+        print(f"    Total capbase_a: {len(capbase_data):,} components")
     
-    # Kör KENT steg 5-8 för alla med nya parametrar
+    # Run KENT steps 5-8 for all with new parameters
     try:
         _, df_network = run_kent_calculations_batch(
             capbase_data,
@@ -459,13 +450,13 @@ def _method_parameter_change(
             normvalue_adjustments=config.normvalue_adjustments,
             lifetime_adjustments=config.lifetime_adjustments
         )
-        print(f"    KENT-beräkningar klara: {len(df_network)} nätverk")
+        print(f"    KENT calculations complete: {len(df_network)} networks")
     except Exception as e:
-        print(f"    FEL i KENT-beräkningar: {e}")
-        print("    → Fallback till baseline")
+        print(f"    ERROR in KENT calculations: {e}")
+        print("    -> Fallback to baseline")
         return _method_baseline_pure(baseline, user_id_network)
     
-    # Merge med baseline för övrig data (volymer, DEA-outputs etc.)
+    # Merge with baseline for other data (volumes, DEA outputs, etc.)
     df_result = merge_kent_with_baseline(
         df_network,
         baseline.df_all_companies,

@@ -45,19 +45,6 @@ from .wacc_calculations import (
     calculate_wacc,
     BASELINE_WACC,
 )
-
-# Kent capbase prep utilities
-from .kent_capbase_prep import (
-    read_kent_excel,
-    process_kent_components,
-    build_capbase_a_from_kent,
-    validate_capbase_a,
-    get_category_encode,
-    year_to_time_code,
-    halvar_to_time_code,
-    CATEGORY_MAPPING,
-)
-
 # Time code constants & helpers
 from .time_codes import (
     HALFYEAR_TO_TIMECODE,
