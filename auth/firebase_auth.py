@@ -1,16 +1,16 @@
 """
 auth/firebase_auth.py
-Firebase Authentication module för Streamlit app
+Firebase Authentication module for Streamlit app
 
-Hanterar:
-- User registration med email verification
+Handles:
+- User registration with email verification
 - Login/logout
 - Password reset
-- Custom claims (DMU, role)
+- Custom claims (REId, role)
 
-Använder:
-- Pyrebase4 för client-side auth
-- firebase-admin för server-side operations (custom claims)
+Uses:
+- Pyrebase4 for client-side auth
+- firebase-admin for server-side operations (custom claims)
 """
 
 import streamlit as st
@@ -25,10 +25,10 @@ import toml
 
 
 class FirebaseAuthManager:
-    """Manager för Firebase Authentication operations"""
+    """Manager for Firebase Authentication operations"""
     
     def __init__(self):
-        """Initialiserar Firebase från Streamlit secrets"""
+        """Initialize Firebase from Streamlit secrets"""
         self.firebase = None
         self.auth = None
         self.admin_initialized = False
@@ -38,23 +38,23 @@ class FirebaseAuthManager:
     
     def _load_secrets(self) -> Dict:
         """
-        Laddar secrets från Streamlit secrets (lokalt) eller Secret Files (Render)
+        Load secrets from Streamlit secrets (local) or Secret Files (Render)
         
-        Försöker i ordning:
-        1. Streamlit secrets (st.secrets) - lokalt
+        Tries in order:
+        1. Streamlit secrets (st.secrets) - local
         2. /etc/secrets/secrets.toml - Render Secret Files
         
         Returns:
-            Dict med secrets
+            Dict with secrets
         """
-        # Försök 1: Streamlit secrets (lokalt)
+        # Try 1: Streamlit secrets (local)
         try:
             if hasattr(st, 'secrets') and 'firebase' in st.secrets:
                 return st.secrets
         except:
             pass
         
-        # Försök 2: Render Secret Files
+        # Try 2: Render Secret Files
         secret_file_path = '/etc/secrets/secrets.toml'
         if os.path.exists(secret_file_path):
             try:
@@ -62,13 +62,13 @@ class FirebaseAuthManager:
                     secrets = toml.load(f)
                     return secrets
             except Exception as e:
-                st.error(f"Kunde inte läsa Secret File: {e}")
+                st.error(f"Could not read Secret File: {e}")
         
-        raise ValueError("Kunde inte hitta Firebase credentials")
+        raise ValueError("Could not find Firebase credentials")
 
     
     def _initialize_client(self):
-        """Initialiserar Pyrebase för client-side operationss"""
+        """Initialize Pyrebase for client-side operations"""
         try:
             secrets = self._load_secrets()
             
@@ -88,7 +88,7 @@ class FirebaseAuthManager:
             raise
     
     def _initialize_admin(self):
-        """Initialiserar Firebase Admin SDK för server-side operations"""
+        """Initialize Firebase Admin SDK for server-side operations"""
         try:
             if not firebase_admin._apps:
                 secrets = self._load_secrets()
@@ -115,34 +115,44 @@ class FirebaseAuthManager:
             st.warning(f"Firebase Admin SDK not initialized: {e}")
             self.admin_initialized = False
     
-    def sign_up(self, email: str, password: str, dmu: int, reid: str = None) -> Tuple[bool, Optional[str], Optional[Dict]]:
+    def sign_up(
+        self, 
+        email: str, 
+        password: str, 
+        role: str,
+        reid: Optional[str] = None
+    ) -> Tuple[bool, Optional[str], Optional[Dict]]:
         """
-        Registrerar ny användare med email verification
+        Register new user with email verification
         
         Args:
-            email: Användarens email (blir username)
-            password: Lösenord
-            dmu: DMU-nummer för företaget
-            reid: REId för nätverket (optional, för framtida användning)
+            email: User's email (becomes username)
+            password: Password
+            role: 'company' or 'regulator'
+            reid: REId for the network (required for company users)
             
         Returns:
             (success, error_message, user_data)
         """
         try:
-            # Skapa användare i Firebase Auth
+            # Validate inputs
+            if role == 'company' and not reid:
+                return False, "REId is required for company users", None
+            
+            if role not in ('company', 'regulator'):
+                return False, "Invalid role. Must be 'company' or 'regulator'", None
+            
+            # Create user in Firebase Auth
             user = self.auth.create_user_with_email_and_password(email, password)
             
-            # Skicka email verification
+            # Send email verification
             self.auth.send_email_verification(user['idToken'])
             
-            # Sätt custom claims (DMU, REId och role) om Admin SDK är initialiserat
+            # Set custom claims (REId and role) if Admin SDK is initialized
             if self.admin_initialized:
                 uid = user['localId']
-                claims = {
-                    'dmu': dmu,
-                    'role': 'company'
-                }
-                if reid:
+                claims = {'role': role}
+                if role == 'company' and reid:
                     claims['reid'] = reid
                 admin_auth.set_custom_user_claims(uid, claims)
             
@@ -153,26 +163,26 @@ class FirebaseAuthManager:
             error_data = json.loads(error_json.response.text)
             error_message = error_data.get('error', {}).get('message', 'Unknown error')
             
-            # Översätt Firebase-felmeddelanden
+            # Translate Firebase error messages
             if error_message == 'EMAIL_EXISTS':
-                return False, "Email-adressen är redan registrerad", None
+                return False, "This email is already registered", None
             elif error_message == 'WEAK_PASSWORD':
-                return False, "Lösenordet är för svagt (minst 6 tecken krävs)", None
+                return False, "Password is too weak (minimum 6 characters required)", None
             elif error_message == 'INVALID_EMAIL':
-                return False, "Ogiltig email-adress", None
+                return False, "Invalid email address", None
             else:
-                return False, f"Registrering misslyckades: {error_message}", None
+                return False, f"Registration failed: {error_message}", None
                 
         except Exception as e:
-            return False, f"Oväntat fel: {str(e)}", None
+            return False, f"Unexpected error: {str(e)}", None
     
     def sign_in(self, email: str, password: str) -> Tuple[bool, Optional[str], Optional[Dict]]:
         """
-        Loggar in användare
+        Log in user
         
         Args:
             email: Email
-            password: Lösenord
+            password: Password
             
         Returns:
             (success, error_message, user_data)
@@ -180,11 +190,11 @@ class FirebaseAuthManager:
         try:
             user = self.auth.sign_in_with_email_and_password(email, password)
             
-            # Hämta account info för att kolla email verification
+            # Get account info to check email verification
             account_info = self.auth.get_account_info(user['idToken'])
             user_info = account_info['users'][0]
             
-            # Lägg till emailVerified i user dict
+            # Add emailVerified to user dict
             user['emailVerified'] = user_info.get('emailVerified', False)
             
             return True, None, user
@@ -195,23 +205,39 @@ class FirebaseAuthManager:
             error_message = error_data.get('error', {}).get('message', 'Unknown error')
             
             if error_message == 'EMAIL_NOT_FOUND':
-                return False, "Email-adressen finns inte registrerad", None
+                return False, "Email address not found", None
             elif error_message == 'INVALID_PASSWORD':
-                return False, "Felaktigt lösenord", None
+                return False, "Incorrect password", None
+            elif error_message == 'INVALID_LOGIN_CREDENTIALS':
+                return False, "Invalid email or password", None
             elif error_message == 'USER_DISABLED':
-                return False, "Kontot är inaktiverat", None
+                return False, "Account is disabled", None
             else:
-                return False, f"Inloggning misslyckades: {error_message}", None
+                return False, f"Login failed: {error_message}", None
                 
         except Exception as e:
-            return False, f"Oväntat fel: {str(e)}", None
+            return False, f"Unexpected error: {str(e)}", None
+    
+    def sign_out(self) -> None:
+        """Sign out current user by clearing session state"""
+        keys_to_clear = [
+            'auth_user',
+            'auth_token', 
+            'auth_email',
+            'auth_role',
+            'auth_reid',
+            'auth_uid',
+        ]
+        for key in keys_to_clear:
+            if key in st.session_state:
+                del st.session_state[key]
     
     def send_password_reset_email(self, email: str) -> Tuple[bool, Optional[str]]:
         """
-        Skickar lösenordsåterställningslänk till email
+        Send password reset link to email
         
         Args:
-            email: Email-adress
+            email: Email address
             
         Returns:
             (success, error_message)
@@ -226,19 +252,19 @@ class FirebaseAuthManager:
             error_message = error_data.get('error', {}).get('message', 'Unknown error')
             
             if error_message == 'EMAIL_NOT_FOUND':
-                return False, "Email-adressen finns inte registrerad"
+                return False, "Email address not found"
             else:
-                return False, f"Kunde inte skicka email: {error_message}"
+                return False, f"Could not send email: {error_message}"
                 
         except Exception as e:
-            return False, f"Oväntat fel: {str(e)}"
+            return False, f"Unexpected error: {str(e)}"
     
     def resend_verification_email(self, id_token: str) -> Tuple[bool, Optional[str]]:
         """
-        Skickar ny verifieringslänk
+        Resend verification link
         
         Args:
-            id_token: Användarens ID token
+            id_token: User's ID token
             
         Returns:
             (success, error_message)
@@ -248,62 +274,97 @@ class FirebaseAuthManager:
             return True, None
             
         except Exception as e:
-            return False, f"Kunde inte skicka verifieringsemail: {str(e)}"
+            return False, f"Could not send verification email: {str(e)}"
     
     def get_user_claims(self, id_token: str) -> Optional[Dict]:
         """
-        Hämtar custom claims från ID token
+        Get custom claims from ID token
         
         Args:
             id_token: Firebase ID token
             
         Returns:
-            Dict med claims (dmu, reid, role) eller None
+            Dict with claims (reid, role) or None
         """
         try:
             if not self.admin_initialized:
                 return None
             
-            # Verifiera token och hämta claims
+            # Verify token and get claims
             decoded_token = admin_auth.verify_id_token(id_token)
             
             return {
                 'uid': decoded_token.get('uid'),
                 'email': decoded_token.get('email'),
-                'dmu': decoded_token.get('dmu'),
                 'reid': decoded_token.get('reid'),
-                'role': decoded_token.get('role')
+                'role': decoded_token.get('role', 'company'),
             }
             
         except Exception as e:
-            st.error(f"Kunde inte hämta claims: {e}")
+            st.error(f"Could not get claims: {e}")
             return None
     
-    def update_user_dmu(self, uid: str, new_dmu: int) -> Tuple[bool, Optional[str]]:
+    def update_user_reid(self, uid: str, new_reid: str) -> Tuple[bool, Optional[str]]:
         """
-        Uppdaterar DMU för en användare (admin-funktion)
+        Update REId for a user (admin function)
         
         Args:
             uid: User ID
-            new_dmu: Nytt DMU-nummer
+            new_reid: New REId
             
         Returns:
             (success, error_message)
         """
         try:
             if not self.admin_initialized:
-                return False, "Admin SDK inte initialiserat"
+                return False, "Admin SDK not initialized"
             
-            admin_auth.set_custom_user_claims(uid, {'dmu': new_dmu, 'role': 'company'})
+            # Get existing claims first
+            user = admin_auth.get_user(uid)
+            existing_claims = user.custom_claims or {}
+            
+            # Update with new REId
+            existing_claims['reid'] = new_reid
+            admin_auth.set_custom_user_claims(uid, existing_claims)
             return True, None
             
         except Exception as e:
-            return False, f"Kunde inte uppdatera DMU: {str(e)}"
+            return False, f"Could not update REId: {str(e)}"
+    
+    def update_user_role(self, uid: str, new_role: str) -> Tuple[bool, Optional[str]]:
+        """
+        Update role for a user (admin function)
+        
+        Args:
+            uid: User ID
+            new_role: New role ('company' or 'regulator')
+            
+        Returns:
+            (success, error_message)
+        """
+        try:
+            if not self.admin_initialized:
+                return False, "Admin SDK not initialized"
+            
+            if new_role not in ('company', 'regulator'):
+                return False, "Invalid role"
+            
+            # Get existing claims first
+            user = admin_auth.get_user(uid)
+            existing_claims = user.custom_claims or {}
+            
+            # Update role
+            existing_claims['role'] = new_role
+            admin_auth.set_custom_user_claims(uid, existing_claims)
+            return True, None
+            
+        except Exception as e:
+            return False, f"Could not update role: {str(e)}"
 
 
 def initialize_firebase_auth() -> FirebaseAuthManager:
     """
-    Initialiserar Firebase Auth Manager (singleton pattern)
+    Initialize Firebase Auth Manager (singleton pattern)
     
     Returns:
         FirebaseAuthManager instance
@@ -312,3 +373,37 @@ def initialize_firebase_auth() -> FirebaseAuthManager:
         st.session_state.firebase_auth = FirebaseAuthManager()
     
     return st.session_state.firebase_auth
+
+
+def is_user_logged_in() -> bool:
+    """Check if user is logged in"""
+    return st.session_state.get('auth_user') is not None
+
+
+def get_current_user() -> Optional[Dict]:
+    """Get current logged in user data"""
+    return st.session_state.get('auth_user')
+
+
+def get_current_user_role() -> Optional[str]:
+    """Get current user's role"""
+    return st.session_state.get('auth_role')
+
+
+def get_current_user_reid() -> Optional[str]:
+    """Get current user's REId (for company users)"""
+    return st.session_state.get('auth_reid')
+
+
+def is_dev_mode() -> bool:
+    """
+    Check if dev mode is enabled (skip auth).
+    
+    Set in .streamlit/secrets.toml:
+    [dev]
+    skip_auth = true
+    """
+    try:
+        return st.secrets.get('dev', {}).get('skip_auth', False)
+    except:
+        return False

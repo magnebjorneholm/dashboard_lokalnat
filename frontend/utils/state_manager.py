@@ -152,6 +152,14 @@ def init_session_state() -> None:
         "selected_modules": set(),    # Modules to configure (empty = all)
         "saved_cases_count": 0,       # For default naming "Case N"
         "case_saved": False,          # True after successful save
+        
+        # Authentication
+        "auth_user": None,            # Firebase user object
+        "auth_token": None,           # Firebase ID token
+        "auth_email": None,           # User's email
+        "auth_uid": None,             # Firebase UID
+        "auth_role": None,            # 'company' or 'regulator'
+        "auth_reid": None,            # REId from claims (company users)
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -375,3 +383,52 @@ def get_active_module_changes() -> Dict[str, bool]:
         result[module_key] = has_changes
     
     return result
+
+
+# =============================================================================
+# AUTHENTICATION FUNCTIONS
+# =============================================================================
+
+def is_authenticated() -> bool:
+    """Check if user is authenticated."""
+    return st.session_state.get("auth_user") is not None
+
+
+def get_auth_role() -> Optional[str]:
+    """Get authenticated user's role ('company' or 'regulator')."""
+    return st.session_state.get("auth_role")
+
+
+def get_auth_reid() -> Optional[str]:
+    """Get authenticated user's REId (for company users)."""
+    return st.session_state.get("auth_reid")
+
+
+def get_auth_email() -> Optional[str]:
+    """Get authenticated user's email."""
+    return st.session_state.get("auth_email")
+
+
+def is_regulator() -> bool:
+    """Check if current user is a regulator."""
+    return get_auth_role() == "regulator"
+
+
+def is_company_user() -> bool:
+    """Check if current user is a company user."""
+    return get_auth_role() == "company"
+
+
+def clear_auth_state() -> None:
+    """Clear all authentication-related session state."""
+    auth_keys = [
+        "auth_user",
+        "auth_token",
+        "auth_email",
+        "auth_uid",
+        "auth_role",
+        "auth_reid",
+    ]
+    for key in auth_keys:
+        if key in st.session_state:
+            st.session_state[key] = None
