@@ -62,7 +62,7 @@ def apply_login_background():
                 background: transparent;
             }}
             
-            /* Semi-transparent overlay for better readability */
+            /* Semi-transparent overlay with blur for better readability */
             [data-testid="stAppViewContainer"]::before {{
                 content: "";
                 position: fixed;
@@ -70,12 +70,10 @@ def apply_login_background():
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background: rgba(255, 255, 255, 0.85);
+                background: rgba(255, 255, 255, 0.75);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
                 z-index: 0;
-            }}
-            
-            [data-testid="stHeader"] {{
-                background: transparent;
             }}
             
             /* Ensure content is above overlay */
@@ -86,12 +84,20 @@ def apply_login_background():
             
             /* Style the main content area */
             .main .block-container {{
-                background: rgba(255, 255, 255, 0.95);
-                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.6);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border-radius: 16px;
                 padding: 2rem;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.3);
                 max-width: 500px;
                 margin: 2rem auto;
+            }}
+            
+            /* Subtle text enhancement for title */
+            h1 {{
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             }}
             </style>
             """,
