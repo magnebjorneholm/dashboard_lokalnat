@@ -110,7 +110,7 @@ def render() -> Dict[str, Any]:
             baseline=BASELINE_MIN_REQUIREMENT,
             min_val=0.0,
             max_val=0.10,
-            step=0.001,
+            step=0.0001,
             help_text="Floor for annual efficiency requirement (applies to outliers and efficient firms)",
             format_as_percent=True
         )

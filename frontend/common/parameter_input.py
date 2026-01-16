@@ -88,24 +88,11 @@ def parameter_input(
             baseline_str = str(baseline)
         
         if is_changed:
-            delta = current - baseline
-            if format_as_percent:
-                delta_str = f"{delta*100:+.2f}pp"
-                color = COLORS["error"] if delta < 0 else COLORS["success"]
-            else:
-                delta_str = f"{delta:+.2g}"
-                color = COLORS["accent"]
-            
             st.markdown(
                 f'<div style="font-size: 0.8rem;">'
-                f'<span style="color: {color}; font-weight: 500;">{delta_str}</span>'
-                f'<br><span style="color: {COLORS["text_muted"]};">vs. {baseline_str}</span>'
+                f'<span style="color: {COLORS["warning"]}; font-weight: 500;">Modified</span>'
+                f'<br><span style="color: {COLORS["text_muted"]};">baseline: {baseline_str}</span>'
                 f'</div>',
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f'<span style="color: {COLORS["text_muted"]}; font-size: 0.8rem;">= {baseline_str}</span>',
                 unsafe_allow_html=True
             )
     
@@ -172,11 +159,6 @@ def parameter_select(
                 f'<span style="color: {COLORS["warning"]}; font-weight: 500;">Modified</span>'
                 f'<br><span style="color: {COLORS["text_muted"]};">baseline: {baseline}</span>'
                 f'</div>',
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f'<span style="color: {COLORS["text_muted"]}; font-size: 0.8rem;">= {baseline}</span>',
                 unsafe_allow_html=True
             )
     

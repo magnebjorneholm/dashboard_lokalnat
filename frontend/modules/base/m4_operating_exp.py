@@ -52,8 +52,5 @@ def render() -> Dict[str, Any]:
         
         if method_changed:
             config["paverkbara_method"] = method
-        
-        if method_changed and method == "TOTEX":
-            st.warning("TOTEX basis: efficiency requirement includes capital costs")
     
     return config
