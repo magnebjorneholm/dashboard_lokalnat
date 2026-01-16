@@ -91,7 +91,7 @@ def render() -> Dict[str, Any]:
         return config
     
     # === DEA CONFIGURATION ===
-    with st.expander("DEA specification", expanded=True):
+    with st.expander("DEA specification", expanded=False):
         st.caption(
             "Configure DEA model. If configuration matches Ei baseline, "
             "pre-computed results are applied; otherwise, new DEA is run."
@@ -179,7 +179,7 @@ def render() -> Dict[str, Any]:
         
         # 5.1.1 IQR multiplier
         multiplier = st.number_input(
-            "IQR multiplier",
+            "5.1.1 IQR multiplier",
             value=BASELINE_MULTIPLIER,
             min_value=1.0,
             max_value=5.0,
@@ -189,40 +189,9 @@ def render() -> Dict[str, Any]:
         )
         config["dea_multiplier"] = multiplier
         
-        st.divider()
-        
-        # === STATUS: Baseline or Custom ===
+        # Set method based on config (for backend to know if new DEA is needed)
         is_baseline = is_baseline_dea_config(config)
-        
-        if is_baseline:
-            config["dea_method"] = "baseline"
-            st.success(
-                "**Baseline specification**\n\n"
-                "Ei baseline. Pre-computed results applied."
-            )
-        else:
-            config["dea_method"] = "custom"
-            
-            # Show differences
-            differences = []
-            if set(config["dea_inputs"]) != set(BASELINE_INPUTS):
-                differences.append(f"Inputs: {config['dea_inputs']} (baseline: {BASELINE_INPUTS})")
-            if set(config["dea_outputs"]) != set(BASELINE_OUTPUTS):
-                differences.append(f"Outputs: {config['dea_outputs']} (baseline: {BASELINE_OUTPUTS})")
-            if config["dea_rts"] != BASELINE_RTS:
-                differences.append(f"RTS: {config['dea_rts']} (baseline: {BASELINE_RTS})")
-            if abs(config["dea_multiplier"] - BASELINE_MULTIPLIER) > 0.001:
-                differences.append(f"Multiplier: {config['dea_multiplier']} (baseline: {BASELINE_MULTIPLIER})")
-            if abs(config["dea_q_lower"] - BASELINE_Q_LOWER) > 0.001:
-                differences.append(f"Q_lower: {config['dea_q_lower']} (baseline: {BASELINE_Q_LOWER})")
-            if abs(config["dea_q_upper"] - BASELINE_Q_UPPER) > 0.001:
-                differences.append(f"Q_upper: {config['dea_q_upper']} (baseline: {BASELINE_Q_UPPER})")
-            
-            st.warning(
-                "**Custom specification**\n\n"
-                "Custom specification. New DEA required.\n\n"
-                "Modifications:\n- " + "\n- ".join(differences)
-            )
+        config["dea_method"] = "baseline" if is_baseline else "custom"
         
         # === SUMMARY ===
         st.divider()

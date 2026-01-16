@@ -41,7 +41,7 @@ def render() -> Dict[str, Any]:
     
     st.subheader("5. Efficiency Incentive")
     
-    with st.expander("Parameters", expanded=True):
+    with st.expander("Parameters", expanded=False):
         st.markdown("##### 5.1 Outlier identification")
         st.caption("Outlier threshold (5.1.1): configured in Add-on Benchmarking")
         

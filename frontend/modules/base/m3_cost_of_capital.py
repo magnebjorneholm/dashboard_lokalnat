@@ -425,12 +425,10 @@ def _render_direct_section() -> None:
         help="Direct WACC entry"
     )
     
-    # Show as percent with baseline comparison
+    # Show as percent with baseline comparison if modified
     if abs(direct_wacc - BASELINE_WACC) > 0.0001:
         delta = direct_wacc - BASELINE_WACC
         st.caption(f"= {format_percent(direct_wacc)} :orange[({delta*100:+.2f} pp from baseline)]")
-    else:
-        st.caption(f"= {format_percent(direct_wacc)} (baseline)")
     
     _render_apply_row(direct_wacc, f"{MODULE_KEY}_use_direct")
 

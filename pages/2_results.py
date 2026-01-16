@@ -35,7 +35,7 @@ from frontend.utils.case_storage import save_case, get_case_count, MAX_CASES_PER
 
 init_session_state()
 
-SHAPEFILE_PATH = "data/shapefiles/Samtliga natforetags del- och verksamhetsomraden.shp"
+SHAPEFILE_PATH = "data/shapefiles/Samtliga nätföretags del- och verksamhetsområden.shp"
 
 # =============================================================================
 # HELPER FUNCTIONS

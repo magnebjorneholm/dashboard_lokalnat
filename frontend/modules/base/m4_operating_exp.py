@@ -26,7 +26,7 @@ def render() -> Dict[str, Any]:
     
     st.subheader("4. Operating Expenditures")
     
-    with st.expander("Parameters", expanded=True):
+    with st.expander("Parameters", expanded=False):
         st.markdown("##### 4.1 General scaling parameters")
         
         st.info(
