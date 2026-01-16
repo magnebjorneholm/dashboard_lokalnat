@@ -10,6 +10,7 @@ Handles user authentication:
 
 import streamlit as st
 import pandas as pd
+import base64
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -21,9 +22,85 @@ from auth.firebase_auth import (
 
 st.set_page_config(
     page_title="Regumetrica - Login",
-    page_icon="🔐",
+    page_icon="⚡",
     layout="centered",
 )
+
+
+# =============================================================================
+# STYLING
+# =============================================================================
+
+def apply_login_background():
+    """Apply background image to login page."""
+    image_path = Path("login_pic.jpg")
+    
+    if not image_path.exists():
+        # Fallback: try other extensions
+        for ext in [".png", ".jpeg"]:
+            alt_path = Path(f"login_pic{ext}")
+            if alt_path.exists():
+                image_path = alt_path
+                break
+    
+    if image_path.exists():
+        with open(image_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+        
+        st.markdown(
+            f"""
+            <style>
+            [data-testid="stAppViewContainer"] {{
+                background-image: url("data:image/jpeg;base64,{encoded}");
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+            }}
+            
+            [data-testid="stHeader"] {{
+                background: transparent;
+            }}
+            
+            /* Semi-transparent overlay for better readability */
+            [data-testid="stAppViewContainer"]::before {{
+                content: "";
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(255, 255, 255, 0.85);
+                z-index: 0;
+            }}
+            
+            [data-testid="stHeader"] {{
+                background: transparent;
+            }}
+            
+            /* Ensure content is above overlay */
+            [data-testid="stAppViewContainer"] > div {{
+                position: relative;
+                z-index: 1;
+            }}
+            
+            /* Style the main content area */
+            .main .block-container {{
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 12px;
+                padding: 2rem;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+                max-width: 500px;
+                margin: 2rem auto;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+
+# Apply background
+apply_login_background()
 
 
 # =============================================================================
