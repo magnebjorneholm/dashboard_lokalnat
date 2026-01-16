@@ -117,6 +117,31 @@ def _calculate_wacc_from_derived(
     return wacc_nominal_pre_tax, wacc_real_pre_tax
 
 
+def _render_apply_row(new_wacc: float, button_key: str) -> None:
+    """
+    Render Apply/Reset buttons and current WACC info in a single row.
+    
+    Layout: [Apply][Reset][Current WACC info]
+    """
+    current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
+    
+    cols = st.columns([0.8, 0.8, 2.5, 10])
+    
+    with cols[0]:
+        st.button("Apply", key=button_key, type="primary", on_click=_set_wacc, args=(new_wacc,))
+    
+    with cols[1]:
+        st.button("Reset", key=f"{button_key}_reset", on_click=_set_wacc, args=(BASELINE_WACC,))
+    
+    with cols[2]:
+        st.caption(f"Active WACC: **{format_percent(current_wacc)}**")
+
+
+def _set_wacc(value: float) -> None:
+    """Callback to set WACC value."""
+    st.session_state[f"{MODULE_KEY}_current_wacc"] = value
+
+
 def render() -> Dict[str, Any]:
     """
     Render Module 3: Cost of capital.
@@ -137,26 +162,6 @@ def render() -> Dict[str, Any]:
     # Initialize session state
     if f"{MODULE_KEY}_current_wacc" not in st.session_state:
         st.session_state[f"{MODULE_KEY}_current_wacc"] = BASELINE_WACC
-    
-    # --- Current value (always visible) ---
-    current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
-    
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        if abs(current_wacc - BASELINE_WACC) < 0.0001:
-            st.info(f"**Current WACC:** {format_percent(current_wacc)} (baseline)")
-        else:
-            delta = current_wacc - BASELINE_WACC
-            delta_str = f"{delta*100:+.2f}".replace(".", ",")
-            st.success(f"**Current WACC:** {format_percent(current_wacc)} ({delta_str} pp from baseline)")
-    
-    with col2:
-        if abs(current_wacc - BASELINE_WACC) > 0.0001:
-            if st.button("Reset", key=f"{MODULE_KEY}_reset"):
-                st.session_state[f"{MODULE_KEY}_current_wacc"] = BASELINE_WACC
-                st.rerun()
-    
-    st.divider()
     
     # === INPUT METHOD VIA RADIO ===
     input_method = st.radio(
@@ -303,33 +308,12 @@ def _render_capm_section() -> None:
             with st.container(border=True):
                 st.metric("3.2.3 Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
 
+        # Final WACC and Apply/Reset/Info row
+        st.divider()
         with st.container(border=True):
             st.metric("Final WACC", format_percent(calculated_wacc))
         
-        # === CALCULATION FORMULAS ===
-        st.divider()
-        st.markdown("##### Calculation formulas")
-        
-        st.markdown("**1. Hamada formula** (asset beta → equity beta)")
-        st.latex(FORMULA_HAMADA)
-        st.caption("Converts unlevered beta to levered beta, accounting for leverage and tax")
-        
-        st.markdown("**2. CAPM** (cost of equity)")
-        st.latex(FORMULA_CAPM)
-        st.caption("Cost of equity via CAPM")
-        
-        st.markdown("**3. WACC nominal pre-tax**")
-        st.latex(FORMULA_WACC_NOMINAL_COMPLETE)
-        st.caption("Weighted average cost of capital, pre-tax")
-        
-        st.markdown("**4. Fisher equation** (nominal → real)")
-        st.latex(FORMULA_FISHER)
-        st.caption("Convert nominal to real rate (inflation adjustment)")
-        
-        # Button to use calculated value
-        if st.button("Apply", key=f"{MODULE_KEY}_use_capm", type="primary"):
-            st.session_state[f"{MODULE_KEY}_current_wacc"] = calculated_wacc
-            st.rerun()
+        _render_apply_row(calculated_wacc, f"{MODULE_KEY}_use_capm")
             
     except ValueError as e:
         st.error(f"Calculation error: {e}")
@@ -412,36 +396,18 @@ def _render_derived_section() -> None:
         tax_rate=tax_rate,
         inflation=inflation
     )
-        
-    st.divider()
     
-    col1, col2 = st.columns(2)
-    with col1:
-        pass
-    with col2:
+    # Final WACC and Apply/Reset/Info row
+    st.divider()
+    with st.container(border=True):
         delta = wacc_real - BASELINE_WACC
-        with st.container(border=True):
-            st.metric(
-                "Final WACC",
-                format_percent(wacc_real),
-                delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
-            )
+        st.metric(
+            "Final WACC",
+            format_percent(wacc_real),
+            delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
+        )
     
-    # === CALCULATION FORMULAS ===
-    st.divider()
-    st.markdown("##### Calculation formulas")
-    
-    st.markdown("**WACC nominal pre-tax**")
-    st.latex(FORMULA_WACC_NOMINAL_COMPLETE)
-    st.caption("WACC nominal (pre-tax)")
-    
-    st.markdown("**Fisher equation** (nominal → real)")
-    st.latex(FORMULA_FISHER)
-    st.caption("Convert nominal to real rate (inflation adjustment)")
-    
-    if st.button("Apply", key=f"{MODULE_KEY}_use_derived", type="primary"):
-        st.session_state[f"{MODULE_KEY}_current_wacc"] = wacc_real
-        st.rerun()
+    _render_apply_row(wacc_real, f"{MODULE_KEY}_use_derived")
 
 
 def _render_direct_section() -> None:
@@ -460,19 +426,14 @@ def _render_direct_section() -> None:
         help="Direct WACC entry"
     )
     
-    # Show as percent
-    st.caption(f"= {format_percent(direct_wacc)}")
-    
-    # Show baseline comparison
+    # Show as percent with baseline comparison
     if abs(direct_wacc - BASELINE_WACC) > 0.0001:
         delta = direct_wacc - BASELINE_WACC
-        st.caption(f":orange[{delta*100:+.2f} percentage points from baseline ({format_percent(BASELINE_WACC)})]")
+        st.caption(f"= {format_percent(direct_wacc)} :orange[({delta*100:+.2f} pp from baseline)]")
     else:
-        st.caption(f"= baseline ({format_percent(BASELINE_WACC)})")
+        st.caption(f"= {format_percent(direct_wacc)} (baseline)")
     
-    if st.button("Apply", key=f"{MODULE_KEY}_use_direct", type="primary"):
-        st.session_state[f"{MODULE_KEY}_current_wacc"] = direct_wacc
-        st.rerun()
+    _render_apply_row(direct_wacc, f"{MODULE_KEY}_use_direct")
 
 
 # =============================================================================
@@ -500,17 +461,17 @@ def render_quality_adjustments() -> Dict[str, Any]:
     
     with col1:
         enable_quality = st.checkbox(
-            "Quality incentive",
+            "3.3 Quality",
             value=BASELINE_INCENTIVE["enable_quality"],
             key=f"{MODULE_KEY_QA}_enable_quality",
-            help="Enable quality adjustment (AIT/AIF)"
+            help="Enable quality adjustment (CEMI/AIT/AIF)"
         )
         if enable_quality != BASELINE_INCENTIVE["enable_quality"]:
             config["enable_quality"] = enable_quality
     
     with col2:
         enable_netloss = st.checkbox(
-            "Network loss adjustment",
+            "3.4 Network loss",
             value=BASELINE_INCENTIVE["enable_netloss"],
             key=f"{MODULE_KEY_QA}_enable_netloss",
             help="Enable network loss adjustment"
@@ -520,45 +481,44 @@ def render_quality_adjustments() -> Dict[str, Any]:
     
     with col3:
         enable_load = st.checkbox(
-            "Utilization rate adjustment",
+            "3.5 Utilization rate",
             value=BASELINE_INCENTIVE["enable_load"],
             key=f"{MODULE_KEY_QA}_enable_load",
-            help="Enable utilization adjustment"
+            help="Enable utilization rate adjustment"
         )
         if enable_load != BASELINE_INCENTIVE["enable_load"]:
             config["enable_load"] = enable_load
     
     st.divider()
     
-    # === 3.3 QUALITY INCENTIVE ===
-    with st.expander("3.3 Quality incentive", expanded=False):
+    # === INDIVIDUAL SECTIONS ===
+    with st.expander("3.3 Quality adjustment parameters", expanded=False):
         _render_quality_section(config)
     
-    # === 3.4 NETWORK LOSS ADJUSTMENT ===
-    with st.expander("3.4 Network loss adjustment", expanded=False):
+    with st.expander("3.4 Network loss adjustment parameters", expanded=False):
         _render_netloss_section(config)
     
-    # === 3.5 UTILIZATION RATE ADJUSTMENT ===
-    with st.expander("3.5 Utilization rate adjustment", expanded=False):
+    with st.expander("3.5 Utilization rate adjustment parameters", expanded=False):
         _render_load_section(config)
     
-    # === 3.6 AGGREGATE ADJUSTMENT CAP ===
     with st.expander("3.6 Aggregate adjustment cap", expanded=False):
         _render_caps_section(config)
     
-    # === 3.7 KPI FACTORS ===
-    with st.expander("3.7 CPI factors", expanded=False):
+    with st.expander("3.7 KPI factors", expanded=False):
         _render_kpi_section(config)
     
     return config
 
 
 def _render_quality_section(config: Dict[str, Any]) -> None:
-    """Render 3.3 Quality incentive with LaTeX formulas."""
-    st.markdown("Quality adjustment parameters (AIT/AIF)")
+    """Render 3.3 Quality adjustment with LaTeX formulas."""
     
-    # === CALCULATION FORMULAS ===
-    st.markdown("###### Calculation formulas")
+    # === CALCULATION FORMULA ===
+    st.markdown("###### Calculation formula")
+    st.latex(FORMULA_INCENTIVE_CAP_TOTAL)
+    st.caption("Quality adjustment components")
+    
+    st.divider()
     
     st.markdown("**Quality cost AIT** (per customer type and outage type)")
     formula_ait, caption_ait = get_formula_with_caption("QUALITY_AIT")
@@ -593,8 +553,6 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     if abs(adj_max_cemi4 - BASELINE_INCENTIVE["adj_max_cemi4"]) > 0.001:
         config["adj_max_cemi4"] = adj_max_cemi4
         st.caption(f":orange[Modified] (baseline: {BASELINE_INCENTIVE['adj_max_cemi4']:.2f})")
-    else:
-        st.caption(f"= baseline ({BASELINE_INCENTIVE['adj_max_cemi4']:.2f})")
     
     st.divider()
     
@@ -604,7 +562,7 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     edited_ait = st.data_editor(
         ait_df,
         key=f"{MODULE_KEY_QA}_ait_editor",
-        width="stretch",
+        use_container_width=True,
         hide_index=False,
         column_config={
             "Unannounced": st.column_config.NumberColumn(format="%.2f"),
@@ -624,7 +582,7 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     edited_aif = st.data_editor(
         aif_df,
         key=f"{MODULE_KEY_QA}_aif_editor",
-        width="stretch",
+        use_container_width=True,
         hide_index=False,
         column_config={
             "Unannounced": st.column_config.NumberColumn(format="%.2f"),
@@ -666,8 +624,6 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
         if abs(sharing - BASELINE_INCENTIVE["sharing_netloss"]) > 0.001:
             config["sharing_netloss"] = sharing
             st.caption(f":orange[Modified] (baseline: {BASELINE_INCENTIVE['sharing_netloss']:.2f})")
-        else:
-            st.caption(f"= baseline ({BASELINE_INCENTIVE['sharing_netloss']:.2f})")
     
     with col2:
         st.markdown("**Electricity price (K_NF) per year**")
@@ -675,7 +631,7 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
         edited_k_nf = st.data_editor(
             k_nf_df,
             key=f"{MODULE_KEY_QA}_k_nf_editor",
-            width="stretch",
+            use_container_width=True,
             hide_index=False,
             column_config={
                 "Price (SEK/MWh)": st.column_config.NumberColumn(format="%.2f"),
@@ -727,8 +683,6 @@ def _render_caps_section(config: Dict[str, Any]) -> None:
     if abs(adj_agg - BASELINE_INCENTIVE["adj_max_agg"]) > 0.001:
         config["adj_max_agg"] = adj_agg
         st.caption(f":orange[Modified] (baseline: {BASELINE_INCENTIVE['adj_max_agg']:.3f})")
-    else:
-        st.caption(f"= baseline ({BASELINE_INCENTIVE['adj_max_agg']:.3f} ≈ 1/3)")
 
 
 def _render_kpi_section(config: Dict[str, Any]) -> None:
@@ -739,7 +693,7 @@ def _render_kpi_section(config: Dict[str, Any]) -> None:
     edited_kpi = st.data_editor(
         kpi_df,
         key=f"{MODULE_KEY_QA}_kpi_editor",
-        width="stretch",
+        use_container_width=True,
         hide_index=False,
         column_config={
             "KPI factor": st.column_config.NumberColumn(format="%.4f"),
@@ -749,8 +703,6 @@ def _render_kpi_section(config: Dict[str, Any]) -> None:
     if kpi_dict != BASELINE_INCENTIVE["kpi"]:
         config["kpi"] = kpi_dict
         st.caption(":orange[KPI factors modified]")
-    else:
-        st.caption(f"= baseline ({BASELINE_INCENTIVE['kpi'][2024]:.4f} all years)")
 
 
 # =============================================================================
