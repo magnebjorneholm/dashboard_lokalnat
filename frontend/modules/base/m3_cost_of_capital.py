@@ -134,7 +134,7 @@ def _render_apply_row(new_wacc: float, button_key: str) -> None:
         st.button("Reset", key=f"{button_key}_reset", on_click=_set_wacc, args=(BASELINE_WACC,))
     
     with cols[2]:
-        st.caption(f"Active WACC: **{format_percent(current_wacc)}**")
+        st.markdown(f"<p style='margin-top: 16px;'>Active WACC: <b>{format_percent(current_wacc)}</b></p>", unsafe_allow_html=True)
 
 
 def _set_wacc(value: float) -> None:
@@ -309,7 +309,6 @@ def _render_capm_section() -> None:
                 st.metric("3.2.3 Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
 
         # Final WACC and Apply/Reset/Info row
-        st.divider()
         with st.container(border=True):
             st.metric("Final WACC", format_percent(calculated_wacc))
         
