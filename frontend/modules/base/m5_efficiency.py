@@ -102,19 +102,32 @@ def render() -> Dict[str, Any]:
         
         st.markdown("##### 5.3 Efficiency requirement bounds")
         
-        # 5.3.1 Minimum annual requirement
-        min_req, min_req_changed = parameter_input(
-            module_key=MODULE_KEY,
-            param_id="5.3.1",
-            label="Minimum annual requirement",
-            baseline=BASELINE_MIN_REQUIREMENT,
-            min_val=0.0,
-            max_val=0.10,
-            step=0.0001,
-            help_text="Floor for annual efficiency requirement (applies to outliers and efficient firms)",
-            format_as_percent=True
-        )
-        
+        # 5.3.1 Minimum annual requirement (custom format for precision)
+        col_id, col_label, col_input, col_baseline = st.columns([1, 2.5, 2, 1.5])
+        with col_id:
+            st.markdown(f'<span style="font-family: monospace; color: #6B7280; font-size: 0.875rem;">5.3.1</span>', unsafe_allow_html=True)
+        with col_label:
+            st.markdown("Minimum annual requirement")
+        with col_input:
+            min_req = st.number_input(
+                "Minimum annual requirement",
+                value=BASELINE_MIN_REQUIREMENT,
+                min_value=0.0,
+                max_value=0.10,
+                step=0.0001,
+                format="%.4f",
+                key=f"{MODULE_KEY}_input_5.3.1",
+                help="Floor for annual efficiency requirement (applies to outliers and efficient firms)",
+                label_visibility="collapsed"
+            )
+        with col_baseline:
+            min_req_changed = abs(min_req - BASELINE_MIN_REQUIREMENT) > 1e-9
+            if min_req_changed:
+                delta = min_req - BASELINE_MIN_REQUIREMENT
+                st.markdown(f'<span style="color: #F59E0B; font-size: 0.8rem;">{delta*100:+.2f}pp</span>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<span style="color: #9CA3AF; font-size: 0.8rem;">= {BASELINE_MIN_REQUIREMENT*100:.2f}%</span>', unsafe_allow_html=True)
+
         if min_req_changed:
             config["outlier_krav"] = min_req
         

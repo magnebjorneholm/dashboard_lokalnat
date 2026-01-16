@@ -657,7 +657,7 @@ def _render_load_section(config: Dict[str, Any]) -> None:
 
 def _render_caps_section(config: Dict[str, Any]) -> None:
     """Render 3.6 Aggregate adjustment cap with LaTeX formulas."""
-    st.markdown("Maximum aggregate incentive adjustment (share of return)")
+    st.markdown("Maximum aggregate incentive adjustment (share of WACC)")
     
     # === CALCULATION FORMULA ===
     st.markdown("###### Calculation formula")
