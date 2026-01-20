@@ -35,6 +35,33 @@ init_session_state()
 
 
 # =============================================================================
+# COMPANY NAME LOOKUP
+# =============================================================================
+
+@st.cache_data(ttl=3600)
+def get_company_name_lookup() -> dict:
+    """Build REId -> Company name lookup from baseline data."""
+    try:
+        from data_loaders.baseline_data import load_baseline_data
+        baseline = load_baseline_data()
+        df = baseline.df_all_companies[["REId", "Företag"]].copy()
+        return dict(zip(df["REId"], df["Företag"]))
+    except Exception:
+        return {}
+
+
+def get_company_display(reid: str) -> str:
+    """Get display string: 'Company Name (REId)' or just REId if lookup fails."""
+    if not reid:
+        return "None"
+    lookup = get_company_name_lookup()
+    company_name = lookup.get(reid)
+    if company_name:
+        return f"{company_name} ({reid})"
+    return reid
+
+
+# =============================================================================
 # AUTHENTICATION CHECK
 # =============================================================================
 
@@ -114,7 +141,8 @@ def _render_dev_mode_selector():
             set_user_reid(reid)
     
     st.divider()
-    st.caption(f"REId: {st.session_state.get('user_reid', 'None')}")
+    current_reid = st.session_state.get('user_reid')
+    st.caption(f"Selected: {get_company_display(current_reid)}")
 
 
 def _render_authenticated_sidebar():
@@ -159,11 +187,13 @@ def _render_authenticated_sidebar():
                 if selected_reid:
                     set_user_reid(selected_reid)
             
-            st.caption(f"Analyzing: {st.session_state.get('user_reid', 'None')}")
+            current_reid = st.session_state.get('user_reid')
+            st.caption(f"Analyzing: {get_company_display(current_reid)}")
     
     else:
-        # Company user - fixed REId
-        st.caption(f"Company: {reid}")
+        # Company user - fixed REId, show company name
+        company_display = get_company_display(reid)
+        st.caption(f"Company: {company_display}")
         
         # Auto-set user_reid from auth
         if reid and st.session_state.get("user_reid") != reid:
@@ -192,17 +222,17 @@ login_page = st.Page(
 
 case_definition = st.Page(
     "pages/0_case_definition.py",
-    title="Definition",
+    title="Define",
 )
 
 case_config = st.Page(
     "pages/1_case_config.py",
-    title="Configuration",
+    title="Configure",
 )
 
 results = st.Page(
     "pages/2_results.py",
-    title="Computation and results",
+    title="Compute and results",
 )
 
 

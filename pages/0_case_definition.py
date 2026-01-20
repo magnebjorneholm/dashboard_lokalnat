@@ -64,8 +64,6 @@ if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")
     st.stop()
 
-st.info(f"Company: **{user_reid}**")
-
 # Update saved cases count for default naming
 case_count = get_case_count(user_reid)
 set_saved_cases_count(case_count)

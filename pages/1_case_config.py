@@ -54,9 +54,6 @@ if user_reid is None:
 # Get user_id_network for company-specific sections
 user_id_network = get_user_id_network()
 
-# Show selected company
-st.info(f"Company: **{user_reid}**")
-
 # Check which modules are selected
 selected_modules = get_selected_modules()
 has_selection = len(selected_modules) > 0

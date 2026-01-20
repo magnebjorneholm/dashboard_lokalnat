@@ -150,8 +150,6 @@ if user_reid is None:
 
 # If no calculation done yet, show case summary with calculate button
 if not st.session_state.get("calculation_done"):
-    st.info(f"Company: **{user_reid}**")
-    st.divider()
     case_summary.render()
     st.stop()
 
