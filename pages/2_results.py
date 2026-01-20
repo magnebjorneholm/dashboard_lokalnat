@@ -32,6 +32,7 @@ from frontend.utils.geo_visualization import (
     get_column_label
 )
 from frontend.utils.case_storage import save_case, get_case_count, MAX_CASES_PER_USER
+from frontend.modules.base import case_summary
 
 init_session_state()
 
@@ -129,7 +130,7 @@ def do_save_case() -> bool:
 
 
 # =============================================================================
-# PAGE GUARD
+# PAGE GUARD / CASE SUMMARY
 # =============================================================================
 
 st.title("Regumetrica")
@@ -137,19 +138,26 @@ st.title("Regumetrica")
 # Show case name
 case_name = get_case_name()
 if case_name:
-    st.subheader(f"Results: {case_name}")
+    st.subheader(f"Compute: {case_name}")
 else:
-    st.subheader("Results")
+    st.subheader("Compute")
 
-if not st.session_state.get("calculation_done"):
-    st.warning("No calculation performed yet.")
-    if st.button("Go to Case Definition"):
-        st.switch_page("pages/0_case_definition.py")
+# Check company selection
+user_reid = get_user_reid()
+if user_reid is None:
+    st.warning("Select a company in the sidebar to continue.")
     st.stop()
 
+# If no calculation done yet, show case summary with calculate button
+if not st.session_state.get("calculation_done"):
+    st.info(f"Company: **{user_reid}**")
+    st.divider()
+    case_summary.render()
+    st.stop()
+
+# From here on, calculation has been performed
 baseline = st.session_state.get("baseline_result")
 case = st.session_state.get("case_result")
-user_reid = get_user_reid()
 
 case_ir = case.post_dea.user_intaktsram
 baseline_ir = baseline.post_dea.user_intaktsram
@@ -486,24 +494,3 @@ with col_save:
 st.caption(f"Saved cases: {case_count}/{MAX_CASES_PER_USER}")
 
 st.divider()
-
-
-# =============================================================================
-# ACTIONS
-# =============================================================================
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    if st.button("New case", use_container_width=True, type="secondary"):
-        reset_case()
-        st.switch_page("pages/0_case_definition.py")
-
-with col2:
-    if st.button("Modify case", use_container_width=True, type="secondary"):
-        st.session_state["calculation_done"] = False
-        st.switch_page("pages/1_case_config.py")
-
-with col3:
-    if st.button("Back to definition", use_container_width=True, type="secondary"):
-        st.switch_page("pages/0_case_definition.py")

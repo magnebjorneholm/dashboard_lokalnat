@@ -16,14 +16,6 @@ from calculations.wacc_calculations import (
     BASELINE_WACC,
 )
 from frontend.common.formatting import format_percent
-from frontend.common.formulas import (
-    get_formula_with_caption,
-    FORMULA_HAMADA,
-    FORMULA_CAPM,
-    FORMULA_WACC_NOMINAL_COMPLETE,
-    FORMULA_FISHER,
-    FORMULA_INCENTIVE_CAP_TOTAL,
-)
 
 MODULE_KEY = "m3_cost_of_capital"
 MODULE_KEY_QA = "m3_quality_adjustments"
@@ -508,31 +500,7 @@ def render_quality_adjustments() -> Dict[str, Any]:
 
 
 def _render_quality_section(config: Dict[str, Any]) -> None:
-    """Render 3.3 Quality adjustment with LaTeX formulas."""
-    
-    # === CALCULATION FORMULA ===
-    st.markdown("###### Calculation formula")
-    st.latex(FORMULA_INCENTIVE_CAP_TOTAL)
-    st.caption("Quality adjustment components")
-    
-    st.divider()
-    
-    st.markdown("**Quality cost AIT** (per customer type and outage type)")
-    formula_ait, caption_ait = get_formula_with_caption("QUALITY_AIT")
-    st.latex(formula_ait)
-    st.caption(caption_ait)
-    
-    st.markdown("**Quality cost AIF** (per customer type and outage type)")
-    formula_aif, caption_aif = get_formula_with_caption("QUALITY_AIF")
-    st.latex(formula_aif)
-    st.caption(caption_aif)
-    
-    st.markdown("**Norm level** (as function of customer density)")
-    formula_norm, caption_norm = get_formula_with_caption("NORM_AIT")
-    st.latex(formula_norm)
-    st.caption(caption_norm)
-    
-    st.divider()
+    """Render 3.3 Quality adjustment parameters."""
     
     # CEMI adjustment
     st.markdown("###### CEMI adjustment")
@@ -593,16 +561,7 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
 
 
 def _render_netloss_section(config: Dict[str, Any]) -> None:
-    """Render 3.4 Network loss adjustment with LaTeX formulas."""
-    
-    
-    # === CALCULATION FORMULA ===
-    st.markdown("###### Calculation formula")
-    formula, caption = get_formula_with_caption("NETLOSS")
-    st.latex(formula)
-    st.caption(caption)
-    
-    st.divider()
+    """Render 3.4 Network loss adjustment parameters."""
     
     col1, col2 = st.columns(2)
     
@@ -641,30 +600,13 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
 
 
 def _render_load_section(config: Dict[str, Any]) -> None:
-    """Render 3.5 Utilization rate adjustment with LaTeX formulas."""
-    
-    
-    # === CALCULATION FORMULA ===
-    st.markdown("###### Calculation formula")
-    formula, caption = get_formula_with_caption("LOAD")
-    st.latex(formula)
-    st.caption(caption)
-    
-    st.divider()
-    
-    st.info("Computed automatically. Toggle only.")
+    """Render 3.5 Utilization rate adjustment parameters."""
+    st.info("Computed automatically based on company data. Use toggle above to enable/disable.")
 
 
 def _render_caps_section(config: Dict[str, Any]) -> None:
-    """Render 3.6 Aggregate adjustment cap with LaTeX formulas."""
+    """Render 3.6 Aggregate adjustment cap parameters."""
     st.markdown("Maximum aggregate incentive adjustment (share of WACC)")
-    
-    # === CALCULATION FORMULA ===
-    st.markdown("###### Calculation formula")
-    st.latex(FORMULA_INCENTIVE_CAP_TOTAL)
-    st.caption("Cap on total incentive per year")
-    
-    st.divider()
     
     adj_agg = st.slider(
         "Max total per year",

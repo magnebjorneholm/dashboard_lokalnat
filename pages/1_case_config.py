@@ -25,7 +25,6 @@ from frontend.modules.base import (
     m3_incentive_variables,
     m4_operating_exp,
     m5_efficiency,
-    case_summary,
 )
 from frontend.modules.addons import benchmarking
 
@@ -42,9 +41,9 @@ st.title("Regumetrica")
 # Show case name
 case_name = get_case_name()
 if case_name:
-    st.subheader(f"Case: {case_name}")
+    st.subheader(f"Configure: {case_name}")
 else:
-    st.subheader("Case Configuration")
+    st.subheader("Configure")
 
 # Check that company is selected
 user_reid = get_user_reid()
@@ -172,21 +171,5 @@ if is_module_selected("m7"):
 
 
 # =============================================================================
-# CASE SUMMARY & CALCULATE
+# END OF CONFIGURATION
 # =============================================================================
-
-st.divider()
-case_summary.render()
-
-
-# =============================================================================
-# NAVIGATION
-# =============================================================================
-
-st.divider()
-
-col_left, col_right = st.columns([1, 1])
-
-with col_left:
-    if st.button("Back to Case Definition", type="secondary", use_container_width=True):
-        st.switch_page("pages/0_case_definition.py")

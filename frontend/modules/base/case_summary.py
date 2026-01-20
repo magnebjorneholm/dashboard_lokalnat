@@ -24,7 +24,6 @@ from frontend.common.asset_categories import (
     get_category_name,
 )
 
-# Import baseline values from respective modules
 from frontend.modules.base.m3_cost_of_capital import (
     BASELINE_WACC,
     BASELINE_INCENTIVE,
@@ -41,14 +40,14 @@ MODULE_KEY = "case_summary"
 
 def render() -> None:
     """
-    Render Case Summary tab.
+    Render Case Summary with tabs.
     
     Displays all parameters organized by module with baseline/modified status.
+    Modified modules have orange tab names.
     Includes reset buttons per module and the main CALCULATE button.
     """
     st.subheader("Case Summary")
     
-    # Get selected modules for filtering
     selected_modules = get_selected_modules()
     
     if selected_modules:
@@ -59,63 +58,88 @@ def render() -> None:
     else:
         st.caption("No modules selected. Running baseline simulation.")
     
-    # Get filtered config (only selected modules have modifications)
     filtered_config = get_filtered_ui_config()
     
-    has_any_changes = False
+    # Pre-compute change status for each module
+    is_selected = {
+        "m1": len(selected_modules) == 0 or "m1" in selected_modules,
+        "m2": len(selected_modules) == 0 or "m2" in selected_modules,
+        "m3": len(selected_modules) == 0 or "m3" in selected_modules,
+        "m4": len(selected_modules) == 0 or "m4" in selected_modules,
+        "m5": len(selected_modules) == 0 or "m5" in selected_modules,
+        "m7": len(selected_modules) == 0 or "m7" in selected_modules,
+    }
     
-    # --- Module 1: Regulatory asset base valuation ---
-    is_selected_1 = len(selected_modules) == 0 or "m1" in selected_modules
-    changed_1 = _render_module_1(filtered_config, is_selected=is_selected_1)
-    has_any_changes = has_any_changes or changed_1
+    has_changes = {
+        "m1": _check_module_1_changes(filtered_config) and is_selected["m1"],
+        "m2": _check_module_2_changes(filtered_config) and is_selected["m2"],
+        "m3": _check_module_3_changes(filtered_config) and is_selected["m3"],
+        "m4": _check_module_4_changes(filtered_config) and is_selected["m4"],
+        "m5": _check_module_5_changes(filtered_config) and is_selected["m5"],
+        "m7": _check_module_7_changes(filtered_config) and is_selected["m7"],
+    }
     
-    # --- Module 2: Depreciation ---
-    is_selected_2 = len(selected_modules) == 0 or "m2" in selected_modules
-    changed_2 = _render_module_2(filtered_config, is_selected=is_selected_2)
-    has_any_changes = has_any_changes or changed_2
+    has_any_changes = any(has_changes.values())
     
-    # --- Module 3: Cost of capital ---
-    is_selected_3 = len(selected_modules) == 0 or "m3" in selected_modules
-    changed_3 = _render_module_3(filtered_config, is_selected=is_selected_3)
-    has_any_changes = has_any_changes or changed_3
+    # Build tab labels - orange if modified
+    def tab_label(key: str, name: str) -> str:
+        if not is_selected[key]:
+            return f":gray[{name}]"
+        elif has_changes[key]:
+            return f":orange[{name}]"
+        return name
     
-    # --- Module 4: Operating expenditures ---
-    is_selected_4 = len(selected_modules) == 0 or "m4" in selected_modules
-    changed_4 = _render_module_4(filtered_config, is_selected=is_selected_4)
-    has_any_changes = has_any_changes or changed_4
+    tab_labels = [
+        tab_label("m1", "1: Regulatory asset base"),
+        tab_label("m2", "2: Depreciation"),
+        tab_label("m3", "3: Cost of capital"),
+        tab_label("m4", "4: Operating expenditures"),
+        tab_label("m5", "5: Efficiency incentive"),
+        tab_label("m7", "7: Add-on modules"),
+    ]
     
-    # --- Module 5: Efficiency incentive ---
-    is_selected_5 = len(selected_modules) == 0 or "m5" in selected_modules
-    changed_5 = _render_module_5(filtered_config, is_selected=is_selected_5)
-    has_any_changes = has_any_changes or changed_5
+    tabs = st.tabs(tab_labels)
     
-    # --- Module 7: Add-on modules ---
-    is_selected_7 = len(selected_modules) == 0 or "m7" in selected_modules
-    changed_7 = _render_module_7(filtered_config, is_selected=is_selected_7)
-    has_any_changes = has_any_changes or changed_7
+    with tabs[0]:
+        _render_module_1_content(filtered_config, is_selected["m1"], has_changes["m1"])
     
-    # --- Summary status ---
+    with tabs[1]:
+        _render_module_2_content(filtered_config, is_selected["m2"], has_changes["m2"])
+    
+    with tabs[2]:
+        _render_module_3_content(filtered_config, is_selected["m3"], has_changes["m3"])
+    
+    with tabs[3]:
+        _render_module_4_content(filtered_config, is_selected["m4"], has_changes["m4"])
+    
+    with tabs[4]:
+        _render_module_5_content(filtered_config, is_selected["m5"], has_changes["m5"])
+    
+    with tabs[5]:
+        _render_module_7_content(filtered_config, is_selected["m7"], has_changes["m7"])
+    
+    # Summary status
     st.divider()
     
     if has_any_changes:
-        st.warning("This case has modified parameters (highlighted in orange above).")
+        st.warning("This case has modified parameters (orange tabs above).")
     else:
         st.info("All parameters at baseline values.")
     
-    # --- CALCULATE button ---
+    # CALCULATE button
     st.divider()
     
     if st.button("CALCULATE REVENUE FRAME", type="primary", use_container_width=True):
         _run_calculation()
 
 
-def _render_module_1(ui_config: Dict[str, Any], is_selected: bool) -> bool:
-    """Render Module 1: Regulatory asset base valuation. Returns True if has changes."""
+# =============================================================================
+# CHANGE DETECTION FUNCTIONS
+# =============================================================================
+
+def _check_module_1_changes(ui_config: Dict[str, Any]) -> bool:
+    """Check if Module 1 has any changes."""
     m1 = ui_config.get("m1_asset_base", {})
-    
-    has_changes = False
-    
-    # Check for changes (new keys)
     kent_uploaded = m1.get("kent_file_bytes") is not None
     general_scaling = m1.get("general_scaling")
     cat_scaling = m1.get("cat_scaling")
@@ -125,159 +149,227 @@ def _render_module_1(ui_config: Dict[str, Any], is_selected: bool) -> bool:
     has_cat = cat_scaling is not None and len(cat_scaling) > 0
     has_var = var_scaling is not None and len(var_scaling) > 0
     
-    if kent_uploaded or has_general or has_cat or has_var:
-        has_changes = True
-    
-    # Header with reset button
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        expander_label = "1. Regulatory asset base valuation"
-        if not is_selected:
-            expander_label += " :gray[(not selected)]"
-        elif has_changes:
-            expander_label += " :orange[(modified)]"
-        expanded = has_changes and is_selected
-    with col2:
-        if has_changes and is_selected:
-            if st.button("Reset", key=f"{MODULE_KEY}_reset_m1", use_container_width=True):
-                _reset_module("m1_asset_base")
-                st.rerun()
-    
-    with st.expander(expander_label, expanded=expanded):
-        if not is_selected:
-            st.caption("Module not selected - using baseline values")
-        else:
-            # Data source (company-specific)
-            st.markdown("**Data source (company-specific)**")
-            if kent_uploaded:
-                kent_name = m1.get("kent_file_name", "Unknown")
-                st.markdown(f":orange[KENT upload: {kent_name}]")
-            elif has_var:
-                n_var = len(var_scaling)
-                st.markdown(f":orange[Variable scaling: {n_var} categories adjusted]")
-            else:
-                st.markdown("Baseline (capbase_a)")
-            
-            st.markdown("")
-            
-            # General scaling factor (1.1.1)
-            st.markdown("**General scaling factor (1.1.1)**")
-            if has_general:
-                pct = (general_scaling - 1.0) * 100
-                st.markdown(f":orange[{general_scaling:.2f} ({pct:+.1f}%)]")
-            else:
-                st.markdown("1.00 (baseline)")
-            
-            st.markdown("")
-            
-            # Category scaling factors (1.2.X)
-            st.markdown("**Category scaling factors (1.2.X)**")
-            if has_cat:
-                rows = []
-                for cat_encode, factor in cat_scaling.items():
-                    cat_name = get_category_name(int(cat_encode))
-                    cat = CATEGORY_BY_CODE.get(int(cat_encode))
-                    param_id = cat.scaling_param_id if cat else f"1.2.{cat_encode}"
-                    pct_change = (factor - 1.0) * 100
-                    rows.append({
-                        "Param-ID": param_id,
-                        "Category": cat_name[:40] + "..." if len(cat_name) > 40 else cat_name,
-                        "Baseline": "1.00",
-                        "Value": f"{factor:.2f}",
-                        "Change": f"{pct_change:+.1f}%",
-                    })
-                df = pd.DataFrame(rows)
-                st.dataframe(df, use_container_width=True, hide_index=True)
-            else:
-                st.caption("All category scaling factors at baseline (1.00)")
-            
-            # Variable scaling (10.X) - company specific
-            if has_var:
-                st.markdown("")
-                st.markdown("**Asset quantity scaling (10.X) - company specific**")
-                rows = []
-                for cat_encode, factor in var_scaling.items():
-                    cat_name = get_category_name(int(cat_encode))
-                    var_id = f"10.{int(cat_encode) + 1}"
-                    pct_change = (factor - 1.0) * 100
-                    rows.append({
-                        "Var-ID": var_id,
-                        "Category": cat_name[:40] + "..." if len(cat_name) > 40 else cat_name,
-                        "Scaling": f"{factor:.2f}",
-                        "Change": f"{pct_change:+.1f}%",
-                    })
-                df = pd.DataFrame(rows)
-                st.dataframe(df, use_container_width=True, hide_index=True)
-    
-    return has_changes and is_selected
+    return kent_uploaded or has_general or has_cat or has_var
 
 
-def _render_module_2(ui_config: Dict[str, Any], is_selected: bool) -> bool:
-    """Render Module 2: Depreciation. Returns True if has changes."""
+def _check_module_2_changes(ui_config: Dict[str, Any]) -> bool:
+    """Check if Module 2 has any changes."""
     m2 = ui_config.get("m2_depreciation", {})
-    
     lifetime_adj = m2.get("lifetime_adjustments")
-    has_changes = lifetime_adj is not None and len(lifetime_adj) > 0
-    
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        expander_label = "2. Depreciation"
-        if not is_selected:
-            expander_label += " :gray[(not selected)]"
-        elif has_changes:
-            expander_label += " :orange[(modified)]"
-    with col2:
-        if has_changes and is_selected:
-            if st.button("Reset", key=f"{MODULE_KEY}_reset_m2", use_container_width=True):
-                _reset_module("m2_depreciation")
-                st.rerun()
-    
-    with st.expander(expander_label, expanded=has_changes and is_selected):
-        if not is_selected:
-            st.caption("Module not selected - using baseline values")
-        else:
-            st.markdown("**Asset lifetimes (2.X.1, 2.X.2)**")
-            
-            if lifetime_adj:
-                rows = []
-                for cat_encode, changes in lifetime_adj.items():
-                    cat = CATEGORY_BY_CODE.get(int(cat_encode))
-                    cat_name = cat.name if cat else f"Category {cat_encode}"
-                    
-                    if 'ekdep' in changes:
-                        baseline_ek = cat.ekdep if cat else "?"
-                        rows.append({
-                            "Category": cat_name[:30],
-                            "Parameter": "Ordinary lifetime",
-                            "Baseline": str(baseline_ek),
-                            "Value": str(changes['ekdep']),
-                        })
-                    if 'maxdep' in changes:
-                        baseline_max = cat.maxdep if cat else "?"
-                        rows.append({
-                            "Category": cat_name[:30],
-                            "Parameter": "Tail lifetime",
-                            "Baseline": str(baseline_max),
-                            "Value": str(changes['maxdep']),
-                        })
-                
-                if rows:
-                    df = pd.DataFrame(rows)
-                    st.dataframe(df, use_container_width=True, hide_index=True)
-            else:
-                st.caption("All lifetime parameters at baseline")
-    
-    return has_changes and is_selected
+    return lifetime_adj is not None and len(lifetime_adj) > 0
 
 
-def _render_module_3(ui_config: Dict[str, Any], is_selected: bool) -> bool:
-    """Render Module 3: Cost of capital. Returns True if has changes."""
+def _check_module_3_changes(ui_config: Dict[str, Any]) -> bool:
+    """Check if Module 3 has any changes."""
     m3_wacc = ui_config.get("m3_cost_of_capital", {})
     m3_qual = ui_config.get("m3_quality_adjustments", {})
     m3_vars = ui_config.get("m3_incentive_variables", {})
     
     wacc_changed = m3_wacc.get("wacc_override") is not None
     
+    qual_changes = (
+        m3_qual.get("adj_max_agg") is not None or
+        m3_qual.get("adj_max_cemi4") is not None or
+        m3_qual.get("sharing_netloss") is not None or
+        not m3_qual.get("enable_quality", True) or
+        not m3_qual.get("enable_netloss", True) or
+        not m3_qual.get("enable_load", True)
+    )
+    
+    var_changes = any(v is not None for v in m3_vars.values())
+    
+    return wacc_changed or qual_changes or var_changes
+
+
+def _check_module_4_changes(ui_config: Dict[str, Any]) -> bool:
+    """Check if Module 4 has any changes."""
+    # M4 has no configurable parameters currently
+    # 5.4.1 (paverkbara_method) moved to M5
+    return False
+
+
+def _check_module_5_changes(ui_config: Dict[str, Any]) -> bool:
+    """Check if Module 5 has any changes."""
+    m5 = ui_config.get("m5_efficiency", {})
+    return (
+        m5.get("trunkering_max") is not None or
+        m5.get("realiseringstid") is not None or
+        m5.get("kunddelning") is not None or
+        m5.get("outlier_krav") is not None or
+        m5.get("trunkering_min") is not None or
+        m5.get("paverkbara_method") is not None  # 5.4.1 moved from M4
+    )
+
+
+def _check_module_7_changes(ui_config: Dict[str, Any]) -> bool:
+    """Check if Module 7 has any changes."""
+    addon = ui_config.get("addon_benchmarking", {})
+    return addon.get("dea_method") == "custom"
+
+
+# =============================================================================
+# TAB CONTENT RENDERING FUNCTIONS
+# =============================================================================
+
+def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
+    """Render Module 1: Regulatory asset base valuation content."""
+    if not is_selected:
+        st.caption("Module not selected - using baseline values")
+        return
+    
+    m1 = ui_config.get("m1_asset_base", {})
+    
+    # Reset button
+    if has_changes:
+        if st.button("Reset to baseline", key=f"{MODULE_KEY}_reset_m1"):
+            _reset_module("m1_asset_base")
+            st.rerun()
+    
+    kent_uploaded = m1.get("kent_file_bytes") is not None
+    general_scaling = m1.get("general_scaling")
+    cat_scaling = m1.get("cat_scaling")
+    var_scaling = m1.get("var_scaling")
+    
+    has_general = general_scaling is not None and general_scaling != 1.0
+    has_cat = cat_scaling is not None and len(cat_scaling) > 0
+    has_var = var_scaling is not None and len(var_scaling) > 0
+    
+    # Data source
+    st.markdown("**Data source**")
+    if kent_uploaded:
+        kent_name = m1.get("kent_file_name", "Unknown")
+        st.markdown(f":orange[KENT upload: {kent_name}]")
+    elif has_var:
+        n_var = len(var_scaling)
+        st.markdown(f":orange[Variable scaling: {n_var} categories adjusted]")
+    else:
+        st.markdown("Baseline (capbase_a)")
+    
+    st.markdown("")
+    
+    # General scaling factor
+    st.markdown("**General scaling factor (1.1.1)**")
+    if has_general:
+        pct = (general_scaling - 1.0) * 100
+        st.markdown(f":orange[{general_scaling:.2f} ({pct:+.1f}%)]")
+    else:
+        st.markdown("1.00 (baseline)")
+    
+    st.markdown("")
+    
+    # Category scaling factors
+    st.markdown("**Category scaling factors (1.2.X)**")
+    if has_cat:
+        rows = []
+        for cat_encode, factor in cat_scaling.items():
+            cat_name = get_category_name(int(cat_encode))
+            cat = CATEGORY_BY_CODE.get(int(cat_encode))
+            param_id = cat.scaling_param_id if cat else f"1.2.{cat_encode}"
+            pct_change = (factor - 1.0) * 100
+            rows.append({
+                "Param-ID": param_id,
+                "Category": cat_name[:40] + "..." if len(cat_name) > 40 else cat_name,
+                "Baseline": "1.00",
+                "Value": f"{factor:.2f}",
+                "Change": f"{pct_change:+.1f}%",
+            })
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.caption("All category scaling factors at baseline (1.00)")
+    
+    # Variable scaling
+    if has_var:
+        st.markdown("")
+        st.markdown("**Asset quantity scaling (10.X)**")
+        rows = []
+        for cat_encode, factor in var_scaling.items():
+            cat_name = get_category_name(int(cat_encode))
+            var_id = f"10.{int(cat_encode) + 1}"
+            pct_change = (factor - 1.0) * 100
+            rows.append({
+                "Var-ID": var_id,
+                "Category": cat_name[:40] + "..." if len(cat_name) > 40 else cat_name,
+                "Scaling": f"{factor:.2f}",
+                "Change": f"{pct_change:+.1f}%",
+            })
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+
+def _render_module_2_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
+    """Render Module 2: Depreciation content."""
+    if not is_selected:
+        st.caption("Module not selected - using baseline values")
+        return
+    
+    m2 = ui_config.get("m2_depreciation", {})
+    
+    if has_changes:
+        if st.button("Reset to baseline", key=f"{MODULE_KEY}_reset_m2"):
+            _reset_module("m2_depreciation")
+            st.rerun()
+    
+    st.markdown("**Asset lifetimes (2.X.1, 2.X.2)**")
+    
+    lifetime_adj = m2.get("lifetime_adjustments")
+    if lifetime_adj:
+        rows = []
+        for cat_encode, changes in lifetime_adj.items():
+            cat = CATEGORY_BY_CODE.get(int(cat_encode))
+            cat_name = cat.name if cat else f"Category {cat_encode}"
+            
+            if 'ekdep' in changes:
+                baseline_ek = cat.ekdep if cat else "?"
+                rows.append({
+                    "Category": cat_name[:30],
+                    "Parameter": "Ordinary lifetime",
+                    "Baseline": str(baseline_ek),
+                    "Value": str(changes['ekdep']),
+                })
+            if 'maxdep' in changes:
+                baseline_max = cat.maxdep if cat else "?"
+                rows.append({
+                    "Category": cat_name[:30],
+                    "Parameter": "Tail lifetime",
+                    "Baseline": str(baseline_max),
+                    "Value": str(changes['maxdep']),
+                })
+        
+        if rows:
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.caption("All lifetime parameters at baseline")
+
+
+def _render_module_3_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
+    """Render Module 3: Cost of capital content."""
+    if not is_selected:
+        st.caption("Module not selected - using baseline values")
+        return
+    
+    m3_wacc = ui_config.get("m3_cost_of_capital", {})
+    m3_qual = ui_config.get("m3_quality_adjustments", {})
+    m3_vars = ui_config.get("m3_incentive_variables", {})
+    
+    if has_changes:
+        if st.button("Reset to baseline", key=f"{MODULE_KEY}_reset_m3"):
+            _reset_module("m3_cost_of_capital")
+            _reset_module("m3_quality_adjustments")
+            _reset_module("m3_incentive_variables")
+            st.rerun()
+    
+    # WACC
+    st.markdown("**WACC (3.2.5)**")
+    wacc_changed = m3_wacc.get("wacc_override") is not None
+    if wacc_changed:
+        wacc = m3_wacc["wacc_override"]
+        st.markdown(f":orange[{wacc:.4f} ({wacc*100:.2f}%)]")
+    else:
+        st.markdown(f"{BASELINE_WACC:.4f} ({BASELINE_WACC*100:.2f}%) - baseline")
+    
+    # Quality adjustments
     qual_changes = []
     if m3_qual.get("adj_max_agg") is not None:
         qual_changes.append(f"Max aggregate: {m3_qual['adj_max_agg']:.2%}")
@@ -292,90 +384,45 @@ def _render_module_3(ui_config: Dict[str, Any], is_selected: bool) -> bool:
     if not m3_qual.get("enable_load", True):
         qual_changes.append("Load incentive OFF")
     
+    if qual_changes:
+        st.markdown("")
+        st.markdown("**Quality adjustments**")
+        for change in qual_changes:
+            st.markdown(f":orange[- {change}]")
+    
+    # Variable overrides
     var_changes = [k for k, v in m3_vars.items() if v is not None]
-    
-    has_changes = wacc_changed or len(qual_changes) > 0 or len(var_changes) > 0
-    
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        expander_label = "3. Cost of capital"
-        if not is_selected:
-            expander_label += " :gray[(not selected)]"
-        elif has_changes:
-            expander_label += " :orange[(modified)]"
-    with col2:
-        if has_changes and is_selected:
-            if st.button("Reset", key=f"{MODULE_KEY}_reset_m3", use_container_width=True):
-                _reset_module("m3_cost_of_capital")
-                _reset_module("m3_quality_adjustments")
-                _reset_module("m3_incentive_variables")
-                st.rerun()
-    
-    with st.expander(expander_label, expanded=has_changes and is_selected):
-        if not is_selected:
-            st.caption("Module not selected - using baseline values")
-        else:
-            # WACC
-            st.markdown("**WACC (3.2.5)**")
-            if wacc_changed:
-                wacc = m3_wacc["wacc_override"]
-                st.markdown(f":orange[{wacc:.4f} ({wacc*100:.2f}%)]")
-            else:
-                st.markdown(f"{BASELINE_WACC:.4f} ({BASELINE_WACC*100:.2f}%) - baseline")
-            
-            # Quality adjustments
-            if qual_changes:
-                st.markdown("")
-                st.markdown("**Quality adjustments**")
-                for change in qual_changes:
-                    st.markdown(f":orange[- {change}]")
-            
-            # Variable overrides
-            if var_changes:
-                st.markdown("")
-                st.markdown("**Incentive variable overrides**")
-                st.caption(f"{len(var_changes)} variable(s) modified")
-    
-    return has_changes and is_selected
+    if var_changes:
+        st.markdown("")
+        st.markdown("**Incentive variable overrides**")
+        st.caption(f"{len(var_changes)} variable(s) modified")
 
 
-def _render_module_4(ui_config: Dict[str, Any], is_selected: bool) -> bool:
-    """Render Module 4: Operating expenditures. Returns True if has changes."""
-    m4 = ui_config.get("m4_operating_exp", {})
+def _render_module_4_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
+    """Render Module 4: Operating expenditures content."""
+    if not is_selected:
+        st.caption("Module not selected - using baseline values")
+        return
     
-    method = m4.get("paverkbara_method", "OPEX")
-    has_changes = method != "OPEX"
-    
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        expander_label = "4. Operating expenditures"
-        if not is_selected:
-            expander_label += " :gray[(not selected)]"
-        elif has_changes:
-            expander_label += " :orange[(modified)]"
-    with col2:
-        if has_changes and is_selected:
-            if st.button("Reset", key=f"{MODULE_KEY}_reset_m4", use_container_width=True):
-                _reset_module("m4_operating_exp")
-                st.rerun()
-    
-    with st.expander(expander_label, expanded=has_changes and is_selected):
-        if not is_selected:
-            st.caption("Module not selected - using baseline values")
-        else:
-            st.markdown("**Adjustable costs method (5.4.1)**")
-            if has_changes:
-                st.markdown(f":orange[{method}]")
-            else:
-                st.markdown("OPEX (baseline)")
-    
-    return has_changes and is_selected
+    # M4 currently has no configurable parameters
+    # 5.4.1 (paverkbara_method) is now in M5
+    st.caption("OPEX parameters planned for future release.")
 
 
-def _render_module_5(ui_config: Dict[str, Any], is_selected: bool) -> bool:
-    """Render Module 5: Efficiency incentive. Returns True if has changes."""
+def _render_module_5_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
+    """Render Module 5: Efficiency incentive content."""
+    if not is_selected:
+        st.caption("Module not selected - using baseline values")
+        return
+    
     m5 = ui_config.get("m5_efficiency", {})
     
+    if has_changes:
+        if st.button("Reset to baseline", key=f"{MODULE_KEY}_reset_m5"):
+            _reset_module("m5_efficiency")
+            st.rerun()
+    
+    # 5.2-5.3 Efficiency requirement parameters
     changes = []
     if m5.get("trunkering_max") is not None:
         changes.append(("5.2.1 Truncation max", BASELINE_MAX_POTENTIAL, m5["trunkering_max"]))
@@ -388,81 +435,62 @@ def _render_module_5(ui_config: Dict[str, Any], is_selected: bool) -> bool:
     if m5.get("trunkering_min") is not None:
         changes.append(("5.3.2 Truncation min", 0.162416, m5["trunkering_min"]))
     
-    has_changes = len(changes) > 0
+    if changes:
+        rows = []
+        for param_id, baseline, value in changes:
+            if isinstance(baseline, float) and baseline < 1:
+                rows.append({
+                    "Parameter": param_id,
+                    "Baseline": f"{baseline:.2%}",
+                    "Value": f"{value:.2%}",
+                })
+            else:
+                rows.append({
+                    "Parameter": param_id,
+                    "Baseline": str(baseline),
+                    "Value": str(value),
+                })
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.caption("All efficiency parameters at baseline")
     
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        expander_label = "5. Efficiency incentive"
-        if not is_selected:
-            expander_label += " :gray[(not selected)]"
-        elif has_changes:
-            expander_label += " :orange[(modified)]"
-    with col2:
-        if has_changes and is_selected:
-            if st.button("Reset", key=f"{MODULE_KEY}_reset_m5", use_container_width=True):
-                _reset_module("m5_efficiency")
-                st.rerun()
-    
-    with st.expander(expander_label, expanded=has_changes and is_selected):
-        if not is_selected:
-            st.caption("Module not selected - using baseline values")
-        elif changes:
-            rows = []
-            for param_id, baseline, value in changes:
-                if isinstance(baseline, float) and baseline < 1:
-                    rows.append({
-                        "Parameter": param_id,
-                        "Baseline": f"{baseline:.2%}",
-                        "Value": f"{value:.2%}",
-                    })
-                else:
-                    rows.append({
-                        "Parameter": param_id,
-                        "Baseline": str(baseline),
-                        "Value": str(value),
-                    })
-            df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        else:
-            st.caption("All efficiency parameters at baseline")
-    
-    return has_changes and is_selected
+    # 5.4.1 Cost base application (moved from M4)
+    st.markdown("")
+    st.markdown("**Cost base application (5.4.1)**")
+    method = m5.get("paverkbara_method")
+    if method is not None:
+        st.markdown(f":orange[{method}]")
+    else:
+        st.markdown("OPEX (baseline)")
 
 
-def _render_module_7(ui_config: Dict[str, Any], is_selected: bool) -> bool:
-    """Render Module 7: Add-on modules. Returns True if has changes."""
+def _render_module_7_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
+    """Render Module 7: Add-on modules content."""
+    if not is_selected:
+        st.caption("Module not selected - using baseline values")
+        return
+    
     addon = ui_config.get("addon_benchmarking", {})
     
-    has_changes = addon.get("dea_method") == "custom"
+    if has_changes:
+        if st.button("Reset to baseline", key=f"{MODULE_KEY}_reset_m7"):
+            _reset_module("addon_benchmarking")
+            st.rerun()
     
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        expander_label = "7. Add-on modules"
-        if not is_selected:
-            expander_label += " :gray[(not selected)]"
-        elif has_changes:
-            expander_label += " :orange[(modified)]"
-    with col2:
-        if has_changes and is_selected:
-            if st.button("Reset", key=f"{MODULE_KEY}_reset_m7", use_container_width=True):
-                _reset_module("addon_benchmarking")
-                st.rerun()
-    
-    with st.expander(expander_label, expanded=has_changes and is_selected):
-        if not is_selected:
-            st.caption("Module not selected - using baseline values")
-        else:
-            st.markdown("**DEA Benchmarking**")
-            if has_changes:
-                st.markdown(":orange[Custom DEA model]")
-                st.caption(f"Inputs: {addon.get('dea_inputs', [])}")
-                st.caption(f"Outputs: {addon.get('dea_outputs', [])}")
-                st.caption(f"RTS: {addon.get('dea_rts', 'crs')}")
-            else:
-                st.markdown("Baseline DEA model")
-    
-    return has_changes and is_selected
+    st.markdown("**DEA Benchmarking**")
+    if addon.get("dea_method") == "custom":
+        st.markdown(":orange[Custom DEA model]")
+        st.caption(f"Inputs: {addon.get('dea_inputs', [])}")
+        st.caption(f"Outputs: {addon.get('dea_outputs', [])}")
+        st.caption(f"RTS: {addon.get('dea_rts', 'crs')}")
+    else:
+        st.markdown("Baseline DEA model")
 
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
 def _reset_module(module_key: str) -> None:
     """Reset a module to its default configuration."""
@@ -504,7 +532,6 @@ def _run_calculation() -> None:
             st.session_state["baseline_result"] = baseline_result
             
             st.write("Building case...")
-            # Use filtered config - only selected modules apply
             filtered_config = get_filtered_ui_config()
             case_definition = build_case_definition(
                 user_reid,

@@ -56,7 +56,7 @@ if st.session_state.get("_toast_message"):
 # =============================================================================
 
 st.title("Regumetrica")
-st.subheader("Case Definition")
+st.subheader("Define")
 
 # Check company selection
 user_reid = get_user_reid()
@@ -299,46 +299,12 @@ st.divider()
 
 
 # =============================================================================
-# NAVIGATION
+# RESET BUTTON
 # =============================================================================
 
-col_left, col_right = st.columns([1, 1])
-
-with col_left:
-    if st.button("Reset to defaults", type="secondary", use_container_width=True):
-        reset_case()
-        st.rerun()
-
-with col_right:
-    if st.button("Continue to Configuration", type="primary", use_container_width=True):
-        # Ensure case has a name
-        if not get_case_name():
-            set_case_name(get_default_case_name())
-        
-        st.switch_page("pages/1_case_config.py")
-
-
-# =============================================================================
-# SIDEBAR: SELECTION SUMMARY
-# =============================================================================
+if st.button("Reset to defaults", type="secondary"):
+    reset_case()
+    st.rerun()
 
 with st.sidebar:
-    st.markdown("### Case Summary")
-    
-    name = get_case_name() or get_default_case_name()
-    st.markdown(f"**{name}**")
-    
-    if current_case_id:
-        st.caption("(saved)")
-    
-    selected = get_selected_modules()
-    if selected:
-        st.caption(f"{len(selected)} module(s) will be applied:")
-        for module in ALL_MODULES:
-            if module.key in selected:
-                st.caption(f"- {module.title}")
-    else:
-        st.caption("No modules selected (baseline only)")
-    
-    st.divider()
     st.caption(f"Saved cases: {len(saved_cases)}/{10}")

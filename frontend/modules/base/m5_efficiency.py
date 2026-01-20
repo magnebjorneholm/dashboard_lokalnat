@@ -9,8 +9,7 @@ Variable-IDs: 50.X
 import streamlit as st
 from typing import Dict, Any
 
-from frontend.common.parameter_input import parameter_input
-from frontend.common.formulas import FORMULA_EFFICIENCY_COMPLETE
+from frontend.common.parameter_input import parameter_input, parameter_select
 from calculations.effektiviseringskrav import get_max_effkrav
 
 MODULE_KEY = "m5_efficiency"
@@ -36,6 +35,7 @@ def render() -> Dict[str, Any]:
         - outlier_krav: Min annual requirement for outliers or None
         - kunddelning: Share allocated to customers or None
         - realiseringstid: Years for full efficiency realization or None
+        - paverkbara_method: "OPEX" or "TOTEX" or None
     """
     config: Dict[str, Any] = {}
     
@@ -144,11 +144,23 @@ def render() -> Dict[str, Any]:
             tillsynsperiod=BASELINE_SUPERVISION_PERIOD
         )
         
-        st.caption(f"Resulting range: {current_min_req*100:.2f}% – {max_annual_req*100:.2f}% annually")
-    
-        # Show complete formula
+        st.caption(f"Resulting range: {current_min_req*100:.2f}% - {max_annual_req*100:.2f}% annually")
+        
         st.divider()
-        st.markdown("**Complete formula**")
-        st.latex(FORMULA_EFFICIENCY_COMPLETE)
+        
+        st.markdown("##### 5.4 Cost base application")
+        
+        # 5.4.1 Efficiency requirement cost base
+        method, method_changed = parameter_select(
+            module_key=MODULE_KEY,
+            param_id="5.4.1",
+            label="Apply efficiency requirement to",
+            options=["OPEX", "TOTEX"],
+            baseline="OPEX",
+            help_text="OPEX: adjustable costs. TOTEX: includes capital costs."
+        )
+        
+        if method_changed:
+            config["paverkbara_method"] = method
     
     return config

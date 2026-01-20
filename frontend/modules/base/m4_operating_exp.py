@@ -1,15 +1,13 @@
 """
 Module 4: Operating Expenditures
 
-Handles OPEX parameters and påverkbara method.
+Handles OPEX parameters.
 Parameter-IDs: 4.1.X
 Variable-IDs: 40.X
 """
 
 import streamlit as st
 from typing import Dict, Any
-
-from frontend.common.parameter_input import parameter_select
 
 MODULE_KEY = "m4_operating_exp"
 
@@ -19,8 +17,7 @@ def render() -> Dict[str, Any]:
     Render Module 4: Operating expenditures.
     
     Returns:
-        Dict with user selections:
-        - paverkbara_method: "OPEX" or "TOTEX"
+        Dict with user selections.
     """
     config: Dict[str, Any] = {}
     
@@ -35,22 +32,5 @@ def render() -> Dict[str, Any]:
             "- Flexibility services scaling\n"
             "- Non-adjustable OPEX scaling"
         )
-        
-        st.divider()
-        
-        # Påverkbara method (5.4.1 but conceptually belongs to OPEX)
-        st.markdown("##### Efficiency requirement cost base")
-        
-        method, method_changed = parameter_select(
-            module_key=MODULE_KEY,
-            param_id="5.4.1",
-            label="Apply efficiency requirement to",
-            options=["OPEX", "TOTEX"],
-            baseline="OPEX",
-            help_text="OPEX: adjustable costs. TOTEX: includes capital costs."
-        )
-        
-        if method_changed:
-            config["paverkbara_method"] = method
     
     return config

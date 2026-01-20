@@ -192,17 +192,17 @@ login_page = st.Page(
 
 case_definition = st.Page(
     "pages/0_case_definition.py",
-    title="Case Definition",
+    title="Definition",
 )
 
 case_config = st.Page(
     "pages/1_case_config.py",
-    title="Case Configuration",
+    title="Configuration",
 )
 
 results = st.Page(
     "pages/2_results.py",
-    title="Results",
+    title="Computation and results",
 )
 
 
