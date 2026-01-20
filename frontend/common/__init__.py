@@ -1,30 +1,65 @@
-"""Common components för Regumetrica UI."""
+"""Common components for Regumetrica UI."""
 
-from frontend.common.formatting import format_tkr, format_percent, format_number, format_delta
-from frontend.common.parameter_input import parameter_input, parameter_select
-
-__all__ = [
-    "format_tkr",
-    "format_percent",
-    "format_number",
-    "format_delta",
-    "parameter_input",
-    "parameter_select",
-]
-
-# Expose asset category utilities
-from frontend.common.asset_categories import (
-    ASSET_CATEGORIES,
-    CATEGORY_BY_CODE,
-    BASELINE_LIFETIMES,
-    get_category_name,
-    get_baseline_lifetime,
+from .module_registry import (
+    # Dataclasses
+    ModuleParameter,
+    ModuleVariable,
+    ModuleSection,
+    ModuleDefinition,
+    # Module definitions
+    M1_ASSET_BASE,
+    M2_DEPRECIATION,
+    M3_COST_OF_CAPITAL,
+    M4_OPERATING_EXP,
+    M5_EFFICIENCY,
+    M7_BENCHMARKING,
+    # Collections
+    ALL_MODULES,
+    BASE_MODULES,
+    ADDON_MODULES,
+    MODULE_BY_KEY,
+    # Functions
+    get_module,
+    get_all_ui_config_keys,
+    parse_selection_key,
+    build_selection_key,
+    get_default_sections_for_module,
+    expand_module_to_sections,
+    get_ui_config_keys_for_selection,
+    infer_selected_from_ui_config,
+    module_has_variables,
+    get_selected_module_keys,
+    is_any_section_selected,
 )
 
-__all__ += [
-    "ASSET_CATEGORIES",
-    "CATEGORY_BY_CODE",
-    "BASELINE_LIFETIMES",
-    "get_category_name",
-    "get_baseline_lifetime",
+__all__ = [
+    # Dataclasses
+    "ModuleParameter",
+    "ModuleVariable",
+    "ModuleSection",
+    "ModuleDefinition",
+    # Module definitions
+    "M1_ASSET_BASE",
+    "M2_DEPRECIATION",
+    "M3_COST_OF_CAPITAL",
+    "M4_OPERATING_EXP",
+    "M5_EFFICIENCY",
+    "M7_BENCHMARKING",
+    # Collections
+    "ALL_MODULES",
+    "BASE_MODULES",
+    "ADDON_MODULES",
+    "MODULE_BY_KEY",
+    # Functions
+    "get_module",
+    "get_all_ui_config_keys",
+    "parse_selection_key",
+    "build_selection_key",
+    "get_default_sections_for_module",
+    "expand_module_to_sections",
+    "get_ui_config_keys_for_selection",
+    "infer_selected_from_ui_config",
+    "module_has_variables",
+    "get_selected_module_keys",
+    "is_any_section_selected",
 ]

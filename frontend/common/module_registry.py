@@ -4,14 +4,18 @@ Module Registry for Regumetrica.
 Defines the structure and metadata for all regulatory modules
 according to the Regumetrica User Manual.
 
+Supports section-level granularity for modules with multiple
+distinct configuration areas (e.g., M3 with WACC, incentive params, variables).
+
 Used by:
-- 0_case_definition.py for module selection display
+- 0_case_definition.py for module/section selection display
 - 1_case_config.py for conditional rendering
-- case_storage.py for inferring selected modules from saved cases
+- state_manager.py for filtering config by selection
+- case_storage.py for inferring selected sections from saved cases
 """
 
-from dataclasses import dataclass, field
-from typing import List, Tuple, Set, Dict, Any
+from dataclasses import dataclass
+from typing import Tuple, Set, Dict, Any, Optional
 
 
 @dataclass(frozen=True)
@@ -31,15 +35,55 @@ class ModuleVariable:
 
 
 @dataclass(frozen=True)
+class ModuleSection:
+    """
+    A configurable section within a module.
+    
+    Sections allow fine-grained control over which parts of a module
+    are rendered and applied. For example, M3 has separate sections
+    for WACC parameters, incentive parameters, and incentive variables.
+    """
+    key: str                        # e.g., "wacc", "incentive_params"
+    label: str                      # e.g., "3.1-3.2 WACC parameters"
+    ui_config_keys: Tuple[str, ...]  # Keys in DEFAULT_UI_CONFIG
+    default_enabled: bool = True    # Selected by default when parent module is checked?
+
+
+@dataclass(frozen=True)
 class ModuleDefinition:
-    """Complete definition of a regulatory module."""
+    """
+    Complete definition of a regulatory module.
+    
+    Modules can have optional sections for fine-grained selection.
+    If sections is empty, the entire module is treated as one unit.
+    """
     key: str
     title: str
     description: str
     parameters: Tuple[ModuleParameter, ...]
     variables: Tuple[ModuleVariable, ...]
-    ui_config_keys: Tuple[str, ...]
+    sections: Tuple[ModuleSection, ...] = ()
     is_addon: bool = False
+    _ui_config_keys: Tuple[str, ...] = ()
+    
+    @property
+    def ui_config_keys(self) -> Tuple[str, ...]:
+        """Get all ui_config keys for this module."""
+        if self.sections:
+            return tuple(k for s in self.sections for k in s.ui_config_keys)
+        return self._ui_config_keys
+    
+    @property
+    def has_sections(self) -> bool:
+        """Check if module has configurable sections."""
+        return len(self.sections) > 0
+    
+    def get_section(self, section_key: str) -> Optional[ModuleSection]:
+        """Get a section by key."""
+        for section in self.sections:
+            if section.key == section_key:
+                return section
+        return None
 
 
 # =============================================================================
@@ -62,7 +106,26 @@ M1_ASSET_BASE = ModuleDefinition(
         ModuleVariable("KENT", "KENT file upload", 
                       "Upload KENT Excel template to override asset data"),
     ),
-    ui_config_keys=("m1_asset_base",),
+    sections=(
+        ModuleSection(
+            key="scaling",
+            label="1.1-1.2 Scaling factors",
+            ui_config_keys=("m1_asset_base",),
+            default_enabled=True,
+        ),
+        ModuleSection(
+            key="quantities",
+            label="10.X Asset quantities",
+            ui_config_keys=("m1_asset_base",),
+            default_enabled=False,
+        ),
+        ModuleSection(
+            key="kent",
+            label="KENT file upload",
+            ui_config_keys=("m1_asset_base",),
+            default_enabled=False,
+        ),
+    ),
 )
 
 M2_DEPRECIATION = ModuleDefinition(
@@ -76,7 +139,14 @@ M2_DEPRECIATION = ModuleDefinition(
                        "Lifetime for assets beyond ordinary economic life (17 categories)"),
     ),
     variables=(),
-    ui_config_keys=("m2_depreciation",),
+    sections=(
+        ModuleSection(
+            key="lifetimes",
+            label="2.X Lifetime parameters",
+            ui_config_keys=("m2_depreciation",),
+            default_enabled=True,
+        ),
+    ),
 )
 
 M3_COST_OF_CAPITAL = ModuleDefinition(
@@ -105,7 +175,26 @@ M3_COST_OF_CAPITAL = ModuleDefinition(
         ModuleVariable("30.4", "Interruption adjustment", 
                       "CEMI4, AME, AIT, AIF per customer type"),
     ),
-    ui_config_keys=("m3_cost_of_capital", "m3_quality_adjustments", "m3_incentive_variables"),
+    sections=(
+        ModuleSection(
+            key="wacc",
+            label="3.1-3.2 WACC parameters",
+            ui_config_keys=("m3_cost_of_capital",),
+            default_enabled=True,
+        ),
+        ModuleSection(
+            key="incentive_params",
+            label="3.3-3.6 Incentive parameters",
+            ui_config_keys=("m3_quality_adjustments",),
+            default_enabled=True,
+        ),
+        ModuleSection(
+            key="incentive_vars",
+            label="30.X Incentive variables",
+            ui_config_keys=("m3_incentive_variables",),
+            default_enabled=False,
+        ),
+    ),
 )
 
 M4_OPERATING_EXP = ModuleDefinition(
@@ -126,7 +215,20 @@ M4_OPERATING_EXP = ModuleDefinition(
         ModuleVariable("40.2", "Non-adjustable OPEX", 
                       "Total non-adjustable costs (prognosis)"),
     ),
-    ui_config_keys=("m4_operating_exp",),
+    sections=(
+        ModuleSection(
+            key="scaling",
+            label="4.1 OPEX scaling factors",
+            ui_config_keys=("m4_operating_exp",),
+            default_enabled=True,
+        ),
+        ModuleSection(
+            key="opex_vars",
+            label="40.X OPEX variables",
+            ui_config_keys=("m4_operating_exp",),
+            default_enabled=False,
+        ),
+    ),
 )
 
 M5_EFFICIENCY = ModuleDefinition(
@@ -144,7 +246,14 @@ M5_EFFICIENCY = ModuleDefinition(
                        "Apply efficiency requirement on TOTEX or OPEX only"),
     ),
     variables=(),
-    ui_config_keys=("m5_efficiency",),
+    sections=(
+        ModuleSection(
+            key="efficiency_params",
+            label="5.1-5.4 Efficiency parameters",
+            ui_config_keys=("m5_efficiency",),
+            default_enabled=True,
+        ),
+    ),
 )
 
 M7_BENCHMARKING = ModuleDefinition(
@@ -156,7 +265,14 @@ M7_BENCHMARKING = ModuleDefinition(
                        "Input/output selection, RTS assumption, outlier detection"),
     ),
     variables=(),
-    ui_config_keys=("addon_benchmarking",),
+    sections=(
+        ModuleSection(
+            key="dea_spec",
+            label="DEA model specification",
+            ui_config_keys=("addon_benchmarking",),
+            default_enabled=True,
+        ),
+    ),
     is_addon=True,
 )
 
@@ -165,7 +281,6 @@ M7_BENCHMARKING = ModuleDefinition(
 # REGISTRY
 # =============================================================================
 
-# Ordered list of all modules (User Manual order)
 ALL_MODULES: Tuple[ModuleDefinition, ...] = (
     M1_ASSET_BASE,
     M2_DEPRECIATION,
@@ -175,17 +290,14 @@ ALL_MODULES: Tuple[ModuleDefinition, ...] = (
     M7_BENCHMARKING,
 )
 
-# Base modules only (exclude add-ons)
 BASE_MODULES: Tuple[ModuleDefinition, ...] = tuple(
     m for m in ALL_MODULES if not m.is_addon
 )
 
-# Add-on modules only
 ADDON_MODULES: Tuple[ModuleDefinition, ...] = tuple(
     m for m in ALL_MODULES if m.is_addon
 )
 
-# Lookup by key
 MODULE_BY_KEY: Dict[str, ModuleDefinition] = {m.key: m for m in ALL_MODULES}
 
 
@@ -208,75 +320,143 @@ def get_all_ui_config_keys() -> Set[str]:
     return keys
 
 
-def infer_selected_modules(ui_config: Dict[str, Any]) -> Set[str]:
+def parse_selection_key(key: str) -> Tuple[str, Optional[str]]:
     """
-    Infer which modules have modifications based on ui_config.
+    Parse a selection key into module_key and optional section_key.
     
-    Used when loading a saved case to determine which modules
-    should be pre-selected in Case Definition.
+    Examples:
+        "m1" -> ("m1", None)
+        "m3.wacc" -> ("m3", "wacc")
+    """
+    if "." in key:
+        parts = key.split(".", 1)
+        return parts[0], parts[1]
+    return key, None
+
+
+def build_selection_key(module_key: str, section_key: Optional[str] = None) -> str:
+    """
+    Build a selection key from module and section keys.
+    
+    Examples:
+        ("m1", None) -> "m1"
+        ("m3", "wacc") -> "m3.wacc"
+    """
+    if section_key:
+        return f"{module_key}.{section_key}"
+    return module_key
+
+
+def get_default_sections_for_module(module_key: str) -> Set[str]:
+    """
+    Get default section keys for a module (where default_enabled=True).
+    For modules without sections, returns empty set.
+    """
+    module = get_module(module_key)
+    if not module.has_sections:
+        return set()
+    return {s.key for s in module.sections if s.default_enabled}
+
+
+def expand_module_to_sections(module_key: str) -> Set[str]:
+    """
+    Expand a module key to all its section keys.
+    
+    For modules without sections, returns {module_key}.
+    For modules with sections, returns {module_key.section1, ...}.
+    """
+    module = get_module(module_key)
+    if not module.has_sections:
+        return {module_key}
+    return {build_selection_key(module_key, s.key) for s in module.sections}
+
+
+def get_ui_config_keys_for_selection(selection_key: str) -> Tuple[str, ...]:
+    """
+    Get ui_config keys for a selection key.
     
     Args:
-        ui_config: The saved ui_config dict
+        selection_key: "m1" or "m3.wacc"
         
     Returns:
-        Set of module keys that have non-default values
+        Tuple of ui_config keys
+    """
+    module_key, section_key = parse_selection_key(selection_key)
+    module = get_module(module_key)
+    
+    if section_key:
+        section = module.get_section(section_key)
+        if section:
+            return section.ui_config_keys
+        return ()
+    
+    return module.ui_config_keys
+
+
+def infer_selected_from_ui_config(ui_config: Dict[str, Any]) -> Set[str]:
+    """
+    Infer selected modules/sections from ui_config values.
+    
+    Used when loading saved cases to determine pre-selection.
+    Returns selection keys (e.g., {"m1.scaling", "m3.wacc", "m3.incentive_params"}).
     """
     selected = set()
     
-    # Module 1: Asset base
+    # Module 1: Asset base (3 sections)
     m1 = ui_config.get("m1_asset_base", {})
-    if any([
-        m1.get("general_scaling") is not None,
-        m1.get("cat_scaling"),
-        m1.get("var_scaling"),
-        m1.get("kent_file_bytes"),
-    ]):
-        selected.add("m1")
+    if any([m1.get("general_scaling") is not None, m1.get("cat_scaling")]):
+        selected.add("m1.scaling")
+    if m1.get("var_scaling"):
+        selected.add("m1.quantities")
+    if m1.get("kent_file_bytes"):
+        selected.add("m1.kent")
     
-    # Module 2: Depreciation
+    # Module 2: Depreciation (1 section)
     m2 = ui_config.get("m2_depreciation", {})
     if m2.get("lifetime_adjustments"):
-        selected.add("m2")
+        selected.add("m2.lifetimes")
     
-    # Module 3: Cost of capital
-    m3 = ui_config.get("m3_cost_of_capital", {})
-    m3q = ui_config.get("m3_quality_adjustments", {})
-    m3v = ui_config.get("m3_incentive_variables", {})
+    # Module 3: Cost of capital (3 sections)
+    m3_wacc = ui_config.get("m3_cost_of_capital", {})
+    if m3_wacc.get("wacc_override") is not None:
+        selected.add("m3.wacc")
     
+    m3_qual = ui_config.get("m3_quality_adjustments", {})
     if any([
-        m3.get("wacc_override") is not None,
-        m3q.get("kpi"),
-        m3q.get("k_nf"),
-        m3q.get("sharing_netloss") is not None,
-        m3q.get("adj_max_agg") is not None,
-        m3q.get("adj_max_cemi4") is not None,
-        not m3q.get("enable_quality", True),
-        not m3q.get("enable_netloss", True),
-        not m3q.get("enable_load", True),
-        any(v is not None for v in m3v.values()),
+        m3_qual.get("kpi"),
+        m3_qual.get("k_nf"),
+        m3_qual.get("sharing_netloss") is not None,
+        m3_qual.get("adj_max_agg") is not None,
+        m3_qual.get("adj_max_cemi4") is not None,
+        not m3_qual.get("enable_quality", True),
+        not m3_qual.get("enable_netloss", True),
+        not m3_qual.get("enable_load", True),
     ]):
-        selected.add("m3")
+        selected.add("m3.incentive_params")
     
-    # Module 4: Operating expenditures
+    m3_vars = ui_config.get("m3_incentive_variables", {})
+    if any(v is not None for v in m3_vars.values()):
+        selected.add("m3.incentive_vars")
+    
+    # Module 4: Operating expenditures (2 sections)
     m4 = ui_config.get("m4_operating_exp", {})
-    if m4.get("paverkbara_method") != "OPEX":
-        selected.add("m4")
+    if m4.get("opex_override") is not None:
+        selected.add("m4.scaling")
+    # TODO: Add m4.opex_vars detection when implemented
     
-    # Module 5: Efficiency
+    # Module 5: Efficiency (1 section)
     m5 = ui_config.get("m5_efficiency", {})
     if any([
         m5.get("trunkering_max") is not None,
         m5.get("trunkering_min") is not None,
-        m5.get("outlier_krav") is not None,
-        m5.get("kunddelning") is not None,
-        m5.get("realiseringstid") is not None,
+        m5.get("efficiency_override") is not None,
     ]):
-        selected.add("m5")
+        selected.add("m5.efficiency_params")
     
-    # Module 7: Benchmarking
+    # Module 7: Benchmarking (1 section)
     m7 = ui_config.get("addon_benchmarking", {})
     if m7.get("dea_method") == "custom":
-        selected.add("m7")
+        selected.add("m7.dea_spec")
     
     return selected
 
@@ -285,3 +465,29 @@ def module_has_variables(key: str) -> bool:
     """Check if a module has variables (company-specific data)."""
     module = get_module(key)
     return len(module.variables) > 0
+
+
+def get_selected_module_keys(selected: Set[str]) -> Set[str]:
+    """
+    Extract unique module keys from selection set.
+    
+    {"m1", "m3.wacc", "m3.incentive_params"} -> {"m1", "m3"}
+    """
+    module_keys = set()
+    for key in selected:
+        module_key, _ = parse_selection_key(key)
+        module_keys.add(module_key)
+    return module_keys
+
+
+def is_any_section_selected(module_key: str, selected: Set[str]) -> bool:
+    """Check if any section of a module is selected."""
+    module = get_module(module_key)
+    
+    if not module.has_sections:
+        return module_key in selected
+    
+    for section in module.sections:
+        if build_selection_key(module_key, section.key) in selected:
+            return True
+    return False

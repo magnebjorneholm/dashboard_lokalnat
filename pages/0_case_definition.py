@@ -5,7 +5,7 @@ Entry point for configuring a regulatory case.
 Allows users to:
 - Name their case
 - Add notes
-- Select which modules to configure
+- Select which modules and sections to configure
 - Load previously saved cases
 """
 
@@ -32,6 +32,7 @@ from frontend.common.module_registry import (
     BASE_MODULES,
     ADDON_MODULES,
     ModuleDefinition,
+    build_selection_key,
 )
 from frontend.utils.case_storage import (
     list_cases,
@@ -72,7 +73,7 @@ st.caption(
     "Define your case by selecting which regulatory modules to configure. "
     "Each module contains parameters (regulatory constants) and variables "
     "(company-specific data) that can be modified from baseline values. "
-    "**Only selected modules will be applied** - unselected modules use baseline."
+    "**Only selected modules/sections will be applied** - unselected use baseline."
 )
 
 st.divider()
@@ -117,13 +118,9 @@ if saved_cases:
             if selected_case.notes:
                 st.caption(info["notes"])
             
-            # Show which modules are included
+            # Show which modules/sections are included
             if selected_case.selected_modules:
-                module_names = []
-                for m in ALL_MODULES:
-                    if m.key in selected_case.selected_modules:
-                        module_names.append(m.key.upper())
-                st.caption(f"Modules: {', '.join(module_names)} | Created: {info['created']}")
+                st.caption(f"Selections: {', '.join(sorted(selected_case.selected_modules))} | Created: {info['created']}")
             else:
                 st.caption(f"Baseline only | Created: {info['created']}")
             
@@ -206,8 +203,8 @@ st.divider()
 
 st.markdown("##### Select modules to configure")
 st.caption(
-    "Check the modules you want to modify. **Only checked modules will affect the calculation.** "
-    "Leave all unchecked for a baseline-only simulation."
+    "Check the modules you want to modify. For modules with sections, "
+    "you can select individual parts. **Only checked items affect the calculation.**"
 )
 
 # Get current selection
@@ -217,12 +214,21 @@ current_selection = get_selected_modules()
 new_selection: Set[str] = set()
 
 
-def render_module_card(module: ModuleDefinition, is_addon: bool = False) -> bool:
+def render_module_card(module: ModuleDefinition, is_addon: bool = False) -> None:
     """
-    Render a module selection card with parameters/variables info.
+    Render a module selection card with optional section checkboxes.
     
-    Returns True if module is selected.
+    For modules without sections: single checkbox
+    For modules with sections: parent checkbox + indented section checkboxes
     """
+    if module.has_sections:
+        _render_module_with_sections(module, is_addon)
+    else:
+        _render_simple_module(module, is_addon)
+
+
+def _render_simple_module(module: ModuleDefinition, is_addon: bool) -> None:
+    """Render a module without sections."""
     widget_key = f"module_select_{module.key}"
     
     # Set default value if not already in session_state
@@ -246,7 +252,52 @@ def render_module_card(module: ModuleDefinition, is_addon: bool = False) -> bool
             st.markdown(f"**{module.title}**")
         st.caption(module.description)
     
-    # Show parameters and variables (always visible for information)
+    # Show parameters and variables info
+    _render_module_info(module)
+    
+    if selected:
+        new_selection.add(module.key)
+
+
+def _render_module_with_sections(module: ModuleDefinition, is_addon: bool) -> None:
+    """Render a module with configurable sections (flat design)."""
+    # Module title (no checkbox)
+    if is_addon:
+        st.markdown(f"**{module.title}** *(add-on)*")
+    else:
+        st.markdown(f"**{module.title}**")
+    st.caption(module.description)
+    
+    # Render sections as flat checkboxes
+    for section in module.sections:
+        section_key = build_selection_key(module.key, section.key)
+        section_widget_key = f"section_select_{section_key}"
+        
+        # Initialize checkbox state
+        if section_widget_key not in st.session_state:
+            st.session_state[section_widget_key] = section_key in current_selection
+        
+        col_check, col_label = st.columns([0.06, 0.94])
+        
+        with col_check:
+            section_selected = st.checkbox(
+                section.label,
+                key=section_widget_key,
+                label_visibility="collapsed"
+            )
+        
+        with col_label:
+            st.markdown(section.label)
+        
+        if section_selected:
+            new_selection.add(section_key)
+    
+    # Show parameters and variables info
+    _render_module_info(module)
+
+
+def _render_module_info(module: ModuleDefinition) -> None:
+    """Render parameters and variables info for a module."""
     with st.container():
         col_params, col_vars = st.columns(2)
         
@@ -265,8 +316,6 @@ def render_module_card(module: ModuleDefinition, is_addon: bool = False) -> bool
                     st.caption(f"- {var.var_id}: {var.label}")
             else:
                 st.caption("*No variables*")
-    
-    return selected
 
 
 # --- BASE MODULES ---
@@ -274,8 +323,7 @@ st.markdown("**Base modules**")
 
 for module in BASE_MODULES:
     with st.container(border=True):
-        if render_module_card(module, is_addon=False):
-            new_selection.add(module.key)
+        render_module_card(module, is_addon=False)
 
 st.markdown("")
 
@@ -284,8 +332,7 @@ st.markdown("**Add-on modules**")
 
 for module in ADDON_MODULES:
     with st.container(border=True):
-        if render_module_card(module, is_addon=True):
-            new_selection.add(module.key)
+        render_module_card(module, is_addon=True)
 
 
 # Update selection if changed
@@ -305,4 +352,4 @@ if st.button("Reset to defaults", type="secondary"):
     st.rerun()
 
 with st.sidebar:
-    st.caption(f"Saved cases: {len(saved_cases)}/{10}")
+    st.caption(f"Saved cases: {len(saved_cases)}/10")

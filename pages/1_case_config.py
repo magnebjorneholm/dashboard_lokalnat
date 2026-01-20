@@ -2,7 +2,7 @@
 Case Configuration Page.
 
 Main page for configuring a regulatory case.
-Renders only selected modules as scrollable sections.
+Renders only selected modules/sections as scrollable sections.
 """
 
 import streamlit as st
@@ -15,6 +15,7 @@ from frontend.utils.state_manager import (
     get_case_name,
     get_selected_modules,
     is_module_selected,
+    is_section_selected,
 )
 from frontend.utils.config_adapter import get_changed_parameters
 
@@ -59,7 +60,7 @@ selected_modules = get_selected_modules()
 has_selection = len(selected_modules) > 0
 
 if has_selection:
-    st.caption(f"Configuring {len(selected_modules)} selected module(s). Other modules use baseline values.")
+    st.caption(f"Configuring {len(selected_modules)} selected item(s). Unselected items use baseline values.")
 else:
     st.caption("No modules selected - running baseline simulation.")
 
@@ -81,72 +82,71 @@ if "ui_config" in st.session_state:
 
 
 # =============================================================================
-# MODULE SECTIONS (Conditional rendering)
+# MODULE SECTIONS (Conditional rendering based on selection)
 # =============================================================================
 
-def render_module_section(
-    module_key: str,
-    title: str,
-    render_func,
-    config_key: str,
-    **render_kwargs
-) -> None:
-    """
-    Render a module section if selected.
-    
-    Args:
-        module_key: Module key (e.g., "m1")
-        title: Section title
-        render_func: Function to render the module
-        config_key: Key for set_module_config
-        **render_kwargs: Additional kwargs passed to render_func
-    """
-    if not is_module_selected(module_key):
-        return
-    
-    st.divider()
-    
-    with st.container():
-        config = render_func(**render_kwargs)
-        set_module_config(config_key, config)
-
-
 # --- Module 1: Regulatory asset base valuation ---
-if is_module_selected("m1"):
+# M1 has three sections: scaling, quantities, kent
+
+if is_section_selected("m1", "scaling"):
     st.divider()
-    config = m1_asset_base.render(user_id_network=user_id_network)
-    set_module_config("m1_asset_base", config)
+    scaling_config = m1_asset_base.render_scaling(user_id_network=user_id_network)
+    # Merge into existing config
+    current_config = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
+    current_config.update(scaling_config)
+    set_module_config("m1_asset_base", current_config)
+
+if is_section_selected("m1", "quantities"):
+    st.divider()
+    quantities_config = m1_asset_base.render_quantities(user_id_network=user_id_network)
+    current_config = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
+    current_config.update(quantities_config)
+    set_module_config("m1_asset_base", current_config)
+
+if is_section_selected("m1", "kent"):
+    st.divider()
+    kent_config = m1_asset_base.render_kent(user_id_network=user_id_network)
+    current_config = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
+    current_config.update(kent_config)
+    # If KENT uploaded, clear var_scaling
+    if kent_config.get("kent_file_bytes"):
+        current_config.pop("var_scaling", None)
+    set_module_config("m1_asset_base", current_config)
 
 
 # --- Module 2: Depreciation ---
-if is_module_selected("m2"):
+# M2 has one section: lifetimes
+
+if is_section_selected("m2", "lifetimes"):
     st.divider()
     config = m2_depreciation.render()
     set_module_config("m2_depreciation", config)
 
 
 # --- Module 3: Cost of capital ---
-if is_module_selected("m3"):
+# M3 has three sections: wacc, incentive_params, incentive_vars
+
+if is_section_selected("m3", "wacc"):
     st.divider()
-    
-    # WACC parameters
     config = m3_cost_of_capital.render()
     set_module_config("m3_cost_of_capital", config)
-    
-    st.markdown("")
-    
-    # Quality adjustments (parameters affecting all companies)
+
+if is_section_selected("m3", "incentive_params"):
+    st.divider()
     qa_config = m3_cost_of_capital.render_quality_adjustments()
     set_module_config("m3_quality_adjustments", qa_config)
-    
-    st.markdown("")
-    
-    # Incentive variables (company-specific observed/norm values)
+
+if is_section_selected("m3", "incentive_vars"):
+    st.divider()
     var_config = m3_incentive_variables.render()
     set_module_config("m3_incentive_variables", var_config)
 
 
 # --- Module 4: Operating expenditures ---
+# M4 has two sections: scaling, opex_vars
+# TODO: Split into render_scaling(), render_variables()
+# For now, render all together if ANY section is selected
+
 if is_module_selected("m4"):
     st.divider()
     config = m4_operating_exp.render()
@@ -154,14 +154,18 @@ if is_module_selected("m4"):
 
 
 # --- Module 5: Efficiency incentive ---
-if is_module_selected("m5"):
+# M5 has one section: efficiency_params
+
+if is_section_selected("m5", "efficiency_params"):
     st.divider()
     config = m5_efficiency.render()
     set_module_config("m5_efficiency", config)
 
 
 # --- Module 7: Add-on modules (Benchmarking) ---
-if is_module_selected("m7"):
+# M7 has one section: dea_spec
+
+if is_section_selected("m7", "dea_spec"):
     st.divider()
     config = benchmarking.render()
     set_module_config("addon_benchmarking", config)
@@ -170,3 +174,9 @@ if is_module_selected("m7"):
 # =============================================================================
 # END OF CONFIGURATION
 # =============================================================================
+
+if not has_selection:
+    st.info(
+        "No modules are selected. Go to the **Define** page to select "
+        "which modules you want to configure, or proceed with baseline values."
+    )

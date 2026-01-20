@@ -2,11 +2,20 @@
 State Manager for Regumetrica UI.
 
 Handles session state initialization, reset and access.
+Supports section-level selection for modules with multiple configuration areas.
 """
 
 import streamlit as st
 import copy
 from typing import Dict, Any, Optional, Set
+
+from frontend.common.module_registry import (
+    ALL_MODULES,
+    parse_selection_key,
+    build_selection_key,
+    get_ui_config_keys_for_selection,
+    get_module,
+)
 
 
 # Explicit default structure for all modules
@@ -48,6 +57,24 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         # === 3.6 Limits ===
         "adj_max_agg": None,  # None = baseline (1/3)
     },
+    "m3_incentive_variables": {
+        # 30.2 Network loss
+        "nf_norm": None,
+        "nf_obs": None,
+        "e_in": None,
+        
+        # 30.3 Utilization
+        "ug_norm": None,
+        "ug_obs": None,
+        "k_upstream": None,
+        
+        # 30.4 CEMI4
+        "cemi4_norm": None,
+        "cemi4_obs": None,
+        
+        # 30.4 AME per customer type (sni 1-6)
+        # 30.4 AIT/AIF stored dynamically
+    },
     "m4_operating_exp": {
         "opex_override": None,  # Dict[year, float] or None
     },
@@ -63,16 +90,6 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "dea_rts": "crs",          # 'crs' or 'vrs'
         "dea_orientation": "input",  # 'input' or 'output'
     },
-}
-
-# Mapping module keys -> ui_config keys (for filtering)
-MODULE_TO_CONFIG_KEYS: Dict[str, tuple] = {
-    "m1": ("m1_asset_base",),
-    "m2": ("m2_depreciation",),
-    "m3": ("m3_cost_of_capital", "m3_quality_adjustments"),
-    "m4": ("m4_operating_exp",),
-    "m5": ("m5_efficiency",),
-    "m7": ("addon_benchmarking",),
 }
 
 
@@ -127,7 +144,7 @@ def init_session_state() -> None:
         "case_id": None,              # UUID if saved, None if new
         "case_name": None,            # User-provided name
         "case_notes": "",             # User's detailed notes
-        "selected_modules": set(),    # Modules to configure (empty = all)
+        "selected_modules": set(),    # Now contains "m1", "m3.wacc", etc.
         "saved_cases_count": 0,       # For default naming "Case N"
         "case_saved": False,          # True after successful save
         
@@ -158,16 +175,16 @@ def reset_case() -> None:
     st.session_state["selected_modules"] = set()
     st.session_state["case_saved"] = False
     
-    # Clear module checkbox widget keys
-    _clear_module_checkbox_keys()
+    # Clear module/section checkbox widget keys
+    _clear_selection_widget_keys()
 
 
-def _clear_module_checkbox_keys() -> None:
-    """Clear module checkbox widget keys to force re-initialization."""
-    for module_key in MODULE_TO_CONFIG_KEYS.keys():
-        widget_key = f"module_select_{module_key}"
-        if widget_key in st.session_state:
-            del st.session_state[widget_key]
+def _clear_selection_widget_keys() -> None:
+    """Clear module/section checkbox widget keys to force re-initialization."""
+    keys_to_clear = [k for k in st.session_state.keys() 
+                     if k.startswith("module_select_") or k.startswith("section_select_")]
+    for key in keys_to_clear:
+        del st.session_state[key]
 
 
 # =============================================================================
@@ -240,44 +257,6 @@ def set_case_notes(notes: str) -> None:
     st.session_state["case_notes"] = notes
 
 
-def get_selected_modules() -> Set[str]:
-    """Get set of selected module keys."""
-    return st.session_state.get("selected_modules", set())
-
-
-def set_selected_modules(modules: Set[str]) -> None:
-    """Set selected module keys."""
-    st.session_state["selected_modules"] = modules
-
-
-def is_module_selected(module_key: str) -> bool:
-    """
-    Check if a module should be rendered/applied.
-    
-    Returns True only if module is explicitly selected.
-    Empty selection = baseline only (no modules rendered/applied).
-    """
-    selected = get_selected_modules()
-    return module_key in selected
-
-
-def get_default_case_name() -> str:
-    """Generate default case name based on saved cases count."""
-    count = st.session_state.get("saved_cases_count", 0)
-    return f"Case {count + 1}"
-
-
-def increment_saved_cases_count() -> None:
-    """Increment the saved cases counter."""
-    current = st.session_state.get("saved_cases_count", 0)
-    st.session_state["saved_cases_count"] = current + 1
-
-
-def set_saved_cases_count(count: int) -> None:
-    """Set the saved cases count (used when loading from storage)."""
-    st.session_state["saved_cases_count"] = count
-
-
 def get_case_id() -> Optional[str]:
     """Get current case ID (None if not saved)."""
     return st.session_state.get("case_id")
@@ -298,15 +277,97 @@ def is_case_saved() -> bool:
     return st.session_state.get("case_saved", False)
 
 
+def get_default_case_name() -> str:
+    """Generate default case name based on saved cases count."""
+    count = st.session_state.get("saved_cases_count", 0)
+    return f"Case {count + 1}"
+
+
+def increment_saved_cases_count() -> None:
+    """Increment the saved cases counter."""
+    current = st.session_state.get("saved_cases_count", 0)
+    st.session_state["saved_cases_count"] = current + 1
+
+
+def set_saved_cases_count(count: int) -> None:
+    """Set the saved cases count (used when loading from storage)."""
+    st.session_state["saved_cases_count"] = count
+
+
 # =============================================================================
-# FILTERED CONFIG (for selected modules only)
+# SELECTION FUNCTIONS (Module and Section level)
+# =============================================================================
+
+def get_selected_modules() -> Set[str]:
+    """
+    Get set of selected module/section keys.
+    
+    Returns keys like: {"m1", "m3.wacc", "m3.incentive_params", "m5"}
+    """
+    return st.session_state.get("selected_modules", set())
+
+
+def set_selected_modules(modules: Set[str]) -> None:
+    """Set selected module/section keys."""
+    st.session_state["selected_modules"] = modules
+
+
+def is_module_selected(module_key: str) -> bool:
+    """
+    Check if a module has any selection (module itself or any section).
+    
+    For modules without sections: checks if module_key in selected.
+    For modules with sections: checks if any section is selected.
+    """
+    selected = get_selected_modules()
+    module = get_module(module_key)
+    
+    if not module.has_sections:
+        return module_key in selected
+    
+    # Check if any section is selected
+    for section in module.sections:
+        if build_selection_key(module_key, section.key) in selected:
+            return True
+    return False
+
+
+def is_section_selected(module_key: str, section_key: str) -> bool:
+    """
+    Check if a specific section is selected.
+    
+    Args:
+        module_key: e.g., "m3"
+        section_key: e.g., "wacc"
+    """
+    selected = get_selected_modules()
+    selection_key = build_selection_key(module_key, section_key)
+    return selection_key in selected
+
+
+def is_selection_key_selected(selection_key: str) -> bool:
+    """
+    Check if a selection key is selected.
+    
+    Works for both module keys ("m1") and section keys ("m3.wacc").
+    """
+    module_key, section_key = parse_selection_key(selection_key)
+    
+    if section_key:
+        return is_section_selected(module_key, section_key)
+    else:
+        return is_module_selected(module_key)
+
+
+# =============================================================================
+# FILTERED CONFIG (for selected modules/sections only)
 # =============================================================================
 
 def get_filtered_ui_config() -> Dict[str, Any]:
     """
-    Get ui_config filtered to only include selected modules.
+    Get ui_config filtered to only include selected modules/sections.
     
-    Non-selected modules are reset to DEFAULT_UI_CONFIG values.
+    Non-selected items are reset to DEFAULT_UI_CONFIG values.
     This ensures only explicitly selected modules affect calculations.
     """
     selected = get_selected_modules()
@@ -315,12 +376,12 @@ def get_filtered_ui_config() -> Dict[str, Any]:
     # Start with default config
     filtered = copy.deepcopy(DEFAULT_UI_CONFIG)
     
-    # Override with actual values for selected modules only
-    for module_key, config_keys in MODULE_TO_CONFIG_KEYS.items():
-        if module_key in selected:
-            for config_key in config_keys:
-                if config_key in full_config:
-                    filtered[config_key] = copy.deepcopy(full_config[config_key])
+    # Override with actual values for selected items only
+    for selection_key in selected:
+        config_keys = get_ui_config_keys_for_selection(selection_key)
+        for config_key in config_keys:
+            if config_key in full_config:
+                filtered[config_key] = copy.deepcopy(full_config[config_key])
     
     return filtered
 

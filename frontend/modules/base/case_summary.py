@@ -17,6 +17,7 @@ from frontend.utils.state_manager import (
     set_module_config,
     get_selected_modules,
     get_filtered_ui_config,
+    is_module_selected,
 )
 from frontend.common.asset_categories import (
     ASSET_CATEGORIES,
@@ -60,14 +61,15 @@ def render() -> None:
     
     filtered_config = get_filtered_ui_config()
     
-    # Pre-compute change status for each module
+    # Pre-compute selection status for each module
+    # Uses is_module_selected() which handles section keys (e.g., "m1.scaling")
     is_selected = {
-        "m1": len(selected_modules) == 0 or "m1" in selected_modules,
-        "m2": len(selected_modules) == 0 or "m2" in selected_modules,
-        "m3": len(selected_modules) == 0 or "m3" in selected_modules,
-        "m4": len(selected_modules) == 0 or "m4" in selected_modules,
-        "m5": len(selected_modules) == 0 or "m5" in selected_modules,
-        "m7": len(selected_modules) == 0 or "m7" in selected_modules,
+        "m1": len(selected_modules) == 0 or is_module_selected("m1"),
+        "m2": len(selected_modules) == 0 or is_module_selected("m2"),
+        "m3": len(selected_modules) == 0 or is_module_selected("m3"),
+        "m4": len(selected_modules) == 0 or is_module_selected("m4"),
+        "m5": len(selected_modules) == 0 or is_module_selected("m5"),
+        "m7": len(selected_modules) == 0 or is_module_selected("m7"),
     }
     
     has_changes = {
@@ -129,7 +131,7 @@ def render() -> None:
     # CALCULATE button
     st.divider()
     
-    if st.button("CALCULATE REVENUE FRAME", type="primary", use_container_width=True):
+    if st.button("CALCULATE REVENUE FRAME", type="primary", width="stretch"):
         _run_calculation()
 
 
@@ -274,7 +276,7 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                 "Change": f"{pct_change:+.1f}%",
             })
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
     else:
         st.caption("All category scaling factors at baseline (1.00)")
     
@@ -294,7 +296,7 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                 "Change": f"{pct_change:+.1f}%",
             })
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
 
 def _render_module_2_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
@@ -338,7 +340,7 @@ def _render_module_2_content(ui_config: Dict[str, Any], is_selected: bool, has_c
         
         if rows:
             df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width="stretch", hide_index=True)
     else:
         st.caption("All lifetime parameters at baseline")
 
@@ -451,7 +453,7 @@ def _render_module_5_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                     "Value": str(value),
                 })
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
     else:
         st.caption("All efficiency parameters at baseline")
     

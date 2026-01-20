@@ -8,6 +8,11 @@ Handles:
 - 1.4 KENT upload - logged-in company only (overrides 1.3)
 
 Per User Manual Tables 1-3.
+
+Section-based rendering:
+- render_scaling() -> 1.1 + 1.2 (parameters)
+- render_quantities() -> 1.3 (variables)
+- render_kent() -> 1.4 (KENT upload)
 """
 
 import streamlit as st
@@ -26,24 +31,105 @@ MODULE_KEY = "m1_asset_base"
 TIMECODE_PERIOD_START = 229
 
 
-def render(user_id_network: Optional[int] = None) -> Dict[str, Any]:
+# =============================================================================
+# SECTION RENDER FUNCTIONS
+# =============================================================================
+
+def render_scaling(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     """
-    Render Module 1: Regulatory Asset Base Valuation.
+    Render M1 scaling section: 1.1 General + 1.2 Category scaling factors.
     
-    Args:
-        user_id_network: Logged-in company's id_network (for Variables section)
+    These are parameters that affect ALL companies uniformly.
     
     Returns:
-        Dict with:
-        - general_scaling: float (Param 1.1.1)
-        - cat_scaling: Dict[int, float] (Param 1.2.X, only non-1.0 values)
-        - var_scaling: Dict[int, float] (Var 10.X, only non-1.0 values)
-        - kent_file_bytes: bytes or None
-        - kent_file_name: str or None
+        Dict with general_scaling and cat_scaling
     """
     config: Dict[str, Any] = {}
     
-    st.subheader("1. Regulatory Asset Base Valuation")
+    st.markdown("### 1. Regulatory Asset Base - Scaling Factors")
+    st.caption("Parameters affecting all companies uniformly.")
+    
+    # === 1.1 GENERAL SCALING FACTOR ===
+    general_scaling = _render_general_scaling()
+    if general_scaling != GENERAL_SCALING_FACTOR_BASELINE:
+        config["general_scaling"] = general_scaling
+    
+    # === 1.2 CATEGORY SCALING FACTORS ===
+    cat_scaling = _render_category_scaling()
+    if cat_scaling:
+        config["cat_scaling"] = cat_scaling
+    
+    return config
+
+
+def render_quantities(user_id_network: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Render M1 quantities section: 1.3 Asset quantities (company-specific).
+    
+    These are variables that affect only the logged-in company.
+    
+    Returns:
+        Dict with var_scaling
+    """
+    config: Dict[str, Any] = {}
+    
+    st.markdown("### 1. Regulatory Asset Base - Asset Quantities")
+    st.caption("Variables affecting your company only.")
+    
+    if not user_id_network:
+        st.info("Log in to access company-specific asset quantity adjustments.")
+        return config
+    
+    # Check if KENT is uploaded (disables this section)
+    existing_kent = st.session_state.get("ui_config", {}).get(MODULE_KEY, {}).get("kent_file_bytes")
+    
+    var_scaling = _render_variables_scaling(
+        user_id_network,
+        disabled=(existing_kent is not None)
+    )
+    if var_scaling:
+        config["var_scaling"] = var_scaling
+    
+    return config
+
+
+def render_kent(user_id_network: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Render M1 KENT section: 1.4 KENT file upload.
+    
+    KENT upload overrides asset quantity scaling (1.3).
+    Parameter scaling (1.1, 1.2) still applies.
+    
+    Returns:
+        Dict with kent_file_bytes and kent_file_name
+    """
+    config: Dict[str, Any] = {}
+    
+    st.markdown("### 1. Regulatory Asset Base - KENT Upload")
+    st.caption("Upload custom capital base data. Overrides quantity scaling.")
+    
+    if not user_id_network:
+        st.info("Log in to upload KENT file.")
+        return config
+    
+    kent_result = _render_kent_upload()
+    if kent_result.get("kent_file_bytes") is not None:
+        config["kent_file_bytes"] = kent_result["kent_file_bytes"]
+        config["kent_file_name"] = kent_result["kent_file_name"]
+    
+    return config
+
+
+def render(user_id_network: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Legacy render function - renders all sections together.
+    
+    DEPRECATED: Use render_scaling(), render_quantities(), render_kent() instead.
+    Kept for backward compatibility.
+    """
+    config: Dict[str, Any] = {}
+    
+    st.markdown("### 1. Regulatory Asset Base Valuation")
     
     # === 1.1 GENERAL SCALING FACTOR ===
     general_scaling = _render_general_scaling()
@@ -57,23 +143,19 @@ def render(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     
     # === 1.3 & 1.4: Company-specific sections ===
     if user_id_network:
-        # First check existing session state for KENT (for priority handling)
-        existing_kent = st.session_state.get("ui_config", {}).get("m1_asset_base", {}).get("kent_file_bytes")
+        existing_kent = st.session_state.get("ui_config", {}).get(MODULE_KEY, {}).get("kent_file_bytes")
         
-        # 1.3 Variables section first
         var_scaling = _render_variables_scaling(
-            user_id_network, 
+            user_id_network,
             disabled=(existing_kent is not None)
         )
         if var_scaling:
             config["var_scaling"] = var_scaling
         
-        # 1.4 KENT upload section
         kent_result = _render_kent_upload()
         if kent_result.get("kent_file_bytes") is not None:
             config["kent_file_bytes"] = kent_result["kent_file_bytes"]
             config["kent_file_name"] = kent_result["kent_file_name"]
-            # If KENT uploaded, clear var_scaling
             config.pop("var_scaling", None)
     else:
         st.info("Log in to access company-specific asset quantity adjustments.")
@@ -325,7 +407,7 @@ def _classify_ordinarie(df: pd.DataFrame) -> pd.DataFrame:
     if 'capbase_existing' in df.columns:
         existing_check = (df['capbase_existing'] == 1)
     else:
-        existing_check = True  # Assume all are existing if column missing
+        existing_check = True
     
     # Ordinarie: age > 0 and age <= ekdep, and existing asset
     df['is_ordinarie'] = (
@@ -385,28 +467,17 @@ def apply_variable_scaling(
     Apply variable scaling to ordinarie components only.
     
     Used by config_adapter when preparing data for calculations.
-    
-    Args:
-        capbase_df: User's capital base DataFrame
-        var_scaling: {cat_encode: scaling_factor}
-    
-    Returns:
-        DataFrame with scaled nuav_2022 for ordinarie components
     """
     if not var_scaling:
         return capbase_df
     
     df = capbase_df.copy()
-    
-    # Classify ordinarie
     df = _classify_ordinarie(df)
     
-    # Apply scaling to ordinarie components only
     for cat_encode, factor in var_scaling.items():
         mask = (df['cat_encode'] == cat_encode) & (df['is_ordinarie'])
         df.loc[mask, 'nuav_2022'] = df.loc[mask, 'nuav_2022'] * factor
     
-    # Drop helper columns
     df = df.drop(columns=['is_ordinarie', 'age_229'], errors='ignore')
     
     return df

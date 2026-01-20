@@ -4,6 +4,8 @@ Case Storage for Regumetrica.
 Handles saving and loading cases to/from Firestore.
 Falls back to local JSON storage if Firestore is unavailable.
 
+Selection format: {"m1", "m3.wacc", "m3.incentive_params", "m5"}
+
 Firestore collection: saved_cases
 Document structure:
     - user_reid: str (filter key)
@@ -25,6 +27,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from frontend.common.module_registry import (
+    ALL_MODULES,
+    build_selection_key,
+)
+
 # Firestore imports
 try:
     from frontend.utils.firebase_firestore import get_firestore_client, is_firestore_available
@@ -36,7 +43,6 @@ except ImportError:
 # Constants
 COLLECTION_NAME = "saved_cases"
 MAX_CASES_PER_USER = 10
-MODULE_KEYS = ["m1", "m2", "m3", "m4", "m5", "m7"]
 
 # Local storage fallback
 LOCAL_STORAGE_DIR = Path("saved_cases")
@@ -52,7 +58,7 @@ class SavedCase:
     created_at: str  # ISO format
     updated_at: str  # ISO format
     ui_config: Dict[str, Any]
-    selected_modules: List[str]
+    selected_modules: List[str]  # e.g., ["m1", "m3.wacc", "m3.incentive_params"]
     had_kent_file: bool
     kent_file_name: Optional[str]
     
@@ -418,7 +424,7 @@ def save_case(
         case_name: Name of the case
         case_notes: User's notes
         ui_config: The ui_config dict from session_state
-        selected_modules: Set of selected module keys
+        selected_modules: Set of selected module/section keys
         case_id: Existing case ID (for updates) or None for new case
     
     Returns:
@@ -504,7 +510,7 @@ def apply_case_to_session(
     """
     Apply a loaded case to session state.
     
-    Explicitly sets module checkbox widget values to ensure they sync.
+    Sets up widget states for both module and section checkboxes.
     
     Args:
         case: The SavedCase to apply
@@ -512,10 +518,24 @@ def apply_case_to_session(
     """
     selected_set = set(case.selected_modules)
     
-    # Explicitly set checkbox widget values
-    for module_key in MODULE_KEYS:
-        widget_key = f"module_select_{module_key}"
-        session_state[widget_key] = module_key in selected_set
+    # Clear old widget states
+    keys_to_clear = [k for k in list(session_state.keys())
+                     if k.startswith("module_select_") or k.startswith("section_select_")]
+    for key in keys_to_clear:
+        del session_state[key]
+    
+    # Set module and section checkbox states
+    for module in ALL_MODULES:
+        if module.has_sections:
+            # Sectioned modules: only set section checkboxes (no parent checkbox)
+            for section in module.sections:
+                section_key = build_selection_key(module.key, section.key)
+                section_widget_key = f"section_select_{section_key}"
+                session_state[section_widget_key] = section_key in selected_set
+        else:
+            # Simple modules: set module checkbox
+            widget_key = f"module_select_{module.key}"
+            session_state[widget_key] = module.key in selected_set
     
     # Clear the load selectbox
     if "load_case_select" in session_state:
