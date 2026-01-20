@@ -47,95 +47,73 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         
         # === 3.6 Limits ===
         "adj_max_agg": None,  # None = baseline (1/3)
-        
-        # === 3.7 KPI factors ===
-        "kpi": None,  # Dict with year -> float
-    },
-    "m3_incentive_variables": {
-        # === Company-specific incentive variables ===
-        # All values None = use baseline from all_adjust_vars.csv
-        
-        # --- 30.2 Network loss ---
-        "nf_norm": None,
-        "nf_obs": None,
-        "e_in": None,
-        
-        # --- 30.3 Load ---
-        "ug_norm": None,
-        "ug_obs": None,
-        "k_upstream": None,
-        
-        # --- 30.4 Quality (CEMI4) ---
-        "cemi4_norm": None,
-        "cemi4_obs": None,
-        
-        # --- 30.4 Quality (AIF observed) ---
-        "aif_a_1_obs": None, "aif_a_2_obs": None, "aif_a_3_obs": None,
-        "aif_a_4_obs": None, "aif_a_5_obs": None, "aif_a_6_obs": None,
-        "aif_o_1_obs": None, "aif_o_2_obs": None, "aif_o_3_obs": None,
-        "aif_o_4_obs": None, "aif_o_5_obs": None, "aif_o_6_obs": None,
-        
-        # --- 30.4 Quality (AIF norm) ---
-        "aif_a_1_norm": None, "aif_a_2_norm": None, "aif_a_3_norm": None,
-        "aif_a_4_norm": None, "aif_a_5_norm": None, "aif_a_6_norm": None,
-        "aif_o_1_norm": None, "aif_o_2_norm": None, "aif_o_3_norm": None,
-        "aif_o_4_norm": None, "aif_o_5_norm": None, "aif_o_6_norm": None,
-        
-        # --- 30.4 Quality (AIT observed) ---
-        "ait_a_1_obs": None, "ait_a_2_obs": None, "ait_a_3_obs": None,
-        "ait_a_4_obs": None, "ait_a_5_obs": None, "ait_a_6_obs": None,
-        "ait_o_1_obs": None, "ait_o_2_obs": None, "ait_o_3_obs": None,
-        "ait_o_4_obs": None, "ait_o_5_obs": None, "ait_o_6_obs": None,
-        
-        # --- 30.4 Quality (AIT norm) ---
-        "ait_a_1_norm": None, "ait_a_2_norm": None, "ait_a_3_norm": None,
-        "ait_a_4_norm": None, "ait_a_5_norm": None, "ait_a_6_norm": None,
-        "ait_o_1_norm": None, "ait_o_2_norm": None, "ait_o_3_norm": None,
-        "ait_o_4_norm": None, "ait_o_5_norm": None, "ait_o_6_norm": None,
-        
-        # --- 30.4 Quality (AME per customer type) ---
-        "ame_1": None, "ame_2": None, "ame_3": None,
-        "ame_4": None, "ame_5": None, "ame_6": None,
     },
     "m4_operating_exp": {
-        "paverkbara_method": "OPEX",  # "OPEX" or "TOTEX"
+        "opex_override": None,  # Dict[year, float] or None
     },
     "m5_efficiency": {
-        "trunkering_max": None,    # None = baseline (0.30)
-        "trunkering_min": None,    # None = baseline (0.162416)
-        "outlier_krav": None,      # None = baseline (0.01)
-        "kunddelning": None,       # None = baseline (0.50)
-        "realiseringstid": None,   # None = baseline (8)
-        "tillsynsperiod": None,    # None = baseline (4)
+        "trunkering_max": None,  # None = baseline (1.0)
+        "trunkering_min": None,  # None = baseline (0.85)
+        "efficiency_override": None,  # float or None
     },
     "addon_benchmarking": {
-        "dea_method": "baseline",  # "baseline" or "custom"
-        "dea_inputs": ["CAPEX", "OPEXp"],
-        "dea_outputs": ["CU", "MW", "NS", "MWhl", "MWhh"],
-        "dea_rts": "crs",
-        "dea_multiplier": 2.0,
-        "dea_q_lower": 25.0,
-        "dea_q_upper": 75.0,
-    }
+        "dea_method": "baseline",  # 'baseline' or 'custom'
+        "dea_inputs": None,        # List[str] - input variable names
+        "dea_outputs": None,       # List[str] - output variable names
+        "dea_rts": "crs",          # 'crs' or 'vrs'
+        "dea_orientation": "input",  # 'input' or 'output'
+    },
 }
 
-# Mapping: module_key -> list of ui_config keys
-MODULE_TO_CONFIG_KEYS: Dict[str, list] = {
-    "m1": ["m1_asset_base"],
-    "m2": ["m2_depreciation"],
-    "m3": ["m3_cost_of_capital", "m3_quality_adjustments", "m3_incentive_variables"],
-    "m4": ["m4_operating_exp"],
-    "m5": ["m5_efficiency"],
-    "m7": ["addon_benchmarking"],
+# Mapping module keys -> ui_config keys (for filtering)
+MODULE_TO_CONFIG_KEYS: Dict[str, tuple] = {
+    "m1": ("m1_asset_base",),
+    "m2": ("m2_depreciation",),
+    "m3": ("m3_cost_of_capital", "m3_quality_adjustments"),
+    "m4": ("m4_operating_exp",),
+    "m5": ("m5_efficiency",),
+    "m7": ("addon_benchmarking",),
 }
 
+
+# =============================================================================
+# REID / ID_NETWORK CONVERSION
+# =============================================================================
+
+def reid_to_id_network(reid: str) -> Optional[int]:
+    """
+    Convert REId to id_network.
+    
+    REId format: "REL00886" -> 886
+    This is the single source of truth for this conversion.
+    
+    Args:
+        reid: REId string (e.g., "REL00886")
+        
+    Returns:
+        id_network as int, or None if invalid
+    """
+    if not reid or not isinstance(reid, str):
+        return None
+    if not reid.startswith("REL"):
+        return None
+    try:
+        numeric_part = reid.replace("REL", "").lstrip("0")
+        return int(numeric_part) if numeric_part else 0
+    except ValueError:
+        return None
+
+
+# =============================================================================
+# STATE INITIALIZATION
+# =============================================================================
 
 def init_session_state() -> None:
-    """Initialize session state at app start."""
+    """Initialize session state with defaults if not present."""
     defaults = {
-        # Company selection
+        # Company selection - user_reid is the ONLY authoritative key
         "user_reid": None,
-        "user_id_network": None,
+        # NOTE: user_id_network is NOT stored - derived on-demand via get_user_id_network()
         
         # Module configuration
         "ui_config": copy.deepcopy(DEFAULT_UI_CONFIG),
@@ -192,6 +170,10 @@ def _clear_module_checkbox_keys() -> None:
             del st.session_state[widget_key]
 
 
+# =============================================================================
+# MODULE CONFIG FUNCTIONS
+# =============================================================================
+
 def get_module_config(module_key: str) -> Dict[str, Any]:
     """Get config for a specific module."""
     return st.session_state.get("ui_config", {}).get(module_key, {})
@@ -204,26 +186,34 @@ def set_module_config(module_key: str, config: Dict[str, Any]) -> None:
     st.session_state["ui_config"][module_key] = config
 
 
+# =============================================================================
+# USER REID FUNCTIONS (Single Source of Truth)
+# =============================================================================
+
 def get_user_reid() -> Optional[str]:
     """Get selected company's REId."""
     return st.session_state.get("user_reid")
 
 
 def set_user_reid(reid: str) -> None:
-    """Set selected company's REId."""
+    """
+    Set selected company's REId.
+    
+    This is the ONLY function that should set user_reid.
+    id_network is derived on-demand, not stored.
+    """
     st.session_state["user_reid"] = reid
-    # Also set id_network
-    if reid and reid.startswith("REL"):
-        try:
-            numeric_part = reid.replace("REL", "").lstrip("0")
-            st.session_state["user_id_network"] = int(numeric_part) if numeric_part else 0
-        except ValueError:
-            st.session_state["user_id_network"] = None
 
 
 def get_user_id_network() -> Optional[int]:
-    """Get selected company's id_network."""
-    return st.session_state.get("user_id_network")
+    """
+    Get selected company's id_network.
+    
+    DERIVED on-demand from user_reid - not stored separately.
+    This eliminates synchronization issues.
+    """
+    reid = st.session_state.get("user_reid")
+    return reid_to_id_network(reid)
 
 
 # =============================================================================
@@ -298,99 +288,49 @@ def set_case_id(case_id: str) -> None:
     st.session_state["case_id"] = case_id
 
 
-def is_case_saved() -> bool:
-    """Check if current case has been saved."""
-    return st.session_state.get("case_saved", False)
-
-
 def mark_case_saved() -> None:
     """Mark current case as saved."""
     st.session_state["case_saved"] = True
 
 
-def mark_case_unsaved() -> None:
-    """Mark current case as unsaved (after modifications)."""
-    st.session_state["case_saved"] = False
+def is_case_saved() -> bool:
+    """Check if current case has been saved."""
+    return st.session_state.get("case_saved", False)
 
 
 # =============================================================================
-# FILTERED CONFIG FOR CALCULATION
+# FILTERED CONFIG (for selected modules only)
 # =============================================================================
 
 def get_filtered_ui_config() -> Dict[str, Any]:
     """
-    Get ui_config filtered by selected_modules.
+    Get ui_config filtered to only include selected modules.
     
-    Only modules in selected_modules retain their modified values.
-    Unselected modules are reset to baseline defaults.
-    
-    This ensures that only explicitly selected modules affect the calculation.
-    
-    Returns:
-        Filtered ui_config dict (deep copy, safe to modify)
+    Non-selected modules are reset to DEFAULT_UI_CONFIG values.
+    This ensures only explicitly selected modules affect calculations.
     """
-    ui_config = st.session_state.get("ui_config", {})
     selected = get_selected_modules()
+    full_config = st.session_state.get("ui_config", {})
     
-    # If no modules selected, return defaults (baseline run)
-    if len(selected) == 0:
-        return copy.deepcopy(DEFAULT_UI_CONFIG)
+    # Start with default config
+    filtered = copy.deepcopy(DEFAULT_UI_CONFIG)
     
-    # Start with deep copy of current config
-    filtered = copy.deepcopy(ui_config)
-    
-    # Reset unselected modules to defaults
+    # Override with actual values for selected modules only
     for module_key, config_keys in MODULE_TO_CONFIG_KEYS.items():
-        if module_key not in selected:
+        if module_key in selected:
             for config_key in config_keys:
-                if config_key in DEFAULT_UI_CONFIG:
-                    filtered[config_key] = copy.deepcopy(DEFAULT_UI_CONFIG[config_key])
+                if config_key in full_config:
+                    filtered[config_key] = copy.deepcopy(full_config[config_key])
     
     return filtered
 
 
-def get_active_module_changes() -> Dict[str, bool]:
-    """
-    Get which modules have active (applied) changes.
-    
-    A module has active changes if:
-    1. It is selected in selected_modules
-    2. Its ui_config differs from defaults
-    
-    Returns:
-        Dict mapping module_key to has_changes bool
-    """
-    ui_config = st.session_state.get("ui_config", {})
-    selected = get_selected_modules()
-    
-    result = {}
-    
-    for module_key, config_keys in MODULE_TO_CONFIG_KEYS.items():
-        # If not selected, no active changes
-        if len(selected) > 0 and module_key not in selected:
-            result[module_key] = False
-            continue
-        
-        # Check if any config differs from default
-        has_changes = False
-        for config_key in config_keys:
-            current = ui_config.get(config_key, {})
-            default = DEFAULT_UI_CONFIG.get(config_key, {})
-            if current != default:
-                has_changes = True
-                break
-        
-        result[module_key] = has_changes
-    
-    return result
-
-
 # =============================================================================
-# AUTHENTICATION FUNCTIONS
+# AUTHENTICATION HELPERS
 # =============================================================================
 
 def is_authenticated() -> bool:
-    """Check if user is authenticated."""
+    """Check if user is authenticated via Firebase."""
     return st.session_state.get("auth_user") is not None
 
 
@@ -410,25 +350,5 @@ def get_auth_email() -> Optional[str]:
 
 
 def is_regulator() -> bool:
-    """Check if current user is a regulator."""
+    """Check if authenticated user is a regulator."""
     return get_auth_role() == "regulator"
-
-
-def is_company_user() -> bool:
-    """Check if current user is a company user."""
-    return get_auth_role() == "company"
-
-
-def clear_auth_state() -> None:
-    """Clear all authentication-related session state."""
-    auth_keys = [
-        "auth_user",
-        "auth_token",
-        "auth_email",
-        "auth_uid",
-        "auth_role",
-        "auth_reid",
-    ]
-    for key in auth_keys:
-        if key in st.session_state:
-            st.session_state[key] = None

@@ -13,6 +13,7 @@ import pandas as pd
 import base64
 from pathlib import Path
 from typing import List, Tuple, Optional
+from frontend.utils.state_manager import set_user_reid
 
 from auth.firebase_auth import (
     initialize_firebase_auth,
@@ -218,7 +219,7 @@ def render_login_form(auth_manager) -> None:
                 
                 # Auto-set user_reid for company users
                 if claims.get('role') == 'company' and claims.get('reid'):
-                    st.session_state['user_reid'] = claims.get('reid')
+                    set_user_reid(claims.get('reid'))
             
             st.success("Login successful!")
             st.rerun()
