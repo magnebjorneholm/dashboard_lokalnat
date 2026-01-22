@@ -14,7 +14,6 @@ from frontend.utils.state_manager import (
     get_user_id_network,
     get_case_name,
     get_selected_modules,
-    is_module_selected,
     is_section_selected,
 )
 from frontend.utils.config_adapter import get_changed_parameters
@@ -82,16 +81,15 @@ if "ui_config" in st.session_state:
 
 
 # =============================================================================
-# MODULE SECTIONS (Conditional rendering based on selection)
+# MODULE SECTIONS (Conditional rendering based on section selection)
 # =============================================================================
 
 # --- Module 1: Regulatory asset base valuation ---
-# M1 has three sections: scaling, quantities, kent
+# Sections: scaling, quantities, kent
 
 if is_section_selected("m1", "scaling"):
     st.divider()
     scaling_config = m1_asset_base.render_scaling(user_id_network=user_id_network)
-    # Merge into existing config
     current_config = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
     current_config.update(scaling_config)
     set_module_config("m1_asset_base", current_config)
@@ -108,66 +106,70 @@ if is_section_selected("m1", "kent"):
     kent_config = m1_asset_base.render_kent(user_id_network=user_id_network)
     current_config = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
     current_config.update(kent_config)
-    # If KENT uploaded, clear var_scaling
     if kent_config.get("kent_file_bytes"):
         current_config.pop("var_scaling", None)
     set_module_config("m1_asset_base", current_config)
 
 
 # --- Module 2: Depreciation ---
-# M2 has one section: lifetimes
+# Sections: lifetimes
 
 if is_section_selected("m2", "lifetimes"):
     st.divider()
-    config = m2_depreciation.render()
+    config = m2_depreciation.render_lifetimes()
     set_module_config("m2_depreciation", config)
 
 
 # --- Module 3: Cost of capital ---
-# M3 has three sections: wacc, incentive_params, incentive_vars
+# Sections: wacc, incentive_params, incentive_vars
 
 if is_section_selected("m3", "wacc"):
     st.divider()
-    config = m3_cost_of_capital.render()
+    config = m3_cost_of_capital.render_wacc()
     set_module_config("m3_cost_of_capital", config)
 
 if is_section_selected("m3", "incentive_params"):
     st.divider()
-    qa_config = m3_cost_of_capital.render_quality_adjustments()
+    qa_config = m3_cost_of_capital.render_incentive_params()
     set_module_config("m3_quality_adjustments", qa_config)
 
 if is_section_selected("m3", "incentive_vars"):
     st.divider()
-    var_config = m3_incentive_variables.render()
+    var_config = m3_incentive_variables.render_incentive_vars()
     set_module_config("m3_incentive_variables", var_config)
 
 
 # --- Module 4: Operating expenditures ---
-# M4 has two sections: scaling, opex_vars
-# TODO: Split into render_scaling(), render_variables()
-# For now, render all together if ANY section is selected
+# Sections: scaling, opex_vars
 
-if is_module_selected("m4"):
+if is_section_selected("m4", "scaling"):
     st.divider()
-    config = m4_operating_exp.render()
+    config = m4_operating_exp.render_scaling()
     set_module_config("m4_operating_exp", config)
+
+if is_section_selected("m4", "opex_vars"):
+    st.divider()
+    var_config = m4_operating_exp.render_opex_vars()
+    current_config = st.session_state.get("ui_config", {}).get("m4_operating_exp", {})
+    current_config.update(var_config)
+    set_module_config("m4_operating_exp", current_config)
 
 
 # --- Module 5: Efficiency incentive ---
-# M5 has one section: efficiency_params
+# Sections: efficiency_params
 
 if is_section_selected("m5", "efficiency_params"):
     st.divider()
-    config = m5_efficiency.render()
+    config = m5_efficiency.render_efficiency_params()
     set_module_config("m5_efficiency", config)
 
 
 # --- Module 7: Add-on modules (Benchmarking) ---
-# M7 has one section: dea_spec
+# Sections: dea_spec
 
 if is_section_selected("m7", "dea_spec"):
     st.divider()
-    config = benchmarking.render()
+    config = benchmarking.render_dea_spec()
     set_module_config("addon_benchmarking", config)
 
 

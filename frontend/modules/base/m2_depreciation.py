@@ -4,14 +4,8 @@ Module 2: Depreciation
 Handles lifetime adjustments for asset categories.
 Parameter-IDs: 2.X.1 (ordinary lifetime), 2.X.2 (tail period) per category X
 
---- NOTE FOR MEETING (kan tas bort efteråt) ---
-Tail period vs maxdep:
-- User Manual visar "Tail" som en separat period (t.ex. 24 år)
-- Internt lagras maxdep som total livslängd (ekdep + tail = 100 + 24 = 124)
-- UI visar nu tail period (24), inte maxdep (124)
-- Beräkningskedjan får: maxdep = ekdep + tail_period
-- Ska tail vara oberoende av ordinary lifetime? Nuvarande beräkningskedja med ex ekdep = 100 och maxdep = 124 innebär att om ekdep ändras till 99 så förblir maxdep 124 fast tail indirekt ökar till 25 då.
---- END NOTE ---
+Section-based rendering:
+- render_lifetimes() -> 2.X Asset lifetimes
 """
 
 import streamlit as st
@@ -23,20 +17,24 @@ from frontend.common.asset_categories import ASSET_CATEGORIES
 MODULE_KEY = "m2_depreciation"
 
 
-def render(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
+def render_lifetimes(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
     """
-    Render Module 2: Depreciation.
+    Render M2 lifetimes section: 2.X Asset lifetimes.
     
+    Args:
+        capbase_data: Optional DataFrame with subcategory info for granular editing
+        
     Returns:
         Dict with lifetime_adjustments and lifetime_level
     """
     config: Dict[str, Any] = {}
     
-    st.subheader("2. Depreciation")
+    st.markdown("### 2. Depreciation - Asset Lifetimes")
+    st.caption("Parameters 2.X.1-2.X.2: Ordinary lifetime and tail period by category")
     
     with st.expander("2.1-2.17 Asset lifetimes", expanded=False):
         st.caption(
-            "Ordinary lifetime and tail period by category. Modified values override baseline."
+            "Modified values override baseline. Changes apply to all companies."
         )
         
         has_subcat = capbase_data is not None and 'subcat_encode' in capbase_data.columns
@@ -67,13 +65,12 @@ def render(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
     return config
 
 
+# =============================================================================
+# EDITOR FUNCTIONS
+# =============================================================================
+
 def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str, Optional[str]]:
-    """
-    Render editor for category-level adjustments.
-    
-    Returns:
-        (adjustments dict or None, 'cat', validation_error or None)
-    """
+    """Render editor for category-level adjustments."""
     data = []
     for cat in ASSET_CATEGORIES:
         tail_period = cat.maxdep - cat.ekdep
@@ -178,17 +175,16 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
     return _extract_lifetime_changes_subcat(edited_df, original_display, agg_df)
 
 
+# =============================================================================
+# EXTRACTION HELPERS
+# =============================================================================
+
 def _extract_lifetime_changes(
     edited_df: pd.DataFrame, 
     original_df: pd.DataFrame,
     baseline_df: pd.DataFrame
 ) -> tuple[Optional[Dict[int, Dict[str, int]]], str, Optional[str]]:
-    """
-    Extract lifetime adjustments for category level.
-    
-    Returns:
-        (adjustments dict, 'cat', validation_error or None)
-    """
+    """Extract lifetime adjustments for category level."""
     adjustments = {}
     validation_errors = []
     
@@ -197,7 +193,6 @@ def _extract_lifetime_changes(
         baseline_row = baseline_df.iloc[idx]
         code = int(baseline_row['_cat_encode'])
         
-        # Check for empty/NaN values
         if pd.isna(edited_row['Ordinary lifetime']):
             cat_name = baseline_row['Category']
             validation_errors.append(f"Ordinary lifetime cannot be empty ({cat_name})")
@@ -208,26 +203,17 @@ def _extract_lifetime_changes(
             validation_errors.append(f"Tail period cannot be empty ({cat_name})")
             continue
         
-        changes = {}
         new_ekdep = int(edited_row['Ordinary lifetime'])
         new_tail = int(edited_row['Tail period'])
         
-        if edited_row['Ordinary lifetime'] != original_row['Ordinary lifetime']:
-            changes['ekdep'] = new_ekdep
-        
-        if edited_row['Tail period'] != original_row['Tail period']:
-            pass  # Will be handled via maxdep below
-        
-        # Calculate maxdep from ekdep + tail_period
         baseline_ekdep = int(baseline_row['_baseline_ekdep'])
         baseline_tail = int(baseline_row['_baseline_tail'])
         
         if new_ekdep != baseline_ekdep or new_tail != baseline_tail:
-            changes['ekdep'] = new_ekdep
-            changes['maxdep'] = new_ekdep + new_tail
-        
-        if changes:
-            adjustments[code] = changes
+            adjustments[code] = {
+                'ekdep': new_ekdep,
+                'maxdep': new_ekdep + new_tail
+            }
     
     if validation_errors:
         return None, 'cat', validation_errors[0]
@@ -240,12 +226,7 @@ def _extract_lifetime_changes_subcat(
     original_df: pd.DataFrame,
     baseline_df: pd.DataFrame
 ) -> tuple[Optional[Dict[int, Dict[str, int]]], str, Optional[str]]:
-    """
-    Extract lifetime adjustments for subcategory level.
-    
-    Returns:
-        (adjustments dict, 'subcat', validation_error or None)
-    """
+    """Extract lifetime adjustments for subcategory level."""
     adjustments = {}
     validation_errors = []
     

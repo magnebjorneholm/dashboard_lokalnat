@@ -4,6 +4,10 @@ Module 3: Cost of Capital
 Handles WACC and related parameters.
 Parameter-IDs: 3.1.X (base), 3.2.X (derived), 3.3-3.6 (adjustments)
 Variable-IDs: 30.X
+
+Section-based rendering:
+- render_wacc() -> 3.1-3.2 WACC parameters
+- render_incentive_params() -> 3.3-3.6 Incentive parameters
 """
 
 import streamlit as st
@@ -69,74 +73,13 @@ BASELINE_INCENTIVE = {
 }
 
 
-def _calculate_wacc_from_derived(
-    cost_of_equity: float,
-    cost_of_debt: float,
-    debt_ratio: float,
-    tax_rate: float,
-    inflation: float
-) -> tuple[float, float]:
+# =============================================================================
+# SECTION RENDER FUNCTIONS
+# =============================================================================
+
+def render_wacc() -> Dict[str, Any]:
     """
-    Calculate WACC from derived parameters.
-    
-    Formulas:
-        WACC_nom_after_tax = (1 - S) × Re + S × Rd × (1 - τ)
-        WACC_nom_pre_tax   = WACC_nom_after_tax / (1 - τ)
-        WACC_real          = (1 + WACC_nom_pre_tax) / (1 + π) - 1
-    
-    Args:
-        cost_of_equity: Re - Cost of equity (nominal, after tax)
-        cost_of_debt: Rd - Cost of debt (nominal, pre-tax)
-        debt_ratio: S - Debt ratio D/(D+E)
-        tax_rate: τ - Corporate tax rate
-        inflation: π - Inflation (CPIF)
-    
-    Returns:
-        Tuple (wacc_nominal_pre_tax, wacc_real_pre_tax)
-    """
-    # WACC after tax (weighted average)
-    wacc_nominal_after_tax = (
-        (1 - debt_ratio) * cost_of_equity + 
-        debt_ratio * cost_of_debt * (1 - tax_rate)
-    )
-    
-    # Convert to pre-tax
-    wacc_nominal_pre_tax = wacc_nominal_after_tax / (1 - tax_rate)
-    
-    # Fisher: nominal → real
-    wacc_real_pre_tax = (1 + wacc_nominal_pre_tax) / (1 + inflation) - 1
-    
-    return wacc_nominal_pre_tax, wacc_real_pre_tax
-
-
-def _render_apply_row(new_wacc: float, button_key: str) -> None:
-    """
-    Render Apply/Reset buttons and current WACC info in a single row.
-    
-    Layout: [Apply][Reset][Current WACC info]
-    """
-    current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
-    
-    cols = st.columns([0.8, 0.8, 2.5, 10])
-    
-    with cols[0]:
-        st.button("Apply", key=button_key, type="primary", on_click=_set_wacc, args=(new_wacc,))
-    
-    with cols[1]:
-        st.button("Reset", key=f"{button_key}_reset", on_click=_set_wacc, args=(BASELINE_WACC,))
-    
-    with cols[2]:
-        st.markdown(f"<p style='margin-top: 16px;'>Active WACC: <b>{format_percent(current_wacc)}</b></p>", unsafe_allow_html=True)
-
-
-def _set_wacc(value: float) -> None:
-    """Callback to set WACC value."""
-    st.session_state[f"{MODULE_KEY}_current_wacc"] = value
-
-
-def render() -> Dict[str, Any]:
-    """
-    Render Module 3: Cost of capital.
+    Render M3 WACC section: 3.1-3.2 WACC parameters.
     
     Three input methods via radio button:
     1. CAPM components - calculate from base parameters
@@ -144,12 +87,12 @@ def render() -> Dict[str, Any]:
     3. Direct input - enter WACC directly
     
     Returns:
-        Dict with user selections:
-        - wacc_override: New WACC value or None for baseline
+        Dict with wacc_override or empty if baseline
     """
     config: Dict[str, Any] = {}
     
-    st.subheader("3. Cost of Capital")
+    st.markdown("### 3. Cost of Capital - WACC Parameters")
+    st.caption("Parameters 3.1-3.2: Base WACC calculation")
     
     # Initialize session state
     if f"{MODULE_KEY}_current_wacc" not in st.session_state:
@@ -184,6 +127,132 @@ def render() -> Dict[str, Any]:
     
     return config
 
+
+def render_incentive_params() -> Dict[str, Any]:
+    """
+    Render M3 incentive parameters section: 3.3-3.6 parameters.
+    
+    Includes:
+    - 3.3 Quality adjustment parameters (CEMI4, AIT/AIF costs)
+    - 3.4 Network loss parameters
+    - 3.5 Utilization rate parameters
+    - 3.6 Aggregate cap
+    - 3.7 KPI factors
+    
+    Returns:
+        Dict with incentive parameter overrides
+    """
+    config: Dict[str, Any] = {}
+    
+    st.markdown("### 3. Cost of Capital - Incentive Parameters")
+    st.caption("Parameters 3.3-3.6: Quality and incentive adjustments")
+    
+    # Enable/disable toggles
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        enable_quality = st.checkbox(
+            "3.3 Quality adjustment",
+            value=BASELINE_INCENTIVE["enable_quality"],
+            key=f"{MODULE_KEY_QA}_enable_quality",
+            help="Enable quality (interruption) adjustment"
+        )
+        if enable_quality != BASELINE_INCENTIVE["enable_quality"]:
+            config["enable_quality"] = enable_quality
+    
+    with col2:
+        enable_netloss = st.checkbox(
+            "3.4 Network loss",
+            value=BASELINE_INCENTIVE["enable_netloss"],
+            key=f"{MODULE_KEY_QA}_enable_netloss",
+            help="Enable network loss adjustment"
+        )
+        if enable_netloss != BASELINE_INCENTIVE["enable_netloss"]:
+            config["enable_netloss"] = enable_netloss
+    
+    with col3:
+        enable_load = st.checkbox(
+            "3.5 Utilization rate",
+            value=BASELINE_INCENTIVE["enable_load"],
+            key=f"{MODULE_KEY_QA}_enable_load",
+            help="Enable utilization rate adjustment"
+        )
+        if enable_load != BASELINE_INCENTIVE["enable_load"]:
+            config["enable_load"] = enable_load
+    
+    st.divider()
+    
+    # === INDIVIDUAL SECTIONS ===
+    with st.expander("3.3 Quality adjustment parameters", expanded=False):
+        _render_quality_section(config)
+    
+    with st.expander("3.4 Network loss adjustment parameters", expanded=False):
+        _render_netloss_section(config)
+    
+    with st.expander("3.5 Utilization rate adjustment parameters", expanded=False):
+        _render_load_section(config)
+    
+    with st.expander("3.6 Aggregate adjustment cap", expanded=False):
+        _render_caps_section(config)
+    
+    with st.expander("3.7 KPI factors", expanded=False):
+        _render_kpi_section(config)
+    
+    return config
+
+# =============================================================================
+# WACC CALCULATION HELPERS
+# =============================================================================
+
+def _calculate_wacc_from_derived(
+    cost_of_equity: float,
+    cost_of_debt: float,
+    debt_ratio: float,
+    tax_rate: float,
+    inflation: float
+) -> tuple[float, float]:
+    """
+    Calculate WACC from derived parameters.
+    
+    Formulas:
+        WACC_nom_after_tax = (1 - S) × Re + S × Rd × (1 - τ)
+        WACC_nom_pre_tax   = WACC_nom_after_tax / (1 - τ)
+        WACC_real          = (1 + WACC_nom_pre_tax) / (1 + π) - 1
+    """
+    wacc_nominal_after_tax = (
+        (1 - debt_ratio) * cost_of_equity + 
+        debt_ratio * cost_of_debt * (1 - tax_rate)
+    )
+    wacc_nominal_pre_tax = wacc_nominal_after_tax / (1 - tax_rate)
+    wacc_real_pre_tax = (1 + wacc_nominal_pre_tax) / (1 + inflation) - 1
+    
+    return wacc_nominal_pre_tax, wacc_real_pre_tax
+
+
+def _render_apply_row(new_wacc: float, button_key: str) -> None:
+    """Render Apply/Reset buttons and current WACC info."""
+    current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
+    
+    cols = st.columns([0.8, 0.8, 2.5, 10])
+    
+    with cols[0]:
+        st.button("Apply", key=button_key, type="primary", on_click=_set_wacc, args=(new_wacc,))
+    
+    with cols[1]:
+        st.button("Reset", key=f"{button_key}_reset", on_click=_set_wacc, args=(BASELINE_WACC,))
+    
+    with cols[2]:
+        st.markdown(f"<p style='margin-top: 16px;'>Active WACC: <b>{format_percent(current_wacc)}</b></p>", unsafe_allow_html=True)
+
+
+def _set_wacc(value: float) -> None:
+    """Callback to set WACC value."""
+    st.session_state[f"{MODULE_KEY}_current_wacc"] = value
+
+
+# =============================================================================
+# WACC INPUT SECTIONS
+# =============================================================================
 
 def _render_capm_section() -> None:
     """Render 3.1 Base parameters with LaTeX formulas."""
@@ -246,32 +315,32 @@ def _render_capm_section() -> None:
             step=0.001,
             format="%.4f",
             key=f"{MODULE_KEY}_credit_risk_premium",
-            help="Company credit risk premium"
+            help="Spread over risk-free for debt"
         )
         
         tax_rate = st.number_input(
-            "3.1.6 Tax rate (τ)",
+            "3.1.6 Corporate tax rate (τ)",
             value=BASELINE_CAPM.tax_rate,
             min_value=0.0,
             max_value=0.50,
             step=0.001,
             format="%.3f",
             key=f"{MODULE_KEY}_tax_rate",
-            help="Corporate tax rate"
+            help="Swedish corporate tax rate"
         )
         
         inflation = st.number_input(
-            "3.1.7 Inflation (π, CPIF)",
+            "3.1.7 Inflation (π)",
             value=BASELINE_CAPM.inflation,
-            min_value=0.0,
+            min_value=-0.05,
             max_value=0.20,
             step=0.001,
             format="%.4f",
             key=f"{MODULE_KEY}_inflation",
-            help="Expected inflation (CPIF)"
+            help="CPIF inflation rate"
         )
     
-    # Calculate WACC from inputs
+    # Calculate WACC
     capm_inputs = CAPMInputs(
         debt_ratio=debt_ratio,
         asset_beta=asset_beta,
@@ -282,222 +351,113 @@ def _render_capm_section() -> None:
         inflation=inflation,
     )
     
-    try:
-        result = calculate_wacc(capm_inputs)
-        calculated_wacc = result.wacc_real_pre_tax
-        
-        # Show derived parameters (read-only)
-        st.divider()
-        st.markdown("##### 3.2 Derived")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            with st.container(border=True):
-                st.metric("3.2.1 Equity beta", f"{result.equity_beta:.4f}")
-            with st.container(border=True):
-                st.metric("3.2.2 Cost of equity (Re)", format_percent(result.cost_of_equity_nominal))
-        with col2:
-            with st.container(border=True):
-                st.metric("3.2.3 Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
-
-        # Final WACC and Apply/Reset/Info row
-        with st.container(border=True):
-            st.metric("Final WACC", format_percent(calculated_wacc))
-        
-        _render_apply_row(calculated_wacc, f"{MODULE_KEY}_use_capm")
-            
-    except ValueError as e:
-        st.error(f"Calculation error: {e}")
+    result = calculate_wacc(capm_inputs)
+    new_wacc = result.wacc_real_pre_tax
+    
+    st.divider()
+    st.markdown(f"**Calculated WACC (real, pre-tax): {format_percent(new_wacc)}**")
+    
+    _render_apply_row(new_wacc, f"{MODULE_KEY}_apply_capm")
 
 
 def _render_derived_section() -> None:
-    """
-    Render 3.2 Derived parameters for direct input.
-    
-    Inputs: Re, Rd, S, τ, π
-    Output: WACC nominal and real (calculated)
-    """
-    st.markdown("##### 3.2 Derived")
-    st.caption("Direct input of equity and debt costs")
+    """Render 3.2 Derived parameters."""
+    st.markdown("##### 3.2 Derived parameters")
+    st.caption("Modify intermediate values directly")
     
     col1, col2 = st.columns(2)
     
     with col1:
         cost_of_equity = st.number_input(
-            "3.2.2 Cost of equity (Re)",
+            "3.2.1 Cost of equity (Re)",
             value=BASELINE_DERIVED["cost_of_equity_nominal"],
             min_value=0.0,
             max_value=0.30,
             step=0.001,
             format="%.4f",
-            key=f"{MODULE_KEY}_derived_cost_equity",
-            help="Nominal cost of equity (post-tax). Baseline: Rf + βₑ × MRP"
+            key=f"{MODULE_KEY}_cost_of_equity",
+            help="Nominal cost of equity"
         )
         
         cost_of_debt = st.number_input(
-            "3.2.3 Cost of debt (Rd)",
+            "3.2.2 Cost of debt (Rd)",
             value=BASELINE_DERIVED["cost_of_debt_nominal"],
             min_value=0.0,
             max_value=0.20,
             step=0.001,
             format="%.4f",
-            key=f"{MODULE_KEY}_derived_cost_debt",
-            help="Nominal cost of debt (pre-tax). Baseline: Rf + credit risk premium"
+            key=f"{MODULE_KEY}_cost_of_debt",
+            help="Nominal cost of debt"
         )
         
         debt_ratio = st.number_input(
-            "3.1.1 Debt ratio (S)",
+            "3.2.3 Debt ratio (S)",
             value=BASELINE_DERIVED["debt_ratio"],
             min_value=0.0,
             max_value=0.99,
             step=0.01,
             format="%.2f",
-            key=f"{MODULE_KEY}_derived_debt_ratio",
-            help="Debt share of total capital D/(D+E)"
+            key=f"{MODULE_KEY}_debt_ratio_derived",
+            help="Debt share D/(D+E)"
         )
     
     with col2:
         tax_rate = st.number_input(
-            "3.1.6 Tax rate (τ)",
+            "3.2.4 Tax rate (τ)",
             value=BASELINE_DERIVED["tax_rate"],
             min_value=0.0,
             max_value=0.50,
             step=0.001,
             format="%.3f",
-            key=f"{MODULE_KEY}_derived_tax_rate",
+            key=f"{MODULE_KEY}_tax_rate_derived",
             help="Corporate tax rate"
         )
         
         inflation = st.number_input(
-            "3.1.7 Inflation (π, CPIF)",
+            "3.2.5 Inflation (π)",
             value=BASELINE_DERIVED["inflation"],
-            min_value=0.0,
+            min_value=-0.05,
             max_value=0.20,
             step=0.001,
             format="%.4f",
-            key=f"{MODULE_KEY}_derived_inflation",
-            help="Expected inflation for Fisher conversion"
+            key=f"{MODULE_KEY}_inflation_derived",
+            help="CPIF inflation"
         )
     
-    # Calculate WACC from derived parameters
-    wacc_nominal, wacc_real = _calculate_wacc_from_derived(
-        cost_of_equity=cost_of_equity,
-        cost_of_debt=cost_of_debt,
-        debt_ratio=debt_ratio,
-        tax_rate=tax_rate,
-        inflation=inflation
+    # Calculate
+    wacc_nom, wacc_real = _calculate_wacc_from_derived(
+        cost_of_equity, cost_of_debt, debt_ratio, tax_rate, inflation
     )
     
-    # Final WACC and Apply/Reset/Info row
     st.divider()
-    with st.container(border=True):
-        delta = wacc_real - BASELINE_WACC
-        st.metric(
-            "Final WACC",
-            format_percent(wacc_real),
-            delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
-        )
+    st.markdown(f"**WACC nominal pre-tax: {format_percent(wacc_nom)}**")
+    st.markdown(f"**WACC real pre-tax: {format_percent(wacc_real)}**")
     
-    _render_apply_row(wacc_real, f"{MODULE_KEY}_use_derived")
+    _render_apply_row(wacc_real, f"{MODULE_KEY}_apply_derived")
 
 
 def _render_direct_section() -> None:
     """Render direct WACC input."""
-    st.markdown("##### 3.2.5 Direct input")
-    st.caption("Direct WACC input")
+    st.markdown("##### Direct input")
+    st.caption("Enter WACC directly (real, pre-tax)")
     
     direct_wacc = st.number_input(
-        "Real WACC pre-tax",
+        "WACC (real, pre-tax)",
         value=BASELINE_WACC,
-        min_value=0.01,
-        max_value=0.15,
-        step=0.0001,
+        min_value=0.0,
+        max_value=0.20,
+        step=0.001,
         format="%.4f",
         key=f"{MODULE_KEY}_direct_wacc",
-        help="Direct WACC entry"
+        help="Enter WACC directly"
     )
     
-    # Show as percent with baseline comparison if modified
-    if abs(direct_wacc - BASELINE_WACC) > 0.0001:
-        delta = direct_wacc - BASELINE_WACC
-        st.caption(f"= {format_percent(direct_wacc)} :orange[({delta*100:+.2f} pp from baseline)]")
-    
-    _render_apply_row(direct_wacc, f"{MODULE_KEY}_use_direct")
+    _render_apply_row(direct_wacc, f"{MODULE_KEY}_apply_direct")
 
 
 # =============================================================================
-# QUALITY ADJUSTMENTS (3.3-3.6)
+# INCENTIVE PARAMETER SECTIONS
 # =============================================================================
-
-def render_quality_adjustments() -> Dict[str, Any]:
-    """
-    Render Quality Adjustments (3.3-3.6).
-    
-    All inputs are always displayed. Only values differing from baseline
-    are saved to config.
-    
-    Returns:
-        Dict with modified incentive parameters
-    """
-    config: Dict[str, Any] = {}
-    
-    st.subheader("3.3-3.6 Quality Adjustments")
-    st.caption("Adjust cost of capital for quality, network loss and utilization")
-    
-    # === ENABLE/DISABLE ===
-    st.markdown("##### Enable adjustments")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        enable_quality = st.checkbox(
-            "3.3 Quality",
-            value=BASELINE_INCENTIVE["enable_quality"],
-            key=f"{MODULE_KEY_QA}_enable_quality",
-            help="Enable quality adjustment (CEMI/AIT/AIF)"
-        )
-        if enable_quality != BASELINE_INCENTIVE["enable_quality"]:
-            config["enable_quality"] = enable_quality
-    
-    with col2:
-        enable_netloss = st.checkbox(
-            "3.4 Network loss",
-            value=BASELINE_INCENTIVE["enable_netloss"],
-            key=f"{MODULE_KEY_QA}_enable_netloss",
-            help="Enable network loss adjustment"
-        )
-        if enable_netloss != BASELINE_INCENTIVE["enable_netloss"]:
-            config["enable_netloss"] = enable_netloss
-    
-    with col3:
-        enable_load = st.checkbox(
-            "3.5 Utilization rate",
-            value=BASELINE_INCENTIVE["enable_load"],
-            key=f"{MODULE_KEY_QA}_enable_load",
-            help="Enable utilization rate adjustment"
-        )
-        if enable_load != BASELINE_INCENTIVE["enable_load"]:
-            config["enable_load"] = enable_load
-    
-    st.divider()
-    
-    # === INDIVIDUAL SECTIONS ===
-    with st.expander("3.3 Quality adjustment parameters", expanded=False):
-        _render_quality_section(config)
-    
-    with st.expander("3.4 Network loss adjustment parameters", expanded=False):
-        _render_netloss_section(config)
-    
-    with st.expander("3.5 Utilization rate adjustment parameters", expanded=False):
-        _render_load_section(config)
-    
-    with st.expander("3.6 Aggregate adjustment cap", expanded=False):
-        _render_caps_section(config)
-    
-    with st.expander("3.7 KPI factors", expanded=False):
-        _render_kpi_section(config)
-    
-    return config
-
 
 def _render_quality_section(config: Dict[str, Any]) -> None:
     """Render 3.3 Quality adjustment parameters."""

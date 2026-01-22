@@ -4,6 +4,9 @@ Module 5: Efficiency Incentive
 Handles efficiency requirement parameters.
 Parameter-IDs: 5.1.X - 5.4.X
 Variable-IDs: 50.X
+
+Section-based rendering:
+- render_efficiency_params() -> 5.X Efficiency parameters
 """
 
 import streamlit as st
@@ -22,24 +25,22 @@ BASELINE_SUPERVISION_PERIOD = 4
 BASELINE_MIN_REQUIREMENT = 0.01
 
 
-def render() -> Dict[str, Any]:
+def render_efficiency_params() -> Dict[str, Any]:
     """
-    Render Module 5: Efficiency incentive.
-    
-    All inputs are always displayed with baseline as default. Only values
-    differing from baseline are saved to config.
+    Render M5 efficiency parameters section: 5.X parameters.
     
     Returns:
-        Dict with user selections:
-        - trunkering_max: Max potential cap or None
-        - outlier_krav: Min annual requirement for outliers or None
-        - kunddelning: Share allocated to customers or None
-        - realiseringstid: Years for full efficiency realization or None
-        - paverkbara_method: "OPEX" or "TOTEX" or None
+        Dict with efficiency parameter overrides:
+        - trunkering_max: Max potential cap
+        - outlier_krav: Min annual requirement for outliers
+        - kunddelning: Share allocated to customers
+        - realiseringstid: Years for full efficiency realization
+        - paverkbara_method: "OPEX" or "TOTEX"
     """
     config: Dict[str, Any] = {}
     
-    st.subheader("5. Efficiency Incentive")
+    st.markdown("### 5. Efficiency Incentive - Parameters")
+    st.caption("Parameters 5.1-5.4: Efficiency requirement calculation")
     
     with st.expander("Parameters", expanded=False):
         st.markdown("##### 5.1 Outlier identification")
@@ -91,7 +92,7 @@ def render() -> Dict[str, Any]:
             min_val=0.0,
             max_val=1.0,
             step=0.05,
-            help_text="Proportion of efficiency gains allocated to customers",
+            help_text="Share of efficiency gains allocated to customers",
             format_as_percent=True
         )
         
@@ -102,26 +103,22 @@ def render() -> Dict[str, Any]:
         
         st.markdown("##### 5.3 Efficiency requirement bounds")
         
-        # 5.3.1 Minimum annual requirement (custom format for precision)
-        col_id, col_label, col_input, col_baseline = st.columns([1, 2.5, 2, 1.5])
-        with col_id:
-            st.markdown(f'<span style="font-family: monospace; color: #6B7280; font-size: 0.875rem;">5.3.1</span>', unsafe_allow_html=True)
-        with col_label:
-            st.markdown("Minimum annual requirement")
-        with col_input:
-            min_req = st.number_input(
-                "Minimum annual requirement",
-                value=BASELINE_MIN_REQUIREMENT,
-                min_value=0.0,
-                max_value=0.10,
-                step=0.0001,
-                format="%.4f",
-                key=f"{MODULE_KEY}_input_5.3.1",
-                help="Floor for annual efficiency requirement (applies to outliers and efficient firms)",
-                label_visibility="collapsed"
-            )
-        with col_baseline:
-            min_req_changed = abs(min_req - BASELINE_MIN_REQUIREMENT) > 1e-9
+        # 5.3.1 Minimum requirement (for outliers)
+        min_req, min_req_changed = parameter_input(
+            module_key=MODULE_KEY,
+            param_id="5.3.1",
+            label="Minimum annual efficiency requirement",
+            baseline=BASELINE_MIN_REQUIREMENT,
+            min_val=0.0,
+            max_val=0.10,
+            step=0.001,
+            help_text="Annual requirement floor for outlier companies",
+            format_as_percent=True
+        )
+        
+        # Show delta indicator
+        col1, col2 = st.columns([3, 1])
+        with col2:
             if min_req_changed:
                 delta = min_req - BASELINE_MIN_REQUIREMENT
                 st.markdown(f'<span style="color: #F59E0B; font-size: 0.8rem;">{delta*100:+.2f}pp</span>', unsafe_allow_html=True)

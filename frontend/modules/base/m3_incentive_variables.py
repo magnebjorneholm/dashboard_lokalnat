@@ -5,6 +5,9 @@ Company-specific input variables for cost of capital adjustments.
 Variable-IDs: 30.2 (network loss), 30.3 (utilization), 30.4 (interruption)
 
 Override values apply to ALL years (2024-2027).
+
+Section-based rendering:
+- render_incentive_vars() -> 30.X Incentive variables
 """
 
 import streamlit as st
@@ -16,7 +19,6 @@ from data_loaders.incentive_data import get_user_baseline_variables
 MODULE_KEY = "m3_incentive_variables"
 
 # Customer type display order per User Manual Table 9
-# Maps: (display_order, SNI_code, english_label)
 CUSTOMER_TYPES: List[Tuple[int, int, str]] = [
     (1, 5, "Household"),
     (2, 1, "Agriculture"),
@@ -27,7 +29,6 @@ CUSTOMER_TYPES: List[Tuple[int, int, str]] = [
 ]
 
 # Variable-ID mapping per User Manual Table 9
-# Structure: column_name -> (variable_id, label, unit, format)
 VARIABLE_METADATA = {
     # 30.2 Network loss adjustment
     "nf_norm": ("30.2.1", "Network loss norm", "share", "%.4f"),
@@ -44,13 +45,10 @@ VARIABLE_METADATA = {
     "cemi4_obs": ("30.4.2", "CEMI4 observed", "share", "%.4f"),
 }
 
-# ÅME Variable-IDs per customer type (UM Table 9: 30.4.3-30.4.8)
+# AME Variable-IDs per customer type (UM Table 9: 30.4.3-30.4.8)
 AME_VARIABLE_IDS = {5: "30.4.3", 1: "30.4.4", 3: "30.4.5", 2: "30.4.6", 4: "30.4.7", 6: "30.4.8"}
 
 # AIT Variable-IDs per customer type (UM Table 9: 30.4.9-30.4.32)
-# Structure: (sni, type, value_type) -> variable_id
-# type: 'o' = unplanned, 'a' = planned
-# value_type: 'norm', 'obs'
 AIT_VARIABLE_IDS = {
     # Household (SNI 5)
     (5, 'o', 'norm'): "30.4.9", (5, 'a', 'norm'): "30.4.10",
@@ -95,9 +93,13 @@ AIF_VARIABLE_IDS = {
 }
 
 
-def render() -> Dict[str, Any]:
+# =============================================================================
+# SECTION RENDER FUNCTION
+# =============================================================================
+
+def render_incentive_vars() -> Dict[str, Any]:
     """
-    Render Module 30: Incentive Variables.
+    Render M3 incentive variables section: 30.X variables.
     
     Displays company-specific variables with baseline values from 2024.
     User can override any variable; the new value applies to all years.
@@ -108,8 +110,8 @@ def render() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.subheader("30. Incentive Variables")
-    st.caption("Values shown are baseline (2024). Modify to override for all years.")
+    st.markdown("### 3. Cost of Capital - Incentive Variables")
+    st.caption("Variables 30.X: Company-specific incentive inputs. Values shown are baseline (2024).")
     
     user_reid = get_user_reid()
     if not user_reid:
@@ -151,6 +153,9 @@ def render() -> Dict[str, Any]:
     
     return config
 
+# =============================================================================
+# HELPERS
+# =============================================================================
 
 @st.cache_data(ttl=3600, show_spinner="Loading baseline variables...")
 def _load_baseline_cached(user_reid: str) -> Dict[str, float]:
@@ -170,11 +175,7 @@ def _render_variable_input(
     max_value: float = None,
     step: float = None,
 ) -> None:
-    """
-    Render a single variable input with baseline comparison.
-    
-    Follows the same pattern as other modules: inline modification indicators.
-    """
+    """Render a single variable input with baseline comparison."""
     baseline_value = baseline.get(var_name)
     
     if baseline_value is None:
@@ -263,7 +264,7 @@ def _render_cemi4_variables(config: Dict[str, Any], baseline: Dict[str, float]) 
 
 
 def _render_ait_obs_variables(config: Dict[str, Any], baseline: Dict[str, float]) -> None:
-    """Render AIT observed variables (30.4.11-12, 15-16, 19-20, 23-24, 27-28, 31-32)."""
+    """Render AIT observed variables."""
     st.markdown("**Unplanned**")
     for _, sni, customer_label in CUSTOMER_TYPES:
         var_name = f"ait_o_{sni}_obs"
@@ -296,7 +297,7 @@ def _render_ait_obs_variables(config: Dict[str, Any], baseline: Dict[str, float]
 
 
 def _render_ait_norm_variables(config: Dict[str, Any], baseline: Dict[str, float]) -> None:
-    """Render AIT norm variables (30.4.9-10, 13-14, 17-18, 21-22, 25-26, 29-30)."""
+    """Render AIT norm variables."""
     st.markdown("**Unplanned**")
     for _, sni, customer_label in CUSTOMER_TYPES:
         var_name = f"ait_o_{sni}_norm"
@@ -329,7 +330,7 @@ def _render_ait_norm_variables(config: Dict[str, Any], baseline: Dict[str, float
 
 
 def _render_aif_obs_variables(config: Dict[str, Any], baseline: Dict[str, float]) -> None:
-    """Render AIF observed variables (30.4.35-36, 39-40, 43-44, 47-48, 51-52, 55-56)."""
+    """Render AIF observed variables."""
     st.markdown("**Unplanned**")
     for _, sni, customer_label in CUSTOMER_TYPES:
         var_name = f"aif_o_{sni}_obs"
@@ -362,7 +363,7 @@ def _render_aif_obs_variables(config: Dict[str, Any], baseline: Dict[str, float]
 
 
 def _render_aif_norm_variables(config: Dict[str, Any], baseline: Dict[str, float]) -> None:
-    """Render AIF norm variables (30.4.33-34, 37-38, 41-42, 45-46, 49-50, 53-54)."""
+    """Render AIF norm variables."""
     st.markdown("**Unplanned**")
     for _, sni, customer_label in CUSTOMER_TYPES:
         var_name = f"aif_o_{sni}_norm"

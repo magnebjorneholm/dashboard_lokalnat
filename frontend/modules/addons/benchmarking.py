@@ -3,6 +3,9 @@ Add-on Module: Benchmarking
 
 Handles DEA configuration and future SFA/StoNED methods.
 New DEA runs only if configuration differs from baseline.
+
+Section-based rendering:
+- render_dea_spec() -> DEA specification
 """
 
 import streamlit as st
@@ -26,15 +29,7 @@ BASELINE_Q_UPPER = 75.0
 
 
 def is_baseline_dea_config(config: Dict[str, Any]) -> bool:
-    """
-    Check if DEA configuration matches Ei baseline.
-    
-    Args:
-        config: DEA configuration from UI
-        
-    Returns:
-        True if config matches baseline (no new DEA required)
-    """
+    """Check if DEA configuration matches Ei baseline."""
     return (
         set(config.get("dea_inputs", [])) == set(BASELINE_INPUTS) and
         set(config.get("dea_outputs", [])) == set(BASELINE_OUTPUTS) and
@@ -45,15 +40,15 @@ def is_baseline_dea_config(config: Dict[str, Any]) -> bool:
     )
 
 
-def render() -> Dict[str, Any]:
+def render_dea_spec() -> Dict[str, Any]:
     """
-    Render Add-on: Benchmarking module.
+    Render M7 DEA specification section.
     
     DEA configuration is always displayed. If config differs from baseline,
     new DEA runs at calculation time; otherwise cached results are used.
     
     Returns:
-        Dict with user selections:
+        Dict with DEA configuration:
         - dea_method: "baseline" or "custom"
         - dea_inputs: List of inputs
         - dea_outputs: List of outputs
@@ -72,7 +67,8 @@ def render() -> Dict[str, Any]:
         "dea_q_upper": BASELINE_Q_UPPER,
     }
     
-    st.subheader("Add-on: Benchmarking")
+    st.markdown("### 7. Add-on: Benchmarking - DEA Specification")
+    st.caption("Configure efficiency analysis model")
     
     # === METHOD SELECTION ===
     st.markdown("##### Efficiency analysis")
@@ -86,53 +82,41 @@ def render() -> Dict[str, Any]:
     )
 
     if method != "DEA":
-        st.info("Planned.")
+        st.info("SFA and StoNED planned for future release.")
         config["dea_method"] = "baseline"
         return config
     
     # === DEA CONFIGURATION ===
     with st.expander("DEA specification", expanded=False):
         st.caption(
-            "Configure DEA model. If configuration matches Ei baseline, "
-            "pre-computed results are applied; otherwise, new DEA is run."
+            "Configure DEA model. Changes trigger new DEA analysis at calculation time."
         )
-        # --- Inputs ---
-        st.markdown("**Inputs (costs)**")
-        selected_inputs = st.multiselect(
-            "Select inputs",
+        
+        # Input variables
+        st.markdown("**Input variables**")
+        dea_inputs = st.multiselect(
+            "Inputs",
             options=DEA_INPUT_OPTIONS,
             default=BASELINE_INPUTS,
             key=f"{MODULE_KEY}_inputs",
-            help="CAPEX = capital costs, OPEXp = adjusted OPEX, TOTEX = CAPEX + OPEXp"
+            help="Cost measures used as DEA inputs"
         )
+        config["dea_inputs"] = dea_inputs if dea_inputs else BASELINE_INPUTS
         
-        if not selected_inputs:
-            st.error("At least one input required")
-            selected_inputs = BASELINE_INPUTS
-        
-        config["dea_inputs"] = selected_inputs
-        
-        st.divider()
-        
-        # --- Outputs ---
-        st.markdown("**Outputs (delivery)**")
-        selected_outputs = st.multiselect(
-            "Select outputs",
+        # Output variables
+        st.markdown("**Output variables**")
+        dea_outputs = st.multiselect(
+            "Outputs",
             options=DEA_OUTPUT_OPTIONS,
             default=BASELINE_OUTPUTS,
             key=f"{MODULE_KEY}_outputs",
-            help="CU=Subscriptions, MW=Peak capacity, NS=Substations, MWhl=Low-voltage energy, MWhh=High-voltage energy"
+            help="Service measures used as DEA outputs"
         )
-        
-        if not selected_outputs:
-            st.error("At least one output required")
-            selected_outputs = BASELINE_OUTPUTS
-        
-        config["dea_outputs"] = selected_outputs
+        config["dea_outputs"] = dea_outputs if dea_outputs else BASELINE_OUTPUTS
         
         st.divider()
         
-        # --- Returns to scale ---
+        # Returns to scale
         st.markdown("**Returns to scale**")
         rts = st.radio(
             "RTS assumption",
@@ -140,22 +124,20 @@ def render() -> Dict[str, Any]:
             index=0 if BASELINE_RTS == "crs" else 1,
             key=f"{MODULE_KEY}_rts",
             horizontal=True,
-            help="CRS = Constant (baseline), VRS = Variable"
+            help="CRS: Constant returns to scale. VRS: Variable returns to scale."
         )
         config["dea_rts"] = rts
         
         st.divider()
         
-        # --- Outlier detection (5.1.1) ---
-        st.markdown("**5.1 Outlier detection**")
-        
+        # Outlier identification
+        st.markdown("**5.1.1 Outlier identification**")
         st.latex(FORMULA_OUTLIER_THRESHOLD)
-        st.caption("Firms exceeding threshold flagged as outliers")
         
         col1, col2 = st.columns(2)
         with col1:
             q_lower = st.number_input(
-                "Lower percentile",
+                "Lower percentile (Q_lower)",
                 value=BASELINE_Q_LOWER,
                 min_value=0.0,
                 max_value=50.0,
@@ -167,7 +149,7 @@ def render() -> Dict[str, Any]:
         
         with col2:
             q_upper = st.number_input(
-                "Upper percentile",
+                "Upper percentile (Q_upper)",
                 value=BASELINE_Q_UPPER,
                 min_value=50.0,
                 max_value=100.0,
@@ -185,11 +167,11 @@ def render() -> Dict[str, Any]:
             max_value=5.0,
             step=0.5,
             key=f"{MODULE_KEY}_multiplier",
-            help="Threshold = Q_upper + multiplier × IQR (baseline: 2.0)"
+            help="Threshold = Q_upper + multiplier x IQR (baseline: 2.0)"
         )
         config["dea_multiplier"] = multiplier
         
-        # Set method based on config (for backend to know if new DEA is needed)
+        # Set method based on config
         is_baseline = is_baseline_dea_config(config)
         config["dea_method"] = "baseline" if is_baseline else "custom"
         
@@ -200,5 +182,8 @@ def render() -> Dict[str, Any]:
 Outputs: {', '.join(config['dea_outputs'])}
 RTS:     {config['dea_rts'].upper()}
 Outlier: Q{config['dea_q_lower']:.0f}-Q{config['dea_q_upper']:.0f}, multiplier={config['dea_multiplier']:.1f}""")
+        
+        if not is_baseline:
+            st.warning("Custom configuration - new DEA will be computed")
     
     return config
