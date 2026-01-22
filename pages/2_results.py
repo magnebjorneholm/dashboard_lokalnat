@@ -209,7 +209,7 @@ with col_map:
                 height=500,
                 zoom=3.0
             )
-            st.plotly_chart(fig, key="efficiency_map", width='stretch')
+            st.plotly_chart(fig, key="efficiency_map", use_container_width=True)
         else:
             st.info("No efficiency data available for map visualization.")
             
@@ -287,10 +287,10 @@ rows.append({
 
 df_summary = pd.DataFrame(rows)
 
-    st.dataframe(
+st.dataframe(
     df_summary,
     hide_index=True,
-    width='stretch',
+    use_container_width=True,
     column_config={
         "ID": st.column_config.TextColumn("ID", width="small"),
         "Component": st.column_config.TextColumn("Component", width="large"),
@@ -370,7 +370,7 @@ with st.expander("3. Cost of capital", expanded=True):
             "Delta (tkr)": format_tkr(delta, show_sign=True) if delta is not None else "-"
         })
     
-    st.dataframe(pd.DataFrame(inc_data), hide_index=True, width='stretch')
+    st.dataframe(pd.DataFrame(inc_data), hide_index=True, use_container_width=True)
     
     if case_ir.get('Missing_Incentive_Data', False):
         st.warning("Incentive data incomplete for this company.")
@@ -471,23 +471,23 @@ with col_save:
     case_count = get_case_count(user_reid)
     can_save_new = case_count < MAX_CASES_PER_USER
     
-        if saved and case_id:
+    if saved and case_id:
         # Existing saved case - show update option
         st.success("Case saved")
-        if st.button("Update saved case", type="secondary", width='stretch'):
+        if st.button("Update saved case", type="secondary", use_container_width=True):
             if do_save_case():
                 st.success("Case updated")
                 st.rerun()
     else:
         # New case - show save option
         if can_save_new:
-            if st.button("Save case", type="primary", width='stretch'):
+            if st.button("Save case", type="primary", use_container_width=True):
                 if do_save_case():
                     st.success("Case saved")
                     st.rerun()
         else:
             st.warning(f"Maximum {MAX_CASES_PER_USER} cases reached. Delete a case to save new ones.")
-            st.button("Save case", type="primary", width='stretch', disabled=True)
+            st.button("Save case", type="primary", use_container_width=True, disabled=True)
 
 st.caption(f"Saved cases: {case_count}/{MAX_CASES_PER_USER}")
 
