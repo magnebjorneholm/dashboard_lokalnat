@@ -3,31 +3,27 @@ Module: Case Summary
 
 Displays complete summary of all case parameters before calculation.
 Shows baseline vs modified values with visual highlighting.
-Contains the CALCULATE REVENUE FRAME button.
+Includes reset buttons per module.
 """
 
 import streamlit as st
 import pandas as pd
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any
 import copy
 
 from frontend.utils.state_manager import (
     DEFAULT_UI_CONFIG,
-    get_module_config,
-    set_module_config,
     get_selected_modules,
     get_filtered_ui_config,
     is_module_selected,
 )
 from frontend.common.asset_categories import (
-    ASSET_CATEGORIES,
     CATEGORY_BY_CODE,
     get_category_name,
 )
 
 from frontend.modules.base.m3_cost_of_capital import (
     BASELINE_WACC,
-    BASELINE_INCENTIVE,
 )
 from frontend.modules.base.m5_efficiency import (
     BASELINE_MAX_POTENTIAL,
@@ -45,7 +41,7 @@ def render() -> None:
     
     Displays all parameters organized by module with baseline/modified status.
     Modified modules have orange tab names.
-    Includes reset buttons per module and the main CALCULATE button.
+    Includes reset buttons per module.
     """
     st.subheader("Case Summary")
     
@@ -61,8 +57,6 @@ def render() -> None:
     
     filtered_config = get_filtered_ui_config()
     
-    # Pre-compute selection status for each module
-    # Uses is_module_selected() which handles section keys (e.g., "m1.scaling")
     is_selected = {
         "m1": len(selected_modules) == 0 or is_module_selected("m1"),
         "m2": len(selected_modules) == 0 or is_module_selected("m2"),
@@ -83,7 +77,6 @@ def render() -> None:
     
     has_any_changes = any(has_changes.values())
     
-    # Build tab labels - orange if modified
     def tab_label(key: str, name: str) -> str:
         if not is_selected[key]:
             return f":gray[{name}]"
@@ -120,19 +113,12 @@ def render() -> None:
     with tabs[5]:
         _render_module_7_content(filtered_config, is_selected["m7"], has_changes["m7"])
     
-    # Summary status
     st.divider()
     
     if has_any_changes:
         st.warning("This case has modified parameters (orange tabs above).")
     else:
         st.info("All parameters at baseline values.")
-    
-    # CALCULATE button
-    st.divider()
-    
-    if st.button("CALCULATE REVENUE FRAME", type="primary", width="stretch"):
-        _run_calculation()
 
 
 # =============================================================================
@@ -140,7 +126,6 @@ def render() -> None:
 # =============================================================================
 
 def _check_module_1_changes(ui_config: Dict[str, Any]) -> bool:
-    """Check if Module 1 has any changes."""
     m1 = ui_config.get("m1_asset_base", {})
     kent_uploaded = m1.get("kent_file_bytes") is not None
     general_scaling = m1.get("general_scaling")
@@ -155,14 +140,12 @@ def _check_module_1_changes(ui_config: Dict[str, Any]) -> bool:
 
 
 def _check_module_2_changes(ui_config: Dict[str, Any]) -> bool:
-    """Check if Module 2 has any changes."""
     m2 = ui_config.get("m2_depreciation", {})
     lifetime_adj = m2.get("lifetime_adjustments")
     return lifetime_adj is not None and len(lifetime_adj) > 0
 
 
 def _check_module_3_changes(ui_config: Dict[str, Any]) -> bool:
-    """Check if Module 3 has any changes."""
     m3_wacc = ui_config.get("m3_cost_of_capital", {})
     m3_qual = ui_config.get("m3_quality_adjustments", {})
     m3_vars = ui_config.get("m3_incentive_variables", {})
@@ -184,14 +167,10 @@ def _check_module_3_changes(ui_config: Dict[str, Any]) -> bool:
 
 
 def _check_module_4_changes(ui_config: Dict[str, Any]) -> bool:
-    """Check if Module 4 has any changes."""
-    # M4 has no configurable parameters currently
-    # 5.4.1 (paverkbara_method) moved to M5
     return False
 
 
 def _check_module_5_changes(ui_config: Dict[str, Any]) -> bool:
-    """Check if Module 5 has any changes."""
     m5 = ui_config.get("m5_efficiency", {})
     return (
         m5.get("trunkering_max") is not None or
@@ -199,12 +178,11 @@ def _check_module_5_changes(ui_config: Dict[str, Any]) -> bool:
         m5.get("kunddelning") is not None or
         m5.get("outlier_krav") is not None or
         m5.get("trunkering_min") is not None or
-        m5.get("paverkbara_method") is not None  # 5.4.1 moved from M4
+        m5.get("paverkbara_method") is not None
     )
 
 
 def _check_module_7_changes(ui_config: Dict[str, Any]) -> bool:
-    """Check if Module 7 has any changes."""
     addon = ui_config.get("addon_benchmarking", {})
     return addon.get("dea_method") == "custom"
 
@@ -213,15 +191,22 @@ def _check_module_7_changes(ui_config: Dict[str, Any]) -> bool:
 # TAB CONTENT RENDERING FUNCTIONS
 # =============================================================================
 
+def _reset_module(module_key: str) -> None:
+    """Reset a module to its default configuration."""
+    if "ui_config" in st.session_state:
+        if module_key in DEFAULT_UI_CONFIG:
+            st.session_state["ui_config"][module_key] = copy.deepcopy(
+                DEFAULT_UI_CONFIG[module_key]
+            )
+
+
 def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
-    """Render Module 1: Regulatory asset base valuation content."""
     if not is_selected:
         st.caption("Module not selected - using baseline values")
         return
     
     m1 = ui_config.get("m1_asset_base", {})
     
-    # Reset button
     if has_changes:
         if st.button("Reset to baseline", key=f"{MODULE_KEY}_reset_m1"):
             _reset_module("m1_asset_base")
@@ -236,7 +221,6 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
     has_cat = cat_scaling is not None and len(cat_scaling) > 0
     has_var = var_scaling is not None and len(var_scaling) > 0
     
-    # Data source
     st.markdown("**Data source**")
     if kent_uploaded:
         kent_name = m1.get("kent_file_name", "Unknown")
@@ -249,7 +233,6 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
     
     st.markdown("")
     
-    # General scaling factor
     st.markdown("**General scaling factor (1.1.1)**")
     if has_general:
         pct = (general_scaling - 1.0) * 100
@@ -259,7 +242,6 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
     
     st.markdown("")
     
-    # Category scaling factors
     st.markdown("**Category scaling factors (1.2.X)**")
     if has_cat:
         rows = []
@@ -276,11 +258,10 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                 "Change": f"{pct_change:+.1f}%",
             })
         df = pd.DataFrame(rows)
-        st.dataframe(df, width="stretch", hide_index=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.caption("All category scaling factors at baseline (1.00)")
     
-    # Variable scaling
     if has_var:
         st.markdown("")
         st.markdown("**Asset quantity scaling (10.X)**")
@@ -296,11 +277,10 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                 "Change": f"{pct_change:+.1f}%",
             })
         df = pd.DataFrame(rows)
-        st.dataframe(df, width="stretch", hide_index=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
 
 def _render_module_2_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
-    """Render Module 2: Depreciation content."""
     if not is_selected:
         st.caption("Module not selected - using baseline values")
         return
@@ -340,13 +320,12 @@ def _render_module_2_content(ui_config: Dict[str, Any], is_selected: bool, has_c
         
         if rows:
             df = pd.DataFrame(rows)
-            st.dataframe(df, width="stretch", hide_index=True)
+            st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.caption("All lifetime parameters at baseline")
 
 
 def _render_module_3_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
-    """Render Module 3: Cost of capital content."""
     if not is_selected:
         st.caption("Module not selected - using baseline values")
         return
@@ -362,7 +341,6 @@ def _render_module_3_content(ui_config: Dict[str, Any], is_selected: bool, has_c
             _reset_module("m3_incentive_variables")
             st.rerun()
     
-    # WACC
     st.markdown("**WACC (3.2.5)**")
     wacc_changed = m3_wacc.get("wacc_override") is not None
     if wacc_changed:
@@ -371,7 +349,6 @@ def _render_module_3_content(ui_config: Dict[str, Any], is_selected: bool, has_c
     else:
         st.markdown(f"{BASELINE_WACC:.4f} ({BASELINE_WACC*100:.2f}%) - baseline")
     
-    # Quality adjustments
     qual_changes = []
     if m3_qual.get("adj_max_agg") is not None:
         qual_changes.append(f"Max aggregate: {m3_qual['adj_max_agg']:.2%}")
@@ -392,7 +369,6 @@ def _render_module_3_content(ui_config: Dict[str, Any], is_selected: bool, has_c
         for change in qual_changes:
             st.markdown(f":orange[- {change}]")
     
-    # Variable overrides
     var_changes = [k for k, v in m3_vars.items() if v is not None]
     if var_changes:
         st.markdown("")
@@ -401,18 +377,14 @@ def _render_module_3_content(ui_config: Dict[str, Any], is_selected: bool, has_c
 
 
 def _render_module_4_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
-    """Render Module 4: Operating expenditures content."""
     if not is_selected:
         st.caption("Module not selected - using baseline values")
         return
     
-    # M4 currently has no configurable parameters
-    # 5.4.1 (paverkbara_method) is now in M5
     st.caption("OPEX parameters planned for future release.")
 
 
 def _render_module_5_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
-    """Render Module 5: Efficiency incentive content."""
     if not is_selected:
         st.caption("Module not selected - using baseline values")
         return
@@ -424,7 +396,6 @@ def _render_module_5_content(ui_config: Dict[str, Any], is_selected: bool, has_c
             _reset_module("m5_efficiency")
             st.rerun()
     
-    # 5.2-5.3 Efficiency requirement parameters
     changes = []
     if m5.get("trunkering_max") is not None:
         changes.append(("5.2.1 Truncation max", BASELINE_MAX_POTENTIAL, m5["trunkering_max"]))
@@ -453,11 +424,10 @@ def _render_module_5_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                     "Value": str(value),
                 })
         df = pd.DataFrame(rows)
-        st.dataframe(df, width="stretch", hide_index=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.caption("All efficiency parameters at baseline")
     
-    # 5.4.1 Cost base application (moved from M4)
     st.markdown("")
     st.markdown("**Cost base application (5.4.1)**")
     method = m5.get("paverkbara_method")
@@ -468,7 +438,6 @@ def _render_module_5_content(ui_config: Dict[str, Any], is_selected: bool, has_c
 
 
 def _render_module_7_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
-    """Render Module 7: Add-on modules content."""
     if not is_selected:
         st.caption("Module not selected - using baseline values")
         return
@@ -488,74 +457,3 @@ def _render_module_7_content(ui_config: Dict[str, Any], is_selected: bool, has_c
         st.caption(f"RTS: {addon.get('dea_rts', 'crs')}")
     else:
         st.markdown("Baseline DEA model")
-
-
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
-
-def _reset_module(module_key: str) -> None:
-    """Reset a module to its default configuration."""
-    if "ui_config" in st.session_state:
-        if module_key in DEFAULT_UI_CONFIG:
-            st.session_state["ui_config"][module_key] = copy.deepcopy(
-                DEFAULT_UI_CONFIG[module_key]
-            )
-
-
-def _run_calculation() -> None:
-    """
-    Run the revenue frame calculation pipeline.
-    
-    Uses get_filtered_ui_config() to ensure only selected modules
-    have their modifications applied.
-    """
-    from frontend.utils.state_manager import get_user_reid, get_filtered_ui_config
-    from frontend.utils.config_adapter import build_case_definition
-    
-    user_reid = get_user_reid()
-    
-    if user_reid is None:
-        st.error("No company selected. Please select a company in the sidebar.")
-        return
-    
-    with st.status("Running calculation...", expanded=True) as status:
-        try:
-            st.write("Loading baseline data...")
-            from data_loaders.baseline_data import load_baseline_data
-            baseline_data = load_baseline_data()
-            
-            st.write("Retrieving baseline...")
-            from config.case_definition import get_baseline_config
-            from pipeline.core import run_pipeline
-            
-            baseline_config = get_baseline_config(user_reid)
-            baseline_result = run_pipeline(baseline_data, baseline_config)
-            st.session_state["baseline_result"] = baseline_result
-            
-            st.write("Building case...")
-            filtered_config = get_filtered_ui_config()
-            case_definition = build_case_definition(
-                user_reid,
-                filtered_config
-            )
-            
-            st.write("Calculating revenue frame...")
-            case_result = run_pipeline(baseline_data, case_definition)
-            st.session_state["case_result"] = case_result
-            
-            st.session_state["calculation_done"] = True
-            status.update(label="Calculation complete", state="complete")
-            
-        except ValueError as e:
-            st.error(f"Configuration error: {e}")
-            status.update(label="Error", state="error")
-            return
-        except Exception as e:
-            st.error(f"Calculation error: {e}")
-            with st.expander("Technical details"):
-                st.exception(e)
-            status.update(label="Error", state="error")
-            return
-    
-    st.switch_page("pages/2_results.py")

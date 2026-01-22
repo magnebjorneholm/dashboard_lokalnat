@@ -15,6 +15,14 @@ from frontend.utils.state_manager import (
     get_auth_reid,
     get_auth_email,
     is_regulator,
+    get_user_reid,
+    get_case_id,
+    get_case_name,
+    get_case_notes,
+    get_selected_modules,
+    mark_case_saved,
+    set_case_id,
+    increment_saved_cases_count,
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
@@ -79,6 +87,118 @@ def check_auth() -> bool:
 
 
 # =============================================================================
+# SIDEBAR ACTIONS
+# =============================================================================
+
+def _run_calculation() -> None:
+    """Run the revenue frame calculation pipeline."""
+    from frontend.utils.state_manager import get_filtered_ui_config
+    from frontend.utils.config_adapter import build_case_definition
+    
+    user_reid = get_user_reid()
+    
+    if user_reid is None:
+        st.error("No company selected.")
+        return
+    
+    with st.status("Running calculation...", expanded=True) as status:
+        try:
+            st.write("Loading baseline data...")
+            from data_loaders.baseline_data import load_baseline_data
+            baseline_data = load_baseline_data()
+            
+            st.write("Retrieving baseline...")
+            from config.case_definition import get_baseline_config
+            from pipeline.core import run_pipeline
+            
+            baseline_config = get_baseline_config(user_reid)
+            baseline_result = run_pipeline(baseline_data, baseline_config)
+            st.session_state["baseline_result"] = baseline_result
+            
+            st.write("Building case...")
+            filtered_config = get_filtered_ui_config()
+            case_definition = build_case_definition(
+                user_reid,
+                filtered_config
+            )
+            
+            st.write("Calculating revenue frame...")
+            case_result = run_pipeline(baseline_data, case_definition)
+            st.session_state["case_result"] = case_result
+            
+            st.session_state["calculation_done"] = True
+            status.update(label="Calculation complete", state="complete")
+            
+        except ValueError as e:
+            st.error(f"Configuration error: {e}")
+            status.update(label="Error", state="error")
+            return
+        except Exception as e:
+            st.error(f"Calculation error: {e}")
+            with st.expander("Technical details"):
+                st.exception(e)
+            status.update(label="Error", state="error")
+            return
+    
+    st.switch_page("pages/2_results.py")
+
+
+def _do_save_case() -> bool:
+    """Save the current case to storage."""
+    from frontend.utils.case_storage import save_case
+    
+    user_reid = get_user_reid()
+    case_name = get_case_name() or "Untitled Case"
+    case_notes = get_case_notes()
+    case_id = get_case_id()
+    ui_config = st.session_state.get("ui_config", {})
+    selected_modules = get_selected_modules()
+    
+    try:
+        saved = save_case(
+            user_reid=user_reid,
+            case_name=case_name,
+            case_notes=case_notes,
+            ui_config=ui_config,
+            selected_modules=selected_modules,
+            case_id=case_id,
+        )
+        
+        set_case_id(saved.id)
+        mark_case_saved()
+        
+        if case_id is None:
+            increment_saved_cases_count()
+        
+        return True
+        
+    except ValueError as e:
+        st.error(str(e))
+        return False
+    except Exception as e:
+        st.error(f"Failed to save case: {e}")
+        return False
+
+
+def _render_sidebar_actions():
+    """Render Compute and Save buttons in sidebar."""
+    st.divider()
+    
+    # Compute button
+    if st.button("Compute Revenue Frame", type="primary", use_container_width=True):
+        _run_calculation()
+    
+    # Save/Update button
+    case_id = get_case_id()
+    save_label = "Update saved case" if case_id else "Save case"
+    
+    if st.button(save_label, use_container_width=True):
+        if _do_save_case():
+            action = "updated" if case_id else "saved"
+            st.toast(f"Case {action} successfully")
+
+
+# =============================================================================
 # SIDEBAR
 # =============================================================================
 
@@ -97,11 +217,14 @@ def render_sidebar():
         
         else:
             st.warning("Not logged in")
+        
+        # Action buttons (always visible when company is selected)
+        if get_user_reid():
+            _render_sidebar_actions()
 
 
 def _render_dev_mode_selector():
     """Render company selector for dev mode."""
-    # Load company list
     @st.cache_data(ttl=3600)
     def get_company_list():
         """Retrieve list of all company REIds with names."""
@@ -117,11 +240,9 @@ def _render_dev_mode_selector():
     
     companies = get_company_list()
     
-    # Create lookup
     options = [c["display"] for c in companies]
     reid_lookup = {c["display"]: c["REId"] for c in companies}
     
-    # Default to golden test company
     default_idx = 0
     for i, c in enumerate(companies):
         if c["REId"] == "REL00886":
@@ -151,14 +272,12 @@ def _render_authenticated_sidebar():
     role = get_auth_role()
     reid = get_auth_reid()
     
-    # User info
     st.caption(f"User: {email}")
     
     if role == "regulator":
         st.caption("Regulator access")
         st.divider()
         
-        # Regulator gets dropdown to select any company
         @st.cache_data(ttl=3600)
         def get_company_list():
             try:
@@ -191,21 +310,18 @@ def _render_authenticated_sidebar():
             st.caption(f"Analyzing: {get_company_display(current_reid)}")
     
     else:
-        # Company user - fixed REId, show company name
         company_display = get_company_display(reid)
         st.caption(f"Company: {company_display}")
         
-        # Auto-set user_reid from auth
         if reid and st.session_state.get("user_reid") != reid:
             set_user_reid(reid)
     
     st.divider()
     
     # Logout button
-    if st.button("Logout", width='stretch'):
+    if st.button("Logout", use_container_width=True):
         auth_manager = initialize_firebase_auth()
         auth_manager.sign_out()
-        # Clear user_reid as well
         st.session_state["user_reid"] = None
         st.rerun()
 
@@ -214,7 +330,6 @@ def _render_authenticated_sidebar():
 # NAVIGATION
 # =============================================================================
 
-# Define pages
 login_page = st.Page(
     "pages/login.py",
     title="Login",
@@ -232,7 +347,7 @@ case_config = st.Page(
 
 results = st.Page(
     "pages/2_results.py",
-    title="Compute and results",
+    title="Results",
 )
 
 
@@ -241,13 +356,11 @@ results = st.Page(
 # =============================================================================
 
 if check_auth():
-    # User is authorized - show sidebar and main navigation
     render_sidebar()
     
     pg = st.navigation([case_definition, case_config, results])
     pg.run()
 
 else:
-    # User not authorized - show only login page
     pg = st.navigation([login_page])
     pg.run()

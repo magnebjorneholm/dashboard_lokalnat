@@ -16,7 +16,6 @@ from frontend.utils.state_manager import (
     get_selected_modules,
     is_section_selected,
 )
-from frontend.utils.config_adapter import get_changed_parameters
 
 from frontend.modules.base import (
     m1_asset_base,
@@ -28,7 +27,6 @@ from frontend.modules.base import (
 )
 from frontend.modules.addons import benchmarking
 
-# Initialize state
 init_session_state()
 
 
@@ -38,23 +36,19 @@ init_session_state()
 
 st.title("Regumetrica")
 
-# Show case name
 case_name = get_case_name()
 if case_name:
     st.subheader(f"Configure: {case_name}")
 else:
     st.subheader("Configure")
 
-# Check that company is selected
 user_reid = get_user_reid()
 if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")
     st.stop()
 
-# Get user_id_network for company-specific sections
 user_id_network = get_user_id_network()
 
-# Check which modules are selected
 selected_modules = get_selected_modules()
 has_selection = len(selected_modules) > 0
 
@@ -65,27 +59,10 @@ else:
 
 
 # =============================================================================
-# SIDEBAR: MODIFIED PARAMETERS
-# =============================================================================
-
-if "ui_config" in st.session_state:
-    changed = get_changed_parameters(st.session_state["ui_config"])
-    if changed:
-        with st.sidebar:
-            st.markdown("### Modified Parameters")
-            for param in changed:
-                st.markdown(f"- {param}")
-    else:
-        with st.sidebar:
-            st.caption("All parameters at baseline")
-
-
-# =============================================================================
 # MODULE SECTIONS (Conditional rendering based on section selection)
 # =============================================================================
 
 # --- Module 1: Regulatory asset base valuation ---
-# Sections: scaling, quantities, kent
 
 if is_section_selected("m1", "scaling"):
     st.divider()
@@ -112,7 +89,6 @@ if is_section_selected("m1", "kent"):
 
 
 # --- Module 2: Depreciation ---
-# Sections: lifetimes
 
 if is_section_selected("m2", "lifetimes"):
     st.divider()
@@ -121,7 +97,6 @@ if is_section_selected("m2", "lifetimes"):
 
 
 # --- Module 3: Cost of capital ---
-# Sections: wacc, incentive_params, incentive_vars
 
 if is_section_selected("m3", "wacc"):
     st.divider()
@@ -140,7 +115,6 @@ if is_section_selected("m3", "incentive_vars"):
 
 
 # --- Module 4: Operating expenditures ---
-# Sections: scaling, opex_vars
 
 if is_section_selected("m4", "scaling"):
     st.divider()
@@ -156,7 +130,6 @@ if is_section_selected("m4", "opex_vars"):
 
 
 # --- Module 5: Efficiency incentive ---
-# Sections: efficiency_params
 
 if is_section_selected("m5", "efficiency_params"):
     st.divider()
@@ -165,7 +138,6 @@ if is_section_selected("m5", "efficiency_params"):
 
 
 # --- Module 7: Add-on modules (Benchmarking) ---
-# Sections: dea_spec
 
 if is_section_selected("m7", "dea_spec"):
     st.divider()

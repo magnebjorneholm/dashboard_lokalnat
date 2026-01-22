@@ -11,16 +11,9 @@ import streamlit.components.v1 as components
 
 from frontend.utils.state_manager import (
     init_session_state, 
-    reset_case, 
     get_user_reid,
     get_case_name,
     get_case_notes,
-    get_case_id,
-    set_case_id,
-    get_selected_modules,
-    is_case_saved,
-    mark_case_saved,
-    increment_saved_cases_count,
 )
 from frontend.utils.export_button import render_export_button
 from frontend.utils.diagram_data import prepare_diagram_data
@@ -31,7 +24,6 @@ from frontend.utils.geo_visualization import (
     get_available_value_columns,
     get_column_label
 )
-from frontend.utils.case_storage import save_case, get_case_count, MAX_CASES_PER_USER
 from frontend.modules.base import case_summary
 
 init_session_state()
@@ -87,70 +79,27 @@ def render_metric_row(
     }
 
 
-def do_save_case() -> bool:
-    """
-    Save the current case to storage.
-    
-    Returns:
-        True if save successful, False otherwise
-    """
-    user_reid = get_user_reid()
-    case_name = get_case_name() or "Untitled Case"
-    case_notes = get_case_notes()
-    case_id = get_case_id()  # None for new, existing ID for update
-    ui_config = st.session_state.get("ui_config", {})
-    selected_modules = get_selected_modules()
-    
-    try:
-        saved = save_case(
-            user_reid=user_reid,
-            case_name=case_name,
-            case_notes=case_notes,
-            ui_config=ui_config,
-            selected_modules=selected_modules,
-            case_id=case_id,
-        )
-        
-        # Update session state
-        set_case_id(saved.id)
-        mark_case_saved()
-        
-        if case_id is None:
-            # New case - increment counter
-            increment_saved_cases_count()
-        
-        return True
-        
-    except ValueError as e:
-        st.error(str(e))
-        return False
-    except Exception as e:
-        st.error(f"Failed to save case: {e}")
-        return False
-
-
 # =============================================================================
-# PAGE GUARD / CASE SUMMARY
+# PAGE HEADER
 # =============================================================================
 
 st.title("Regumetrica")
 
-# Show case name
 case_name = get_case_name()
 if case_name:
-    st.subheader(f"Compute: {case_name}")
+    st.subheader(f"Results: {case_name}")
 else:
-    st.subheader("Compute")
+    st.subheader("Results")
 
-# Check company selection
 user_reid = get_user_reid()
 if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")
     st.stop()
 
-# If no calculation done yet, show case summary with calculate button
+# If no calculation done yet, show case summary
 if not st.session_state.get("calculation_done"):
     case_summary.render()
+    st.info("Use the **Compute Revenue Frame** button in the sidebar to run the calculation.")
     st.stop()
 
 # From here on, calculation has been performed
@@ -163,7 +112,6 @@ foretag = case.extraction.foretag
 
 st.markdown(f"**{foretag}** ({user_reid})")
 
-# Show case notes if present
 case_notes = get_case_notes()
 if case_notes:
     with st.expander("Case notes", expanded=False):
@@ -448,47 +396,17 @@ st.divider()
 
 
 # =============================================================================
-# SECTION D: EXPORT & SAVE
+# SECTION D: EXPORT
 # =============================================================================
 
-st.markdown("##### Export & Save")
+st.markdown("##### Export")
 
-col_export, col_save = st.columns(2)
+render_export_button(
+    user_reid=user_reid,
+    foretag=foretag,
+    baseline_result=baseline,
+    case_result=case,
+    ui_config=st.session_state.get("ui_config", {})
+)
 
-with col_export:
-    render_export_button(
-        user_reid=user_reid,
-        foretag=foretag,
-        baseline_result=baseline,
-        case_result=case,
-        ui_config=st.session_state.get("ui_config", {})
-    )
-
-with col_save:
-    # Check current state
-    case_id = get_case_id()
-    saved = is_case_saved()
-    case_count = get_case_count(user_reid)
-    can_save_new = case_count < MAX_CASES_PER_USER
-    
-    if saved and case_id:
-        # Existing saved case - show update option
-        st.success("Case saved")
-        if st.button("Update saved case", type="secondary", use_container_width=True):
-            if do_save_case():
-                st.success("Case updated")
-                st.rerun()
-    else:
-        # New case - show save option
-        if can_save_new:
-            if st.button("Save case", type="primary", use_container_width=True):
-                if do_save_case():
-                    st.success("Case saved")
-                    st.rerun()
-        else:
-            st.warning(f"Maximum {MAX_CASES_PER_USER} cases reached. Delete a case to save new ones.")
-            st.button("Save case", type="primary", use_container_width=True, disabled=True)
-
-st.caption(f"Saved cases: {case_count}/{MAX_CASES_PER_USER}")
-
-st.divider()
+st.caption("Use **Save case** in the sidebar to save this configuration.")
