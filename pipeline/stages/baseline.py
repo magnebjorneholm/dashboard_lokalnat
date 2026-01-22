@@ -2,7 +2,9 @@
 pipeline/stages/baseline.py
 
 Stage 1: Baseline
-Konverterar BaselineData till BaselineStageOutput.
+Converts BaselineData to BaselineStageOutput.
+
+No print statements - logging handled by PipelineDebugLogger.
 """
 
 import pandas as pd
@@ -12,19 +14,28 @@ from pipeline.stages.stage_outputs import BaselineStageOutput
 
 def stage_baseline(baseline: BaselineData) -> BaselineStageOutput:
     """
-    Stage 1: Konvertera BaselineData till stage output format.
+    Stage 1: Convert BaselineData to stage output format.
+    
+    Args:
+        baseline: BaselineData from data_loaders
+        
+    Returns:
+        BaselineStageOutput with all baseline data
+        
+    Raises:
+        AttributeError: If BaselineData missing required attributes
     """
-    # Validera att baseline har korrekt struktur
+    # Validate baseline structure
     if not hasattr(baseline, 'sdf_ir'):
         raise AttributeError(
-            "BaselineData saknar 'sdf_ir' attribut. "
-            "Kontrollera att load_baseline_data() returnerar korrekt struktur."
+            "BaselineData missing 'sdf_ir' attribute. "
+            "Check that load_baseline_data() returns correct structure."
         )
     
     if not hasattr(baseline, 'sdf_paverkbara'):
         raise AttributeError(
-            "BaselineData saknar 'sdf_paverkbara' attribut. "
-            "Kontrollera att load_baseline_data() returnerar korrekt struktur."
+            "BaselineData missing 'sdf_paverkbara' attribute. "
+            "Check that load_baseline_data() returns correct structure."
         )
     
     return BaselineStageOutput(

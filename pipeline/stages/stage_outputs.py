@@ -1,11 +1,8 @@
 """
 pipeline/stages/stage_outputs.py
 
-Output dataclasses för varje pipeline stage.
-Alla outputs är frozen (immutable) för att säkerställa data integrity.
-
-REFAKTORISERAD: PreDeaStageOutput innehåller nu metadata om både 
-capbase_source och capex_method.
+Output dataclasses for each pipeline stage.
+All outputs are frozen (immutable) to ensure data integrity.
 """
 
 from dataclasses import dataclass
@@ -16,45 +13,31 @@ from typing import Optional
 @dataclass(frozen=True)
 class BaselineStageOutput:
     """
-    Output från Baseline stage.
-    Konverterar BaselineData till stage-format.
+    Output from Baseline stage.
+    Converts BaselineData to stage format.
     """
-    df_all_companies: pd.DataFrame  # 148 företag med Kapitalkostnad_2024, OPEXp, volumes
-    dea_baseline: pd.DataFrame      # Baseline DEA-resultat från Ei
-    reconciliation: pd.DataFrame    # REId/id_network mapping (har även DMU)
+    df_all_companies: pd.DataFrame  # 148 companies with Kapitalkostnad_2024, OPEXp, volumes
+    dea_baseline: pd.DataFrame      # Baseline DEA results from Ei
+    reconciliation: pd.DataFrame    # REId/id_network mapping (also has DMU)
     wacc: float                     # Baseline WACC (0.0453)
     
-    # SDF-data för Post-DEA
+    # SDF data for Post-DEA
     sdf_ir: pd.DataFrame            # Sheet "IR 2024-2027"
-    sdf_paverkbara: pd.DataFrame    # Sheet "Påverkbara"
+    sdf_paverkbara: pd.DataFrame    # Sheet "Paverkbara"
 
 
 @dataclass(frozen=True)
 class PreDeaStageOutput:
     """
-    Output från Pre-DEA stage.
+    Output from Pre-DEA stage.
     
-    Innehåller metadata om både datakälla (capbase_source) och 
-    beräkningsmetod (capex_method) för spårbarhet och korrekt
-    hantering i efterföljande stages.
-    
-    Attributes:
-        df_all_companies: DataFrame med alla 148 företag, potentiellt
-            modifierad Kapitalkostnad_2024/OPEXp.
-        capbase_source: Källa för användarens data:
-            - "baseline": Baseline capbase_a
-            - "kent_upload": Uppladdad KENT-fil
-        capex_method: Beräkningsmetod som användes:
-            - "baseline": Ingen parameterändring
-            - "wacc_scaling": Skalad avkastning
-            - "parameter_change": Nya normvärden/livslängder
-        capex_modified: True om Kapitalkostnad_2024 ändrades från baseline.
-        wacc_used: WACC som användes (för post_dea periodsumma-beräkning).
-        user_id_network: Användarens id_network (för spårbarhet).
+    Contains metadata about both data source (capbase_source) and
+    calculation method (capex_method) for traceability and correct
+    handling in subsequent stages.
     """
     df_all_companies: pd.DataFrame
-    capbase_source: str
-    capex_method: str
+    capbase_source: str  # "baseline", "var_scaled", "kent_upload"
+    capex_method: str    # "baseline", "wacc_scaling", "parameter_change"
     capex_modified: bool
     wacc_used: Optional[float] = None
     user_id_network: Optional[int] = None
@@ -63,24 +46,24 @@ class PreDeaStageOutput:
 @dataclass(frozen=True)
 class DeaStageOutput:
     """
-    Output från DEA stage.
-    DEA-resultat för alla 148 företag.
+    Output from DEA stage.
+    DEA results for all 148 companies.
     """
-    dea_results: pd.DataFrame       # 148 rows: REId, efficiency, potential, is_outlier
-    dea_method: str                 # Metod: baseline eller dea
-    dea_executed: bool              # True om ny DEA kördes (annars baseline)
+    dea_results: pd.DataFrame  # 148 rows: REId, Effektivitet, potential, is_outlier
+    dea_method: str            # "baseline", "baseline_recalculated", "dea"
+    dea_executed: bool         # True if new DEA was run
 
 
 @dataclass(frozen=True)
 class ExtractionStageOutput:
     """
-    Output från Extraction stage.
-    Extraherade värden för användarens företag.
+    Output from Extraction stage.
+    Extracted values for user's company.
     """
-    user_reid: str  # REId för företaget (ex: "REL00001")
+    user_reid: str
     foretag: str
     
-    # Från Pre-DEA
+    # From Pre-DEA
     capex: float
     opex: float
     totex: float
@@ -90,7 +73,7 @@ class ExtractionStageOutput:
     mw: float
     ns: float
     
-    # Från DEA
+    # From DEA
     efficiency: Optional[float]
     potential: float
     is_outlier: bool
@@ -99,21 +82,17 @@ class ExtractionStageOutput:
 @dataclass(frozen=True)
 class PostDeaStageOutput:
     """
-    Output från Post-DEA stage.
-    Effektiviseringskrav, incitamentjusteringar, påverkbara kostnader,
-    och komplett intäktsram.
+    Output from Post-DEA stage.
+    Efficiency requirements, incentive adjustments, adjustable costs,
+    and complete revenue frame.
     """
-    user_reid: str  # REId för användarens företag
-    user_intaktsram: pd.Series  # Alla komponenter för användaren (inkl. Intaktsram_Total)
-    user_effkrav_proc: float  # Årligt effektiviseringskrav för användaren
+    user_reid: str
+    user_intaktsram: pd.Series  # All components for user (incl. Intaktsram_Total)
+    user_effkrav_proc: float    # Annual efficiency requirement for user
     
-    # För alla 148 företag (för jämförelse/analys)
-    all_intaktsram: pd.DataFrame  # Kompletta intäktsramar för alla företag
-    all_effkrav: pd.DataFrame  # Effektiviseringskrav för alla företag
+    # For all 148 companies (for comparison/analysis)
+    all_intaktsram: pd.DataFrame   # Complete revenue frames for all companies
+    all_effkrav: pd.DataFrame      # Efficiency requirements for all companies
     
-    # Incitamentjusteringar (nytt)
-    # None om incitamentdata saknas
+    # Incentive adjustments (None if incentive data missing)
     all_incentives: Optional[pd.DataFrame] = None
-    # Kolumner: REId, Kvalitetsjustering_Total, Natforlustjustering_Total,
-    #           Belastningsjustering_Total, Incitamentjustering_Total,
-    #           Missing_Incentive_Data (bool)
