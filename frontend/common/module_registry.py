@@ -40,13 +40,13 @@ class ModuleSection:
     A configurable section within a module.
     
     Sections allow fine-grained control over which parts of a module
-    are rendered and applied. For example, M3 has separate sections
-    for WACC parameters, incentive parameters, and incentive variables.
+    are rendered and applied.
     """
     key: str                        # e.g., "wacc", "incentive_params"
-    label: str                      # e.g., "3.1-3.2 WACC parameters"
+    label: str                      # Display label for checkbox
     ui_config_keys: Tuple[str, ...]  # Keys in DEFAULT_UI_CONFIG
-    default_enabled: bool = True    # Selected by default when parent module is checked?
+    default_enabled: bool = True
+    help_text: str = ""             # Tooltip text (User Manual reference)
 
 
 @dataclass(frozen=True)
@@ -109,21 +109,24 @@ M1_ASSET_BASE = ModuleDefinition(
     sections=(
         ModuleSection(
             key="scaling",
-            label="1.1-1.2 Scaling factors",
+            label="1.1-1.2 General and asset type scaling factors",
             ui_config_keys=("m1_asset_base",),
             default_enabled=True,
+            help_text="Parameters 1.1.1 (general), 1.2.X (per category). Affects all companies.",
         ),
         ModuleSection(
             key="quantities",
-            label="10.X Asset quantities",
+            label="10.X Asset quantity adjustments",
             ui_config_keys=("m1_asset_base",),
             default_enabled=False,
+            help_text="Variable 10.X. Adjust quantities per asset category for your company.",
         ),
         ModuleSection(
             key="kent",
-            label="KENT file upload",
+            label="KENT file upload (overrides quantity adjustments)",
             ui_config_keys=("m1_asset_base",),
             default_enabled=False,
+            help_text="Upload KENT Excel template. Overrides manual quantity adjustments.",
         ),
     ),
 )
@@ -142,9 +145,10 @@ M2_DEPRECIATION = ModuleDefinition(
     sections=(
         ModuleSection(
             key="lifetimes",
-            label="2.X Lifetime parameters",
+            label="2.X Economic and tail lifetime parameters",
             ui_config_keys=("m2_depreciation",),
             default_enabled=True,
+            help_text="Parameters 2.X.1 (ordinary) and 2.X.2 (tail) per asset category.",
         ),
     ),
 )
@@ -178,21 +182,24 @@ M3_COST_OF_CAPITAL = ModuleDefinition(
     sections=(
         ModuleSection(
             key="wacc",
-            label="3.1-3.2 WACC parameters",
+            label="3.1-3.2 WACC calculation (CAPM parameters)",
             ui_config_keys=("m3_cost_of_capital",),
             default_enabled=True,
+            help_text="Risk-free rate, market risk premium, beta, debt ratio, tax rate, inflation.",
         ),
         ModuleSection(
             key="incentive_params",
-            label="3.3-3.6 Incentive parameters",
+            label="3.3-3.6 Quality and incentive adjustment parameters",
             ui_config_keys=("m3_quality_adjustments",),
             default_enabled=True,
+            help_text="Adjustment caps, network loss sharing, interruption cost parameters.",
         ),
         ModuleSection(
             key="incentive_vars",
-            label="30.X Incentive variables",
+            label="30.X Incentive adjustment variables (company-specific)",
             ui_config_keys=("m3_incentive_variables",),
             default_enabled=False,
+            help_text="Network loss, utilization, CEMI4 values for your company.",
         ),
     ),
 )
@@ -218,15 +225,17 @@ M4_OPERATING_EXP = ModuleDefinition(
     sections=(
         ModuleSection(
             key="scaling",
-            label="4.1 OPEX scaling factors",
+            label="4.1 OPEX scaling factors (adjustable, flexibility, non-adjustable)",
             ui_config_keys=("m4_operating_exp",),
             default_enabled=True,
+            help_text="Parameters 4.1.1-4.1.3. Scale operating expenditure components.",
         ),
         ModuleSection(
             key="opex_vars",
-            label="40.X OPEX variables",
+            label="40.X OPEX variables (company-specific cost data)",
             ui_config_keys=("m4_operating_exp",),
             default_enabled=False,
+            help_text="Variables 40.1-40.2. Override OPEX values for your company.",
         ),
     ),
 )
@@ -249,9 +258,10 @@ M5_EFFICIENCY = ModuleDefinition(
     sections=(
         ModuleSection(
             key="efficiency_params",
-            label="5.1-5.4 Efficiency parameters",
+            label="5.1-5.4 Efficiency requirement parameters (bounds, outliers, cost base)",
             ui_config_keys=("m5_efficiency",),
             default_enabled=True,
+            help_text="Truncation bounds, outlier treatment, TOTEX vs OPEX application.",
         ),
     ),
 )
@@ -268,9 +278,10 @@ M7_BENCHMARKING = ModuleDefinition(
     sections=(
         ModuleSection(
             key="dea_spec",
-            label="DEA model specification",
+            label="DEA model specification (inputs, outputs, RTS)",
             ui_config_keys=("addon_benchmarking",),
             default_enabled=True,
+            help_text="Define custom DEA model with different inputs/outputs than Ei baseline.",
         ),
     ),
     is_addon=True,

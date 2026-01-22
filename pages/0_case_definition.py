@@ -39,7 +39,6 @@ from frontend.utils.case_storage import (
     load_case,
     delete_case,
     apply_case_to_session,
-    get_case_display_info,
     get_case_count,
 )
 
@@ -73,7 +72,7 @@ st.caption(
     "Define your case by selecting which regulatory modules to configure. "
     "Each module contains parameters (regulatory constants) and variables "
     "(company-specific data) that can be modified from baseline values. "
-    "**Only selected modules/sections will be applied** - unselected use baseline."
+    "**Only selected items will be applied** - unselected use baseline."
 )
 
 st.divider()
@@ -90,64 +89,40 @@ saved_cases = list_cases(user_reid)
 if saved_cases:
     st.caption(f"You have {len(saved_cases)} saved case(s). Select one to load or continue with a new case.")
     
-    # Create options for selectbox
-    case_options = {case.id: case for case in saved_cases}
-    case_names = ["-- Create new case --"] + [
-        f"{case.name} (updated {get_case_display_info(case)['updated']})"
-        for case in saved_cases
+    # Build options for selectbox
+    case_display_names = ["-- Select a case --"] + [
+        f"{c.name} ({c.updated_at[:16] if c.updated_at else 'unknown'})"
+        for c in saved_cases
     ]
-    case_ids = [None] + [case.id for case in saved_cases]
     
     selected_idx = st.selectbox(
-        "Select case",
-        range(len(case_names)),
-        format_func=lambda i: case_names[i],
+        "Saved cases",
+        range(len(case_display_names)),
+        format_func=lambda i: case_display_names[i],
         key="load_case_select",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
     )
     
     if selected_idx > 0:
-        selected_case_id = case_ids[selected_idx]
-        selected_case = case_options[selected_case_id]
+        selected_case = saved_cases[selected_idx - 1]
         
-        # Show case details
-        info = get_case_display_info(selected_case)
+        col_load, col_delete = st.columns([1, 1])
         
-        with st.container(border=True):
-            st.markdown(f"**{selected_case.name}**")
-            if selected_case.notes:
-                st.caption(info["notes"])
-            
-            # Show which modules/sections are included
-            if selected_case.selected_modules:
-                st.caption(f"Selections: {', '.join(sorted(selected_case.selected_modules))} | Created: {info['created']}")
-            else:
-                st.caption(f"Baseline only | Created: {info['created']}")
-            
-            if info["had_kent"]:
-                st.warning(
-                    f"This case originally included a KENT file ({info['kent_name']}). "
-                    "You will need to re-upload it after loading."
-                )
-            
-            col_load, col_delete = st.columns([1, 1])
-            
-            with col_load:
-                if st.button("Load case", type="primary", use_container_width=True):
-                    apply_case_to_session(selected_case, st.session_state)
-                    st.session_state["_toast_message"] = f"Loaded: {selected_case.name}"
+        with col_load:
+            if st.button("Load case", type="primary", use_container_width=True):
+                case_data = load_case(selected_case.id)
+                if case_data:
+                    apply_case_to_session(case_data)
+                    st.session_state["_toast_message"] = f"Loaded: {case_data.name}"
                     st.rerun()
-            
-            with col_delete:
-                if st.button("Delete case", type="secondary", use_container_width=True):
-                    if delete_case(user_reid, selected_case_id):
-                        st.session_state["_toast_message"] = "Case deleted"
-                        st.rerun()
-                    else:
-                        st.error("Failed to delete case")
-
+        
+        with col_delete:
+            if st.button("Delete case", type="secondary", use_container_width=True):
+                if delete_case(selected_case.id):
+                    st.session_state["_toast_message"] = "Case deleted"
+                    st.rerun()
 else:
-    st.info("No saved cases yet. Cases can be saved after running a calculation.")
+    st.caption("No saved cases yet. Cases can be saved after running a calculation.")
 
 
 st.divider()
@@ -203,8 +178,7 @@ st.divider()
 
 st.markdown("##### Select modules to configure")
 st.caption(
-    "Check the modules you want to modify. For modules with sections, "
-    "you can select individual parts. **Only checked items affect the calculation.**"
+    "Check the items you want to modify. Tooltips provide User Manual references."
 )
 
 # Get current selection
@@ -216,10 +190,10 @@ new_selection: Set[str] = set()
 
 def render_module_card(module: ModuleDefinition, is_addon: bool = False) -> None:
     """
-    Render a module selection card with optional section checkboxes.
+    Render a module selection card.
     
-    For modules without sections: single checkbox
-    For modules with sections: parent checkbox + indented section checkboxes
+    For modules with sections: vertical checkboxes with descriptive labels.
+    For modules without sections: single checkbox.
     """
     if module.has_sections:
         _render_module_with_sections(module, is_addon)
@@ -231,12 +205,10 @@ def _render_simple_module(module: ModuleDefinition, is_addon: bool) -> None:
     """Render a module without sections."""
     widget_key = f"module_select_{module.key}"
     
-    # Set default value if not already in session_state
     if widget_key not in st.session_state:
         st.session_state[widget_key] = module.key in current_selection
     
-    # Module header with checkbox
-    col_check, col_title = st.columns([0.08, 0.92])
+    col_check, col_title = st.columns([0.05, 0.95])
     
     with col_check:
         selected = st.checkbox(
@@ -246,76 +218,44 @@ def _render_simple_module(module: ModuleDefinition, is_addon: bool) -> None:
         )
     
     with col_title:
+        title = f"**{module.title}**"
         if is_addon:
-            st.markdown(f"**{module.title}** *(add-on)*")
-        else:
-            st.markdown(f"**{module.title}**")
+            title += " *(add-on)*"
+        st.markdown(title)
         st.caption(module.description)
-    
-    # Show parameters and variables info
-    _render_module_info(module)
     
     if selected:
         new_selection.add(module.key)
 
 
 def _render_module_with_sections(module: ModuleDefinition, is_addon: bool) -> None:
-    """Render a module with configurable sections (flat design)."""
-    # Module title (no checkbox)
+    """Render a module with configurable sections (vertical checkboxes)."""
+    # Module title (no parent checkbox)
+    title = f"**{module.title}**"
     if is_addon:
-        st.markdown(f"**{module.title}** *(add-on)*")
-    else:
-        st.markdown(f"**{module.title}**")
+        title += " *(add-on)*"
+    st.markdown(title)
     st.caption(module.description)
     
-    # Render sections as flat checkboxes
+    st.markdown("")  # Small spacing
+    
+    # Render each section as a vertical checkbox
     for section in module.sections:
         section_key = build_selection_key(module.key, section.key)
         section_widget_key = f"section_select_{section_key}"
         
-        # Initialize checkbox state
         if section_widget_key not in st.session_state:
             st.session_state[section_widget_key] = section_key in current_selection
         
-        col_check, col_label = st.columns([0.06, 0.94])
-        
-        with col_check:
-            section_selected = st.checkbox(
-                section.label,
-                key=section_widget_key,
-                label_visibility="collapsed"
-            )
-        
-        with col_label:
-            st.markdown(section.label)
+        # Checkbox with descriptive label and help tooltip
+        section_selected = st.checkbox(
+            section.label,
+            key=section_widget_key,
+            help=section.help_text if section.help_text else None,
+        )
         
         if section_selected:
             new_selection.add(section_key)
-    
-    # Show parameters and variables info
-    _render_module_info(module)
-
-
-def _render_module_info(module: ModuleDefinition) -> None:
-    """Render parameters and variables info for a module."""
-    with st.container():
-        col_params, col_vars = st.columns(2)
-        
-        with col_params:
-            if module.parameters:
-                st.markdown("**Parameters**")
-                for param in module.parameters:
-                    st.caption(f"- {param.param_id}: {param.label}")
-            else:
-                st.caption("*No parameters*")
-        
-        with col_vars:
-            if module.variables:
-                st.markdown("**Variables**")
-                for var in module.variables:
-                    st.caption(f"- {var.var_id}: {var.label}")
-            else:
-                st.caption("*No variables*")
 
 
 # --- BASE MODULES ---

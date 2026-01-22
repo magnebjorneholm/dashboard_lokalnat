@@ -200,6 +200,7 @@ def render_incentive_params() -> Dict[str, Any]:
     
     return config
 
+
 # =============================================================================
 # WACC CALCULATION HELPERS
 # =============================================================================
@@ -230,19 +231,29 @@ def _calculate_wacc_from_derived(
 
 
 def _render_apply_row(new_wacc: float, button_key: str) -> None:
-    """Render Apply/Reset buttons and current WACC info."""
+    """Render Apply/Reset buttons and current WACC info (vertical layout)."""
     current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
     
-    cols = st.columns([0.8, 0.8, 2.5, 10])
+    col1, col2 = st.columns(2)
+    with col1:
+        st.button(
+            "Apply",
+            key=button_key,
+            type="primary",
+            on_click=_set_wacc,
+            args=(new_wacc,),
+            use_container_width=True
+        )
+    with col2:
+        st.button(
+            "Reset",
+            key=f"{button_key}_reset",
+            on_click=_set_wacc,
+            args=(BASELINE_WACC,),
+            use_container_width=True
+        )
     
-    with cols[0]:
-        st.button("Apply", key=button_key, type="primary", on_click=_set_wacc, args=(new_wacc,))
-    
-    with cols[1]:
-        st.button("Reset", key=f"{button_key}_reset", on_click=_set_wacc, args=(BASELINE_WACC,))
-    
-    with cols[2]:
-        st.markdown(f"<p style='margin-top: 16px;'>Active WACC: <b>{format_percent(current_wacc)}</b></p>", unsafe_allow_html=True)
+    st.caption(f"Active WACC: **{format_percent(current_wacc)}**")
 
 
 def _set_wacc(value: float) -> None:
@@ -255,7 +266,7 @@ def _set_wacc(value: float) -> None:
 # =============================================================================
 
 def _render_capm_section() -> None:
-    """Render 3.1 Base parameters with LaTeX formulas."""
+    """Render 3.1 Base parameters with derived values display."""
     st.markdown("##### 3.1 Base parameters")
     st.caption("WACC derived from CAPM inputs")
     
@@ -340,7 +351,7 @@ def _render_capm_section() -> None:
             help="CPIF inflation rate"
         )
     
-    # Calculate WACC
+    # Calculate WACC from inputs
     capm_inputs = CAPMInputs(
         debt_ratio=debt_ratio,
         asset_beta=asset_beta,
@@ -351,13 +362,32 @@ def _render_capm_section() -> None:
         inflation=inflation,
     )
     
-    result = calculate_wacc(capm_inputs)
-    new_wacc = result.wacc_real_pre_tax
-    
-    st.divider()
-    st.markdown(f"**Calculated WACC (real, pre-tax): {format_percent(new_wacc)}**")
-    
-    _render_apply_row(new_wacc, f"{MODULE_KEY}_apply_capm")
+    try:
+        result = calculate_wacc(capm_inputs)
+        calculated_wacc = result.wacc_real_pre_tax
+        
+        # Show derived parameters (read-only)
+        st.divider()
+        st.markdown("##### 3.2 Derived")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            with st.container(border=True):
+                st.metric("3.2.1 Equity beta", f"{result.equity_beta:.4f}")
+            with st.container(border=True):
+                st.metric("3.2.2 Cost of equity (Re)", format_percent(result.cost_of_equity_nominal))
+        with col2:
+            with st.container(border=True):
+                st.metric("3.2.3 Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
+
+        # Final WACC
+        with st.container(border=True):
+            st.metric("Calculated WACC (real, pre-tax)", format_percent(calculated_wacc))
+        
+        _render_apply_row(calculated_wacc, f"{MODULE_KEY}_apply_capm")
+            
+    except ValueError as e:
+        st.error(f"Calculation error: {e}")
 
 
 def _render_derived_section() -> None:
@@ -429,9 +459,15 @@ def _render_derived_section() -> None:
         cost_of_equity, cost_of_debt, debt_ratio, tax_rate, inflation
     )
     
+    # Final WACC with delta
     st.divider()
-    st.markdown(f"**WACC nominal pre-tax: {format_percent(wacc_nom)}**")
-    st.markdown(f"**WACC real pre-tax: {format_percent(wacc_real)}**")
+    with st.container(border=True):
+        delta = wacc_real - BASELINE_WACC
+        st.metric(
+            "Calculated WACC (real, pre-tax)",
+            format_percent(wacc_real),
+            delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
+        )
     
     _render_apply_row(wacc_real, f"{MODULE_KEY}_apply_derived")
 
@@ -444,13 +480,18 @@ def _render_direct_section() -> None:
     direct_wacc = st.number_input(
         "WACC (real, pre-tax)",
         value=BASELINE_WACC,
-        min_value=0.0,
-        max_value=0.20,
-        step=0.001,
+        min_value=0.01,
+        max_value=0.15,
+        step=0.0001,
         format="%.4f",
         key=f"{MODULE_KEY}_direct_wacc",
-        help="Enter WACC directly"
+        help="Direct WACC entry"
     )
+    
+    # Show baseline comparison if modified
+    if abs(direct_wacc - BASELINE_WACC) > 0.0001:
+        delta = direct_wacc - BASELINE_WACC
+        st.caption(f"= {format_percent(direct_wacc)} :orange[({delta*100:+.2f} pp from baseline)]")
     
     _render_apply_row(direct_wacc, f"{MODULE_KEY}_apply_direct")
 

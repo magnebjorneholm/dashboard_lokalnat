@@ -202,7 +202,7 @@ def _render_authenticated_sidebar():
     st.divider()
     
     # Logout button
-    if st.button("Logout", use_container_width=True):
+    if st.button("Logout", width='stretch'):
         auth_manager = initialize_firebase_auth()
         auth_manager.sign_out()
         # Clear user_reid as well

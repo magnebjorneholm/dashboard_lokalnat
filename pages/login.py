@@ -185,9 +185,9 @@ def render_login_form(auth_manager) -> None:
         
         col1, col2 = st.columns([1, 1])
         with col1:
-            submit = st.form_submit_button("Login", type="primary", use_container_width=True)
+            submit = st.form_submit_button("Login", type="primary", width='stretch')
         with col2:
-            forgot = st.form_submit_button("Forgot password?", use_container_width=True)
+            forgot = st.form_submit_button("Forgot password?", width='stretch')
     
     if submit:
         if not email or not password:
@@ -240,9 +240,9 @@ def render_password_reset(auth_manager) -> None:
         
         col1, col2 = st.columns([1, 1])
         with col1:
-            submit = st.form_submit_button("Send reset link", type="primary", use_container_width=True)
+            submit = st.form_submit_button("Send reset link", type="primary", width='stretch')
         with col2:
-            back = st.form_submit_button("Back to login", use_container_width=True)
+            back = st.form_submit_button("Back to login", width='stretch')
     
     if submit:
         if not email:
@@ -300,7 +300,7 @@ def render_registration_form(auth_manager) -> None:
             else:
                 st.error("Could not load company list")
         
-        submit = st.form_submit_button("Create account", type="primary", use_container_width=True)
+        submit = st.form_submit_button("Create account", type="primary", width='stretch')
     
     if submit:
         # Validation
@@ -345,7 +345,7 @@ def render_verification_pending(auth_manager) -> None:
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        if st.button("Resend verification email", use_container_width=True):
+        if st.button("Resend verification email", width='stretch'):
             token = st.session_state.get('pending_verification_token')
             if token:
                 success, error = auth_manager.resend_verification_email(token)
@@ -355,7 +355,7 @@ def render_verification_pending(auth_manager) -> None:
                     st.error(error or "Could not send email")
     
     with col2:
-        if st.button("Back to login", use_container_width=True):
+        if st.button("Back to login", width='stretch'):
             st.session_state['pending_verification_token'] = None
             st.rerun()
 
@@ -388,10 +388,10 @@ def main():
         
         col1, col2 = st.columns([1, 1])
         with col1:
-            if st.button("Continue to app", type="primary", use_container_width=True):
+            if st.button("Continue to app", type="primary", width='stretch'):
                 st.switch_page("pages/0_case_definition.py")
         with col2:
-            if st.button("Logout", use_container_width=True):
+            if st.button("Logout", width='stretch'):
                 auth_manager = initialize_firebase_auth()
                 auth_manager.sign_out()
                 st.rerun()
