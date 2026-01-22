@@ -13,7 +13,10 @@ import streamlit as st
 from typing import Dict, Any
 
 from frontend.common.parameter_input import parameter_input, parameter_select
-from calculations.effektiviseringskrav import get_max_effkrav
+from calculations.effektiviseringskrav import (
+    get_max_effkrav,
+    calculate_trunkering_min_from_outlier_krav,
+)
 
 MODULE_KEY = "m5_efficiency"
 
@@ -23,6 +26,27 @@ BASELINE_REALIZATION_TIME = 8
 BASELINE_CUSTOMER_SHARING = 0.50
 BASELINE_SUPERVISION_PERIOD = 4
 BASELINE_MIN_REQUIREMENT = 0.01
+
+# Session state keys for constraint calculation
+_SS_PREFIX = "m5_eff_"
+
+
+def _get_constraint_values() -> tuple:
+    """
+    Get values for constraint calculation from session_state.
+    Uses previous render's values, or baseline if first render.
+    """
+    real_time = st.session_state.get(f"{_SS_PREFIX}realiseringstid", BASELINE_REALIZATION_TIME)
+    kund_del = st.session_state.get(f"{_SS_PREFIX}kunddelning", BASELINE_CUSTOMER_SHARING)
+    min_req = st.session_state.get(f"{_SS_PREFIX}outlier_krav", BASELINE_MIN_REQUIREMENT)
+    return int(real_time), kund_del, min_req
+
+
+def _update_constraint_values(real_time: int, kund_del: float, min_req: float):
+    """Store current values in session_state for next render."""
+    st.session_state[f"{_SS_PREFIX}realiseringstid"] = real_time
+    st.session_state[f"{_SS_PREFIX}kunddelning"] = kund_del
+    st.session_state[f"{_SS_PREFIX}outlier_krav"] = min_req
 
 
 def render_efficiency_params() -> Dict[str, Any]:
@@ -50,13 +74,24 @@ def render_efficiency_params() -> Dict[str, Any]:
         
         st.markdown("##### 5.2 Efficiency requirement conversion")
         
-        # 5.2.1 Max potential cap
+        # Get constraint values from previous render (or baseline)
+        prev_real_time, prev_kund_del, prev_min_req = _get_constraint_values()
+        
+        # Calculate dynamic min for 5.2.1 based on PREVIOUS values
+        critical_potential = calculate_trunkering_min_from_outlier_krav(
+            outlier_krav=prev_min_req,
+            kunddelning=prev_kund_del,
+            realiseringstid=prev_real_time,
+            tillsynsperiod=BASELINE_SUPERVISION_PERIOD
+        )
+        
+        # 5.2.1 Max potential cap - NOW IN CORRECT POSITION
         max_pot, max_pot_changed = parameter_input(
             module_key=MODULE_KEY,
             param_id="5.2.1",
             label="Maximum efficiency potential cap",
             baseline=BASELINE_MAX_POTENTIAL,
-            min_val=0.0,
+            min_val=critical_potential,
             max_val=1.0,
             step=0.01,
             help_text="Upper bound on assessed efficiency potential",
@@ -65,6 +100,13 @@ def render_efficiency_params() -> Dict[str, Any]:
         
         if max_pot_changed:
             config["trunkering_max"] = max_pot
+        
+        # Show constraint info if relevant
+        if critical_potential > 0.001:
+            st.caption(
+                f"Min: {critical_potential*100:.1f}% "
+                f"(ensures max req >= {prev_min_req*100:.2f}%)"
+            )
         
         # 5.2.2 Realization time
         real_time, real_time_changed = parameter_input(
@@ -89,7 +131,7 @@ def render_efficiency_params() -> Dict[str, Any]:
             param_id="5.2.3",
             label="Customer sharing factor",
             baseline=BASELINE_CUSTOMER_SHARING,
-            min_val=0.0,
+            min_val=0.01,
             max_val=1.0,
             step=0.05,
             help_text="Share of efficiency gains allocated to customers",
@@ -116,24 +158,19 @@ def render_efficiency_params() -> Dict[str, Any]:
             format_as_percent=True
         )
         
-        # Show delta indicator
-        col1, col2 = st.columns([3, 1])
-        with col2:
-            if min_req_changed:
-                delta = min_req - BASELINE_MIN_REQUIREMENT
-                st.markdown(f'<span style="color: #F59E0B; font-size: 0.8rem;">{delta*100:+.2f}pp</span>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<span style="color: #9CA3AF; font-size: 0.8rem;">= {BASELINE_MIN_REQUIREMENT*100:.2f}%</span>', unsafe_allow_html=True)
-
         if min_req_changed:
             config["outlier_krav"] = min_req
         
-        # Calculate and display resulting range
-        current_max_pot = max_pot if max_pot_changed else BASELINE_MAX_POTENTIAL
+        # Get current values for display and storage
         current_real_time = int(real_time) if real_time_changed else BASELINE_REALIZATION_TIME
         current_kund_del = kund_del if kund_del_changed else BASELINE_CUSTOMER_SHARING
         current_min_req = min_req if min_req_changed else BASELINE_MIN_REQUIREMENT
+        current_max_pot = max_pot if max_pot_changed else BASELINE_MAX_POTENTIAL
         
+        # Store current values for next render's constraint calculation
+        _update_constraint_values(current_real_time, current_kund_del, current_min_req)
+        
+        # Calculate and display resulting range
         max_annual_req = get_max_effkrav(
             trunkering_max=current_max_pot,
             kunddelning=current_kund_del,
@@ -141,7 +178,24 @@ def render_efficiency_params() -> Dict[str, Any]:
             tillsynsperiod=BASELINE_SUPERVISION_PERIOD
         )
         
-        st.caption(f"Resulting range: {current_min_req*100:.2f}% - {max_annual_req*100:.2f}% annually")
+        st.caption(
+            f"Resulting range: {current_min_req*100:.2f}% - {max_annual_req*100:.2f}% annually"
+        )
+        
+        # Validate constraint with CURRENT values and show warning if violated
+        new_critical = calculate_trunkering_min_from_outlier_krav(
+            outlier_krav=current_min_req,
+            kunddelning=current_kund_del,
+            realiseringstid=current_real_time,
+            tillsynsperiod=BASELINE_SUPERVISION_PERIOD
+        )
+        
+        if current_max_pot < new_critical - 0.001:
+            st.warning(
+                f"Constraint violation: Max potential ({current_max_pot*100:.1f}%) "
+                f"< required minimum ({new_critical*100:.1f}%). "
+                f"Increase 5.2.1 or adjust 5.2.2/5.2.3/5.3.1."
+            )
         
         st.divider()
         

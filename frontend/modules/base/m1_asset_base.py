@@ -172,7 +172,7 @@ def _render_general_scaling() -> float:
     with st.expander("1.1 General scaling factor", expanded=False):
         st.caption(
             "Applied multiplicatively to all asset norm values. "
-            "Affects all companies uniformly. (Parameter-ID: 1.1.1)"
+            "Affects all companies ordinarie capital base uniformly. (Parameter-ID: 1.1.1)"
         )
         
         value = st.number_input(
@@ -201,7 +201,7 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
     """Render category-level scaling factors (Param 1.2.1-1.2.17)."""
     with st.expander("1.2 Category scaling factors", expanded=False):
         st.caption(
-            "Scaling factors per asset category. Affects all companies uniformly. "
+            "Scaling factors per asset category. Affects all companies ordinarie capital base uniformly."
             "(Parameter-IDs: 1.2.1-1.2.17)"
         )
         
@@ -281,7 +281,7 @@ def _render_variables_scaling(
         
         st.caption(
             "Scale asset quantities per category for your company only. "
-            "Only affects ordinarie capital base (tail is unchanged). "
+            "Only affects ordinaie capital base (tail is unchanged). "
             "(Variable-IDs: 10.2-10.18)"
         )
         
