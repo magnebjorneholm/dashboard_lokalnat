@@ -185,14 +185,14 @@ def _render_sidebar_actions():
     st.divider()
     
     # Compute button
-    if st.button("Compute Revenue Frame", type="primary", use_container_width=True):
+    if st.button("Compute Revenue Frame", type="primary", width='stretch'):
         _run_calculation()
     
     # Save/Update button
     case_id = get_case_id()
     save_label = "Update saved case" if case_id else "Save case"
     
-    if st.button(save_label, use_container_width=True):
+    if st.button(save_label, width='stretch'):
         if _do_save_case():
             action = "updated" if case_id else "saved"
             st.toast(f"Case {action} successfully")
@@ -319,7 +319,7 @@ def _render_authenticated_sidebar():
     st.divider()
     
     # Logout button
-    if st.button("Logout", use_container_width=True):
+    if st.button("Logout", width='stretch'):
         auth_manager = initialize_firebase_auth()
         auth_manager.sign_out()
         st.session_state["user_reid"] = None

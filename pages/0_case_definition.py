@@ -109,7 +109,7 @@ if saved_cases:
         col_load, col_delete = st.columns([1, 1])
         
         with col_load:
-            if st.button("Load case", type="primary", use_container_width=True):
+            if st.button("Load case", type="primary", width='stretch'):
                 case_data = load_case(selected_case.id)
                 if case_data:
                     apply_case_to_session(case_data)
@@ -117,7 +117,7 @@ if saved_cases:
                     st.rerun()
         
         with col_delete:
-            if st.button("Delete case", type="secondary", use_container_width=True):
+            if st.button("Delete case", type="secondary", width='stretch'):
                 if delete_case(selected_case.id):
                     st.session_state["_toast_message"] = "Case deleted"
                     st.rerun()

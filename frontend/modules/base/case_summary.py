@@ -258,7 +258,7 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                 "Change": f"{pct_change:+.1f}%",
             })
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
     else:
         st.caption("All category scaling factors at baseline (1.00)")
     
@@ -277,7 +277,7 @@ def _render_module_1_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                 "Change": f"{pct_change:+.1f}%",
             })
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
 
 
 def _render_module_2_content(ui_config: Dict[str, Any], is_selected: bool, has_changes: bool) -> None:
@@ -320,7 +320,7 @@ def _render_module_2_content(ui_config: Dict[str, Any], is_selected: bool, has_c
         
         if rows:
             df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
     else:
         st.caption("All lifetime parameters at baseline")
 
@@ -424,7 +424,7 @@ def _render_module_5_content(ui_config: Dict[str, Any], is_selected: bool, has_c
                     "Value": str(value),
                 })
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
     else:
         st.caption("All efficiency parameters at baseline")
     

@@ -157,7 +157,7 @@ with col_map:
                 height=500,
                 zoom=3.0
             )
-            st.plotly_chart(fig, key="efficiency_map", use_container_width=True)
+            st.plotly_chart(fig, key="efficiency_map", width='stretch')
         else:
             st.info("No efficiency data available for map visualization.")
             
@@ -238,7 +238,7 @@ df_summary = pd.DataFrame(rows)
 st.dataframe(
     df_summary,
     hide_index=True,
-    use_container_width=True,
+    width='stretch',
     column_config={
         "ID": st.column_config.TextColumn("ID", width="small"),
         "Component": st.column_config.TextColumn("Component", width="large"),
@@ -318,7 +318,7 @@ with st.expander("3. Cost of capital", expanded=True):
             "Delta (tkr)": format_tkr(delta, show_sign=True) if delta is not None else "-"
         })
     
-    st.dataframe(pd.DataFrame(inc_data), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(inc_data), hide_index=True, width='stretch')
     
     if case_ir.get('Missing_Incentive_Data', False):
         st.warning("Incentive data incomplete for this company.")

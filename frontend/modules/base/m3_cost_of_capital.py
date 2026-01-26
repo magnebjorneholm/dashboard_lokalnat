@@ -236,13 +236,13 @@ def _render_apply_row(new_wacc: float, button_key: str) -> None:
     
     col1, col2 = st.columns(2)
     with col1:
-        st.button(
+            st.button(
             "Apply",
             key=button_key,
             type="primary",
             on_click=_set_wacc,
             args=(new_wacc,),
-            use_container_width=True
+            width='stretch'
         )
     with col2:
         st.button(
@@ -250,7 +250,7 @@ def _render_apply_row(new_wacc: float, button_key: str) -> None:
             key=f"{button_key}_reset",
             on_click=_set_wacc,
             args=(BASELINE_WACC,),
-            use_container_width=True
+            width='stretch'
         )
     
     st.caption(f"Active WACC: **{format_percent(current_wacc)}**")
@@ -528,7 +528,7 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     edited_ait = st.data_editor(
         ait_df,
         key=f"{MODULE_KEY_QA}_ait_editor",
-        use_container_width=True,
+        width='stretch',
         hide_index=False,
         column_config={
             "Unannounced": st.column_config.NumberColumn(format="%.2f"),
@@ -548,7 +548,7 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     edited_aif = st.data_editor(
         aif_df,
         key=f"{MODULE_KEY_QA}_aif_editor",
-        use_container_width=True,
+        width='stretch',
         hide_index=False,
         column_config={
             "Unannounced": st.column_config.NumberColumn(format="%.2f"),
@@ -588,7 +588,7 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
         edited_k_nf = st.data_editor(
             k_nf_df,
             key=f"{MODULE_KEY_QA}_k_nf_editor",
-            use_container_width=True,
+            width='stretch',
             hide_index=False,
             column_config={
                 "Price (SEK/MWh)": st.column_config.NumberColumn(format="%.2f"),
@@ -633,7 +633,7 @@ def _render_kpi_section(config: Dict[str, Any]) -> None:
     edited_kpi = st.data_editor(
         kpi_df,
         key=f"{MODULE_KEY_QA}_kpi_editor",
-        use_container_width=True,
+        width='stretch',
         hide_index=False,
         column_config={
             "KPI factor": st.column_config.NumberColumn(format="%.4f"),
