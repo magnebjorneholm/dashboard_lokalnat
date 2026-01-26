@@ -24,6 +24,7 @@ from frontend.common.asset_categories import (
     CATEGORY_BY_CODE,
     GENERAL_SCALING_FACTOR_BASELINE,
 )
+from frontend.utils.state_manager import get_config_value
 
 MODULE_KEY = "m1_asset_base"
 
@@ -179,7 +180,7 @@ def _render_general_scaling() -> float:
             "General scaling factor",
             min_value=0.5,
             max_value=2.0,
-            value=1.0,
+            value=get_config_value(MODULE_KEY, "general_scaling", GENERAL_SCALING_FACTOR_BASELINE),
             step=0.01,
             format="%.2f",
             key=f"{MODULE_KEY}_general_scaling",
@@ -207,12 +208,16 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
         
         # Build dataframe for editor
         data = []
+        cat_scaling_conf = get_config_value(MODULE_KEY, "cat_scaling", None)
         for cat in ASSET_CATEGORIES:
+            initial_scaling = 1.0
+            if isinstance(cat_scaling_conf, dict):
+                initial_scaling = float(cat_scaling_conf.get(cat.cat_encode, 1.0))
             data.append({
                 'cat_encode': cat.cat_encode,
                 'Category': cat.name,
                 'Param-ID': cat.scaling_param_id,
-                'Scaling': 1.0,
+                'Scaling': initial_scaling,
             })
         
         df = pd.DataFrame(data)
@@ -296,8 +301,14 @@ def _render_variables_scaling(
             st.warning("No capital base data found for this company.")
             return None
         
-        # Add scaling column
-        summary_df['Scaling'] = 1.0
+        # Add scaling column (prefill from ui_config if present)
+        var_scaling_conf = get_config_value(MODULE_KEY, "var_scaling", None)
+        def _initial_var_scaling(cat_encode):
+            if isinstance(var_scaling_conf, dict):
+                return float(var_scaling_conf.get(cat_encode, 1.0))
+            return 1.0
+
+        summary_df['Scaling'] = summary_df['cat_encode'].map(_initial_var_scaling)
         
         edited_df = st.data_editor(
             summary_df,

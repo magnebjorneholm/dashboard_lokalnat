@@ -177,6 +177,8 @@ def reset_case() -> None:
     
     # Clear module/section checkbox widget keys
     _clear_selection_widget_keys()
+    # Clear all config-related widget keys so widgets re-init from ui_config
+    _clear_config_widget_keys()
 
 
 def _clear_selection_widget_keys() -> None:
@@ -185,6 +187,38 @@ def _clear_selection_widget_keys() -> None:
                      if k.startswith("module_select_") or k.startswith("section_select_")]
     for key in keys_to_clear:
         del st.session_state[key]
+
+
+def _clear_config_widget_keys() -> None:
+    """Clear all config-related widget keys so Streamlit will reinitialize them.
+
+    This removes keys that begin with common widget prefixes used by modules.
+    The list is intentionally conservative but can be extended if new prefixes
+    are introduced. Operates directly on `st.session_state`.
+    """
+    prefixes = [
+        "m1_", "m2_", "m3_", "m4_", "m5_",
+        "addon_", "wacc_", "scaling_",
+    ]
+    keys_to_clear = [k for k in list(st.session_state.keys()) if any(k.startswith(p) for p in prefixes)]
+    for k in keys_to_clear:
+        try:
+            del st.session_state[k]
+        except Exception:
+            # Ignore if already removed concurrently
+            pass
+
+
+def get_config_value(module_key: str, param_key: str, default: Any):
+    """Read a configuration value from `ui_config` with fallback to `default`.
+
+    If the stored config contains `None` for the parameter, the `default` is
+    returned so widgets initialize with baseline values.
+    """
+    ui = st.session_state.get("ui_config", {})
+    module = ui.get(module_key, {}) if isinstance(ui, dict) else {}
+    val = module.get(param_key) if isinstance(module, dict) else None
+    return default if val is None else val
 
 
 # =============================================================================

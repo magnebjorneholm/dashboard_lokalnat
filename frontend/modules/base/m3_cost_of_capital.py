@@ -20,6 +20,7 @@ from calculations.wacc_calculations import (
     BASELINE_WACC,
 )
 from frontend.common.formatting import format_percent
+from frontend.utils.state_manager import get_config_value
 
 MODULE_KEY = "m3_cost_of_capital"
 MODULE_KEY_QA = "m3_quality_adjustments"
@@ -96,7 +97,7 @@ def render_wacc() -> Dict[str, Any]:
     
     # Initialize session state
     if f"{MODULE_KEY}_current_wacc" not in st.session_state:
-        st.session_state[f"{MODULE_KEY}_current_wacc"] = BASELINE_WACC
+        st.session_state[f"{MODULE_KEY}_current_wacc"] = get_config_value(MODULE_KEY, "wacc_override", BASELINE_WACC)
     
     # === INPUT METHOD VIA RADIO ===
     input_method = st.radio(
@@ -124,6 +125,30 @@ def render_wacc() -> Dict[str, Any]:
     current_wacc = st.session_state[f"{MODULE_KEY}_current_wacc"]
     if abs(current_wacc - BASELINE_WACC) > 0.0001:
         config["wacc_override"] = current_wacc
+
+    # Persist current widget values into config so they are restored when loading a case
+    # Read from session_state keys if present and store under module config
+    widget_map = {
+        f"{MODULE_KEY}_debt_ratio": "debt_ratio",
+        f"{MODULE_KEY}_asset_beta": "asset_beta",
+        f"{MODULE_KEY}_risk_free_rate": "risk_free_rate",
+        f"{MODULE_KEY}_market_risk_premium": "market_risk_premium",
+        f"{MODULE_KEY}_credit_risk_premium": "credit_risk_premium",
+        f"{MODULE_KEY}_tax_rate": "tax_rate",
+        f"{MODULE_KEY}_inflation": "inflation",
+        f"{MODULE_KEY}_cost_of_equity": "cost_of_equity",
+        f"{MODULE_KEY}_cost_of_debt": "cost_of_debt",
+        f"{MODULE_KEY}_debt_ratio_derived": "debt_ratio_derived",
+        f"{MODULE_KEY}_tax_rate_derived": "tax_rate_derived",
+        f"{MODULE_KEY}_inflation_derived": "inflation_derived",
+        f"{MODULE_KEY}_direct_wacc": "direct_wacc",
+    }
+
+    for widget_key, param_name in widget_map.items():
+        if widget_key in st.session_state:
+            val = st.session_state.get(widget_key)
+            # store numeric values (or booleans) directly
+            config[param_name] = val
     
     return config
 
@@ -153,7 +178,7 @@ def render_incentive_params() -> Dict[str, Any]:
     with col1:
         enable_quality = st.checkbox(
             "3.3 Quality adjustment",
-            value=BASELINE_INCENTIVE["enable_quality"],
+                value=get_config_value(MODULE_KEY_QA, "enable_quality", BASELINE_INCENTIVE["enable_quality"]),
             key=f"{MODULE_KEY_QA}_enable_quality",
             help="Enable quality (interruption) adjustment"
         )
@@ -163,7 +188,7 @@ def render_incentive_params() -> Dict[str, Any]:
     with col2:
         enable_netloss = st.checkbox(
             "3.4 Network loss",
-            value=BASELINE_INCENTIVE["enable_netloss"],
+                value=get_config_value(MODULE_KEY_QA, "enable_netloss", BASELINE_INCENTIVE["enable_netloss"]),
             key=f"{MODULE_KEY_QA}_enable_netloss",
             help="Enable network loss adjustment"
         )
@@ -173,7 +198,7 @@ def render_incentive_params() -> Dict[str, Any]:
     with col3:
         enable_load = st.checkbox(
             "3.5 Utilization rate",
-            value=BASELINE_INCENTIVE["enable_load"],
+                value=get_config_value(MODULE_KEY_QA, "enable_load", BASELINE_INCENTIVE["enable_load"]),
             key=f"{MODULE_KEY_QA}_enable_load",
             help="Enable utilization rate adjustment"
         )
@@ -275,7 +300,7 @@ def _render_capm_section() -> None:
     with col1:
         debt_ratio = st.number_input(
             "3.1.1 Debt ratio (S)",
-            value=BASELINE_CAPM.debt_ratio,
+            value=get_config_value(MODULE_KEY, "debt_ratio", BASELINE_CAPM.debt_ratio),
             min_value=0.0,
             max_value=0.99,
             step=0.01,
@@ -286,7 +311,7 @@ def _render_capm_section() -> None:
         
         asset_beta = st.number_input(
             "3.1.2 Asset beta",
-            value=BASELINE_CAPM.asset_beta,
+            value=get_config_value(MODULE_KEY, "asset_beta", BASELINE_CAPM.asset_beta),
             min_value=0.0,
             max_value=2.0,
             step=0.01,
@@ -297,7 +322,7 @@ def _render_capm_section() -> None:
         
         risk_free_rate = st.number_input(
             "3.1.3 Risk-free rate (Rf)",
-            value=BASELINE_CAPM.risk_free_rate,
+            value=get_config_value(MODULE_KEY, "risk_free_rate", BASELINE_CAPM.risk_free_rate),
             min_value=0.0,
             max_value=0.20,
             step=0.001,
@@ -308,7 +333,7 @@ def _render_capm_section() -> None:
         
         market_risk_premium = st.number_input(
             "3.1.4 Market risk premium",
-            value=BASELINE_CAPM.market_risk_premium,
+            value=get_config_value(MODULE_KEY, "market_risk_premium", BASELINE_CAPM.market_risk_premium),
             min_value=0.0,
             max_value=0.20,
             step=0.001,
@@ -320,7 +345,7 @@ def _render_capm_section() -> None:
     with col2:
         credit_risk_premium = st.number_input(
             "3.1.5 Credit risk premium",
-            value=BASELINE_CAPM.credit_risk_premium,
+            value=get_config_value(MODULE_KEY, "credit_risk_premium", BASELINE_CAPM.credit_risk_premium),
             min_value=0.0,
             max_value=0.10,
             step=0.001,
@@ -331,7 +356,7 @@ def _render_capm_section() -> None:
         
         tax_rate = st.number_input(
             "3.1.6 Corporate tax rate (τ)",
-            value=BASELINE_CAPM.tax_rate,
+            value=get_config_value(MODULE_KEY, "tax_rate", BASELINE_CAPM.tax_rate),
             min_value=0.0,
             max_value=0.50,
             step=0.001,
@@ -342,7 +367,7 @@ def _render_capm_section() -> None:
         
         inflation = st.number_input(
             "3.1.7 Inflation (π)",
-            value=BASELINE_CAPM.inflation,
+            value=get_config_value(MODULE_KEY, "inflation", BASELINE_CAPM.inflation),
             min_value=-0.05,
             max_value=0.20,
             step=0.001,
@@ -400,7 +425,7 @@ def _render_derived_section() -> None:
     with col1:
         cost_of_equity = st.number_input(
             "3.2.1 Cost of equity (Re)",
-            value=BASELINE_DERIVED["cost_of_equity_nominal"],
+            value=get_config_value(MODULE_KEY, "cost_of_equity", BASELINE_DERIVED["cost_of_equity_nominal"]),
             min_value=0.0,
             max_value=0.30,
             step=0.001,
@@ -411,7 +436,7 @@ def _render_derived_section() -> None:
         
         cost_of_debt = st.number_input(
             "3.2.2 Cost of debt (Rd)",
-            value=BASELINE_DERIVED["cost_of_debt_nominal"],
+            value=get_config_value(MODULE_KEY, "cost_of_debt", BASELINE_DERIVED["cost_of_debt_nominal"]),
             min_value=0.0,
             max_value=0.20,
             step=0.001,
@@ -422,7 +447,7 @@ def _render_derived_section() -> None:
         
         debt_ratio = st.number_input(
             "3.2.3 Debt ratio (S)",
-            value=BASELINE_DERIVED["debt_ratio"],
+            value=get_config_value(MODULE_KEY, "debt_ratio_derived", BASELINE_DERIVED["debt_ratio"]),
             min_value=0.0,
             max_value=0.99,
             step=0.01,
@@ -434,7 +459,7 @@ def _render_derived_section() -> None:
     with col2:
         tax_rate = st.number_input(
             "3.2.4 Tax rate (τ)",
-            value=BASELINE_DERIVED["tax_rate"],
+            value=get_config_value(MODULE_KEY, "tax_rate_derived", BASELINE_DERIVED["tax_rate"]),
             min_value=0.0,
             max_value=0.50,
             step=0.001,
@@ -445,7 +470,7 @@ def _render_derived_section() -> None:
         
         inflation = st.number_input(
             "3.2.5 Inflation (π)",
-            value=BASELINE_DERIVED["inflation"],
+            value=get_config_value(MODULE_KEY, "inflation_derived", BASELINE_DERIVED["inflation"]),
             min_value=-0.05,
             max_value=0.20,
             step=0.001,
@@ -479,7 +504,7 @@ def _render_direct_section() -> None:
     
     direct_wacc = st.number_input(
         "WACC (real, pre-tax)",
-        value=BASELINE_WACC,
+        value=get_config_value(MODULE_KEY, "direct_wacc", BASELINE_WACC),
         min_value=0.01,
         max_value=0.15,
         step=0.0001,
@@ -509,7 +534,7 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
         "Max CEMI4 adjustment",
         min_value=0.0,
         max_value=1.0,
-        value=BASELINE_INCENTIVE["adj_max_cemi4"],
+            value=get_config_value(MODULE_KEY_QA, "adj_max_cemi4", BASELINE_INCENTIVE["adj_max_cemi4"]),
         step=0.05,
         format="%.2f",
         key=f"{MODULE_KEY_QA}_adj_max_cemi4",
@@ -571,7 +596,7 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
             "Sharing factor",
             min_value=0.0,
             max_value=1.0,
-            value=BASELINE_INCENTIVE["sharing_netloss"],
+            value=get_config_value(MODULE_KEY_QA, "sharing_netloss", BASELINE_INCENTIVE["sharing_netloss"]),
             step=0.05,
             format="%.2f",
             key=f"{MODULE_KEY_QA}_sharing_netloss",
@@ -613,7 +638,7 @@ def _render_caps_section(config: Dict[str, Any]) -> None:
         "Max total per year",
         min_value=0.0,
         max_value=1.0,
-        value=BASELINE_INCENTIVE["adj_max_agg"],
+        value=get_config_value(MODULE_KEY_QA, "adj_max_agg", BASELINE_INCENTIVE["adj_max_agg"]),
         step=0.05,
         format="%.3f",
         key=f"{MODULE_KEY_QA}_adj_max_agg",
@@ -651,7 +676,7 @@ def _render_kpi_section(config: Dict[str, Any]) -> None:
 
 def _create_cost_dataframe(cost_type: str) -> pd.DataFrame:
     """Create DataFrame for AIT/AIF costs."""
-    baseline = BASELINE_INCENTIVE[f"{cost_type}_costs"]
+    baseline = get_config_value(MODULE_KEY_QA, f"{cost_type}_costs", BASELINE_INCENTIVE[f"{cost_type}_costs"])
     
     data = []
     for sni, label in SNI_LABELS.items():
@@ -682,7 +707,7 @@ def _dataframe_to_cost_dict(df: pd.DataFrame, cost_type: str) -> Dict[str, float
 
 def _create_yearly_dataframe(param_key: str, column_name: str) -> pd.DataFrame:
     """Create DataFrame for per-year parameters."""
-    baseline = BASELINE_INCENTIVE[param_key]
+    baseline = get_config_value(MODULE_KEY_QA, param_key, BASELINE_INCENTIVE[param_key])
     
     data = []
     for year in [2024, 2025, 2026, 2027]:

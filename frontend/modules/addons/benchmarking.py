@@ -12,6 +12,7 @@ import streamlit as st
 from typing import Dict, Any, List
 
 from frontend.common.formulas import FORMULA_OUTLIER_THRESHOLD
+from frontend.utils.state_manager import get_config_value
 
 MODULE_KEY = "addon_benchmarking"
 
@@ -57,14 +58,14 @@ def render_dea_spec() -> Dict[str, Any]:
         - dea_q_lower: Lower percentile
         - dea_q_upper: Upper percentile
     """
-    # Initialize config with baseline values
+    # Initialize config with baseline values (can be overridden by ui_config)
     config: Dict[str, Any] = {
-        "dea_inputs": BASELINE_INPUTS.copy(),
-        "dea_outputs": BASELINE_OUTPUTS.copy(),
-        "dea_rts": BASELINE_RTS,
-        "dea_multiplier": BASELINE_MULTIPLIER,
-        "dea_q_lower": BASELINE_Q_LOWER,
-        "dea_q_upper": BASELINE_Q_UPPER,
+        "dea_inputs": get_config_value(MODULE_KEY, "dea_inputs", BASELINE_INPUTS.copy()),
+        "dea_outputs": get_config_value(MODULE_KEY, "dea_outputs", BASELINE_OUTPUTS.copy()),
+        "dea_rts": get_config_value(MODULE_KEY, "dea_rts", BASELINE_RTS),
+        "dea_multiplier": get_config_value(MODULE_KEY, "dea_multiplier", BASELINE_MULTIPLIER),
+        "dea_q_lower": get_config_value(MODULE_KEY, "dea_q_lower", BASELINE_Q_LOWER),
+        "dea_q_upper": get_config_value(MODULE_KEY, "dea_q_upper", BASELINE_Q_UPPER),
     }
     
     st.markdown("### 7. Add-on: Benchmarking - DEA Specification")
@@ -97,7 +98,7 @@ def render_dea_spec() -> Dict[str, Any]:
         dea_inputs = st.multiselect(
             "Inputs",
             options=DEA_INPUT_OPTIONS,
-            default=BASELINE_INPUTS,
+            default=get_config_value(MODULE_KEY, "dea_inputs", BASELINE_INPUTS),
             key=f"{MODULE_KEY}_inputs",
             help="Cost measures used as DEA inputs"
         )
@@ -108,7 +109,7 @@ def render_dea_spec() -> Dict[str, Any]:
         dea_outputs = st.multiselect(
             "Outputs",
             options=DEA_OUTPUT_OPTIONS,
-            default=BASELINE_OUTPUTS,
+            default=get_config_value(MODULE_KEY, "dea_outputs", BASELINE_OUTPUTS),
             key=f"{MODULE_KEY}_outputs",
             help="Service measures used as DEA outputs"
         )
@@ -118,10 +119,11 @@ def render_dea_spec() -> Dict[str, Any]:
         
         # Returns to scale
         st.markdown("**Returns to scale**")
+        current_rts = get_config_value(MODULE_KEY, "dea_rts", BASELINE_RTS)
         rts = st.radio(
             "RTS assumption",
             options=["crs", "vrs"],
-            index=0 if BASELINE_RTS == "crs" else 1,
+            index=0 if current_rts == "crs" else 1,
             key=f"{MODULE_KEY}_rts",
             horizontal=True,
             help="CRS: Constant returns to scale. VRS: Variable returns to scale."
@@ -138,7 +140,7 @@ def render_dea_spec() -> Dict[str, Any]:
         with col1:
             q_lower = st.number_input(
                 "Lower percentile (Q_lower)",
-                value=BASELINE_Q_LOWER,
+                value=get_config_value(MODULE_KEY, "dea_q_lower", BASELINE_Q_LOWER),
                 min_value=0.0,
                 max_value=50.0,
                 step=5.0,
@@ -150,7 +152,7 @@ def render_dea_spec() -> Dict[str, Any]:
         with col2:
             q_upper = st.number_input(
                 "Upper percentile (Q_upper)",
-                value=BASELINE_Q_UPPER,
+                value=get_config_value(MODULE_KEY, "dea_q_upper", BASELINE_Q_UPPER),
                 min_value=50.0,
                 max_value=100.0,
                 step=5.0,
@@ -162,7 +164,7 @@ def render_dea_spec() -> Dict[str, Any]:
         # 5.1.1 IQR multiplier
         multiplier = st.number_input(
             "5.1.1 IQR multiplier",
-            value=BASELINE_MULTIPLIER,
+            value=get_config_value(MODULE_KEY, "dea_multiplier", BASELINE_MULTIPLIER),
             min_value=1.0,
             max_value=5.0,
             step=0.5,

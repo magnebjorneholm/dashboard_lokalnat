@@ -31,6 +31,7 @@ from frontend.common.module_registry import (
     ALL_MODULES,
     build_selection_key,
 )
+from frontend.utils.state_manager import _clear_config_widget_keys
 
 # Firestore imports
 try:
@@ -523,6 +524,13 @@ def apply_case_to_session(
                      if k.startswith("module_select_") or k.startswith("section_select_")]
     for key in keys_to_clear:
         del session_state[key]
+
+    # Clear config widget keys so widgets reinitialize from ui_config
+    try:
+        _clear_config_widget_keys()
+    except Exception:
+        # Best-effort: if st.session_state isn't available, continue
+        pass
     
     # Set module and section checkbox states
     for module in ALL_MODULES:

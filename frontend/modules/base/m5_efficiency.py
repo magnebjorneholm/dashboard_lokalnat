@@ -17,6 +17,7 @@ from calculations.effektiviseringskrav import (
     get_max_effkrav,
     calculate_trunkering_min_from_outlier_krav,
 )
+from frontend.utils.state_manager import get_config_value
 
 MODULE_KEY = "m5_efficiency"
 
@@ -90,7 +91,7 @@ def render_efficiency_params() -> Dict[str, Any]:
             module_key=MODULE_KEY,
             param_id="5.2.1",
             label="Maximum efficiency potential cap",
-            baseline=BASELINE_MAX_POTENTIAL,
+            baseline=get_config_value(MODULE_KEY, "trunkering_max", BASELINE_MAX_POTENTIAL),
             min_val=critical_potential,
             max_val=1.0,
             step=0.01,
@@ -113,7 +114,7 @@ def render_efficiency_params() -> Dict[str, Any]:
             module_key=MODULE_KEY,
             param_id="5.2.2",
             label="Realization time",
-            baseline=float(BASELINE_REALIZATION_TIME),
+            baseline=get_config_value(MODULE_KEY, "realiseringstid", float(BASELINE_REALIZATION_TIME)),
             min_val=1.0,
             max_val=20.0,
             step=1.0,
@@ -130,7 +131,7 @@ def render_efficiency_params() -> Dict[str, Any]:
             module_key=MODULE_KEY,
             param_id="5.2.3",
             label="Customer sharing factor",
-            baseline=BASELINE_CUSTOMER_SHARING,
+            baseline=get_config_value(MODULE_KEY, "kunddelning", BASELINE_CUSTOMER_SHARING),
             min_val=0.01,
             max_val=1.0,
             step=0.05,
@@ -150,7 +151,7 @@ def render_efficiency_params() -> Dict[str, Any]:
             module_key=MODULE_KEY,
             param_id="5.3.1",
             label="Minimum annual efficiency requirement",
-            baseline=BASELINE_MIN_REQUIREMENT,
+            baseline=get_config_value(MODULE_KEY, "outlier_krav", BASELINE_MIN_REQUIREMENT),
             min_val=0.0,
             max_val=0.10,
             step=0.001,
@@ -207,11 +208,24 @@ def render_efficiency_params() -> Dict[str, Any]:
             param_id="5.4.1",
             label="Apply efficiency requirement to",
             options=["OPEX", "TOTEX"],
-            baseline="OPEX",
+            baseline=get_config_value(MODULE_KEY, "paverkbara_method", "OPEX"),
             help_text="OPEX: adjustable costs. TOTEX: includes capital costs."
         )
         
         if method_changed:
             config["paverkbara_method"] = method
     
+    # Ensure current widget values are included so they persist when saving/loading cases
+    widget_map = {
+        f"{MODULE_KEY}_input_5.2.1": "trunkering_max",
+        f"{MODULE_KEY}_input_5.2.2": "realiseringstid",
+        f"{MODULE_KEY}_input_5.2.3": "kunddelning",
+        f"{MODULE_KEY}_input_5.3.1": "outlier_krav",
+        f"{MODULE_KEY}_select_5.4.1": "paverkbara_method",
+    }
+    for wkey, pname in widget_map.items():
+        if wkey in st.session_state:
+            config[pname] = st.session_state.get(wkey)
+
     return config
+    
