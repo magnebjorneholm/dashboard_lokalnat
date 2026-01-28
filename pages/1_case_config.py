@@ -79,12 +79,12 @@ def _render_not_selected_message():
 
 
 tab_labels = [
-    _tab_label("m1", "M1 Regulatory asset base valuation"),
-    _tab_label("m2", "M2 Depreciation"),
-    _tab_label("m3", "M3 Cost of Capital"),
-    _tab_label("m4", "M4 Operating expenditures"),
-    _tab_label("m5", "M5 Efficiency incentive"),
-    _tab_label("m7", "M7 Benchmarking"),
+    _tab_label("m1", "Regulatory asset base valuation"),
+    _tab_label("m2", "Depreciation"),
+    _tab_label("m3", "Cost of Capital"),
+    _tab_label("m4", "Operating expenditures"),
+    _tab_label("m5", "Efficiency incentive"),
+    _tab_label("m7", "Benchmarking"),
 ]
 
 tabs = st.tabs(tab_labels)
@@ -98,6 +98,8 @@ with tabs[0]:
     if not is_module_selected("m1"):
         _render_not_selected_message()
     else:
+        st.markdown("#### 1. Regulatory Asset Base")
+        
         # Section: Scaling factors (1.1, 1.2)
         if is_section_selected("m1", "scaling"):
             scaling_config = m1_asset_base.render_scaling(user_id_network=user_id_network)
@@ -130,6 +132,8 @@ with tabs[1]:
     if not is_module_selected("m2"):
         _render_not_selected_message()
     else:
+        st.markdown("#### 2. Depreciation")
+        
         if is_section_selected("m2", "lifetimes"):
             config = m2_depreciation.render_lifetimes()
             set_module_config("m2_depreciation", config)
@@ -143,6 +147,8 @@ with tabs[2]:
     if not is_module_selected("m3"):
         _render_not_selected_message()
     else:
+        st.markdown("#### 3. Cost of Capital")
+        
         # Section: WACC (3.1-3.2)
         if is_section_selected("m3", "wacc"):
             config = m3_cost_of_capital.render_wacc()
@@ -167,6 +173,8 @@ with tabs[3]:
     if not is_module_selected("m4"):
         _render_not_selected_message()
     else:
+        st.markdown("#### 4. Operating Expenditures")
+        
         # Section: OPEX scaling (4.1)
         if is_section_selected("m4", "scaling"):
             config = m4_operating_exp.render_scaling()
@@ -188,6 +196,8 @@ with tabs[4]:
     if not is_module_selected("m5"):
         _render_not_selected_message()
     else:
+        st.markdown("#### 5. Efficiency Incentive")
+        
         if is_section_selected("m5", "efficiency_params"):
             config = m5_efficiency.render_efficiency_params()
             set_module_config("m5_efficiency", config)
@@ -201,6 +211,8 @@ with tabs[5]:
     if not is_module_selected("m7"):
         _render_not_selected_message()
     else:
+        st.markdown("#### 7. Benchmarking")
+        
         if is_section_selected("m7", "dea_spec"):
             config = benchmarking.render_dea_spec()
             set_module_config("addon_benchmarking", config)

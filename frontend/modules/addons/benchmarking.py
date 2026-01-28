@@ -68,7 +68,6 @@ def render_dea_spec() -> Dict[str, Any]:
         "dea_q_upper": get_config_value(MODULE_KEY, "dea_q_upper", BASELINE_Q_UPPER),
     }
     
-    st.markdown("### 7. Add-on: Benchmarking - DEA Specification")
     st.caption("Configure efficiency analysis model")
     
     # === METHOD SELECTION ===

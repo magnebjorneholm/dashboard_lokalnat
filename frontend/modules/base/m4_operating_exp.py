@@ -25,7 +25,6 @@ def render_scaling() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 4. Operating Expenditures - Scaling Parameters")
     st.caption("Parameters 4.1.X: OPEX scaling factors")
     
     with st.expander("4.1 General scaling parameters", expanded=False):
@@ -48,7 +47,6 @@ def render_opex_vars() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 4. Operating Expenditures - Variables")
     st.caption("Variables 40.X: Company-specific OPEX inputs")
     
     with st.expander("40.X OPEX variables", expanded=False):

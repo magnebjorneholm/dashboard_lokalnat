@@ -30,7 +30,6 @@ def render_lifetimes(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, A
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 2. Depreciation - Asset Lifetimes")
     st.caption("Parameters 2.X.1-2.X.2: Ordinary lifetime and tail period by category")
     
     with st.expander("2.1-2.17 Asset lifetimes", expanded=False):
@@ -61,7 +60,7 @@ def render_lifetimes(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, A
         elif adjustments:
             config["lifetime_adjustments"] = adjustments
             config["lifetime_level"] = level_used
-            st.caption(f":orange[Modified] — {len(adjustments)} lifetime adjustment(s)")
+            st.caption(f":orange[Modified] â€” {len(adjustments)} lifetime adjustment(s)")
     
     return config
 

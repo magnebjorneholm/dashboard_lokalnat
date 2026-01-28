@@ -47,7 +47,6 @@ def render_scaling(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 1. Regulatory Asset Base - Scaling Factors")
     st.caption("Parameters affecting all companies uniformly.")
     
     # === 1.1 GENERAL SCALING FACTOR ===
@@ -74,7 +73,6 @@ def render_quantities(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 1. Regulatory Asset Base - Asset Quantities")
     st.caption("Variables affecting your company only.")
     
     if not user_id_network:
@@ -106,7 +104,6 @@ def render_kent(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 1. Regulatory Asset Base - KENT Upload")
     st.caption("Upload custom capital base data. Overrides quantity scaling.")
     
     if not user_id_network:
@@ -189,7 +186,7 @@ def _render_general_scaling() -> float:
         
         if abs(value - GENERAL_SCALING_FACTOR_BASELINE) > 1e-9:
             pct = (value - 1) * 100
-            st.caption(f":orange[Modified] ({pct:+.0f}%) — baseline: {GENERAL_SCALING_FACTOR_BASELINE:.2f}")
+            st.caption(f":orange[Modified] ({pct:+.0f}%) â€” baseline: {GENERAL_SCALING_FACTOR_BASELINE:.2f}")
     
     return value
 
@@ -258,7 +255,7 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
                 adjustments[int(row['cat_encode'])] = float(row['Scaling'])
         
         if adjustments:
-            st.caption(f":orange[Modified] — {len(adjustments)} category scaling adjustment(s)")
+            st.caption(f":orange[Modified] â€” {len(adjustments)} category scaling adjustment(s)")
         
         return adjustments if adjustments else None
 
@@ -352,7 +349,7 @@ def _render_variables_scaling(
                 adjustments[int(row['cat_encode'])] = float(row['Scaling'])
         
         if adjustments:
-            st.caption(f":orange[Modified] — {len(adjustments)} variable scaling adjustment(s)")
+            st.caption(f":orange[Modified] â€” {len(adjustments)} variable scaling adjustment(s)")
         
         return adjustments if adjustments else None
 
@@ -457,7 +454,7 @@ def _render_kent_upload() -> Dict[str, Any]:
         if uploaded_file is not None:
             result["kent_file_bytes"] = uploaded_file.getvalue()
             result["kent_file_name"] = uploaded_file.name
-            st.caption(f":orange[Modified] — KENT file: {uploaded_file.name}")
+            st.caption(f":orange[Modified] â€” KENT file: {uploaded_file.name}")
             st.info(
                 "KENT file will be used for capital base calculations. "
                 "Parameter scaling factors (1.1, 1.2) still apply."

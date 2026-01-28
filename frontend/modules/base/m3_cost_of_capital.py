@@ -30,11 +30,11 @@ BASELINE_CAPM = CAPMInputs()
 
 # Baseline derived parameters (calculated from CAPM baseline)
 BASELINE_DERIVED = {
-    "cost_of_equity_nominal": 0.0645,   # Re: Rf + βₑ × MRP
+    "cost_of_equity_nominal": 0.0645,   # Re: Rf + Î²â‚‘ Ã— MRP
     "cost_of_debt_nominal": 0.0401,     # Rd: Rf + credit spread
     "debt_ratio": 0.36,                  # S: debt ratio
-    "tax_rate": 0.206,                   # τ: corporate tax
-    "inflation": 0.0202,                 # π: CPIF
+    "tax_rate": 0.206,                   # Ï„: corporate tax
+    "inflation": 0.0202,                 # Ï€: CPIF
     "wacc_nominal_pre_tax": 0.0664,      # WACC nominal
     "wacc_real_pre_tax": BASELINE_WACC,  # 0.0453
 }
@@ -43,10 +43,10 @@ BASELINE_DERIVED = {
 SNI_LABELS = {
     1: "Jordbruk",
     2: "Industri",
-    3: "Handel/tjänster",
+    3: "Handel/tjÃ¤nster",
     4: "Offentlig verksamhet",
-    5: "Hushåll",
-    6: "Gränspunkt",
+    5: "HushÃ¥ll",
+    6: "GrÃ¤nspunkt",
 }
 
 # Baseline values for incentive parameters
@@ -84,7 +84,7 @@ def render_wacc() -> Dict[str, Any]:
     
     Three input methods via radio button:
     1. CAPM components - calculate from base parameters
-    2. Derived parameters - modify Re, Rd, S, τ, π directly
+    2. Derived parameters - modify Re, Rd, S, Ï„, Ï€ directly
     3. Direct input - enter WACC directly
     
     Returns:
@@ -92,7 +92,6 @@ def render_wacc() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 3. Cost of Capital - WACC Parameters")
     st.caption("Parameters 3.1-3.2: Base WACC calculation")
     
     # Initialize session state
@@ -169,7 +168,6 @@ def render_incentive_params() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 3. Cost of Capital - Incentive Parameters")
     st.caption("Parameters 3.3-3.6: Quality and incentive adjustments")
     
     # Enable/disable toggles
@@ -241,9 +239,9 @@ def _calculate_wacc_from_derived(
     Calculate WACC from derived parameters.
     
     Formulas:
-        WACC_nom_after_tax = (1 - S) × Re + S × Rd × (1 - τ)
-        WACC_nom_pre_tax   = WACC_nom_after_tax / (1 - τ)
-        WACC_real          = (1 + WACC_nom_pre_tax) / (1 + π) - 1
+        WACC_nom_after_tax = (1 - S) Ã— Re + S Ã— Rd Ã— (1 - Ï„)
+        WACC_nom_pre_tax   = WACC_nom_after_tax / (1 - Ï„)
+        WACC_real          = (1 + WACC_nom_pre_tax) / (1 + Ï€) - 1
     """
     wacc_nominal_after_tax = (
         (1 - debt_ratio) * cost_of_equity + 
@@ -355,7 +353,7 @@ def _render_capm_section() -> None:
         )
         
         tax_rate = st.number_input(
-            "3.1.6 Corporate tax rate (τ)",
+            "3.1.6 Corporate tax rate (Ï„)",
             value=get_config_value(MODULE_KEY, "tax_rate", BASELINE_CAPM.tax_rate),
             min_value=0.0,
             max_value=0.50,
@@ -366,7 +364,7 @@ def _render_capm_section() -> None:
         )
         
         inflation = st.number_input(
-            "3.1.7 Inflation (π)",
+            "3.1.7 Inflation (Ï€)",
             value=get_config_value(MODULE_KEY, "inflation", BASELINE_CAPM.inflation),
             min_value=-0.05,
             max_value=0.20,
@@ -458,7 +456,7 @@ def _render_derived_section() -> None:
     
     with col2:
         tax_rate = st.number_input(
-            "3.2.4 Tax rate (τ)",
+            "3.2.4 Tax rate (Ï„)",
             value=get_config_value(MODULE_KEY, "tax_rate_derived", BASELINE_DERIVED["tax_rate"]),
             min_value=0.0,
             max_value=0.50,
@@ -469,7 +467,7 @@ def _render_derived_section() -> None:
         )
         
         inflation = st.number_input(
-            "3.2.5 Inflation (π)",
+            "3.2.5 Inflation (Ï€)",
             value=get_config_value(MODULE_KEY, "inflation_derived", BASELINE_DERIVED["inflation"]),
             min_value=-0.05,
             max_value=0.20,

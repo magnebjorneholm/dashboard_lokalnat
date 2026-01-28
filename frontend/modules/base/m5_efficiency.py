@@ -64,7 +64,6 @@ def render_efficiency_params() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.markdown("### 5. Efficiency Incentive - Parameters")
     st.caption("Parameters 5.1-5.4: Efficiency requirement calculation")
     
     with st.expander("Parameters", expanded=False):
