@@ -87,104 +87,88 @@ def render_dea_spec() -> Dict[str, Any]:
         return config
     
     # === DEA CONFIGURATION ===
-    with st.expander("DEA specification", expanded=False):
-        st.caption(
-            "Configure DEA model. Changes trigger new DEA analysis at calculation time."
+    st.caption(
+        "Configure DEA model. Changes trigger new DEA analysis at calculation time."
+    )
+    
+    dea_inputs = st.multiselect(
+        "Input variables",
+        options=DEA_INPUT_OPTIONS,
+        default=get_config_value(MODULE_KEY, "dea_inputs", BASELINE_INPUTS),
+        key=f"{MODULE_KEY}_inputs",
+        help="Cost measures used as DEA inputs"
+    )
+    config["dea_inputs"] = dea_inputs if dea_inputs else BASELINE_INPUTS
+    
+    dea_outputs = st.multiselect(
+        "Output variables",
+        options=DEA_OUTPUT_OPTIONS,
+        default=get_config_value(MODULE_KEY, "dea_outputs", BASELINE_OUTPUTS),
+        key=f"{MODULE_KEY}_outputs",
+        help="Service measures used as DEA outputs"
+    )
+    config["dea_outputs"] = dea_outputs if dea_outputs else BASELINE_OUTPUTS
+    
+    st.divider()
+    
+    # Returns to scale
+    st.markdown("**Returns to scale**")
+    current_rts = get_config_value(MODULE_KEY, "dea_rts", BASELINE_RTS)
+    rts = st.radio(
+        "RTS assumption",
+        options=["crs", "vrs"],
+        index=0 if current_rts == "crs" else 1,
+        key=f"{MODULE_KEY}_rts",
+        horizontal=True,
+        help="CRS: Constant returns to scale. VRS: Variable returns to scale."
+    )
+    config["dea_rts"] = rts
+    
+    st.divider()
+    
+    # Outlier identification
+    st.markdown("**5.1.1 Outlier identification**")
+    st.latex(FORMULA_OUTLIER_THRESHOLD)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        q_lower = st.number_input(
+            "Lower percentile (Q_lower)",
+            value=get_config_value(MODULE_KEY, "dea_q_lower", BASELINE_Q_LOWER),
+            min_value=0.0,
+            max_value=50.0,
+            step=5.0,
+            key=f"{MODULE_KEY}_q_lower",
+            help="Lower bound for IQR calculation (baseline: 25)"
         )
-        
-        # Input variables
-        st.markdown("**Input variables**")
-        dea_inputs = st.multiselect(
-            "Inputs",
-            options=DEA_INPUT_OPTIONS,
-            default=get_config_value(MODULE_KEY, "dea_inputs", BASELINE_INPUTS),
-            key=f"{MODULE_KEY}_inputs",
-            help="Cost measures used as DEA inputs"
+        config["dea_q_lower"] = q_lower
+    
+    with col2:
+        q_upper = st.number_input(
+            "Upper percentile (Q_upper)",
+            value=get_config_value(MODULE_KEY, "dea_q_upper", BASELINE_Q_UPPER),
+            min_value=50.0,
+            max_value=100.0,
+            step=5.0,
+            key=f"{MODULE_KEY}_q_upper",
+            help="Upper bound for IQR calculation (baseline: 75)"
         )
-        config["dea_inputs"] = dea_inputs if dea_inputs else BASELINE_INPUTS
-        
-        # Output variables
-        st.markdown("**Output variables**")
-        dea_outputs = st.multiselect(
-            "Outputs",
-            options=DEA_OUTPUT_OPTIONS,
-            default=get_config_value(MODULE_KEY, "dea_outputs", BASELINE_OUTPUTS),
-            key=f"{MODULE_KEY}_outputs",
-            help="Service measures used as DEA outputs"
-        )
-        config["dea_outputs"] = dea_outputs if dea_outputs else BASELINE_OUTPUTS
-        
-        st.divider()
-        
-        # Returns to scale
-        st.markdown("**Returns to scale**")
-        current_rts = get_config_value(MODULE_KEY, "dea_rts", BASELINE_RTS)
-        rts = st.radio(
-            "RTS assumption",
-            options=["crs", "vrs"],
-            index=0 if current_rts == "crs" else 1,
-            key=f"{MODULE_KEY}_rts",
-            horizontal=True,
-            help="CRS: Constant returns to scale. VRS: Variable returns to scale."
-        )
-        config["dea_rts"] = rts
-        
-        st.divider()
-        
-        # Outlier identification
-        st.markdown("**5.1.1 Outlier identification**")
-        st.latex(FORMULA_OUTLIER_THRESHOLD)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            q_lower = st.number_input(
-                "Lower percentile (Q_lower)",
-                value=get_config_value(MODULE_KEY, "dea_q_lower", BASELINE_Q_LOWER),
-                min_value=0.0,
-                max_value=50.0,
-                step=5.0,
-                key=f"{MODULE_KEY}_q_lower",
-                help="Lower bound for IQR calculation (baseline: 25)"
-            )
-            config["dea_q_lower"] = q_lower
-        
-        with col2:
-            q_upper = st.number_input(
-                "Upper percentile (Q_upper)",
-                value=get_config_value(MODULE_KEY, "dea_q_upper", BASELINE_Q_UPPER),
-                min_value=50.0,
-                max_value=100.0,
-                step=5.0,
-                key=f"{MODULE_KEY}_q_upper",
-                help="Upper bound for IQR calculation (baseline: 75)"
-            )
-            config["dea_q_upper"] = q_upper
-        
-        # 5.1.1 IQR multiplier
-        multiplier = st.number_input(
-            "5.1.1 IQR multiplier",
-            value=get_config_value(MODULE_KEY, "dea_multiplier", BASELINE_MULTIPLIER),
-            min_value=1.0,
-            max_value=5.0,
-            step=0.5,
-            key=f"{MODULE_KEY}_multiplier",
-            help="Threshold = Q_upper + multiplier x IQR (baseline: 2.0)"
-        )
-        config["dea_multiplier"] = multiplier
-        
-        # Set method based on config
-        is_baseline = is_baseline_dea_config(config)
-        config["dea_method"] = "baseline" if is_baseline else "custom"
-        
-        # === SUMMARY ===
-        st.divider()
-        st.markdown("**Summary**")
-        st.code(f"""Inputs:  {', '.join(config['dea_inputs'])}
-Outputs: {', '.join(config['dea_outputs'])}
-RTS:     {config['dea_rts'].upper()}
-Outlier: Q{config['dea_q_lower']:.0f}-Q{config['dea_q_upper']:.0f}, multiplier={config['dea_multiplier']:.1f}""")
-        
-        if not is_baseline:
-            st.warning("Custom configuration - new DEA will be computed")
+        config["dea_q_upper"] = q_upper
+    
+    # 5.1.1 IQR multiplier
+    multiplier = st.number_input(
+        "5.1.1 IQR multiplier",
+        value=get_config_value(MODULE_KEY, "dea_multiplier", BASELINE_MULTIPLIER),
+        min_value=1.0,
+        max_value=5.0,
+        step=0.5,
+        key=f"{MODULE_KEY}_multiplier",
+        help="Threshold = Q_upper + multiplier x IQR (baseline: 2.0)"
+    )
+    config["dea_multiplier"] = multiplier
+    
+    # Set method based on config
+    is_baseline = is_baseline_dea_config(config)
+    config["dea_method"] = "baseline" if is_baseline else "custom"
     
     return config

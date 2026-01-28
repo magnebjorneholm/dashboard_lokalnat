@@ -219,7 +219,7 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
     
     edited_df = st.data_editor(
         df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="fixed",
         disabled=['cat_encode', 'Category', 'Param-ID'],
@@ -308,7 +308,7 @@ def _render_variables_scaling(
     
     edited_df = st.data_editor(
         summary_df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="fixed",
         disabled=['cat_encode', 'Category', 'Var-ID', 'Components', 'NUAV (Mkr)'],

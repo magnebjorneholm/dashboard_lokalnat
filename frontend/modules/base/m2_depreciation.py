@@ -97,7 +97,7 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str, Opti
     
     edited_df = st.data_editor(
         display_df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="fixed",
         disabled=['Param-ID', 'Category'],
@@ -171,7 +171,7 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
     
     edited_df = st.data_editor(
         display_df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="fixed",
         disabled=['Subcategory'],
