@@ -197,9 +197,10 @@ def _clear_config_widget_keys() -> None:
     are introduced. Operates directly on `st.session_state`.
     """
     prefixes = [
-        "m1_", "m2_", "m3_", "m4_", "m5_",
-        "addon_", "wacc_", "scaling_",
+    "m1_", "m2_", "m3_", "m4_", "m5_", "m5_eff_",
+    "addon_", "wacc_", "scaling_",
     ]
+
     keys_to_clear = [k for k in list(st.session_state.keys()) if any(k.startswith(p) for p in prefixes)]
     for k in keys_to_clear:
         try:
