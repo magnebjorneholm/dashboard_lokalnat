@@ -61,7 +61,7 @@ def render_lifetimes(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, A
         elif adjustments:
             config["lifetime_adjustments"] = adjustments
             config["lifetime_level"] = level_used
-            st.success(f"{len(adjustments)} lifetime adjustment(s) active")
+            st.caption(f":orange[Modified] — {len(adjustments)} lifetime adjustment(s)")
     
     return config
 

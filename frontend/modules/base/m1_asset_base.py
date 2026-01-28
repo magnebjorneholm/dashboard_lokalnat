@@ -187,9 +187,9 @@ def _render_general_scaling() -> float:
             help="1.0 = no change, 1.2 = +20%, 0.8 = -20%"
         )
         
-        if value != 1.0:
+        if abs(value - GENERAL_SCALING_FACTOR_BASELINE) > 1e-9:
             pct = (value - 1) * 100
-            st.success(f"General scaling: {value:.2f} ({pct:+.0f}%)")
+            st.caption(f":orange[Modified] ({pct:+.0f}%) — baseline: {GENERAL_SCALING_FACTOR_BASELINE:.2f}")
     
     return value
 
@@ -254,11 +254,11 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
         # Extract non-default values
         adjustments = {}
         for _, row in edited_df.iterrows():
-            if row['Scaling'] != 1.0:
+            if abs(row['Scaling'] - 1.0) > 1e-9:
                 adjustments[int(row['cat_encode'])] = float(row['Scaling'])
         
         if adjustments:
-            st.success(f"{len(adjustments)} category scaling adjustment(s) active")
+            st.caption(f":orange[Modified] — {len(adjustments)} category scaling adjustment(s)")
         
         return adjustments if adjustments else None
 
@@ -348,11 +348,11 @@ def _render_variables_scaling(
         # Extract non-default values
         adjustments = {}
         for _, row in edited_df.iterrows():
-            if row['Scaling'] != 1.0:
+            if abs(row['Scaling'] - 1.0) > 1e-9:
                 adjustments[int(row['cat_encode'])] = float(row['Scaling'])
         
         if adjustments:
-            st.success(f"{len(adjustments)} variable scaling adjustment(s) active")
+            st.caption(f":orange[Modified] — {len(adjustments)} variable scaling adjustment(s)")
         
         return adjustments if adjustments else None
 
@@ -457,7 +457,7 @@ def _render_kent_upload() -> Dict[str, Any]:
         if uploaded_file is not None:
             result["kent_file_bytes"] = uploaded_file.getvalue()
             result["kent_file_name"] = uploaded_file.name
-            st.success(f"KENT file loaded: {uploaded_file.name}")
+            st.caption(f":orange[Modified] — KENT file: {uploaded_file.name}")
             st.info(
                 "KENT file will be used for capital base calculations. "
                 "Parameter scaling factors (1.1, 1.2) still apply."

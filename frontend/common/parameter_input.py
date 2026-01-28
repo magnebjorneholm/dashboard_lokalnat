@@ -17,28 +17,29 @@ def parameter_input(
     param_id: str,
     label: str,
     baseline: float,
+    value: Optional[float] = None,
     unit: str = "",
     min_val: Optional[float] = None,
     max_val: Optional[float] = None,
     step: Optional[float] = None,
+    format_str: Optional[str] = None,
     help_text: str = "",
     format_as_percent: bool = False
 ) -> Tuple[float, bool]:
     """
     Render parameter input with baseline comparison.
     
-    Always displays input field with baseline as default. Returns whether
-    the value differs from baseline.
-    
     Args:
         module_key: Unique key for the module (widget-key prefix)
         param_id: Parameter ID from User Manual (e.g. "3.2.5")
         label: Display name
-        baseline: Baseline value
+        baseline: Baseline value (used for comparison and Modified flag)
+        value: Initial widget value. If None, uses baseline.
         unit: Unit (e.g. "%", "years")
         min_val: Minimum allowed value
         max_val: Maximum allowed value
         step: Step size for input
+        format_str: Display format (e.g. "%.4f" for 4 decimals)
         help_text: Help text
         format_as_percent: If True, format as percentage in help text
     
@@ -46,6 +47,7 @@ def parameter_input(
         Tuple of (current_value, is_changed)
     """
     input_key = f"{module_key}_input_{param_id}"
+    initial_value = value if value is not None else baseline
     
     # Layout: ID | Label | Input | Baseline/Status
     col_id, col_label, col_input, col_baseline = st.columns([1, 2.5, 2, 1.5])
@@ -67,10 +69,11 @@ def parameter_input(
     with col_input:
         current = st.number_input(
             label,
-            value=baseline,
+            value=initial_value,
             min_value=min_val,
             max_value=max_val,
             step=step,
+            format=format_str,
             key=input_key,
             help=help_text,
             label_visibility="collapsed"
@@ -105,6 +108,7 @@ def parameter_select(
     label: str,
     options: list,
     baseline: str,
+    value: Optional[str] = None,
     help_text: str = ""
 ) -> Tuple[str, bool]:
     """
@@ -115,13 +119,15 @@ def parameter_select(
         param_id: Parameter ID from User Manual
         label: Display name
         options: List of selectable options
-        baseline: Baseline option
+        baseline: Baseline option (used for comparison and Modified flag)
+        value: Initial selection. If None, uses baseline.
         help_text: Help text
     
     Returns:
         Tuple of (selected_value, is_changed)
     """
     input_key = f"{module_key}_select_{param_id}"
+    initial_value = value if value is not None else baseline
     
     col_id, col_label, col_input, col_baseline = st.columns([1, 2.5, 2, 1.5])
     
@@ -140,7 +146,7 @@ def parameter_select(
         )
     
     with col_input:
-        default_idx = options.index(baseline) if baseline in options else 0
+        default_idx = options.index(initial_value) if initial_value in options else 0
         selected = st.selectbox(
             label,
             options=options,

@@ -91,7 +91,8 @@ def render_efficiency_params() -> Dict[str, Any]:
             module_key=MODULE_KEY,
             param_id="5.2.1",
             label="Maximum efficiency potential cap",
-            baseline=get_config_value(MODULE_KEY, "trunkering_max", BASELINE_MAX_POTENTIAL),
+            baseline=BASELINE_MAX_POTENTIAL,
+            value=get_config_value(MODULE_KEY, "trunkering_max", BASELINE_MAX_POTENTIAL),
             min_val=critical_potential,
             max_val=1.0,
             step=0.01,
@@ -114,7 +115,8 @@ def render_efficiency_params() -> Dict[str, Any]:
             module_key=MODULE_KEY,
             param_id="5.2.2",
             label="Realization time",
-            baseline=get_config_value(MODULE_KEY, "realiseringstid", float(BASELINE_REALIZATION_TIME)),
+            baseline=float(BASELINE_REALIZATION_TIME),
+            value=get_config_value(MODULE_KEY, "realiseringstid", float(BASELINE_REALIZATION_TIME)),
             min_val=1.0,
             max_val=20.0,
             step=1.0,
@@ -131,7 +133,8 @@ def render_efficiency_params() -> Dict[str, Any]:
             module_key=MODULE_KEY,
             param_id="5.2.3",
             label="Customer sharing factor",
-            baseline=get_config_value(MODULE_KEY, "kunddelning", BASELINE_CUSTOMER_SHARING),
+            baseline=BASELINE_CUSTOMER_SHARING,
+            value=get_config_value(MODULE_KEY, "kunddelning", BASELINE_CUSTOMER_SHARING),
             min_val=0.01,
             max_val=1.0,
             step=0.05,
@@ -151,10 +154,12 @@ def render_efficiency_params() -> Dict[str, Any]:
             module_key=MODULE_KEY,
             param_id="5.3.1",
             label="Minimum annual efficiency requirement",
-            baseline=get_config_value(MODULE_KEY, "outlier_krav", BASELINE_MIN_REQUIREMENT),
+            baseline=BASELINE_MIN_REQUIREMENT,
+            value=get_config_value(MODULE_KEY, "outlier_krav", BASELINE_MIN_REQUIREMENT),
             min_val=0.0,
             max_val=0.10,
             step=0.001,
+            format_str="%.3f",
             help_text="Annual requirement floor for outlier companies",
             format_as_percent=True
         )
@@ -208,7 +213,8 @@ def render_efficiency_params() -> Dict[str, Any]:
             param_id="5.4.1",
             label="Apply efficiency requirement to",
             options=["OPEX", "TOTEX"],
-            baseline=get_config_value(MODULE_KEY, "paverkbara_method", "OPEX"),
+            baseline="OPEX",
+            value=get_config_value(MODULE_KEY, "paverkbara_method", "OPEX"),
             help_text="OPEX: adjustable costs. TOTEX: includes capital costs."
         )
         
@@ -228,4 +234,3 @@ def render_efficiency_params() -> Dict[str, Any]:
             config[pname] = st.session_state.get(wkey)
 
     return config
-    
