@@ -1,5 +1,5 @@
 """
-Regumetrica Streamlit Application.
+Regumetrica Streamlit Applicationnnn
 
 Entry point for the frontend application.
 Handles authentication guard and navigation.
