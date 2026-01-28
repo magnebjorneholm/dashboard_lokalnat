@@ -1,0 +1,108 @@
+# Repository tree
+- requirements.txt
+- streamlit_app.py
+- auth
+  - __init__.py
+  - firebase_auth.py
+- calculations
+  - __init__.py
+  - data_mapping.py
+  - dea_calculations.py
+  - effektiviseringskrav.py
+  - incentive_calculations.py
+  - incentive_parameters.py
+  - intaktsram_assembly.py
+  - kent_calculations.py
+  - kent_capbase_prep.py
+  - paverkbara_calculations.py
+  - time_codes.py
+  - wacc_calculations.py
+  - wacc_scaling.py
+- config
+  - __init__.py
+  - case_definition.py
+- data
+  - adjustment_final (1).csv
+  - all_adjust_vars.csv
+  - capbase_a_exempel.xlsx
+  - capbase_a_mini.parquet
+  - capbase_a.parquet
+  - Data_modeller.xlsx
+  - EIs_DEA.xlsx
+  - exempel_paverkbara.xlsx
+  - Löpande kostnader från SDF 2024-27.xlsx
+  - reconciliation_id_network_firm_dmu.csv
+  - shapefiles
+    - Samtliga nätföretags del- och verksamhetsområden.cpg
+    - Samtliga nätföretags del- och verksamhetsområden.dbf
+    - Samtliga nätföretags del- och verksamhetsområden.prj
+    - Samtliga nätföretags del- och verksamhetsområden.shp
+    - Samtliga nätföretags del- och verksamhetsområden.shx
+- data_loaders
+  - __init__.py
+  - baseline_data.py
+  - incentive_data.py
+  - rab_data.py
+- frontend
+  - __init__.py
+  - common
+    - __init__.py
+    - asset_categories.py
+    - formatting.py
+    - formulas.py
+    - module_registry.py
+    - parameter_input.py
+    - styling.py
+  - modules
+    - __init__.py
+    - addons
+      - __init__.py
+      - benchmarking.py
+    - base
+      - __init__.py
+      - case_summary.py
+      - m1_asset_base.py
+      - m2_depreciation.py
+      - m3_cost_of_capital.py
+      - m3_incentive_variables.py
+      - m4_operating_exp.py
+      - m5_efficiency.py
+  - results
+    - __init__.py
+    - flow_diagram.py
+    - module_outputs.py
+    - summary.py
+  - utils
+    - __init__.py
+    - case_storage.py
+    - config_adapter.py
+    - diagram_data.py
+    - diagram_utils.py
+    - export_button.py
+    - export_excel.py
+    - firebase_firestore.py
+    - geo_data.py
+    - geo_visualization.py
+    - state_manager.py
+- pages
+  - 0_case_definition.py
+  - 1_case_config.py
+  - 2_results.py
+  - login.py
+- pipeline
+  - __init__.py
+  - core.py
+  - debug_logger.py
+  - post_dea_capex_helpers.py
+  - stages
+    - __init__.py
+    - baseline.py
+    - dea.py
+    - extraction.py
+    - post_dea.py
+    - pre_dea.py
+    - stage_outputs.py
+
+
+
+*Notes: Excluded directories `__pycache__`, `.cache` and `cache`. Also omitted virtual environment files and Git internals for clarity.*

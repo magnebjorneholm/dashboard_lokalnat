@@ -162,8 +162,25 @@ def _serialize_dict(d: Dict) -> Dict:
 
 
 def _deserialize_ui_config(serialized: Dict[str, Any]) -> Dict[str, Any]:
-    """Deserialize ui_config from storage."""
-    return serialized
+    """Deserialize ui_config from storage, converting string keys back to int where appropriate."""
+    return _convert_numeric_keys(serialized)
+
+
+def _convert_numeric_keys(obj: Any) -> Any:
+    """Recursively convert string keys that look like integers back to int."""
+    if isinstance(obj, dict):
+        result = {}
+        for k, v in obj.items():
+            if isinstance(k, str) and k.isdigit():
+                new_key = int(k)
+            else:
+                new_key = k
+            result[new_key] = _convert_numeric_keys(v)
+        return result
+    elif isinstance(obj, list):
+        return [_convert_numeric_keys(item) for item in obj]
+    else:
+        return obj
 
 
 # =============================================================================

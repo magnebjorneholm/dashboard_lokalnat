@@ -110,15 +110,15 @@ if saved_cases:
         
         with col_load:
             if st.button("Load case", type="primary", width='stretch'):
-                case_data = load_case(selected_case.id)
+                case_data = load_case(user_reid, selected_case.id)
                 if case_data:
-                    apply_case_to_session(case_data)
+                    apply_case_to_session(case_data, st.session_state)
                     st.session_state["_toast_message"] = f"Loaded: {case_data.name}"
                     st.rerun()
         
         with col_delete:
             if st.button("Delete case", type="secondary", width='stretch'):
-                if delete_case(selected_case.id):
+                if delete_case(user_reid, selected_case.id):
                     st.session_state["_toast_message"] = "Case deleted"
                     st.rerun()
 else:
