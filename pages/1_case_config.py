@@ -79,12 +79,12 @@ def _render_not_selected_message():
 
 
 tab_labels = [
-    _tab_label("m1", "Regulatory asset base valuation"),
-    _tab_label("m2", "Depreciation"),
-    _tab_label("m3", "Cost of Capital"),
-    _tab_label("m4", "Operating expenditures"),
-    _tab_label("m5", "Efficiency incentive"),
-    _tab_label("m7", "Benchmarking"),
+    _tab_label("m1", "M1 Regulatory asset base valuation"),
+    _tab_label("m2", "M2 Depreciation"),
+    _tab_label("m3", "M3 Cost of Capital"),
+    _tab_label("m4", "M4 Operating expenditures"),
+    _tab_label("m5", "M5 Efficiency incentive"),
+    _tab_label("m7", "M7 Benchmarking"),
 ]
 
 tabs = st.tabs(tab_labels)
@@ -109,6 +109,8 @@ with tabs[0]:
         
         # Section: Asset quantities (1.3)
         if is_section_selected("m1", "quantities"):
+            if is_section_selected("m1", "scaling"):
+                st.divider()
             quantities_config = m1_asset_base.render_quantities(user_id_network=user_id_network)
             current_config = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
             current_config.update(quantities_config)
@@ -116,6 +118,8 @@ with tabs[0]:
         
         # Section: KENT upload (1.4)
         if is_section_selected("m1", "kent"):
+            if is_section_selected("m1", "scaling") or is_section_selected("m1", "quantities"):
+                st.divider()
             kent_config = m1_asset_base.render_kent(user_id_network=user_id_network)
             current_config = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
             current_config.update(kent_config)
@@ -156,11 +160,15 @@ with tabs[2]:
         
         # Section: Incentive parameters (3.3-3.6)
         if is_section_selected("m3", "incentive_params"):
+            if is_section_selected("m3", "wacc"):
+                st.divider()
             qa_config = m3_cost_of_capital.render_incentive_params()
             set_module_config("m3_quality_adjustments", qa_config)
         
         # Section: Incentive variables (30.X)
         if is_section_selected("m3", "incentive_vars"):
+            if is_section_selected("m3", "wacc") or is_section_selected("m3", "incentive_params"):
+                st.divider()
             var_config = m3_incentive_variables.render_incentive_vars()
             set_module_config("m3_incentive_variables", var_config)
 
@@ -182,6 +190,8 @@ with tabs[3]:
         
         # Section: OPEX variables (40.X)
         if is_section_selected("m4", "opex_vars"):
+            if is_section_selected("m4", "scaling"):
+                st.divider()
             var_config = m4_operating_exp.render_opex_vars()
             current_config = st.session_state.get("ui_config", {}).get("m4_operating_exp", {})
             current_config.update(var_config)

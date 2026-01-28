@@ -30,37 +30,36 @@ def render_lifetimes(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, A
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Parameters 2.X.1-2.X.2: Ordinary lifetime and tail period by category")
+    st.markdown("##### 2.1-2.17 Asset lifetimes")
+    st.caption(
+        "Modified values override baseline. Changes apply to all companies. "
+        "(Parameters 2.X.1-2.X.2)"
+    )
     
-    with st.expander("2.1-2.17 Asset lifetimes", expanded=False):
-        st.caption(
-            "Modified values override baseline. Changes apply to all companies."
+    has_subcat = capbase_data is not None and 'subcat_encode' in capbase_data.columns
+    
+    if has_subcat:
+        level = st.radio(
+            "Adjustment level:",
+            ["Category level", "Subcategory level"],
+            horizontal=True,
+            key=f"{MODULE_KEY}_level"
         )
-        
-        has_subcat = capbase_data is not None and 'subcat_encode' in capbase_data.columns
-        
-        if has_subcat:
-            level = st.radio(
-                "Adjustment level:",
-                ["Category level", "Subcategory level"],
-                horizontal=True,
-                key=f"{MODULE_KEY}_level"
-            )
-            use_subcat = (level == "Subcategory level")
-        else:
-            use_subcat = False
-        
-        if use_subcat and capbase_data is not None:
-            adjustments, level_used, validation_error = _render_subcat_editor(capbase_data)
-        else:
-            adjustments, level_used, validation_error = _render_cat_editor()
-        
-        if validation_error:
-            st.error(validation_error)
-        elif adjustments:
-            config["lifetime_adjustments"] = adjustments
-            config["lifetime_level"] = level_used
-            st.caption(f":orange[Modified] â€” {len(adjustments)} lifetime adjustment(s)")
+        use_subcat = (level == "Subcategory level")
+    else:
+        use_subcat = False
+    
+    if use_subcat and capbase_data is not None:
+        adjustments, level_used, validation_error = _render_subcat_editor(capbase_data)
+    else:
+        adjustments, level_used, validation_error = _render_cat_editor()
+    
+    if validation_error:
+        st.error(validation_error)
+    elif adjustments:
+        config["lifetime_adjustments"] = adjustments
+        config["lifetime_level"] = level_used
+        st.caption(f":orange[Modified] - {len(adjustments)} lifetime adjustment(s)")
     
     return config
 
@@ -98,7 +97,7 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str, Opti
     
     edited_df = st.data_editor(
         display_df,
-        width='stretch',
+        use_container_width=True,
         hide_index=True,
         num_rows="fixed",
         disabled=['Param-ID', 'Category'],
@@ -172,7 +171,7 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
     
     edited_df = st.data_editor(
         display_df,
-        width='stretch',
+        use_container_width=True,
         hide_index=True,
         num_rows="fixed",
         disabled=['Subcategory'],

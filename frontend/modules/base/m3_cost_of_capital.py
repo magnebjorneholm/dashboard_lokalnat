@@ -19,7 +19,7 @@ from calculations.wacc_calculations import (
     calculate_wacc,
     BASELINE_WACC,
 )
-from frontend.common.formatting import format_percent
+from frontend.common.formatting import format_percent, format_number
 from frontend.utils.state_manager import get_config_value
 
 MODULE_KEY = "m3_cost_of_capital"
@@ -92,7 +92,7 @@ def render_wacc() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Parameters 3.1-3.2: Base WACC calculation")
+    st.markdown("##### 3.1-3.2 WACC Parameters")
     
     # Initialize session state
     if f"{MODULE_KEY}_current_wacc" not in st.session_state:
@@ -168,7 +168,7 @@ def render_incentive_params() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Parameters 3.3-3.6: Quality and incentive adjustments")
+    st.markdown("##### 3.3-3.6 Incentive Parameters")
     
     # Enable/disable toggles
     col1, col2, col3 = st.columns(3)
@@ -396,7 +396,7 @@ def _render_capm_section() -> None:
         col1, col2 = st.columns(2)
         with col1:
             with st.container(border=True):
-                st.metric("3.2.1 Equity beta", f"{result.equity_beta:.4f}")
+                st.metric("3.2.1 Equity beta", format_number(result.equity_beta, 4))
             with st.container(border=True):
                 st.metric("3.2.2 Cost of equity (Re)", format_percent(result.cost_of_equity_nominal))
         with col2:

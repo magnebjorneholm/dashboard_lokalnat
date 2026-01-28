@@ -25,15 +25,13 @@ def render_scaling() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Parameters 4.1.X: OPEX scaling factors")
-    
-    with st.expander("4.1 General scaling parameters", expanded=False):
-        st.info(
-            "OPEX scaling factors (4.1.1-4.1.3) - planned for future release:\n"
-            "- 4.1.1 Scaling factor adjustable OPEX\n"
-            "- 4.1.2 Scaling factor flexibility services\n"
-            "- 4.1.3 Scaling factor non-adjustable OPEX"
-        )
+    st.markdown("##### 4.1 General scaling parameters")
+    st.info(
+        "OPEX scaling factors (4.1.1-4.1.3) - planned for future release:\n"
+        "- 4.1.1 Scaling factor adjustable OPEX\n"
+        "- 4.1.2 Scaling factor flexibility services\n"
+        "- 4.1.3 Scaling factor non-adjustable OPEX"
+    )
     
     return config
 
@@ -47,14 +45,12 @@ def render_opex_vars() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Variables 40.X: Company-specific OPEX inputs")
-    
-    with st.expander("40.X OPEX variables", expanded=False):
-        st.info(
-            "OPEX variables (40.X) - planned for future release:\n"
-            "- 40.1.1 Adjusted OPEX (OPEXp)\n"
-            "- 40.1.2 Flexibility service cost\n"
-            "- 40.2.1 Total non-adjustable costs (prognosis)"
-        )
+    st.markdown("##### 40.X OPEX variables")
+    st.info(
+        "OPEX variables (40.X) - planned for future release:\n"
+        "- 40.1.1 Adjusted OPEX (OPEXp)\n"
+        "- 40.1.2 Flexibility service cost\n"
+        "- 40.2.1 Total non-adjustable costs (prognosis)"
+    )
     
     return config

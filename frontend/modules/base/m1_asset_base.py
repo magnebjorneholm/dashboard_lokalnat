@@ -47,12 +47,12 @@ def render_scaling(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Parameters affecting all companies uniformly.")
-    
     # === 1.1 GENERAL SCALING FACTOR ===
     general_scaling = _render_general_scaling()
     if general_scaling != GENERAL_SCALING_FACTOR_BASELINE:
         config["general_scaling"] = general_scaling
+    
+    st.divider()
     
     # === 1.2 CATEGORY SCALING FACTORS ===
     cat_scaling = _render_category_scaling()
@@ -73,9 +73,8 @@ def render_quantities(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Variables affecting your company only.")
-    
     if not user_id_network:
+        st.markdown("##### 1.3 Asset quantities (company-specific)")
         st.info("Log in to access company-specific asset quantity adjustments.")
         return config
     
@@ -104,9 +103,8 @@ def render_kent(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Upload custom capital base data. Overrides quantity scaling.")
-    
     if not user_id_network:
+        st.markdown("##### 1.4 Upload KENT file")
         st.info("Log in to upload KENT file.")
         return config
     
@@ -167,26 +165,26 @@ def render(user_id_network: Optional[int] = None) -> Dict[str, Any]:
 
 def _render_general_scaling() -> float:
     """Render general scaling factor input (Param 1.1.1)."""
-    with st.expander("1.1 General scaling factor", expanded=False):
-        st.caption(
-            "Applied multiplicatively to all asset norm values. "
-            "Affects all companies ordinarie capital base uniformly. (Parameter-ID: 1.1.1)"
-        )
-        
-        value = st.number_input(
-            "General scaling factor",
-            min_value=0.5,
-            max_value=2.0,
-            value=get_config_value(MODULE_KEY, "general_scaling", GENERAL_SCALING_FACTOR_BASELINE),
-            step=0.01,
-            format="%.2f",
-            key=f"{MODULE_KEY}_general_scaling",
-            help="1.0 = no change, 1.2 = +20%, 0.8 = -20%"
-        )
-        
-        if abs(value - GENERAL_SCALING_FACTOR_BASELINE) > 1e-9:
-            pct = (value - 1) * 100
-            st.caption(f":orange[Modified] ({pct:+.0f}%) â€” baseline: {GENERAL_SCALING_FACTOR_BASELINE:.2f}")
+    st.markdown("##### 1.1 General scaling factor")
+    st.caption(
+        "Applied multiplicatively to all asset norm values. "
+        "Affects all companies uniformly. (Parameter-ID: 1.1.1)"
+    )
+    
+    value = st.number_input(
+        "General scaling factor",
+        min_value=0.5,
+        max_value=2.0,
+        value=get_config_value(MODULE_KEY, "general_scaling", GENERAL_SCALING_FACTOR_BASELINE),
+        step=0.01,
+        format="%.2f",
+        key=f"{MODULE_KEY}_general_scaling",
+        help="1.0 = no change, 1.2 = +20%, 0.8 = -20%"
+    )
+    
+    if abs(value - GENERAL_SCALING_FACTOR_BASELINE) > 1e-9:
+        pct = (value - 1) * 100
+        st.caption(f":orange[Modified] ({pct:+.0f}%) - baseline: {GENERAL_SCALING_FACTOR_BASELINE:.2f}")
     
     return value
 
@@ -197,67 +195,67 @@ def _render_general_scaling() -> float:
 
 def _render_category_scaling() -> Optional[Dict[int, float]]:
     """Render category-level scaling factors (Param 1.2.1-1.2.17)."""
-    with st.expander("1.2 Category scaling factors", expanded=False):
-        st.caption(
-            "Scaling factors per asset category. Affects all companies ordinarie capital base uniformly."
-            "(Parameter-IDs: 1.2.1-1.2.17)"
-        )
-        
-        # Build dataframe for editor
-        data = []
-        cat_scaling_conf = get_config_value(MODULE_KEY, "cat_scaling", None)
-        for cat in ASSET_CATEGORIES:
-            initial_scaling = 1.0
-            if isinstance(cat_scaling_conf, dict):
-                initial_scaling = float(cat_scaling_conf.get(cat.cat_encode, 1.0))
-            data.append({
-                'cat_encode': cat.cat_encode,
-                'Category': cat.name,
-                'Param-ID': cat.scaling_param_id,
-                'Scaling': initial_scaling,
-            })
-        
-        df = pd.DataFrame(data)
-        
-        edited_df = st.data_editor(
-            df,
-            width='stretch',
-            hide_index=True,
-            num_rows="fixed",
-            disabled=['cat_encode', 'Category', 'Param-ID'],
-            column_config={
-                'cat_encode': st.column_config.NumberColumn(
-                    'Code', format="%d", width="small"
-                ),
-                'Category': st.column_config.TextColumn(
-                    'Category', width="large"
-                ),
-                'Param-ID': st.column_config.TextColumn(
-                    'Param-ID', width="small"
-                ),
-                'Scaling': st.column_config.NumberColumn(
-                    'Scaling',
-                    min_value=0.5,
-                    max_value=2.0,
-                    step=0.01,
-                    format="%.2f",
-                    width="small",
-                    help="1.0 = no change"
-                )
-            },
-            key=f"{MODULE_KEY}_cat_scaling"
-        )
-        
-        # Extract non-default values
-        adjustments = {}
-        for _, row in edited_df.iterrows():
-            if abs(row['Scaling'] - 1.0) > 1e-9:
-                adjustments[int(row['cat_encode'])] = float(row['Scaling'])
-        
-        if adjustments:
-            st.caption(f":orange[Modified] â€” {len(adjustments)} category scaling adjustment(s)")
-        
-        return adjustments if adjustments else None
+    st.markdown("##### 1.2 Category scaling factors")
+    st.caption(
+        "Scaling factors per asset category. Affects all companies uniformly. "
+        "(Parameter-IDs: 1.2.1-1.2.17)"
+    )
+    
+    # Build dataframe for editor
+    data = []
+    cat_scaling_conf = get_config_value(MODULE_KEY, "cat_scaling", None)
+    for cat in ASSET_CATEGORIES:
+        initial_scaling = 1.0
+        if isinstance(cat_scaling_conf, dict):
+            initial_scaling = float(cat_scaling_conf.get(cat.cat_encode, 1.0))
+        data.append({
+            'cat_encode': cat.cat_encode,
+            'Category': cat.name,
+            'Param-ID': cat.scaling_param_id,
+            'Scaling': initial_scaling,
+        })
+    
+    df = pd.DataFrame(data)
+    
+    edited_df = st.data_editor(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        disabled=['cat_encode', 'Category', 'Param-ID'],
+        column_config={
+            'cat_encode': st.column_config.NumberColumn(
+                'Code', format="%d", width="small"
+            ),
+            'Category': st.column_config.TextColumn(
+                'Category', width="large"
+            ),
+            'Param-ID': st.column_config.TextColumn(
+                'Param-ID', width="small"
+            ),
+            'Scaling': st.column_config.NumberColumn(
+                'Scaling',
+                min_value=0.5,
+                max_value=2.0,
+                step=0.01,
+                format="%.2f",
+                width="small",
+                help="1.0 = no change"
+            )
+        },
+        key=f"{MODULE_KEY}_cat_scaling"
+    )
+    
+    # Extract non-default values
+    adjustments = {}
+    for _, row in edited_df.iterrows():
+        if abs(row['Scaling'] - 1.0) > 1e-9:
+            adjustments[int(row['cat_encode'])] = float(row['Scaling'])
+    
+    if adjustments:
+        st.caption(f":orange[Modified] - {len(adjustments)} category scaling adjustment(s)")
+    
+    return adjustments if adjustments else None
 
 
 # =============================================================================
@@ -273,85 +271,86 @@ def _render_variables_scaling(
     
     Shows ordinarie capital base per category with scaling option.
     """
-    with st.expander("1.3 Asset quantities (company-specific)", expanded=False):
-        if disabled:
-            st.warning(
-                "KENT file uploaded - asset quantity scaling is disabled. "
-                "Remove KENT file to enable manual scaling."
-            )
-            return None
-        
-        st.caption(
-            "Scale asset quantities per category for your company only. "
-            "Only affects ordinaie capital base (tail is unchanged). "
-            "(Variable-IDs: 10.2-10.18)"
+    st.markdown("##### 1.3 Asset quantities (company-specific)")
+    
+    if disabled:
+        st.warning(
+            "KENT file uploaded - asset quantity scaling is disabled. "
+            "Remove KENT file to enable manual scaling."
         )
-        
-        # Load user's capital base data
-        try:
-            summary_df = _get_ordinarie_summary(user_id_network)
-        except Exception as e:
-            st.error(f"Could not load capital base data: {e}")
-            return None
-        
-        if summary_df.empty:
-            st.warning("No capital base data found for this company.")
-            return None
-        
-        # Add scaling column (prefill from ui_config if present)
-        var_scaling_conf = get_config_value(MODULE_KEY, "var_scaling", None)
-        def _initial_var_scaling(cat_encode):
-            if isinstance(var_scaling_conf, dict):
-                return float(var_scaling_conf.get(cat_encode, 1.0))
-            return 1.0
+        return None
+    
+    st.caption(
+        "Scale asset quantities per category for your company only. "
+        "Only affects ordinarie capital base (tail is unchanged). "
+        "(Variable-IDs: 10.2-10.18)"
+    )
+    
+    # Load user's capital base data
+    try:
+        summary_df = _get_ordinarie_summary(user_id_network)
+    except Exception as e:
+        st.error(f"Could not load capital base data: {e}")
+        return None
+    
+    if summary_df.empty:
+        st.warning("No capital base data found for this company.")
+        return None
+    
+    # Add scaling column (prefill from ui_config if present)
+    var_scaling_conf = get_config_value(MODULE_KEY, "var_scaling", None)
+    def _initial_var_scaling(cat_encode):
+        if isinstance(var_scaling_conf, dict):
+            return float(var_scaling_conf.get(cat_encode, 1.0))
+        return 1.0
 
-        summary_df['Scaling'] = summary_df['cat_encode'].map(_initial_var_scaling)
-        
-        edited_df = st.data_editor(
-            summary_df,
-            width='stretch',
-            hide_index=True,
-            num_rows="fixed",
-            disabled=['cat_encode', 'Category', 'Var-ID', 'Components', 'NUAV (Mkr)'],
-            column_config={
-                'cat_encode': st.column_config.NumberColumn(
-                    'Code', format="%d", width="small"
-                ),
-                'Category': st.column_config.TextColumn(
-                    'Category', width="medium"
-                ),
-                'Var-ID': st.column_config.TextColumn(
-                    'Var-ID', width="small"
-                ),
-                'Components': st.column_config.NumberColumn(
-                    'Components', format="%d", width="small"
-                ),
-                'NUAV (Mkr)': st.column_config.NumberColumn(
-                    'NUAV (Mkr)', format="%.1f", width="small"
-                ),
-                'Scaling': st.column_config.NumberColumn(
-                    'Scaling',
-                    min_value=0.5,
-                    max_value=2.0,
-                    step=0.01,
-                    format="%.2f",
-                    width="small",
-                    help="1.0 = no change"
-                )
-            },
-            key=f"{MODULE_KEY}_var_scaling"
-        )
-        
-        # Extract non-default values
-        adjustments = {}
-        for _, row in edited_df.iterrows():
-            if abs(row['Scaling'] - 1.0) > 1e-9:
-                adjustments[int(row['cat_encode'])] = float(row['Scaling'])
-        
-        if adjustments:
-            st.caption(f":orange[Modified] â€” {len(adjustments)} variable scaling adjustment(s)")
-        
-        return adjustments if adjustments else None
+    summary_df['Scaling'] = summary_df['cat_encode'].map(_initial_var_scaling)
+    
+    edited_df = st.data_editor(
+        summary_df,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        disabled=['cat_encode', 'Category', 'Var-ID', 'Components', 'NUAV (Mkr)'],
+        column_config={
+            'cat_encode': st.column_config.NumberColumn(
+                'Code', format="%d", width="small"
+            ),
+            'Category': st.column_config.TextColumn(
+                'Category', width="medium"
+            ),
+            'Var-ID': st.column_config.TextColumn(
+                'Var-ID', width="small"
+            ),
+            'Components': st.column_config.NumberColumn(
+                'Components', format="%d", width="small"
+            ),
+            'NUAV (Mkr)': st.column_config.NumberColumn(
+                'NUAV (Mkr)', format="%.1f", width="small"
+            ),
+            'Scaling': st.column_config.NumberColumn(
+                'Scaling',
+                min_value=0.5,
+                max_value=2.0,
+                step=0.01,
+                format="%.2f",
+                width="small",
+                help="1.0 = no change"
+            )
+        },
+        key=f"{MODULE_KEY}_var_scaling"
+    )
+    
+    # Extract non-default values
+    adjustments = {}
+    for _, row in edited_df.iterrows():
+        if abs(row['Scaling'] - 1.0) > 1e-9:
+            adjustments[int(row['cat_encode'])] = float(row['Scaling'])
+    
+    if adjustments:
+        st.caption(f":orange[Modified] - {len(adjustments)} variable scaling adjustment(s)")
+    
+    return adjustments if adjustments else None
 
 
 def _get_ordinarie_summary(user_id_network: int) -> pd.DataFrame:
@@ -438,27 +437,27 @@ def _render_kent_upload() -> Dict[str, Any]:
         "kent_file_name": None,
     }
     
-    with st.expander("1.4 Upload KENT file", expanded=False):
-        st.caption(
-            "Upload custom capital base data from KENT. "
-            "This overrides asset quantity scaling above."
+    st.markdown("##### 1.4 Upload KENT file")
+    st.caption(
+        "Upload custom capital base data from KENT. "
+        "This overrides asset quantity scaling above."
+    )
+    
+    uploaded_file = st.file_uploader(
+        "KENT Excel file",
+        type=["xlsx", "xls"],
+        key=f"{MODULE_KEY}_kent_upload",
+        help="Export from KENT regulatory template"
+    )
+    
+    if uploaded_file is not None:
+        result["kent_file_bytes"] = uploaded_file.getvalue()
+        result["kent_file_name"] = uploaded_file.name
+        st.caption(f":orange[Modified] - KENT file: {uploaded_file.name}")
+        st.info(
+            "KENT file will be used for capital base calculations. "
+            "Parameter scaling factors (1.1, 1.2) still apply."
         )
-        
-        uploaded_file = st.file_uploader(
-            "KENT Excel file",
-            type=["xlsx", "xls"],
-            key=f"{MODULE_KEY}_kent_upload",
-            help="Export from KENT regulatory template"
-        )
-        
-        if uploaded_file is not None:
-            result["kent_file_bytes"] = uploaded_file.getvalue()
-            result["kent_file_name"] = uploaded_file.name
-            st.caption(f":orange[Modified] â€” KENT file: {uploaded_file.name}")
-            st.info(
-                "KENT file will be used for capital base calculations. "
-                "Parameter scaling factors (1.1, 1.2) still apply."
-            )
     
     return result
 

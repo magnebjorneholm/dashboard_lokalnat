@@ -64,162 +64,159 @@ def render_efficiency_params() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Parameters 5.1-5.4: Efficiency requirement calculation")
+    st.markdown("##### 5.1 Outlier identification")
+    st.caption("Outlier threshold (5.1.1): configured in Add-on Benchmarking")
     
-    with st.expander("Parameters", expanded=False):
-        st.markdown("##### 5.1 Outlier identification")
-        st.caption("Outlier threshold (5.1.1): configured in Add-on Benchmarking")
-        
-        st.divider()
-        
-        st.markdown("##### 5.2 Efficiency requirement conversion")
-        
-        # Get constraint values from previous render (or baseline)
-        prev_real_time, prev_kund_del, prev_min_req = _get_constraint_values()
-        
-        # Calculate dynamic min for 5.2.1 based on PREVIOUS values
-        critical_potential = calculate_trunkering_min_from_outlier_krav(
-            outlier_krav=prev_min_req,
-            kunddelning=prev_kund_del,
-            realiseringstid=prev_real_time,
-            tillsynsperiod=BASELINE_SUPERVISION_PERIOD
-        )
-        
-        # 5.2.1 Max potential cap - NOW IN CORRECT POSITION
-        max_pot, max_pot_changed = parameter_input(
-            module_key=MODULE_KEY,
-            param_id="5.2.1",
-            label="Maximum efficiency potential cap",
-            baseline=BASELINE_MAX_POTENTIAL,
-            value=get_config_value(MODULE_KEY, "trunkering_max", BASELINE_MAX_POTENTIAL),
-            min_val=critical_potential,
-            max_val=1.0,
-            step=0.01,
-            help_text="Upper bound on assessed efficiency potential",
-            format_as_percent=True
-        )
-        
-        if max_pot_changed:
-            config["trunkering_max"] = max_pot
-        
-        # Show constraint info if relevant
-        if critical_potential > 0.001:
-            st.caption(
-                f"Min: {critical_potential*100:.1f}% "
-                f"(ensures max req >= {prev_min_req*100:.2f}%)"
-            )
-        
-        # 5.2.2 Realization time
-        real_time, real_time_changed = parameter_input(
-            module_key=MODULE_KEY,
-            param_id="5.2.2",
-            label="Realization time",
-            baseline=float(BASELINE_REALIZATION_TIME),
-            value=get_config_value(MODULE_KEY, "realiseringstid", float(BASELINE_REALIZATION_TIME)),
-            min_val=1.0,
-            max_val=20.0,
-            step=1.0,
-            unit="years",
-            help_text="Time horizon for full efficiency realization",
-            format_as_percent=False
-        )
-        
-        if real_time_changed:
-            config["realiseringstid"] = int(real_time)
-        
-        # 5.2.3 Customer sharing factor
-        kund_del, kund_del_changed = parameter_input(
-            module_key=MODULE_KEY,
-            param_id="5.2.3",
-            label="Customer sharing factor",
-            baseline=BASELINE_CUSTOMER_SHARING,
-            value=get_config_value(MODULE_KEY, "kunddelning", BASELINE_CUSTOMER_SHARING),
-            min_val=0.01,
-            max_val=1.0,
-            step=0.05,
-            help_text="Share of efficiency gains allocated to customers",
-            format_as_percent=True
-        )
-        
-        if kund_del_changed:
-            config["kunddelning"] = kund_del
-        
-        st.divider()
-        
-        st.markdown("##### 5.3 Efficiency requirement bounds")
-        
-        # 5.3.1 Minimum requirement (for outliers)
-        min_req, min_req_changed = parameter_input(
-            module_key=MODULE_KEY,
-            param_id="5.3.1",
-            label="Minimum annual efficiency requirement",
-            baseline=BASELINE_MIN_REQUIREMENT,
-            value=get_config_value(MODULE_KEY, "outlier_krav", BASELINE_MIN_REQUIREMENT),
-            min_val=0.0,
-            max_val=0.10,
-            step=0.001,
-            format_str="%.3f",
-            help_text="Annual requirement floor for outlier companies",
-            format_as_percent=True
-        )
-        
-        if min_req_changed:
-            config["outlier_krav"] = min_req
-        
-        # Get current values for display and storage
-        current_real_time = int(real_time) if real_time_changed else BASELINE_REALIZATION_TIME
-        current_kund_del = kund_del if kund_del_changed else BASELINE_CUSTOMER_SHARING
-        current_min_req = min_req if min_req_changed else BASELINE_MIN_REQUIREMENT
-        current_max_pot = max_pot if max_pot_changed else BASELINE_MAX_POTENTIAL
-        
-        # Store current values for next render's constraint calculation
-        _update_constraint_values(current_real_time, current_kund_del, current_min_req)
-        
-        # Calculate and display resulting range
-        max_annual_req = get_max_effkrav(
-            trunkering_max=current_max_pot,
-            kunddelning=current_kund_del,
-            realiseringstid=current_real_time,
-            tillsynsperiod=BASELINE_SUPERVISION_PERIOD
-        )
-        
+    st.divider()
+    
+    st.markdown("##### 5.2 Efficiency requirement conversion")
+    
+    # Get constraint values from previous render (or baseline)
+    prev_real_time, prev_kund_del, prev_min_req = _get_constraint_values()
+    
+    # Calculate dynamic min for 5.2.1 based on PREVIOUS values
+    critical_potential = calculate_trunkering_min_from_outlier_krav(
+        outlier_krav=prev_min_req,
+        kunddelning=prev_kund_del,
+        realiseringstid=prev_real_time,
+        tillsynsperiod=BASELINE_SUPERVISION_PERIOD
+    )
+    
+    # 5.2.1 Max potential cap
+    max_pot, max_pot_changed = parameter_input(
+        module_key=MODULE_KEY,
+        param_id="5.2.1",
+        label="Maximum efficiency potential cap",
+        baseline=BASELINE_MAX_POTENTIAL,
+        value=get_config_value(MODULE_KEY, "trunkering_max", BASELINE_MAX_POTENTIAL),
+        min_val=critical_potential,
+        max_val=1.0,
+        step=0.01,
+        help_text="Upper bound on assessed efficiency potential",
+        format_as_percent=True
+    )
+    
+    if max_pot_changed:
+        config["trunkering_max"] = max_pot
+    
+    # Show constraint info if relevant
+    if critical_potential > 0.001:
         st.caption(
-            f"Resulting range: {current_min_req*100:.2f}% - {max_annual_req*100:.2f}% annually"
+            f"Min: {critical_potential*100:.1f}% "
+            f"(ensures max req >= {prev_min_req*100:.2f}%)"
         )
-        
-        # Validate constraint with CURRENT values and show warning if violated
-        new_critical = calculate_trunkering_min_from_outlier_krav(
-            outlier_krav=current_min_req,
-            kunddelning=current_kund_del,
-            realiseringstid=current_real_time,
-            tillsynsperiod=BASELINE_SUPERVISION_PERIOD
-        )
-        
-        if current_max_pot < new_critical - 0.001:
-            st.warning(
-                f"Constraint violation: Max potential ({current_max_pot*100:.1f}%) "
-                f"< required minimum ({new_critical*100:.1f}%). "
-                f"Increase 5.2.1 or adjust 5.2.2/5.2.3/5.3.1."
-            )
-        
-        st.divider()
-        
-        st.markdown("##### 5.4 Cost base application")
-        
-        # 5.4.1 Efficiency requirement cost base
-        method, method_changed = parameter_select(
-            module_key=MODULE_KEY,
-            param_id="5.4.1",
-            label="Apply efficiency requirement to",
-            options=["OPEX", "TOTEX"],
-            baseline="OPEX",
-            value=get_config_value(MODULE_KEY, "paverkbara_method", "OPEX"),
-            help_text="OPEX: adjustable costs. TOTEX: includes capital costs."
-        )
-        
-        if method_changed:
-            config["paverkbara_method"] = method
     
+    # 5.2.2 Realization time
+    real_time, real_time_changed = parameter_input(
+        module_key=MODULE_KEY,
+        param_id="5.2.2",
+        label="Realization time",
+        baseline=float(BASELINE_REALIZATION_TIME),
+        value=get_config_value(MODULE_KEY, "realiseringstid", float(BASELINE_REALIZATION_TIME)),
+        min_val=1.0,
+        max_val=20.0,
+        step=1.0,
+        unit="years",
+        help_text="Time horizon for full efficiency realization",
+        format_as_percent=False
+    )
+    
+    if real_time_changed:
+        config["realiseringstid"] = int(real_time)
+    
+    # 5.2.3 Customer sharing factor
+    kund_del, kund_del_changed = parameter_input(
+        module_key=MODULE_KEY,
+        param_id="5.2.3",
+        label="Customer sharing factor",
+        baseline=BASELINE_CUSTOMER_SHARING,
+        value=get_config_value(MODULE_KEY, "kunddelning", BASELINE_CUSTOMER_SHARING),
+        min_val=0.01,
+        max_val=1.0,
+        step=0.05,
+        help_text="Share of efficiency gains allocated to customers",
+        format_as_percent=True
+    )
+    
+    if kund_del_changed:
+        config["kunddelning"] = kund_del
+    
+    st.divider()
+    
+    st.markdown("##### 5.3 Efficiency requirement bounds")
+    
+    # 5.3.1 Minimum requirement (for outliers)
+    min_req, min_req_changed = parameter_input(
+        module_key=MODULE_KEY,
+        param_id="5.3.1",
+        label="Minimum annual efficiency requirement",
+        baseline=BASELINE_MIN_REQUIREMENT,
+        value=get_config_value(MODULE_KEY, "outlier_krav", BASELINE_MIN_REQUIREMENT),
+        min_val=0.0,
+        max_val=0.10,
+        step=0.001,
+        format_str="%.3f",
+        help_text="Annual requirement floor for outlier companies",
+        format_as_percent=True
+    )
+    
+    if min_req_changed:
+        config["outlier_krav"] = min_req
+    
+    # Get current values for display and storage
+    current_real_time = int(real_time) if real_time_changed else BASELINE_REALIZATION_TIME
+    current_kund_del = kund_del if kund_del_changed else BASELINE_CUSTOMER_SHARING
+    current_min_req = min_req if min_req_changed else BASELINE_MIN_REQUIREMENT
+    current_max_pot = max_pot if max_pot_changed else BASELINE_MAX_POTENTIAL
+    
+    # Store current values for next render's constraint calculation
+    _update_constraint_values(current_real_time, current_kund_del, current_min_req)
+    
+    # Calculate and display resulting range
+    max_annual_req = get_max_effkrav(
+        trunkering_max=current_max_pot,
+        kunddelning=current_kund_del,
+        realiseringstid=current_real_time,
+        tillsynsperiod=BASELINE_SUPERVISION_PERIOD
+    )
+    
+    st.caption(
+        f"Resulting range: {current_min_req*100:.2f}% - {max_annual_req*100:.2f}% annually"
+    )
+    
+    # Validate constraint with CURRENT values and show warning if violated
+    new_critical = calculate_trunkering_min_from_outlier_krav(
+        outlier_krav=current_min_req,
+        kunddelning=current_kund_del,
+        realiseringstid=current_real_time,
+        tillsynsperiod=BASELINE_SUPERVISION_PERIOD
+    )
+    
+    if current_max_pot < new_critical - 0.001:
+        st.warning(
+            f"Constraint violation: Max potential ({current_max_pot*100:.1f}%) "
+            f"< required minimum ({new_critical*100:.1f}%). "
+            f"Increase 5.2.1 or adjust 5.2.2/5.2.3/5.3.1."
+        )
+    
+    st.divider()
+    
+    st.markdown("##### 5.4 Cost base application")
+    
+    # 5.4.1 Efficiency requirement cost base
+    method, method_changed = parameter_select(
+        module_key=MODULE_KEY,
+        param_id="5.4.1",
+        label="Apply efficiency requirement to",
+        options=["OPEX", "TOTEX"],
+        baseline="OPEX",
+        value=get_config_value(MODULE_KEY, "paverkbara_method", "OPEX"),
+        help_text="OPEX: adjustable costs. TOTEX: includes capital costs."
+    )
+    
+    if method_changed:
+        config["paverkbara_method"] = method
+
     # Ensure current widget values are included so they persist when saving/loading cases
     widget_map = {
         f"{MODULE_KEY}_input_5.2.1": "trunkering_max",

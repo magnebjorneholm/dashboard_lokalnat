@@ -110,7 +110,8 @@ def render_incentive_vars() -> Dict[str, Any]:
     """
     config: Dict[str, Any] = {}
     
-    st.caption("Variables 30.X: Company-specific incentive inputs. Values shown are baseline (2024).")
+    st.markdown("##### 30.X Incentive Variables")
+    st.caption("Company-specific inputs. Values shown are baseline (2024).")
     
     user_reid = get_user_reid()
     if not user_reid:
