@@ -5,7 +5,7 @@ Prepares data for revenue frame decomposition diagram.
 Handles all capex_method variations and sources data correctly.
 
 Data flow:
-- Controllable costs (före avdrag): From SDF (Medelvärde 2018-2021 × 4 + Neonjusteringar)
+- Controllable costs (före avdrag): From SDF (Medelvärde 2018-2021 * 4 + Neonjusteringar)
 - Efficiency requirement: Calculated as (före - efter)
 - Depreciation/Return: From SDF (baseline), scaled (wacc_scaling), or KENT (parameter_change)
 - Capital base: Derived from return / WACC
@@ -208,7 +208,7 @@ def _get_paverkbara_components(
     Calculate påverkbara components: före avdrag, efter avdrag, och effektivisering.
     
     Uses SDF data for base values and calculates:
-    - paverkbara_fore: Medelvärde × 4 + Neonjusteringar
+    - paverkbara_fore: Medelvärde * 4 + Neonjusteringar
     - paverkbara_efter: From intaktsram (Paverkbara_Periodsumma)
     - effektivisering: paverkbara_fore - paverkbara_efter
     """
@@ -240,7 +240,7 @@ def _get_paverkbara_components(
         neonjusteringar = 0
     
     # Calculate påverkbara före avdrag
-    # Formula: (Medelvärde + Neonjusteringar/4) × 4 = Medelvärde × 4 + Neonjusteringar
+    # Formula: (Medelvärde + Neonjusteringar/4) * 4 = Medelvärde * 4 + Neonjusteringar
     paverkbara_fore = medelvarde * 4 + neonjusteringar
     
     # Effektivisering = före - efter

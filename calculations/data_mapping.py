@@ -56,7 +56,7 @@ def merge_kent_with_baseline(
             prefix = "  " * indent
             print(f"{prefix}{msg}")
     
-    log("── merge_kent_with_baseline() ──", indent=1)
+    log("â”€â”€ merge_kent_with_baseline() â”€â”€", indent=1)
     
     # 1. Verifiera att REId finns i KENT-output
     if 'REId' not in df_network.columns:
@@ -156,7 +156,7 @@ def merge_kent_with_baseline(
         log(f"[VARNING] Resultat har {n_result} rader, förväntat {n_baseline}", indent=2)
     
     # Sammanfattning
-    log("── Resultat ──", indent=1)
+    log("â”€â”€ Resultat â”€â”€", indent=1)
     log(f"Kapitalkostnad_2024: {(~df_result['Kapitalkostnad_2024'].isna()).sum()}/{n_result} företag", indent=2)
     
     if 'Kapitalkostnad_Period' in df_result.columns:

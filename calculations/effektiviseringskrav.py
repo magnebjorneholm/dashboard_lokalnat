@@ -33,12 +33,12 @@ def calculate_trunkering_min_from_outlier_krav(
     minimikrav som outliers, vilket är konsekvent med Ei's metod.
     
     Omvänd beräkning av formeln:
-        årskrav = (1 + potential × kunddelning × tillsynsperiod/realiseringstid)^(1/tillsynsperiod) - 1
+        årskrav = (1 + potential * kunddelning * tillsynsperiod/realiseringstid)^(1/tillsynsperiod) - 1
     
     Ger:
-        potential = ((1 + årskrav)^tillsynsperiod - 1) / (kunddelning × tillsynsperiod/realiseringstid)
+        potential = ((1 + årskrav)^tillsynsperiod - 1) / (kunddelning * tillsynsperiod/realiseringstid)
     
-    Med default-parametrar (outlier_krav=1%) ger detta trunkering_min ≈ 16.24%
+    Med default-parametrar (outlier_krav=1%) ger detta trunkering_min â‰ˆ 16.24%
     
     Args:
         outlier_krav: Fast årligt krav för outliers (default 1%)
@@ -52,7 +52,7 @@ def calculate_trunkering_min_from_outlier_krav(
     # Beräkna total effektivisering som krävs för att ge outlier_krav
     total_eff = (1 + outlier_krav) ** tillsynsperiod - 1
     
-    # Lös ut potential från: total_eff = potential × kunddelning × (tillsynsperiod/realiseringstid)
+    # Lös ut potential från: total_eff = potential * kunddelning * (tillsynsperiod/realiseringstid)
     realization_factor = tillsynsperiod / realiseringstid
     potential = total_eff / (kunddelning * realization_factor)
     
@@ -76,7 +76,7 @@ def calculate_effkrav_from_potential(
     
     1. Om outlier: använd fast krav (default 1%)
     2. Trunkera potential mellan min/max
-    3. Beräkna total effektivisering: potential × kunddelning × (tillsynsperiod/realiseringstid)
+    3. Beräkna total effektivisering: potential * kunddelning * (tillsynsperiod/realiseringstid)
     4. Fördela över tillsynsperioden: (1 + total_eff)^(1/tillsynsperiod) - 1
     
     För tillsynsperiod 2024-2027 med default-parametrar:
@@ -103,7 +103,7 @@ def calculate_effkrav_from_potential(
     potential_trunkerad = np.clip(potential, trunkering_min, trunkering_max)
     
     # Beräkna total effektivisering under tillsynsperioden
-    # = potential × kunddelning × (tillsynsperiod / realiseringstid)
+    # = potential * kunddelning * (tillsynsperiod / realiseringstid)
     total_effektivisering = potential_trunkerad * kunddelning * (tillsynsperiod / realiseringstid)
     
     # Fördela över tillsynsperioden med ränta-på-ränta

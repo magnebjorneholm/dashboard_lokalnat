@@ -1,5 +1,5 @@
 """
-Regumetrica Streamlit Applicationnnn
+Regumetrica Streamlit Application.
 
 Entry point for the frontend application.
 Handles authentication guard and navigation.
@@ -30,7 +30,7 @@ from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
 # Page configuration
 st.set_page_config(
     page_title="Regumetrica",
-    page_icon="⚡",
+    page_icon="âš¡",
     layout="wide",
     initial_sidebar_state="expanded"
 )

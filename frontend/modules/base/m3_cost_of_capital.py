@@ -30,11 +30,11 @@ BASELINE_CAPM = CAPMInputs()
 
 # Baseline derived parameters (calculated from CAPM baseline)
 BASELINE_DERIVED = {
-    "cost_of_equity_nominal": 0.0645,   # Re: Rf + ÃŽÂ²Ã¢â€šâ€˜ Ãƒâ€” MRP
+    "cost_of_equity_nominal": 0.0645,   # Re: Rf + beta * MRP
     "cost_of_debt_nominal": 0.0401,     # Rd: Rf + credit spread
     "debt_ratio": 0.36,                  # S: debt ratio
-    "tax_rate": 0.206,                   # Ãâ€ž: corporate tax
-    "inflation": 0.0202,                 # Ãâ‚¬: CPIF
+    "tax_rate": 0.206,                   # tau: corporate tax
+    "inflation": 0.0202,                 # pi: CPIF
     "wacc_nominal_pre_tax": 0.0664,      # WACC nominal
     "wacc_real_pre_tax": BASELINE_WACC,  # 0.0453
 }
@@ -43,10 +43,10 @@ BASELINE_DERIVED = {
 SNI_LABELS = {
     1: "Jordbruk",
     2: "Industri",
-    3: "Handel/tjÃƒÂ¤nster",
+    3: "Handel/tjanster",
     4: "Offentlig verksamhet",
-    5: "HushÃƒÂ¥ll",
-    6: "GrÃƒÂ¤nspunkt",
+    5: "Hushall",
+    6: "Granspunkt",
 }
 
 # Baseline values for incentive parameters
@@ -84,7 +84,7 @@ def render_wacc() -> Dict[str, Any]:
     
     Three input methods via radio button:
     1. CAPM components - calculate from base parameters
-    2. Derived parameters - modify Re, Rd, S, Ãâ€ž, Ãâ‚¬ directly
+    2. Derived parameters - modify Re, Rd, S, tau, pi directly
     3. Direct input - enter WACC directly
     
     Returns:
@@ -239,9 +239,9 @@ def _calculate_wacc_from_derived(
     Calculate WACC from derived parameters.
     
     Formulas:
-        WACC_nom_after_tax = (1 - S) Ãƒâ€” Re + S Ãƒâ€” Rd Ãƒâ€” (1 - Ãâ€ž)
-        WACC_nom_pre_tax   = WACC_nom_after_tax / (1 - Ãâ€ž)
-        WACC_real          = (1 + WACC_nom_pre_tax) / (1 + Ãâ‚¬) - 1
+        WACC_nom_after_tax = (1 - S) * Re + S * Rd * (1 - tau)
+        WACC_nom_pre_tax   = WACC_nom_after_tax / (1 - tau)
+        WACC_real          = (1 + WACC_nom_pre_tax) / (1 + pi) - 1
     """
     wacc_nominal_after_tax = (
         (1 - debt_ratio) * cost_of_equity + 
@@ -353,7 +353,7 @@ def _render_capm_section() -> None:
         )
         
         tax_rate = st.number_input(
-            "3.1.6 Corporate tax rate (Ãâ€ž)",
+            "3.1.6 Corporate tax rate (tau)",
             value=get_config_value(MODULE_KEY, "tax_rate", BASELINE_CAPM.tax_rate),
             min_value=0.0,
             max_value=0.50,
@@ -364,7 +364,7 @@ def _render_capm_section() -> None:
         )
         
         inflation = st.number_input(
-            "3.1.7 Inflation (Ãâ‚¬)",
+            "3.1.7 Inflation (pi)",
             value=get_config_value(MODULE_KEY, "inflation", BASELINE_CAPM.inflation),
             min_value=-0.05,
             max_value=0.20,
@@ -456,7 +456,7 @@ def _render_derived_section() -> None:
     
     with col2:
         tax_rate = st.number_input(
-            "3.2.4 Tax rate (Ãâ€ž)",
+            "3.2.4 Tax rate (tau)",
             value=get_config_value(MODULE_KEY, "tax_rate_derived", BASELINE_DERIVED["tax_rate"]),
             min_value=0.0,
             max_value=0.50,
@@ -467,7 +467,7 @@ def _render_derived_section() -> None:
         )
         
         inflation = st.number_input(
-            "3.2.5 Inflation (Ãâ‚¬)",
+            "3.2.5 Inflation (pi)",
             value=get_config_value(MODULE_KEY, "inflation_derived", BASELINE_DERIVED["inflation"]),
             min_value=-0.05,
             max_value=0.20,

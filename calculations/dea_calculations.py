@@ -149,8 +149,8 @@ def _run_super_efficiency_dea(
     För varje företag i löses en LP-modell där företaget exkluderas från referensset.
     
     Args:
-        inputs: numpy array med inputs (n_companies × n_inputs)
-        outputs: numpy array med outputs (n_companies × n_outputs)
+        inputs: numpy array med inputs (n_companies * n_inputs)
+        outputs: numpy array med outputs (n_companies * n_outputs)
         rts: 'crs' eller 'vrs'
     
     Returns:

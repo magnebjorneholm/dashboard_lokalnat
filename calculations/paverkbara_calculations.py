@@ -104,7 +104,7 @@ def _calculate_paverkbara_single_company(
     3. Årsbas_Effkrav = Startvärde + Årlig_Justering
     4. För varje år t:
        - Tillväxtfaktor_t = (1 + effkrav)^(t-1)
-       - Årligt_Avdrag_t = effkrav × Årsbas × Tillväxtfaktor_t
+       - Årligt_Avdrag_t = effkrav * Årsbas * Tillväxtfaktor_t
        - Kumulativt_Avdrag_t = sum(Årligt_Avdrag[1:t+1])
        - Påverkbara_t = Startvärde - Kumulativt_Avdrag_t + Årlig_Justering
     5. Periodsumma = sum(Påverkbara[2024:2028])

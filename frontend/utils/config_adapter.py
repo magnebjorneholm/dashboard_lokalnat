@@ -194,7 +194,7 @@ def _combine_scaling_factors(
     Logic:
     - If only general_scaling: apply to all 17 categories
     - If only cat_scaling: use as-is
-    - If both: multiply general × category for each
+    - If both: multiply general * category for each
     
     Returns:
         Dict[cat_encode, combined_factor] or None if no changes

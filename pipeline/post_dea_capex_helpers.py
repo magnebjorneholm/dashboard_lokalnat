@@ -115,7 +115,7 @@ def _get_return_wacc_scaled(
     """
     Skalar baseline per-år avkastning med WACC-kvot.
     
-    Formel: Avkastning_ny = Avkastning_baseline × (WACC_ny / WACC_baseline)
+    Formel: Avkastning_ny = Avkastning_baseline * (WACC_ny / WACC_baseline)
     """
     if pre_dea.wacc_used is None:
         raise ValueError("wacc_used saknas i PreDeaStageOutput för wacc_scaling")

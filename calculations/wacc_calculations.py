@@ -74,7 +74,7 @@ def _hamada(beta_asset: float, debt_ratio: float, tax_rate: float) -> float:
     """
     Hamada-formel för att konvertera tillgångsbeta till aktiebeta.
     
-    Formel: β_E = β_A × (1 + (1-T) × D/E)
+    Formel: β_E = β_A * (1 + (1-T) * D/E)
     där D/E = S/(1-S)
     
     Args:
