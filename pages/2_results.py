@@ -14,6 +14,7 @@ from frontend.utils.state_manager import (
     get_user_reid,
     get_case_name,
     get_case_notes,
+    get_filtered_ui_config,
 )
 from frontend.utils.export_button import render_export_button
 from frontend.utils.diagram_data import prepare_diagram_data
@@ -28,7 +29,7 @@ from frontend.modules.base import case_summary
 
 init_session_state()
 
-SHAPEFILE_PATH = "data/shapefiles/Samtliga nätföretags del- och verksamhetsområden.shp"
+SHAPEFILE_PATH = "data/shapefiles/Samtliga nÃ¤tfÃ¶retags del- och verksamhetsomrÃ¥den.shp"
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -258,139 +259,98 @@ st.divider()
 
 st.markdown("##### Module outputs")
 
-with st.expander("1. Regulatory asset base valuation", expanded=False):
-    wacc_case = case.pre_dea.wacc_used or 0.0453
-    wacc_baseline = 0.0453
-    
-    st.markdown("**11.1 Total asset value**")
-    st.caption("Detailed asset base calculation requires KENT data.")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("WACC applied", f"{wacc_case:.2%}")
-    with col2:
-        st.metric("Baseline WACC", f"{wacc_baseline:.2%}")
-    
-    st.info("Per-category breakdown (11.2-11.17) coming soon.")
+# Change detection for tab styling
+ui_config = get_filtered_ui_config()
 
-with st.expander("2. Depreciation", expanded=False):
-    st.markdown("**Depreciation outputs**")
-    st.markdown("""
-    | ID | Description | Status |
-    |---|---|---|
-    | 20.1.1 | Total depreciation (ordinary) | Coming soon |
-    | 20.1.2 | Total depreciation (tail) | Coming soon |
-    | 20.2-20.18 | Per-category breakdown | Coming soon |
-    """)
-    st.info("Depreciation breakdown requires detailed KENT capital base data.")
-
-with st.expander("3. Cost of capital", expanded=True):
-    st.markdown("**WACC parameters**")
-    
-    wacc_case = case.pre_dea.wacc_used or 0.0453
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("3.2.5 WACC applied", f"{wacc_case:.2%}")
-    with col2:
-        st.metric("Baseline WACC", "4.53%")
-    
-    st.markdown("")
-    st.markdown("**Incentive adjustments (cost of capital)**")
-    
-    inc_rows = [
-        ("30.4.59", "Quality adjustment", "Kvalitetsjustering_Total"),
-        ("30.2.5", "Network loss adjustment", "Natforlustjustering_Total"),
-        ("30.3.5", "Utilization rate adjustment", "Belastningsjustering_Total"),
-        ("30.5.2", "Total incentive adjustment", "Incitamentjustering_Total"),
-    ]
-    
-    inc_data = []
-    for var_id, label, col in inc_rows:
-        case_val = case_ir.get(col, 0)
-        baseline_val = baseline_ir.get(col, 0)
-        delta, pct = calc_delta(case_val, baseline_val)
-        inc_data.append({
-            "ID": var_id,
-            "Adjustment": label,
-            "Case (tkr)": format_tkr(case_val, show_sign=True),
-            "Baseline (tkr)": format_tkr(baseline_val, show_sign=True),
-            "Delta (tkr)": format_tkr(delta, show_sign=True) if delta is not None else "-"
-        })
-    
-    st.dataframe(pd.DataFrame(inc_data), hide_index=True, width='stretch')
-    
-    if case_ir.get('Missing_Incentive_Data', False):
-        st.warning("Incentive data incomplete for this company.")
-
-with st.expander("4. Operating expenditures", expanded=False):
-    st.markdown("**OPEX components**")
-    
-    pav_case = case_ir['Paverkbara_Periodsumma']
-    pav_baseline = baseline_ir['Paverkbara_Periodsumma']
-    pav_delta, pav_pct = calc_delta(pav_case, pav_baseline)
-    
-    method_used = case_ir.get('Method_used', 'OPEX')
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric(
-            "40.1.1 Controllable costs",
-            f"{pav_case:,.0f} tkr",
-            f"{pav_pct:+.1f}%" if pav_pct else None
-        )
-    with col2:
-        st.metric("Method", method_used)
-    
-    opav_case = case_ir.get('Opaverkbara_Kostnader', 0)
-    opav_baseline = baseline_ir.get('Opaverkbara_Kostnader', 0)
-    opav_delta, opav_pct = calc_delta(opav_case, opav_baseline)
-    
-    st.metric(
-        "40.2.1 Non-controllable costs",
-        f"{opav_case:,.0f} tkr",
-        f"{opav_pct:+.1f}%" if opav_pct else None
+def _has_m1_changes() -> bool:
+    m1 = ui_config.get("m1_asset_base", {})
+    return (
+        m1.get("kent_file_bytes") is not None or
+        (m1.get("general_scaling") is not None and m1.get("general_scaling") != 1.0) or
+        (m1.get("cat_scaling") and len(m1.get("cat_scaling")) > 0) or
+        (m1.get("var_scaling") and len(m1.get("var_scaling")) > 0)
     )
 
-with st.expander("5. Efficiency incentive", expanded=True):
-    st.markdown("**DEA efficiency results**")
-    
-    eff_case = case.extraction.efficiency
-    eff_baseline = baseline.extraction.efficiency
-    potential_case = case.extraction.potential
-    effkrav_case = case.post_dea.user_effkrav_proc
-    effkrav_baseline = baseline.post_dea.user_effkrav_proc
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric(
-            "50.3.1 Efficiency score",
-            f"{eff_case:.3f}" if eff_case else "-",
-            f"{(eff_case - eff_baseline):.3f}" if eff_case and eff_baseline else None
-        )
-    
-    with col2:
-        st.metric(
-            "50.3.3 Efficiency potential",
-            f"{potential_case:.1%}" if potential_case else "-"
-        )
-    
-    with col3:
-        st.metric(
-            "50.3.4 Applied requirement",
-            f"{effkrav_case:.2%}" if effkrav_case else "-",
-            f"{(effkrav_case - effkrav_baseline):.2%}" if effkrav_case and effkrav_baseline and abs(effkrav_case - effkrav_baseline) > 0.0001 else None
-        )
-    
-    st.markdown("")
-    
-    if hasattr(case.dea, 'dea_results') and case.dea.dea_results is not None:
-        dea_df = case.dea.dea_results
-        user_row = dea_df[dea_df['REId'] == user_reid]
-        if not user_row.empty and 'Supereffektivitet' in user_row.columns:
-            super_eff = user_row['Supereffektivitet'].iloc[0]
-            st.metric("50.3.2 Super-efficiency score", f"{super_eff:.3f}")
+def _has_m2_changes() -> bool:
+    m2 = ui_config.get("m2_depreciation", {})
+    lifetime_adj = m2.get("lifetime_adjustments")
+    return lifetime_adj is not None and len(lifetime_adj) > 0
+
+def _has_m3_changes() -> bool:
+    m3_wacc = ui_config.get("m3_cost_of_capital", {})
+    m3_qual = ui_config.get("m3_quality_adjustments", {})
+    return (
+        m3_wacc.get("wacc_override") is not None or
+        m3_qual.get("adj_max_agg") is not None or
+        m3_qual.get("adj_max_cemi4") is not None or
+        m3_qual.get("sharing_netloss") is not None or
+        not m3_qual.get("enable_quality", True) or
+        not m3_qual.get("enable_netloss", True) or
+        not m3_qual.get("enable_load", True)
+    )
+
+def _has_m4_changes() -> bool:
+    return False  # No OPEX parameters implemented yet
+
+def _has_m5_changes() -> bool:
+    m5 = ui_config.get("m5_efficiency", {})
+    return (
+        m5.get("trunkering_max") is not None or
+        m5.get("realiseringstid") is not None or
+        m5.get("kunddelning") is not None or
+        m5.get("outlier_krav") is not None or
+        m5.get("trunkering_min") is not None or
+        m5.get("paverkbara_method") is not None
+    )
+
+has_changes = {
+    "m1": _has_m1_changes(),
+    "m2": _has_m2_changes(),
+    "m3": _has_m3_changes(),
+    "m4": _has_m4_changes(),
+    "m5": _has_m5_changes(),
+    "m7": ui_config.get("addon_benchmarking", {}).get("dea_method") == "custom",
+}
+
+def tab_label(key: str, name: str) -> str:
+    if has_changes[key]:
+        return f":orange[{name}]"
+    return name
+
+tab_labels = [
+    tab_label("m1", "M1 Regulatory asset base valuation"),
+    tab_label("m2", "M2 Depreciation"),
+    tab_label("m3", "M3 Cost of Capital"),
+    tab_label("m4", "M4 Operating expenditures"),
+    tab_label("m5", "M5 Efficiency incentive"),
+    tab_label("m7", "M7 Benchmarking"),
+]
+
+tabs = st.tabs(tab_labels)
+
+# Tab 1: Asset base
+with tabs[0]:
+    st.caption("Asset base outputs - placeholder")
+
+# Tab 2: Depreciation
+with tabs[1]:
+    st.caption("Depreciation outputs - placeholder")
+
+# Tab 3: Cost of capital
+with tabs[2]:
+    st.caption("Cost of capital outputs - placeholder")
+
+# Tab 4: OPEX
+with tabs[3]:
+    st.caption("OPEX outputs - placeholder")
+
+# Tab 5: Efficiency
+with tabs[4]:
+    st.caption("Efficiency outputs - placeholder")
+
+# Tab 7: Benchmarking
+with tabs[5]:
+    st.caption("Benchmarking outputs - placeholder")
 
 st.divider()
 
