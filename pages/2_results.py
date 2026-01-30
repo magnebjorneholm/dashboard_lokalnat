@@ -37,7 +37,7 @@ from frontend.results import (
 
 init_session_state()
 
-SHAPEFILE_PATH = "data/shapefiles/Samtliga nÃ¤tfÃ¶retags del- och verksamhetsomrÃ¥den.shp"
+SHAPEFILE_PATH = "data/shapefiles/Samtliga nätföretags del- och verksamhetsområden.shp"
 
 # =============================================================================
 # HELPER FUNCTIONS
