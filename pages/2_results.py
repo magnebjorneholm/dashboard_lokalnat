@@ -26,6 +26,14 @@ from frontend.utils.geo_visualization import (
     get_column_label
 )
 from frontend.modules.base import case_summary
+from frontend.results import (
+    m1_asset_base_output,
+    m2_depreciation_output,
+    m3_cost_of_capital_output,
+    m4_operating_exp_output,
+    m5_efficiency_output,
+    m7_benchmarking_output,
+)
 
 init_session_state()
 
@@ -328,29 +336,29 @@ tab_labels = [
 
 tabs = st.tabs(tab_labels)
 
-# Tab 1: Asset base
+# Tab 1: Asset base (M1)
 with tabs[0]:
-    st.caption("Asset base outputs - placeholder")
+    m1_asset_base_output.render(case, baseline, ui_config)
 
-# Tab 2: Depreciation
+# Tab 2: Depreciation (M2)
 with tabs[1]:
-    st.caption("Depreciation outputs - placeholder")
+    m2_depreciation_output.render(case, baseline, ui_config)
 
-# Tab 3: Cost of capital
+# Tab 3: Cost of Capital (M3)
 with tabs[2]:
-    st.caption("Cost of capital outputs - placeholder")
+    m3_cost_of_capital_output.render(case, baseline, ui_config)
 
-# Tab 4: OPEX
+# Tab 4: Operating expenditures (M4)
 with tabs[3]:
-    st.caption("OPEX outputs - placeholder")
+    m4_operating_exp_output.render(case, baseline, ui_config)
 
-# Tab 5: Efficiency
+# Tab 5: Efficiency incentive (M5)
 with tabs[4]:
-    st.caption("Efficiency outputs - placeholder")
+    m5_efficiency_output.render(case, baseline, ui_config, user_reid=user_reid)
 
-# Tab 7: Benchmarking
+# Tab 7: Benchmarking (M7)
 with tabs[5]:
-    st.caption("Benchmarking outputs - placeholder")
+    m7_benchmarking_output.render(case, baseline, ui_config)
 
 st.divider()
 
