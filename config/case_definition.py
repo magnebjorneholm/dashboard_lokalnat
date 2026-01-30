@@ -103,6 +103,19 @@ class PreDeaConfig:
     # Parameter change specific (normvalues/lifetimes)
     normvalue_adjustments: Optional[Dict[int, float]] = None  # {cat_encode: multiplier}
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None  # {cat_encode: {'ekdep': X, 'maxdep': Y}}
+    
+    # === WACC input specification (for M3 output display) ===
+    # How WACC was specified: "capm", "derived", "direct", "baseline"
+    wacc_input_method: str = "baseline"
+    
+    # CAPM base parameters (3.1.X) - used if wacc_input_method == "capm"
+    wacc_capm_inputs: Optional[Dict[str, float]] = None
+    # Keys: debt_ratio, asset_beta, risk_free_rate, market_risk_premium,
+    #       credit_risk_premium, tax_rate, inflation
+    
+    # Derived parameters (3.2.X) - used if wacc_input_method == "derived"
+    wacc_derived_inputs: Optional[Dict[str, float]] = None
+    # Keys: cost_of_equity, cost_of_debt, debt_ratio, tax_rate, inflation
 
 
 @dataclass

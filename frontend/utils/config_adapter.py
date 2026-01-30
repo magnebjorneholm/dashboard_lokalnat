@@ -169,6 +169,9 @@ def _build_pre_dea_config(
     else:
         capex_method = CapexMethod.BASELINE
     
+    # === WACC INPUT SPECIFICATION (for M3 output display) ===
+    wacc_input_method, wacc_capm_inputs, wacc_derived_inputs = _extract_wacc_inputs(m3)
+    
     return PreDeaConfig(
         # Source (for user's company)
         capbase_source=capbase_source,
@@ -181,7 +184,86 @@ def _build_pre_dea_config(
         wacc=wacc_override,
         normvalue_adjustments=normvalue_adjustments,
         lifetime_adjustments=lifetime_adjustments,
+        
+        # WACC input specification
+        wacc_input_method=wacc_input_method,
+        wacc_capm_inputs=wacc_capm_inputs,
+        wacc_derived_inputs=wacc_derived_inputs,
     )
+
+
+def _extract_wacc_inputs(m3: Dict[str, Any]) -> tuple:
+    """
+    Extract WACC input method and parameters from m3_cost_of_capital config.
+    
+    Returns:
+        Tuple of (wacc_input_method, wacc_capm_inputs, wacc_derived_inputs)
+    """
+    # Default baseline CAPM values (from UM Table 6)
+    BASELINE_CAPM = {
+        "debt_ratio": 0.36,
+        "asset_beta": 0.37,
+        "risk_free_rate": 0.0287,
+        "market_risk_premium": 0.0668,
+        "credit_risk_premium": 0.0114,
+        "tax_rate": 0.206,
+        "inflation": 0.0202,
+    }
+    
+    BASELINE_DERIVED = {
+        "cost_of_equity": 0.0645,
+        "cost_of_debt": 0.0401,
+        "debt_ratio": 0.36,
+        "tax_rate": 0.206,
+        "inflation": 0.0202,
+    }
+    
+    # No WACC override means baseline
+    if m3.get("wacc_override") is None:
+        return "baseline", None, None
+    
+    # Check for CAPM inputs (all 7 base parameters)
+    capm_keys = ["debt_ratio", "asset_beta", "risk_free_rate", 
+                 "market_risk_premium", "credit_risk_premium", "tax_rate", "inflation"]
+    has_capm = any(m3.get(k) is not None for k in capm_keys)
+    
+    # Check for derived inputs
+    derived_keys = ["cost_of_equity", "cost_of_debt", "debt_ratio_derived", 
+                    "tax_rate_derived", "inflation_derived"]
+    has_derived = any(m3.get(k) is not None for k in derived_keys)
+    
+    # Determine method based on what's present
+    if has_capm:
+        wacc_input_method = "capm"
+        wacc_capm_inputs = {
+            "debt_ratio": m3.get("debt_ratio", BASELINE_CAPM["debt_ratio"]),
+            "asset_beta": m3.get("asset_beta", BASELINE_CAPM["asset_beta"]),
+            "risk_free_rate": m3.get("risk_free_rate", BASELINE_CAPM["risk_free_rate"]),
+            "market_risk_premium": m3.get("market_risk_premium", BASELINE_CAPM["market_risk_premium"]),
+            "credit_risk_premium": m3.get("credit_risk_premium", BASELINE_CAPM["credit_risk_premium"]),
+            "tax_rate": m3.get("tax_rate", BASELINE_CAPM["tax_rate"]),
+            "inflation": m3.get("inflation", BASELINE_CAPM["inflation"]),
+        }
+        wacc_derived_inputs = None  # Will be calculated in pre_dea
+        
+    elif has_derived:
+        wacc_input_method = "derived"
+        wacc_capm_inputs = None
+        wacc_derived_inputs = {
+            "cost_of_equity": m3.get("cost_of_equity", BASELINE_DERIVED["cost_of_equity"]),
+            "cost_of_debt": m3.get("cost_of_debt", BASELINE_DERIVED["cost_of_debt"]),
+            "debt_ratio": m3.get("debt_ratio_derived", BASELINE_DERIVED["debt_ratio"]),
+            "tax_rate": m3.get("tax_rate_derived", BASELINE_DERIVED["tax_rate"]),
+            "inflation": m3.get("inflation_derived", BASELINE_DERIVED["inflation"]),
+        }
+        
+    else:
+        # Direct input - only wacc_override is set
+        wacc_input_method = "direct"
+        wacc_capm_inputs = None
+        wacc_derived_inputs = None
+    
+    return wacc_input_method, wacc_capm_inputs, wacc_derived_inputs
 
 
 def _combine_scaling_factors(

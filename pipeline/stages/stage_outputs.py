@@ -34,6 +34,11 @@ class PreDeaStageOutput:
     Contains metadata about both data source (capbase_source) and
     calculation method (capex_method) for traceability and correct
     handling in subsequent stages.
+    
+    WACC chain (3.1.X -> 3.2.X -> wacc_used):
+    - wacc_input_method: How WACC was specified ("capm", "derived", "direct", "baseline")
+    - wacc_inputs: Base parameters (3.1.X) if method is "capm"
+    - wacc_derived: Derived values (3.2.X) if method is "capm" or "derived"
     """
     df_all_companies: pd.DataFrame
     capbase_source: str  # "baseline", "var_scaled", "kent_upload"
@@ -41,6 +46,11 @@ class PreDeaStageOutput:
     capex_modified: bool
     wacc_used: Optional[float] = None
     user_id_network: Optional[int] = None
+    
+    # WACC calculation chain for M3 output display
+    wacc_input_method: str = "baseline"  # "capm", "derived", "direct", "baseline"
+    wacc_inputs: Optional[dict] = None   # 3.1.X parameters (if capm)
+    wacc_derived: Optional[dict] = None  # 3.2.X derived values (if capm or derived)
 
 
 @dataclass(frozen=True)
