@@ -118,7 +118,9 @@ def _calculate_paverkbara_single_company(
         method: 'OPEX' eller 'TOTEX'
         
     Returns:
-        Dict med resultat för detta företag
+        Dict med resultat för detta företag, inkl:
+        - Paverkbara_Fore_Periodsumma: Periodsumma FÖRE effektivisering
+        - Effektivisering_Total: Total reduktion (före - efter)
     """
     # Steg 1: Definiera startvärden
     if method == 'OPEX':
@@ -128,6 +130,9 @@ def _calculate_paverkbara_single_company(
     
     arlig_justering = neonjusteringar / 4
     arsbas_effkrav = startvarde + arlig_justering
+
+    # Påverkbara FÖRE effektivisering (4 år av startvärde + justering)
+    paverkbara_fore_periodsumma = (startvarde + arlig_justering) * 4
     
     # Steg 2-3: Beräkna årliga värden
     paverkbara_per_ar = {}
@@ -150,14 +155,19 @@ def _calculate_paverkbara_single_company(
         year = 2023 + t
         paverkbara_per_ar[f'Paverkbara_{year}'] = paverkbara_efter_avdrag
     
-    # Steg 4: Periodsumma
+    # Steg 4: Periodsumma (efter effektivisering)
     periodsumma = sum(paverkbara_per_ar.values())
+    
+    # Total effektivisering = före - efter
+    effektivisering_total = paverkbara_fore_periodsumma - periodsumma
     
     # Returnera resultat
     result = {
         'REId': reid,
         'Method_used': method,
-        'Paverkbara_Periodsumma': periodsumma
+        'Paverkbara_Fore_Periodsumma': paverkbara_fore_periodsumma,
+        'Paverkbara_Periodsumma': periodsumma,
+        'Effektivisering_Total': effektivisering_total,
     }
     result.update(paverkbara_per_ar)
     
@@ -170,10 +180,10 @@ def get_paverkbara_from_sdf(
 ) -> pd.DataFrame:
     """
     Extraherar påverkbara baseline-data från SDF Excel.
-    
+
     KRITISKT: Använder MEDELVÄRDE 2018-2021 från Påverkbara-sheet,
     INTE periodsumman från IR-sheet!
-    
+
     Args:
         sdf_ir: DataFrame från sheet "IR 2024-2027" (används ej längre för medelvärde)
         sdf_paverkbara: DataFrame från sheet "Påverkbara"

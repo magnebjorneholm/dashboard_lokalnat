@@ -40,8 +40,15 @@ def assemble_intaktsram(
     df = capex_result[['REId', 'Kapitalkostnad_Total']].copy()
     
     # Merge påverkbara
+    paverkbara_cols = ['REId', 'Paverkbara_Periodsumma', 'Method_used']
+    # Include new efficiency fields if present
+    if 'Paverkbara_Fore_Periodsumma' in paverkbara_result.columns:
+        paverkbara_cols.append('Paverkbara_Fore_Periodsumma')
+    if 'Effektivisering_Total' in paverkbara_result.columns:
+        paverkbara_cols.append('Effektivisering_Total')
+    
     df = df.merge(
-        paverkbara_result[['REId', 'Paverkbara_Periodsumma', 'Method_used']],
+        paverkbara_result[paverkbara_cols],
         on='REId',
         how='left'
     )
