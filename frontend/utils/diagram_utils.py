@@ -72,18 +72,18 @@ def create_interactive_diagram_html(data: Dict[str, dict]) -> str:
         return VARIABLE_IDS.get(key, '')
     
     # Y positions
-    y1, y2, y3, y4, y5, y6 = 0, 95, 180, 265, 350, 445
+    y1, y2, y3, y4, y5, y6 = 0, 95, 165, 265, 350, 445
     
-    # X positions
-    col1, col2, col3, col4 = 0, 175, 365, 530
+    # X positions (580px total width)
+    col1, col2, col3, col4 = 0, 150, 310, 450
     
     # Widths
-    w_small, w_medium, w_large = 150, 175, 315
-    w_wide, w_result = 505, 340
+    w_small, w_medium, w_large = 130, 150, 270
+    w_wide, w_result = 430, 290
     
     # Vertical line x-positions (aligned)
-    line_left = 87      # Center line for left column (OPEX flow)
-    line_right = 605    # Center line for right column (Capital flow)
+    line_left = 75      # Center line for left column (OPEX flow)
+    line_right = 515    # Center line for right column (Capital flow)
     
     html = f"""<!DOCTYPE html>
 <html>
@@ -98,7 +98,7 @@ body {{
     -webkit-font-smoothing: antialiased;
 }}
 .diagram {{
-    width: 680px;
+    width: 580px;
     margin: 0 auto;
     position: relative;
     height: 545px;
@@ -230,8 +230,8 @@ body {{
     
     <!-- Flow lines row 1 -->
     <div class="flow-line" style="left: {line_left}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
-    <div class="flow-line" style="left: {col2 + 75}px; top: {y1 + 52}px; height: {y4 - y1 - 52}px;"></div>
-    <div class="flow-line" style="left: {col3 + 75}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
+    <div class="flow-line" style="left: {col2 + 65}px; top: {y1 + 52}px; height: {y4 - y1 - 52}px;"></div>
+    <div class="flow-line" style="left: {col3 + 65}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
     <div class="flow-line" style="left: {line_right}px; top: {y1 + 52}px; height: {y2 - y1 - 52}px;"></div>
     
     <!-- ROW 2 -->
@@ -256,7 +256,7 @@ body {{
     
     <!-- Flow lines row 2 -->
     <div class="flow-line" style="left: {line_left}px; top: {y2 + 52}px; height: {y4 - y2 - 52}px;"></div>
-    <div class="flow-line" style="left: {col3 + 75}px; top: {y2 + 52}px; height: {y4 - y2 - 52}px;"></div>
+    <div class="flow-line" style="left: {col3 + 65}px; top: {y2 + 52}px; height: {y4 - y2 - 52}px;"></div>
     <div class="flow-line" style="left: {line_right}px; top: {y2 + 52}px; height: {y3 - y2 - 52}px;"></div>
     
     <!-- ROW 3: Quality aligned with col4 -->
@@ -283,21 +283,21 @@ body {{
         <div class="box-value">{fmt(kapitalkostnader['value'])} MSEK</div>
     </div>
     
-    <div class="flow-line" style="left: {col1 + 157}px; top: {y4 + 52}px; height: {y5 - y4 - 52}px;"></div>
-    <div class="flow-line" style="left: {col3 + 157}px; top: {y4 + 52}px; height: {y5 - y4 - 52}px;"></div>
+    <div class="flow-line" style="left: {col1 + 135}px; top: {y4 + 52}px; height: {y5 - y4 - 52}px;"></div>
+    <div class="flow-line" style="left: {col3 + 135}px; top: {y4 + 52}px; height: {y5 - y4 - 52}px;"></div>
     
     <!-- ROW 5 -->
-    <div class="box {get_box_class(other_adjustments)}" style="left: {col1 + 87}px; top: {y5}px; width: {w_wide}px;">
+    <div class="box {get_box_class(other_adjustments)}" style="left: {col1 + 75}px; top: {y5}px; width: {w_wide}px;">
         <div class="box-id">{get_var_id('other_adjustments')}</div>
         <div class="tooltip">{create_tooltip('Other adjustments', other_adjustments)}</div>
         <div class="box-title">Other adjustments</div>
         <div class="box-value">{fmt(other_adjustments['value'])} MSEK</div>
     </div>
     
-    <div class="flow-line" style="left: 340px; top: {y5 + 52}px; height: {y6 - y5 - 52}px;"></div>
+    <div class="flow-line" style="left: 290px; top: {y5 + 52}px; height: {y6 - y5 - 52}px;"></div>
     
     <!-- ROW 6 -->
-    <div class="box result {get_box_class(intaktsram)}" style="left: {(680 - w_result) // 2}px; top: {y6}px; width: {w_result}px;">
+    <div class="box result {get_box_class(intaktsram)}" style="left: {(580 - w_result) // 2}px; top: {y6}px; width: {w_result}px;">
         <div class="box-id">{get_var_id('intaktsram')}</div>
         <div class="tooltip">{create_tooltip('Revenue frame', intaktsram)}</div>
         <div class="box-title">Revenue frame</div>
