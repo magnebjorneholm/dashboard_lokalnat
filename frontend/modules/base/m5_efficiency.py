@@ -13,10 +13,7 @@ import streamlit as st
 from typing import Dict, Any
 
 from frontend.common.parameter_input import parameter_input, parameter_select
-from calculations.effektiviseringskrav import (
-    get_max_effkrav,
-    calculate_trunkering_min_from_outlier_krav,
-)
+from calculations.effektiviseringskrav import get_max_effkrav
 from frontend.utils.state_manager import get_config_value
 
 MODULE_KEY = "m5_efficiency"
@@ -28,26 +25,8 @@ BASELINE_CUSTOMER_SHARING = 0.50
 BASELINE_SUPERVISION_PERIOD = 4
 BASELINE_MIN_REQUIREMENT = 0.01
 
-# Session state keys for constraint calculation
-_SS_PREFIX = "m5_eff_"
-
-
-def _get_constraint_values() -> tuple:
-    """
-    Get values for constraint calculation from session_state.
-    Uses previous render's values, or baseline if first render.
-    """
-    real_time = st.session_state.get(f"{_SS_PREFIX}realiseringstid", BASELINE_REALIZATION_TIME)
-    kund_del = st.session_state.get(f"{_SS_PREFIX}kunddelning", BASELINE_CUSTOMER_SHARING)
-    min_req = st.session_state.get(f"{_SS_PREFIX}outlier_krav", BASELINE_MIN_REQUIREMENT)
-    return int(real_time), kund_del, min_req
-
-
-def _update_constraint_values(real_time: int, kund_del: float, min_req: float):
-    """Store current values in session_state for next render."""
-    st.session_state[f"{_SS_PREFIX}realiseringstid"] = real_time
-    st.session_state[f"{_SS_PREFIX}kunddelning"] = kund_del
-    st.session_state[f"{_SS_PREFIX}outlier_krav"] = min_req
+# Fixed minimum for potential cap (16%) - provides margin for parameter changes
+MIN_POTENTIAL_CAP = 0.17
 
 
 def render_efficiency_params() -> Dict[str, Any]:
@@ -71,25 +50,14 @@ def render_efficiency_params() -> Dict[str, Any]:
     
     st.markdown("##### 5.2 Efficiency requirement conversion")
     
-    # Get constraint values from previous render (or baseline)
-    prev_real_time, prev_kund_del, prev_min_req = _get_constraint_values()
-    
-    # Calculate dynamic min for 5.2.1 based on PREVIOUS values
-    critical_potential = calculate_trunkering_min_from_outlier_krav(
-        outlier_krav=prev_min_req,
-        kunddelning=prev_kund_del,
-        realiseringstid=prev_real_time,
-        tillsynsperiod=BASELINE_SUPERVISION_PERIOD
-    )
-    
-    # 5.2.1 Max potential cap
+    # 5.2.1 Max potential cap (fixed min_val for stability)
     max_pot, max_pot_changed = parameter_input(
         module_key=MODULE_KEY,
         param_id="5.2.1",
         label="Maximum efficiency potential cap",
         baseline=BASELINE_MAX_POTENTIAL,
         value=get_config_value(MODULE_KEY, "trunkering_max", BASELINE_MAX_POTENTIAL),
-        min_val=critical_potential,
+        min_val=MIN_POTENTIAL_CAP,
         max_val=1.0,
         step=0.01,
         help_text="Upper bound on assessed efficiency potential",
@@ -98,13 +66,6 @@ def render_efficiency_params() -> Dict[str, Any]:
     
     if max_pot_changed:
         config["trunkering_max"] = max_pot
-    
-    # Show constraint info if relevant
-    if critical_potential > 0.001:
-        st.caption(
-            f"Min: {critical_potential*100:.1f}% "
-            f"(ensures max req >= {prev_min_req*100:.2f}%)"
-        )
     
     # 5.2.2 Realization time
     real_time, real_time_changed = parameter_input(
@@ -163,14 +124,11 @@ def render_efficiency_params() -> Dict[str, Any]:
     if min_req_changed:
         config["outlier_krav"] = min_req
     
-    # Get current values for display and storage
+    # Get current values for display
     current_real_time = int(real_time) if real_time_changed else BASELINE_REALIZATION_TIME
     current_kund_del = kund_del if kund_del_changed else BASELINE_CUSTOMER_SHARING
     current_min_req = min_req if min_req_changed else BASELINE_MIN_REQUIREMENT
     current_max_pot = max_pot if max_pot_changed else BASELINE_MAX_POTENTIAL
-    
-    # Store current values for next render's constraint calculation
-    _update_constraint_values(current_real_time, current_kund_del, current_min_req)
     
     # Calculate and display resulting range
     max_annual_req = get_max_effkrav(
@@ -183,21 +141,6 @@ def render_efficiency_params() -> Dict[str, Any]:
     st.caption(
         f"Resulting range: {current_min_req*100:.2f}% - {max_annual_req*100:.2f}% annually"
     )
-    
-    # Validate constraint with CURRENT values and show warning if violated
-    new_critical = calculate_trunkering_min_from_outlier_krav(
-        outlier_krav=current_min_req,
-        kunddelning=current_kund_del,
-        realiseringstid=current_real_time,
-        tillsynsperiod=BASELINE_SUPERVISION_PERIOD
-    )
-    
-    if current_max_pot < new_critical - 0.001:
-        st.warning(
-            f"Constraint violation: Max potential ({current_max_pot*100:.1f}%) "
-            f"< required minimum ({new_critical*100:.1f}%). "
-            f"Increase 5.2.1 or adjust 5.2.2/5.2.3/5.3.1."
-        )
     
     st.divider()
     

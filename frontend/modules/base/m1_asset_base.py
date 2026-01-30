@@ -209,29 +209,26 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
         if isinstance(cat_scaling_conf, dict):
             initial_scaling = float(cat_scaling_conf.get(cat.cat_encode, 1.0))
         data.append({
-            'cat_encode': cat.cat_encode,
-            'Category': cat.name,
             'Param-ID': cat.scaling_param_id,
+            'Category': cat.name,
             'Scaling': initial_scaling,
+            '_cat_encode': cat.cat_encode,  # Hidden, for extraction only
         })
     
     df = pd.DataFrame(data)
     
     edited_df = st.data_editor(
-        df,
+        df[['Param-ID', 'Category', 'Scaling']],
         width='stretch',
         hide_index=True,
         num_rows="fixed",
-        disabled=['cat_encode', 'Category', 'Param-ID'],
+        disabled=['Param-ID', 'Category'],
         column_config={
-            'cat_encode': st.column_config.NumberColumn(
-                'Code', format="%d", width="small"
+            'Param-ID': st.column_config.TextColumn(
+                'Param-ID', width="small"
             ),
             'Category': st.column_config.TextColumn(
                 'Category', width="large"
-            ),
-            'Param-ID': st.column_config.TextColumn(
-                'Param-ID', width="small"
             ),
             'Scaling': st.column_config.NumberColumn(
                 'Scaling',
@@ -246,11 +243,12 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
         key=f"{MODULE_KEY}_cat_scaling"
     )
     
-    # Extract non-default values
+    # Extract non-default values (use original df for cat_encode lookup)
     adjustments = {}
-    for _, row in edited_df.iterrows():
+    for idx, row in edited_df.iterrows():
         if abs(row['Scaling'] - 1.0) > 1e-9:
-            adjustments[int(row['cat_encode'])] = float(row['Scaling'])
+            cat_encode = int(df.iloc[idx]['_cat_encode'])
+            adjustments[cat_encode] = float(row['Scaling'])
     
     if adjustments:
         st.caption(f":orange[Modified] - {len(adjustments)} category scaling adjustment(s)")
@@ -306,21 +304,21 @@ def _render_variables_scaling(
 
     summary_df['Scaling'] = summary_df['cat_encode'].map(_initial_var_scaling)
     
+    # Reorder: Var-ID first, hide cat_encode
+    display_cols = ['Var-ID', 'Category', 'Components', 'NUAV (Mkr)', 'Scaling']
+    
     edited_df = st.data_editor(
-        summary_df,
+        summary_df[display_cols],
         width='stretch',
         hide_index=True,
         num_rows="fixed",
-        disabled=['cat_encode', 'Category', 'Var-ID', 'Components', 'NUAV (Mkr)'],
+        disabled=['Var-ID', 'Category', 'Components', 'NUAV (Mkr)'],
         column_config={
-            'cat_encode': st.column_config.NumberColumn(
-                'Code', format="%d", width="small"
+            'Var-ID': st.column_config.TextColumn(
+                'Var-ID', width="small"
             ),
             'Category': st.column_config.TextColumn(
                 'Category', width="medium"
-            ),
-            'Var-ID': st.column_config.TextColumn(
-                'Var-ID', width="small"
             ),
             'Components': st.column_config.NumberColumn(
                 'Components', format="%d", width="small"
@@ -341,11 +339,12 @@ def _render_variables_scaling(
         key=f"{MODULE_KEY}_var_scaling"
     )
     
-    # Extract non-default values
+    # Extract non-default values (use original summary_df for cat_encode lookup)
     adjustments = {}
-    for _, row in edited_df.iterrows():
+    for idx, row in edited_df.iterrows():
         if abs(row['Scaling'] - 1.0) > 1e-9:
-            adjustments[int(row['cat_encode'])] = float(row['Scaling'])
+            cat_encode = int(summary_df.iloc[idx]['cat_encode'])
+            adjustments[cat_encode] = float(row['Scaling'])
     
     if adjustments:
         st.caption(f":orange[Modified] - {len(adjustments)} variable scaling adjustment(s)")
