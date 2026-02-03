@@ -605,7 +605,15 @@ def _render_peryear_table(
         'incentive_total_year': 'Total (after agg cap)',
     }
     
-    # Build table: rows = variables, columns = years
+    # Get year rows (exclude Total row for per-year display)
+    case_years = case_df[case_df['year'] != 'Total']
+    case_total = case_df[case_df['year'] == 'Total']
+    
+    baseline_total = None
+    if baseline_df is not None and not baseline_df.empty:
+        baseline_total = baseline_df[baseline_df['year'] == 'Total']
+    
+    # Build table: rows = variables, columns = years + totals
     rows = []
     for col_name, var_id in var_id_map.items():
         if col_name not in case_df.columns:
@@ -616,13 +624,29 @@ def _render_peryear_table(
             'Description': label_map.get(col_name, col_name),
         }
         
-        # Add values for each year
-        for _, data_row in case_df.iterrows():
+        # Add Case values for each year
+        for _, data_row in case_years.iterrows():
             year = data_row['year']
             val = data_row.get(col_name, 0)
-            # Convert to tkr
             val_tkr = val / 1000 if pd.notna(val) else 0
             row[f'{year}'] = val_tkr
+        
+        # Add Case Total
+        if not case_total.empty:
+            case_tot_val = case_total.iloc[0].get(col_name, 0)
+            row['Case Total'] = case_tot_val / 1000 if pd.notna(case_tot_val) else 0
+        else:
+            row['Case Total'] = 0
+        
+        # Add Baseline Total and Delta
+        if baseline_total is not None and not baseline_total.empty and col_name in baseline_total.columns:
+            bl_tot_val = baseline_total.iloc[0].get(col_name, 0)
+            bl_tkr = bl_tot_val / 1000 if pd.notna(bl_tot_val) else 0
+            row['BL Total'] = bl_tkr
+            row['Delta'] = row['Case Total'] - bl_tkr
+        else:
+            row['BL Total'] = row['Case Total']  # Same as case if no baseline
+            row['Delta'] = 0
         
         rows.append(row)
     
@@ -640,7 +664,7 @@ def _render_peryear_table(
         'Description': st.column_config.TextColumn('Description', width='medium'),
     }
     
-    # Add year columns
+    # Add year columns and totals
     for col in df_display.columns:
         if col not in ['Var-ID', 'Description']:
             column_config[col] = st.column_config.NumberColumn(col, format='%.1f')
@@ -697,20 +721,29 @@ def _render_ait_aif_breakdown(
     # === AIT Breakdown ===
     if ait_cols:
         st.markdown("**AIT (Average Interruption Time)**")
-        _render_indicator_table(case_df, 'ait', sni_labels)
+        _render_indicator_table(case_df, baseline_df, 'ait', sni_labels)
     
     # === AIF Breakdown ===
     if aif_cols:
         st.markdown("**AIF (Average Interruption Frequency)**")
-        _render_indicator_table(case_df, 'aif', sni_labels)
+        _render_indicator_table(case_df, baseline_df, 'aif', sni_labels)
 
 
 def _render_indicator_table(
     case_df: pd.DataFrame,
+    baseline_df: Optional[pd.DataFrame],
     indicator: str,  # 'ait' or 'aif'
     sni_labels: dict
 ) -> None:
     """Render AIT or AIF table by customer type and planned/unplanned."""
+    
+    # Get year rows (exclude Total row for per-year display)
+    case_years = case_df[case_df['year'] != 'Total']
+    case_total = case_df[case_df['year'] == 'Total']
+    
+    baseline_total = None
+    if baseline_df is not None and not baseline_df.empty:
+        baseline_total = baseline_df[baseline_df['year'] == 'Total']
     
     rows = []
     
@@ -726,12 +759,29 @@ def _render_indicator_table(
                 'Customer': sni_labels.get(sni, f'SNI {sni}'),
             }
             
-            # Add values for each year
-            for _, data_row in case_df.iterrows():
+            # Add Case values for each year
+            for _, data_row in case_years.iterrows():
                 year = data_row['year']
                 val = data_row.get(col_name, 0)
                 val_tkr = val / 1000 if pd.notna(val) else 0
                 row[f'{year}'] = val_tkr
+            
+            # Add Case Total
+            if not case_total.empty:
+                case_tot_val = case_total.iloc[0].get(col_name, 0)
+                row['Case Total'] = case_tot_val / 1000 if pd.notna(case_tot_val) else 0
+            else:
+                row['Case Total'] = 0
+            
+            # Add Baseline Total and Delta
+            if baseline_total is not None and not baseline_total.empty and col_name in baseline_total.columns:
+                bl_tot_val = baseline_total.iloc[0].get(col_name, 0)
+                bl_tkr = bl_tot_val / 1000 if pd.notna(bl_tot_val) else 0
+                row['BL Total'] = bl_tkr
+                row['Delta'] = row['Case Total'] - bl_tkr
+            else:
+                row['BL Total'] = row['Case Total']
+                row['Delta'] = 0
             
             rows.append(row)
     
