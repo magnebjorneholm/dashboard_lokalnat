@@ -3,6 +3,8 @@ intaktsram_assembly.py
 
 Assemblering av intäktsram från alla komponenter.
 Summerar kapitalkostnad, påverkbara, opåverkbara, incitament, och övriga komponenter.
+
+Vid TOTEX-metod: CAPEX reduceras separat med sin andel av effektiviseringskravet.
 """
 
 import pandas as pd
@@ -18,18 +20,27 @@ def assemble_intaktsram(
     """
     Assemblerar komplett intäktsram för alla företag.
     
-    Formel:
+    Formel (OPEX-metod):
     Intäktsram_Total = Kapitalkostnad_Total
-                     + Påverkbara_Periodsumma
+                     + Påverkbara_Periodsumma (efter OPEX-effektivisering)
                      + Opåverkbara_Kostnader
                      + Flexibilitetstjänster
                      + Avbrottsersättning_12_24h
                      - Avdrag_Statligt_Stöd
-                     + Incitamentjustering_Total    <- NY POST
+                     + Incitamentjustering_Total
+    
+    Formel (TOTEX-metod):
+    Intäktsram_Total = Kapitalkostnad_Efter_Effektivisering (CAPEX - CAPEX_Effektivisering)
+                     + OPEX_Efter (OPEX-andel av påverkbara efter effektivisering)
+                     + Opåverkbara_Kostnader
+                     + Flexibilitetstjänster
+                     + Avbrottsersättning_12_24h
+                     - Avdrag_Statligt_Stöd
+                     + Incitamentjustering_Total
     
     Args:
         capex_result: DataFrame med REId, Kapitalkostnad_Total
-        paverkbara_result: DataFrame med REId, Paverkbara_Periodsumma
+        paverkbara_result: DataFrame med REId, Paverkbara_Periodsumma, OPEX/CAPEX-fält
         sdf_baseline: DataFrame från SDF Excel med opåverkbara och övriga komponenter
         incentive_result: Optional DataFrame med incitamentjusteringar per REId
         
@@ -39,19 +50,37 @@ def assemble_intaktsram(
     # Start med CAPEX
     df = capex_result[['REId', 'Kapitalkostnad_Total']].copy()
     
-    # Merge påverkbara
+    # Merge påverkbara - inkludera alla relevanta fält
     paverkbara_cols = ['REId', 'Paverkbara_Periodsumma', 'Method_used']
-    # Include new efficiency fields if present
-    if 'Paverkbara_Fore_Periodsumma' in paverkbara_result.columns:
-        paverkbara_cols.append('Paverkbara_Fore_Periodsumma')
-    if 'Effektivisering_Total' in paverkbara_result.columns:
-        paverkbara_cols.append('Effektivisering_Total')
+    
+    # Legacy efficiency fields
+    for col in ['Paverkbara_Fore_Periodsumma', 'Effektivisering_Total']:
+        if col in paverkbara_result.columns:
+            paverkbara_cols.append(col)
+    
+    # New separated OPEX/CAPEX fields
+    for col in ['OPEX_Fore', 'OPEX_Efter', 'OPEX_Effektivisering',
+                'CAPEX_Fore', 'CAPEX_Efter', 'CAPEX_Effektivisering',
+                'OPEX_Andel', 'CAPEX_Andel']:
+        if col in paverkbara_result.columns:
+            paverkbara_cols.append(col)
     
     df = df.merge(
         paverkbara_result[paverkbara_cols],
         on='REId',
         how='left'
     )
+    
+    # Apply CAPEX efficiency reduction for TOTEX method
+    # Kapitalkostnad_Efter_Effektivisering = Kapitalkostnad_Total - CAPEX_Effektivisering
+    if 'CAPEX_Effektivisering' in df.columns:
+        df['CAPEX_Effektivisering'] = df['CAPEX_Effektivisering'].fillna(0)
+        df['Kapitalkostnad_Efter_Effektivisering'] = (
+            df['Kapitalkostnad_Total'] - df['CAPEX_Effektivisering']
+        )
+    else:
+        df['CAPEX_Effektivisering'] = 0
+        df['Kapitalkostnad_Efter_Effektivisering'] = df['Kapitalkostnad_Total']
     
     # Merge SDF baseline komponenter
     sdf_cols = [
@@ -129,10 +158,35 @@ def assemble_intaktsram(
         df['Incitamentjustering_Total'] = 0
         df['Missing_Incentive_Data'] = True
     
+    # Determine which CAPEX value to use based on method
+    # For TOTEX: use Kapitalkostnad_Efter_Effektivisering
+    # For OPEX: use Kapitalkostnad_Total (no reduction)
+    method_is_totex = df['Method_used'] == 'TOTEX'
+    
+    df['Kapitalkostnad_I_Intaktsram'] = df.apply(
+        lambda row: row['Kapitalkostnad_Efter_Effektivisering'] 
+                    if row['Method_used'] == 'TOTEX' 
+                    else row['Kapitalkostnad_Total'],
+        axis=1
+    )
+    
+    # For TOTEX, use OPEX_Efter; for OPEX, use Paverkbara_Periodsumma
+    # (These should be the same value, but OPEX_Efter is more explicit)
+    if 'OPEX_Efter' in df.columns:
+        df['Paverkbara_I_Intaktsram'] = df.apply(
+            lambda row: row.get('OPEX_Efter', row['Paverkbara_Periodsumma'])
+                        if pd.notna(row.get('OPEX_Efter'))
+                        else row['Paverkbara_Periodsumma'],
+            axis=1
+        )
+    else:
+        df['Paverkbara_I_Intaktsram'] = df['Paverkbara_Periodsumma']
+    
     # Beräkna total intäktsram inkl. incitament
+    # Uses the method-appropriate values for CAPEX and OPEX
     df['Intaktsram_Total'] = (
-        df['Kapitalkostnad_Total']
-        + df['Paverkbara_Periodsumma']
+        df['Kapitalkostnad_I_Intaktsram']
+        + df['Paverkbara_I_Intaktsram']
         + df['Opaverkbara_Kostnader']
         + df['Flexibilitetstjanster']
         + df['Avbrottsersattning_12_24h']
@@ -180,21 +234,40 @@ def create_intaktsram_breakdown(
     Returns:
         DataFrame med kolumner: Komponent, Värde (tkr)
     """
+    method = user_intaktsram.get('Method_used', 'OPEX')
+    
+    # Use method-appropriate values
+    capex_value = user_intaktsram.get('Kapitalkostnad_I_Intaktsram', 
+                                       user_intaktsram.get('Kapitalkostnad_Total', 0))
+    paverkbara_value = user_intaktsram.get('Paverkbara_I_Intaktsram',
+                                            user_intaktsram.get('Paverkbara_Periodsumma', 0))
+    
     breakdown = [
-        ('Kapitalkostnad', user_intaktsram['Kapitalkostnad_Total']),
-        ('Påverkbara kostnader', user_intaktsram['Paverkbara_Periodsumma']),
-        ('Opåverkbara kostnader', user_intaktsram['Opaverkbara_Kostnader']),
-        ('Flexibilitetstjänster', user_intaktsram['Flexibilitetstjanster']),
-        ('Avbrottsersättning 12-24h', user_intaktsram['Avbrottsersattning_12_24h']),
-        ('Avdrag statligt stöd', -user_intaktsram['Avdrag_Statligt_Stod']),
+        ('Kapitalkostnad', capex_value),
+        ('Påverkbara kostnader', paverkbara_value),
+        ('Opåverkbara kostnader', user_intaktsram.get('Opaverkbara_Kostnader', 0)),
+        ('Flexibilitetstjänster', user_intaktsram.get('Flexibilitetstjanster', 0)),
+        ('Avbrottsersättning 12-24h', user_intaktsram.get('Avbrottsersattning_12_24h', 0)),
+        ('Avdrag statligt stöd', -user_intaktsram.get('Avdrag_Statligt_Stod', 0)),
     ]
+    
+    # Show efficiency breakdown for TOTEX
+    if method == 'TOTEX':
+        capex_eff = user_intaktsram.get('CAPEX_Effektivisering', 0)
+        opex_eff = user_intaktsram.get('OPEX_Effektivisering', 0)
+        if capex_eff != 0 or opex_eff != 0:
+            breakdown.append(('', ''))
+            breakdown.append(('Effektivisering (TOTEX):', ''))
+            if opex_eff != 0:
+                breakdown.append(('  - OPEX-reduktion', -opex_eff))
+            if capex_eff != 0:
+                breakdown.append(('  - CAPEX-reduktion', -capex_eff))
     
     # Lägg till incitamentjusteringar om de finns
     if 'Incitamentjustering_Total' in user_intaktsram.index:
         inc_total = user_intaktsram.get('Incitamentjustering_Total', 0)
         if inc_total != 0:
-            # Visa dekomposition
-            breakdown.append(('', ''))  # Blank rad
+            breakdown.append(('', ''))
             breakdown.append(('Incitamentjusteringar:', ''))
             
             qual = user_intaktsram.get('Kvalitetsjustering_Total', 0)
@@ -210,8 +283,8 @@ def create_intaktsram_breakdown(
             
             breakdown.append(('Incitamentjustering totalt', inc_total))
     
-    breakdown.append(('', ''))  # Blank rad
-    breakdown.append(('TOTAL INTÄKTSRAM', user_intaktsram['Intaktsram_Total']))
+    breakdown.append(('', ''))
+    breakdown.append(('TOTAL INTÄKTSRAM', user_intaktsram.get('Intaktsram_Total', 0)))
     
     df = pd.DataFrame(breakdown, columns=['Komponent', 'Värde (tkr)'])
     
@@ -232,21 +305,27 @@ def create_detailed_breakdown(
     Returns:
         DataFrame med kolumner: Komponent, Värde (tkr), Andel (%)
     """
-    total = user_intaktsram['Intaktsram_Total']
+    total = user_intaktsram.get('Intaktsram_Total', 0)
+    method = user_intaktsram.get('Method_used', 'OPEX')
     
     components = []
     
+    # Use method-appropriate values
+    capex_value = user_intaktsram.get('Kapitalkostnad_I_Intaktsram', 
+                                       user_intaktsram.get('Kapitalkostnad_Total', 0))
+    paverkbara_value = user_intaktsram.get('Paverkbara_I_Intaktsram',
+                                            user_intaktsram.get('Paverkbara_Periodsumma', 0))
+    
     # Huvudkomponenter
     main = [
-        ('Kapitalkostnad', 'Kapitalkostnad_Total'),
-        ('Påverkbara kostnader', 'Paverkbara_Periodsumma'),
-        ('Opåverkbara kostnader', 'Opaverkbara_Kostnader'),
-        ('Flexibilitetstjänster', 'Flexibilitetstjanster'),
-        ('Avbrottsersättning 12-24h', 'Avbrottsersattning_12_24h'),
+        ('Kapitalkostnad', capex_value),
+        ('Påverkbara kostnader', paverkbara_value),
+        ('Opåverkbara kostnader', user_intaktsram.get('Opaverkbara_Kostnader', 0)),
+        ('Flexibilitetstjänster', user_intaktsram.get('Flexibilitetstjanster', 0)),
+        ('Avbrottsersättning 12-24h', user_intaktsram.get('Avbrottsersattning_12_24h', 0)),
     ]
     
-    for label, col in main:
-        val = user_intaktsram.get(col, 0)
+    for label, val in main:
         pct = (val / total * 100) if total != 0 else 0
         components.append((label, val, pct))
     

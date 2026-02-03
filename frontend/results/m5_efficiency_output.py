@@ -257,63 +257,138 @@ def _render_adjusted_costs_section(
     
     # Get method
     method_used = case_ir.get('Method_used', 'OPEX')
-    st.caption(f"Cost base: {method_used}")
+    if method_used == 'TOTEX':
+        st.caption("Cost base: TOTEX (CAPEX excl. incentive adjustments)")
+    else:
+        st.caption("Cost base: OPEX")
     
-    # Get values from intaktsram (now includes Paverkbara_Fore_Periodsumma)
-    pav_fore_case = case_ir.get('Paverkbara_Fore_Periodsumma', None)
-    pav_fore_baseline = baseline_ir.get('Paverkbara_Fore_Periodsumma', None)
+    # Get new separated OPEX/CAPEX values
+    opex_fore_case = case_ir.get('OPEX_Fore', None)
+    opex_fore_baseline = baseline_ir.get('OPEX_Fore', None)
+    opex_efter_case = case_ir.get('OPEX_Efter', None)
+    opex_efter_baseline = baseline_ir.get('OPEX_Efter', None)
+    opex_eff_case = case_ir.get('OPEX_Effektivisering', None)
+    opex_eff_baseline = baseline_ir.get('OPEX_Effektivisering', None)
     
-    pav_efter_case = case_ir.get('Paverkbara_Periodsumma', 0)
-    pav_efter_baseline = baseline_ir.get('Paverkbara_Periodsumma', 0)
+    capex_fore_case = case_ir.get('CAPEX_Fore', None)
+    capex_fore_baseline = baseline_ir.get('CAPEX_Fore', None)
+    capex_efter_case = case_ir.get('CAPEX_Efter', None)
+    capex_efter_baseline = baseline_ir.get('CAPEX_Efter', None)
+    capex_eff_case = case_ir.get('CAPEX_Effektivisering', None)
+    capex_eff_baseline = baseline_ir.get('CAPEX_Effektivisering', None)
     
-    eff_adj_case = case_ir.get('Effektivisering_Total', None)
-    eff_adj_baseline = baseline_ir.get('Effektivisering_Total', None)
-    
-    # Fallback calculation if new fields not available
-    if pav_fore_case is None and eff_adj_case is None:
-        # Legacy mode - estimate from baseline comparison
-        st.caption("Note: Detailed efficiency breakdown not available for this calculation.")
-        eff_adj_case = 0
-        eff_adj_baseline = 0
-        pav_fore_case = pav_efter_case
-        pav_fore_baseline = pav_efter_baseline
+    # Fallback to legacy fields if new fields not available
+    if opex_fore_case is None:
+        opex_fore_case = case_ir.get('Paverkbara_Fore_Periodsumma', 0)
+        opex_fore_baseline = baseline_ir.get('Paverkbara_Fore_Periodsumma', 0)
+        opex_efter_case = case_ir.get('Paverkbara_Periodsumma', 0)
+        opex_efter_baseline = baseline_ir.get('Paverkbara_Periodsumma', 0)
+        opex_eff_case = case_ir.get('Effektivisering_Total', 0)
+        opex_eff_baseline = baseline_ir.get('Effektivisering_Total', 0)
+        capex_eff_case = 0
+        capex_eff_baseline = 0
     
     rows = []
     
+    # Show allocation percentages for TOTEX
+    if method_used == 'TOTEX':
+        opex_andel = case_ir.get('OPEX_Andel', None)
+        capex_andel = case_ir.get('CAPEX_Andel', None)
+        if opex_andel is not None and capex_andel is not None:
+            st.caption(
+                f"Efficiency allocation: OPEX {opex_andel*100:.1f}% / CAPEX {capex_andel*100:.1f}%"
+            )
+    
     # OPEX before
-    if pav_fore_case is not None:
-        fore_delta, _ = _calc_delta(pav_fore_case, pav_fore_baseline)
+    if opex_fore_case is not None:
+        fore_delta, _ = _calc_delta(opex_fore_case, opex_fore_baseline)
         rows.append({
             "ID": "-",
             "Component": "OPEX before efficiency adj.",
-            "Case (tkr)": _format_tkr(pav_fore_case),
-            "Baseline (tkr)": _format_tkr(pav_fore_baseline),
+            "Case (tkr)": _format_tkr(opex_fore_case),
+            "Baseline (tkr)": _format_tkr(opex_fore_baseline),
             "Delta (tkr)": _format_tkr(fore_delta, show_sign=True) if fore_delta else "-",
         })
     
     # 50.4.1 OPEX efficiency adjustment
-    if eff_adj_case is not None:
-        adj_delta, _ = _calc_delta(eff_adj_case, eff_adj_baseline)
+    if opex_eff_case is not None:
+        adj_delta, _ = _calc_delta(opex_eff_case, opex_eff_baseline)
         rows.append({
             "ID": "50.4.1",
             "Component": "OPEX efficiency adjustment",
-            "Case (tkr)": _format_tkr(-eff_adj_case, show_sign=True),  # Show as negative (reduction)
-            "Baseline (tkr)": _format_tkr(-eff_adj_baseline, show_sign=True),
+            "Case (tkr)": _format_tkr(-opex_eff_case, show_sign=True),  # Show as negative (reduction)
+            "Baseline (tkr)": _format_tkr(-opex_eff_baseline, show_sign=True),
             "Delta (tkr)": _format_tkr(-adj_delta, show_sign=True) if adj_delta else "-",
         })
     
     # 50.4.3 OPEX after adjustment
-    efter_delta, _ = _calc_delta(pav_efter_case, pav_efter_baseline)
-    rows.append({
-        "ID": "50.4.3",
-        "Component": "OPEX after efficiency adj.",
-        "Case (tkr)": _format_tkr(pav_efter_case),
-        "Baseline (tkr)": _format_tkr(pav_efter_baseline),
-        "Delta (tkr)": _format_tkr(efter_delta, show_sign=True) if efter_delta else "-",
-    })
+    if opex_efter_case is not None:
+        efter_delta, _ = _calc_delta(opex_efter_case, opex_efter_baseline)
+        rows.append({
+            "ID": "50.4.3",
+            "Component": "OPEX after efficiency adj.",
+            "Case (tkr)": _format_tkr(opex_efter_case),
+            "Baseline (tkr)": _format_tkr(opex_efter_baseline),
+            "Delta (tkr)": _format_tkr(efter_delta, show_sign=True) if efter_delta else "-",
+        })
     
-    # TODO: Add 50.4.2, 50.4.4 for TOTEX method when CAPEX efficiency adjustment is implemented
+    # --- CAPEX Section (only for TOTEX) ---
     if method_used == 'TOTEX':
-        st.info("CAPEX efficiency adjustment (50.4.2, 50.4.4) will be added in a future update.")
-    
+        # Add separator row
+        rows.append({
+            "ID": "",
+            "Component": "",
+            "Case (tkr)": "",
+            "Baseline (tkr)": "",
+            "Delta (tkr)": "",
+        })
+        
+        # CAPEX before
+        if capex_fore_case is not None:
+            fore_delta, _ = _calc_delta(capex_fore_case, capex_fore_baseline)
+            rows.append({
+                "ID": "-",
+                "Component": "CAPEX before efficiency adj.",
+                "Case (tkr)": _format_tkr(capex_fore_case),
+                "Baseline (tkr)": _format_tkr(capex_fore_baseline),
+                "Delta (tkr)": _format_tkr(fore_delta, show_sign=True) if fore_delta else "-",
+            })
+        
+        # 50.4.2 CAPEX efficiency adjustment
+        if capex_eff_case is not None:
+            adj_delta, _ = _calc_delta(capex_eff_case, capex_eff_baseline)
+            rows.append({
+                "ID": "50.4.2",
+                "Component": "CAPEX efficiency adjustment",
+                "Case (tkr)": _format_tkr(-capex_eff_case, show_sign=True),  # Show as negative (reduction)
+                "Baseline (tkr)": _format_tkr(-capex_eff_baseline, show_sign=True),
+                "Delta (tkr)": _format_tkr(-adj_delta, show_sign=True) if adj_delta else "-",
+            })
+        
+        # 50.4.4 CAPEX after adjustment
+        if capex_efter_case is not None:
+            efter_delta, _ = _calc_delta(capex_efter_case, capex_efter_baseline)
+            rows.append({
+                "ID": "50.4.4",
+                "Component": "CAPEX after efficiency adj.",
+                "Case (tkr)": _format_tkr(capex_efter_case),
+                "Baseline (tkr)": _format_tkr(capex_efter_baseline),
+                "Delta (tkr)": _format_tkr(efter_delta, show_sign=True) if efter_delta else "-",
+            })
+        
     st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    
+    # Summary metrics
+    total_eff_case = (opex_eff_case or 0) + (capex_eff_case or 0)
+    total_eff_baseline = (opex_eff_baseline or 0) + (capex_eff_baseline or 0)
+    
+    if total_eff_case != 0 or total_eff_baseline != 0:
+        col1, col2 = st.columns(2)
+        with col1:
+            delta = total_eff_case - total_eff_baseline
+            st.metric(
+                "Total efficiency adjustment",
+                f"-{total_eff_case:,.0f} tkr",
+                delta=f"{-delta:,.0f} tkr" if delta != 0 else None,
+                delta_color="inverse"
+            )

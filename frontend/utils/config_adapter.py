@@ -486,9 +486,8 @@ def calculate_trunkering_min_from_outlier_krav(
 
 
 def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
-    """Build PostDeaConfig from m4, m5, m3_quality_adjustments."""
+    """Build PostDeaConfig from m5_efficiency, m3_quality_adjustments."""
     m5 = ui_config.get("m5_efficiency", {})
-    m4 = ui_config.get("m4_operating_exp", {})
     
     trunkering_max = m5.get("trunkering_max") if m5.get("trunkering_max") is not None else 0.30
     outlier_krav = m5.get("outlier_krav") if m5.get("outlier_krav") is not None else 0.01
@@ -507,7 +506,8 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
             tillsynsperiod=tillsynsperiod
         )
     
-    paverkbara_method_str = m4.get("paverkbara_method", "OPEX")
+    # paverkbara_method is set in M5 (5.4.1 Cost base application)
+    paverkbara_method_str = m5.get("paverkbara_method", "OPEX")
     incentive = _build_incentive_config(ui_config)
     
     return PostDeaConfig(

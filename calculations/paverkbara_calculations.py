@@ -3,6 +3,9 @@ calculations/paverkbara_calculations.py
 
 Beräkningar för påverkbara kostnader med effektiviseringskrav.
 Stöder både OPEX-metod (traditionell) och TOTEX-metod (Ei 2020).
+
+TOTEX-metod: Effektiviseringskravet läggs på OPEX + CAPEX, men reduktionen
+allokeras proportionellt och appliceras separat på respektive kostnadskomponent.
 """
 
 import pandas as pd
@@ -24,6 +27,7 @@ def calculate_paverkbara_with_effkrav(
     2. Beräkna årliga avdrag med compound growth
     3. Beräkna påverkbara per år (2024-2027)
     4. Summera periodsumma
+    5. För TOTEX: Allokera effektivisering proportionellt mellan OPEX och CAPEX
     
     Args:
         effkrav_data: DataFrame med REId, Effkrav_proc (från effektiviseringskrav stage)
@@ -37,6 +41,8 @@ def calculate_paverkbara_with_effkrav(
         - Paverkbara_2024, Paverkbara_2025, Paverkbara_2026, Paverkbara_2027
         - Paverkbara_Periodsumma
         - Method_used
+        - OPEX_Fore, OPEX_Efter, OPEX_Effektivisering
+        - CAPEX_Fore, CAPEX_Efter, CAPEX_Effektivisering
     """
     if method not in ['OPEX', 'TOTEX']:
         raise ValueError(f"Method måste vara 'OPEX' eller 'TOTEX', fick '{method}'")
@@ -51,18 +57,16 @@ def calculate_paverkbara_with_effkrav(
         how='left'
     )
     
-    # Merge med CAPEX data (behövs ENDAST för TOTEX)
-    if method == 'TOTEX':
-        if 'Kapitalkostnad_Total' not in capex_data.columns:
-            raise ValueError(
-                "TOTEX-metod kräver 'Kapitalkostnad_Total' i capex_data. "
-                "Kontrollera att kapitalkostnad förbereds korrekt i post_dea.py"
-            )
+    # Merge med CAPEX data (behövs för TOTEX, och för CAPEX_Fore även i OPEX-läge)
+    if 'Kapitalkostnad_Total' in capex_data.columns:
         df = df.merge(
             capex_data[['REId', 'Kapitalkostnad_Total']],
             on='REId',
             how='left'
         )
+        df['Kapitalkostnad_Total'] = df['Kapitalkostnad_Total'].fillna(0)
+    else:
+        df['Kapitalkostnad_Total'] = 0
     
     # Validera att vi har data
     required_cols = ['REId', 'Effkrav_proc', 'Paverkbara_Medelvarde', 'Neonjusteringar']
@@ -108,66 +112,100 @@ def _calculate_paverkbara_single_company(
        - Kumulativt_Avdrag_t = sum(Årligt_Avdrag[1:t+1])
        - Påverkbara_t = Startvärde - Kumulativt_Avdrag_t + Årlig_Justering
     5. Periodsumma = sum(Påverkbara[2024:2028])
+    6. För TOTEX: Allokera effektivisering proportionellt mellan OPEX och CAPEX
     
     Args:
         reid: REId för företaget
         effkrav_proc: Årligt effektiviseringskrav (decimal)
-        paverkbara_medelvarde: Medelvärde påverkbara 2018-2021 (tkr, 4-års)
-        neonjusteringar: Neonjusteringar (tkr, 4-års)
-        kapitalkostnad_total: Total kapitalkostnad 2024-2027 (tkr, 4-års)
+        paverkbara_medelvarde: Medelvärde påverkbara 2018-2021 (tkr, årligt)
+        neonjusteringar: Neonjusteringar (tkr, 4-års periodsumma)
+        kapitalkostnad_total: Total kapitalkostnad 2024-2027 (tkr, 4-års periodsumma)
         method: 'OPEX' eller 'TOTEX'
         
     Returns:
-        Dict med resultat för detta företag, inkl:
-        - Paverkbara_Fore_Periodsumma: Periodsumma FÖRE effektivisering
-        - Effektivisering_Total: Total reduktion (före - efter)
+        Dict med resultat för detta företag
     """
-    # Steg 1: Definiera startvärden
+    arlig_justering = neonjusteringar / 4
+    
+    # OPEX-bas (årlig)
+    opex_bas_arlig = paverkbara_medelvarde + arlig_justering
+    
+    # CAPEX-bas (årlig) - endast relevant för TOTEX
+    capex_bas_arlig = kapitalkostnad_total / 4
+    
+    # Definiera startvärde för effektiviseringsberäkning
     if method == 'OPEX':
         startvarde = paverkbara_medelvarde
+        total_bas_arlig = opex_bas_arlig
     else:  # TOTEX
-        startvarde = paverkbara_medelvarde + (kapitalkostnad_total / 4)
+        startvarde = paverkbara_medelvarde + capex_bas_arlig
+        total_bas_arlig = opex_bas_arlig + capex_bas_arlig
     
-    arlig_justering = neonjusteringar / 4
     arsbas_effkrav = startvarde + arlig_justering
 
-    # Påverkbara FÖRE effektivisering (4 år av startvärde + justering)
-    paverkbara_fore_periodsumma = (startvarde + arlig_justering) * 4
-    
-    # Steg 2-3: Beräkna årliga värden
+    # Beräkna årliga värden och total effektivisering
     paverkbara_per_ar = {}
     kumulativt_avdrag = 0
     
     for t in range(1, 5):  # t = 1,2,3,4 för 2024,2025,2026,2027
-        # Tillväxtfaktor
         tillvaxtfaktor = (1 + effkrav_proc) ** (t - 1)
-        
-        # Årligt avdrag
         arligt_avdrag = effkrav_proc * arsbas_effkrav * tillvaxtfaktor
-        
-        # Kumulativt avdrag
         kumulativt_avdrag += arligt_avdrag
-        
-        # Påverkbara efter avdrag
         paverkbara_efter_avdrag = startvarde - kumulativt_avdrag + arlig_justering
-        
-        # Spara för detta år
         year = 2023 + t
         paverkbara_per_ar[f'Paverkbara_{year}'] = paverkbara_efter_avdrag
     
-    # Steg 4: Periodsumma (efter effektivisering)
-    periodsumma = sum(paverkbara_per_ar.values())
+    # Total effektivisering (periodsumma)
+    total_fore = (startvarde + arlig_justering) * 4
+    total_efter = sum(paverkbara_per_ar.values())
+    effektivisering_total = total_fore - total_efter
     
-    # Total effektivisering = före - efter
-    effektivisering_total = paverkbara_fore_periodsumma - periodsumma
+    # Beräkna OPEX/CAPEX-andelar och allokera effektivisering
+    if method == 'OPEX' or total_bas_arlig == 0:
+        opex_andel = 1.0
+        capex_andel = 0.0
+    else:  # TOTEX
+        opex_andel = opex_bas_arlig / total_bas_arlig
+        capex_andel = capex_bas_arlig / total_bas_arlig
+    
+    # OPEX före/efter (periodsumma)
+    opex_fore = opex_bas_arlig * 4
+    opex_effektivisering = effektivisering_total * opex_andel
+    opex_efter = opex_fore - opex_effektivisering
+    
+    # CAPEX före/efter (periodsumma)
+    if method == 'TOTEX':
+        capex_fore = kapitalkostnad_total
+        capex_effektivisering = effektivisering_total * capex_andel
+        capex_efter = capex_fore - capex_effektivisering
+    else:
+        capex_fore = kapitalkostnad_total  # Visa CAPEX även i OPEX-läge (för referens)
+        capex_effektivisering = 0.0
+        capex_efter = capex_fore  # Ingen reduktion i OPEX-läge
     
     # Returnera resultat
     result = {
         'REId': reid,
         'Method_used': method,
-        'Paverkbara_Fore_Periodsumma': paverkbara_fore_periodsumma,
-        'Paverkbara_Periodsumma': periodsumma,
+        
+        # Legacy-fält (bakåtkompatibilitet)
+        'Paverkbara_Fore_Periodsumma': total_fore,
+        'Paverkbara_Periodsumma': total_efter,
         'Effektivisering_Total': effektivisering_total,
+        
+        # Nya separata OPEX-fält (50.4.1, 50.4.3)
+        'OPEX_Fore': opex_fore,
+        'OPEX_Efter': opex_efter,
+        'OPEX_Effektivisering': opex_effektivisering,
+        
+        # Nya separata CAPEX-fält (50.4.2, 50.4.4)
+        'CAPEX_Fore': capex_fore,
+        'CAPEX_Efter': capex_efter,
+        'CAPEX_Effektivisering': capex_effektivisering,
+        
+        # Andelar (för transparens)
+        'OPEX_Andel': opex_andel,
+        'CAPEX_Andel': capex_andel,
     }
     result.update(paverkbara_per_ar)
     
@@ -197,7 +235,8 @@ def get_paverkbara_from_sdf(
     # Kolumn 123: "Medelvärde 2018-2021 påverkbara kostnader"
     medelvarde_col = None
     for col in sdf_paverkbara.columns:
-        if 'medelvärde' in col.lower() and '2018-2021' in col.lower():
+        col_lower = col.lower()
+        if ('medelvärde' in col_lower or 'medelvarde' in col_lower) and '2018-2021' in col_lower:
             medelvarde_col = col
             break
     
