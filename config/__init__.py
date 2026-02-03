@@ -13,7 +13,6 @@ from .case_definition import (
     EfficiencyMethod,
     PaverkbaraMethod,
     get_baseline_config,
-    create_wacc_scaling_config,
     create_parameter_change_config,
     create_kent_upload_config,
 )
@@ -27,7 +26,6 @@ __all__ = [
     'EfficiencyMethod',
     'PaverkbaraMethod',
     'get_baseline_config',
-    'create_wacc_scaling_config',
     'create_parameter_change_config',
     'create_kent_upload_config'
 ]

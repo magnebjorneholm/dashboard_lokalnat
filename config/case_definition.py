@@ -37,8 +37,7 @@ class CapexMethod(str, Enum):
     Applied uniformly to all 148 companies (Parameters).
     """
     BASELINE = "baseline"              # No parameter change, baseline WACC
-    WACC_SCALING = "wacc_scaling"      # Scale returns with new WACC
-    PARAMETER_CHANGE = "parameter_change"  # Change normvalues/lifetimes, run KENT 5-8
+    PARAMETER_CHANGE = "parameter_change"  # Any parameter change (WACC/normvalues/lifetimes), run KENT 5-8
 
 
 class EfficiencyMethod(str, Enum):
@@ -74,14 +73,16 @@ class PreDeaConfig:
     - KENT_UPLOAD source: Convert via kent_capbase_prep.py (steps 1-4)
     - Then run selected method (steps 5-8 if needed)
     
-    Combination matrix (9 combinations):
-    +------------------+--------------+----------------+-------------------+
-    | Source \ Method  | BASELINE     | WACC_SCALING   | PARAMETER_CHANGE  |
-    +------------------+--------------+----------------+-------------------+
-    | BASELINE         | Direct       | Scale all      | KENT 5-8 all      |
-    | VAR_SCALED       | KENT for usr | KENT+scale     | Replace+KENT all  |
-    | KENT_UPLOAD      | KENT for usr | KENT+scale     | Replace+KENT all  |
-    +------------------+--------------+----------------+-------------------+
+    Combination matrix (6 combinations):
+    +------------------+--------------+-------------------+
+    | Source \ Method  | BASELINE     | PARAMETER_CHANGE  |
+    +------------------+--------------+-------------------+
+    | BASELINE         | Direct       | KENT 5-8 all      |
+    | VAR_SCALED       | KENT for usr | Replace+KENT all  |
+    | KENT_UPLOAD      | KENT for usr | Replace+KENT all  |
+    +------------------+--------------+-------------------+
+    
+    Note: WACC changes now use PARAMETER_CHANGE for full precision.
     """
     
     # === Data supply (per company) ===
@@ -229,30 +230,6 @@ def get_baseline_config(user_reid: str) -> CaseDefinition:
     )
 
 
-def create_wacc_scaling_config(user_reid: str, new_wacc: float) -> CaseDefinition:
-    """
-    Create config for WACC scaling.
-    
-    Args:
-        user_reid: User's REId
-        new_wacc: New WACC (real, before tax)
-        
-    Returns:
-        CaseDefinition for WACC scaling
-    """
-    return CaseDefinition(
-        name=f"WACC {new_wacc:.2%}",
-        user_reid=user_reid,
-        pre_dea=PreDeaConfig(
-            capbase_source=CapbaseSource.BASELINE,
-            method=CapexMethod.WACC_SCALING,
-            wacc=new_wacc
-        ),
-        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
-        post_dea=PostDeaConfig()
-    )
-
-
 def create_var_scaled_config(
     user_reid: str,
     user_capbase_scaled: Any,  # pd.DataFrame
@@ -267,8 +244,8 @@ def create_var_scaled_config(
     Args:
         user_reid: User's REId
         user_capbase_scaled: Scaled capbase_a DataFrame (ordinarie scaled)
-        method: Calculation method (BASELINE, WACC_SCALING, PARAMETER_CHANGE)
-        wacc: WACC if method != BASELINE
+        method: Calculation method (BASELINE or PARAMETER_CHANGE)
+        wacc: WACC if method == PARAMETER_CHANGE
         normvalue_adjustments: Normvalue adjustments if PARAMETER_CHANGE
         lifetime_adjustments: Lifetime adjustments if PARAMETER_CHANGE
         
@@ -307,8 +284,8 @@ def create_kent_upload_config(
         user_reid: User's REId
         kent_file_bytes: KENT Excel file as bytes
         kent_user_id_network: User's id_network
-        method: Calculation method (BASELINE, WACC_SCALING, PARAMETER_CHANGE)
-        wacc: WACC if method != BASELINE
+        method: Calculation method (BASELINE or PARAMETER_CHANGE)
+        wacc: WACC if method == PARAMETER_CHANGE
         normvalue_adjustments: Normvalue adjustments if PARAMETER_CHANGE
         lifetime_adjustments: Lifetime adjustments if PARAMETER_CHANGE
         

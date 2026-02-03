@@ -10,7 +10,7 @@ REFACTORED ARCHITECTURE:
 
 This separation enables all combinations of:
 - Data source: baseline / var_scaled / kent_upload
-- Method: baseline / wacc_scaling / parameter_change
+- Method: baseline / parameter_change
 
 No print statements - logging handled by PipelineDebugLogger.
 """
@@ -21,7 +21,6 @@ from typing import Optional, Tuple
 
 from config.case_definition import PreDeaConfig, CapbaseSource, CapexMethod
 from pipeline.stages.stage_outputs import BaselineStageOutput, PreDeaStageOutput
-from calculations.wacc_scaling import calculate_wacc_scaled_capex
 from calculations.wacc_calculations import CAPMInputs, WACCResult, calculate_wacc, BASELINE_WACC
 from calculations.kent_calculations import run_kent_calculations_batch
 from calculations.data_mapping import merge_kent_with_baseline
@@ -219,8 +218,7 @@ def _apply_capex_method(
     Logic:
     - BASELINE method + baseline source -> Direct from baseline
     - BASELINE method + custom source -> KENT 5-8 for user, baseline for others
-    - WACC_SCALING -> Scale return for all (after optional KENT for user)
-    - PARAMETER_CHANGE -> KENT 5-8 for all with new parameters
+    - PARAMETER_CHANGE -> KENT 5-8 for all with new parameters (incl WACC changes)
     """
     method = config.method
     
@@ -236,13 +234,7 @@ def _apply_capex_method(
                 baseline, user_capbase, user_id_network, source_used, wacc_chain
             )
     
-    # === WACC_SCALING method ===
-    elif method == CapexMethod.WACC_SCALING:
-        return _method_wacc_scaling(
-            baseline, user_capbase, user_id_network, source_used, config, wacc_chain
-        )
-    
-    # === PARAMETER_CHANGE method ===
+    # === PARAMETER_CHANGE method (includes WACC-only changes) ===
     elif method == CapexMethod.PARAMETER_CHANGE:
         return _method_parameter_change(
             baseline, user_capbase, user_id_network, source_used, config, wacc_chain
@@ -335,63 +327,6 @@ def _method_baseline_with_custom_source(
         wacc_inputs=wacc_chain["wacc_inputs"],
         wacc_derived=wacc_chain["wacc_derived"],
         df_by_category=df_by_category,
-    )
-
-
-def _method_wacc_scaling(
-    baseline: BaselineStageOutput,
-    user_capbase: Optional[pd.DataFrame],
-    user_id_network: int,
-    source_used: str,
-    config: PreDeaConfig,
-    wacc_chain: dict
-) -> PreDeaStageOutput:
-    """
-    WACC_SCALING method.
-    If custom source: Run KENT for user first, then scale all.
-    If baseline source: Scale directly from baseline.
-    
-    Note: df_by_category is not populated here - will be refactored later.
-    """
-    new_wacc = wacc_chain["wacc_used"]
-    
-    # Step 1: If custom source, run KENT for user with baseline WACC
-    if user_capbase is not None:
-        try:
-            _, df_network, _ = run_kent_calculations_batch(
-                user_capbase,
-                wacc=baseline.wacc,
-                normvalue_adjustments=None,
-                lifetime_adjustments=None
-            )
-            df_base = merge_kent_with_baseline(
-                df_network,
-                baseline.df_all_companies,
-                sdf_ir=baseline.sdf_ir
-            )
-        except Exception:
-            df_base = baseline.df_all_companies.copy()
-    else:
-        df_base = baseline.df_all_companies.copy()
-    
-    # Step 2: Scale all 148 with WACC ratio
-    df_result = calculate_wacc_scaled_capex(
-        df_base,
-        baseline_wacc=baseline.wacc,
-        new_wacc=new_wacc
-    )
-    
-    return PreDeaStageOutput(
-        df_all_companies=df_result,
-        capbase_source=source_used,
-        capex_method="wacc_scaling",
-        capex_modified=True,
-        wacc_used=new_wacc,
-        user_id_network=user_id_network,
-        wacc_input_method=wacc_chain["wacc_input_method"],
-        wacc_inputs=wacc_chain["wacc_inputs"],
-        wacc_derived=wacc_chain["wacc_derived"],
-        df_by_category=None,  # To be implemented in refactor
     )
 
 

@@ -121,9 +121,8 @@ def _build_pre_dea_config(
     3. BASELINE (no change)
     
     METHOD PRIORITY (calculation method for ALL companies):
-    1. PARAMETER_CHANGE (if normvalues/lifetimes changed)
-    2. WACC_SCALING (if only WACC changed)
-    3. BASELINE (no change)
+    1. PARAMETER_CHANGE (if any parameter changed: WACC/normvalues/lifetimes)
+    2. BASELINE (no change)
     
     IMPORTANT: Parameters (general_scaling, cat_scaling) affect ALL companies.
     Variables (var_scaling) only affect logged-in company.
@@ -162,10 +161,9 @@ def _build_pre_dea_config(
     )
     has_wacc_change = (wacc_override is not None)
     
-    if has_parameter_changes:
+    # Any parameter or WACC change triggers PARAMETER_CHANGE (full KENT calculation)
+    if has_parameter_changes or has_wacc_change:
         capex_method = CapexMethod.PARAMETER_CHANGE
-    elif has_wacc_change:
-        capex_method = CapexMethod.WACC_SCALING
     else:
         capex_method = CapexMethod.BASELINE
     
@@ -628,9 +626,9 @@ def get_source_method_summary(ui_config: Dict[str, Any]) -> Dict[str, str]:
     has_lifetime = m2.get("lifetime_adjustments")
     has_wacc = m3.get("wacc_override") is not None
     
-    has_params = has_general or has_cat or has_lifetime
+    has_any_change = has_general or has_cat or has_lifetime or has_wacc
     
-    if has_params:
+    if has_any_change:
         method = "PARAMETER_CHANGE"
         parts = []
         if has_general:
@@ -639,10 +637,9 @@ def get_source_method_summary(ui_config: Dict[str, Any]) -> Dict[str, str]:
             parts.append(f"{len(m1['cat_scaling'])} cat scaling")
         if has_lifetime:
             parts.append(f"{len(m2['lifetime_adjustments'])} lifetimes")
+        if has_wacc:
+            parts.append(f"WACC={m3['wacc_override']:.4f}")
         method_desc = "Parameter changes: " + ", ".join(parts)
-    elif has_wacc:
-        method = "WACC_SCALING"
-        method_desc = f"WACC scaling: {m3['wacc_override']:.4f}"
     else:
         method = "BASELINE"
         method_desc = "No parameter changes"

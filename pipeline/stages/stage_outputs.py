@@ -42,7 +42,7 @@ class PreDeaStageOutput:
     """
     df_all_companies: pd.DataFrame
     capbase_source: str  # "baseline", "var_scaled", "kent_upload"
-    capex_method: str    # "baseline", "wacc_scaling", "parameter_change"
+    capex_method: str    # "baseline", "parameter_change"
     capex_modified: bool
     wacc_used: Optional[float] = None
     user_id_network: Optional[int] = None

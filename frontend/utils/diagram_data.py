@@ -7,7 +7,7 @@ Handles all capex_method variations and sources data correctly.
 Data flow:
 - Controllable costs (före avdrag): From SDF (Medelvärde 2018-2021 * 4 + Neonjusteringar)
 - Efficiency requirement: Calculated as (före - efter)
-- Depreciation/Return: From SDF (baseline), scaled (wacc_scaling), or KENT (parameter_change)
+- Depreciation/Return: From SDF (baseline) or KENT (parameter_change)
 - Capital base: Derived from return / WACC
 - Other adjustments: Flexibility services + interruption compensation - state aid deduction
 """
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 # SDF column names (Swedish regulatory terminology)
 SDF_COL_KAPITALKOSTNAD = 'Kapitalkostnad'
-SDF_COL_KAPITALFORSLITNING = '-varav Kapital-förslitning'
+SDF_COL_KAPITALFORSLITNING = '-varav Kapital-fÃ¶rslitning'
 SDF_COL_KAPITALBINDNING = 'varav Kapital-bindning'
 
 BASELINE_WACC = 0.0453
@@ -36,7 +36,6 @@ def prepare_diagram_data(
     
     Handles all capex_method variations:
     - baseline: Use SDF values directly
-    - wacc_scaling: Scale avkastning from SDF
     - parameter_change: Use KENT output from pre_dea
     
     Args:
@@ -60,7 +59,7 @@ def prepare_diagram_data(
     capex_method = case_result.pre_dea.capex_method
     wacc_used = case_result.pre_dea.wacc_used or BASELINE_WACC
     
-    # Calculate påverkbara components
+    # Calculate pÃ¥verkbara components
     pav_data = _get_paverkbara_components(
         case_result=case_result,
         baseline_result=baseline_result,
@@ -74,7 +73,7 @@ def prepare_diagram_data(
         user_reid=user_reid
     )
     
-    # Get ej påverkbara from intaktsram
+    # Get ej pÃ¥verkbara from intaktsram
     ej_paverkbara_value = float(case_ir.get('Opaverkbara_Kostnader', 0))
     ej_paverkbara_baseline = float(baseline_ir.get('Opaverkbara_Kostnader', 0))
     
@@ -93,11 +92,11 @@ def prepare_diagram_data(
     kapitalkostnad_value = capex_data['avskrivningar']['value'] + capex_data['avkastning']['value'] + kvalitet_value
     kapitalkostnad_baseline = capex_data['avskrivningar']['baseline'] + capex_data['avkastning']['baseline'] + kvalitet_baseline
     
-    # Löpande = påverkbara efter avdrag + ej påverkbara
+    # LÃ¶pande = pÃ¥verkbara efter avdrag + ej pÃ¥verkbara
     lopande_value = pav_data['paverkbara_efter']['value'] + ej_paverkbara_value
     lopande_baseline = pav_data['paverkbara_efter']['baseline'] + ej_paverkbara_baseline
     
-    # Total intäktsram
+    # Total intÃ¤ktsram
     intaktsram_value = float(case_ir.get('Intaktsram_Total', 0))
     intaktsram_baseline = float(baseline_ir.get('Intaktsram_Total', 0))
     
@@ -110,7 +109,7 @@ def prepare_diagram_data(
             'value': pav_data['paverkbara_fore']['value'],
             'baseline': pav_data['paverkbara_fore']['baseline'],
             'is_directly_modified': False,
-            'source': 'SDF Medelvärde 2018-2021'
+            'source': 'SDF MedelvÃ¤rde 2018-2021'
         },
         'ej_paverkbara': {
             'value': ej_paverkbara_value,
@@ -205,25 +204,25 @@ def _get_paverkbara_components(
     user_reid: str
 ) -> Dict[str, dict]:
     """
-    Calculate påverkbara components: före avdrag, efter avdrag, och effektivisering.
+    Calculate pÃ¥verkbara components: fÃ¶re avdrag, efter avdrag, och effektivisering.
     
     Uses SDF data for base values and calculates:
-    - paverkbara_fore: Medelvärde * 4 + Neonjusteringar
+    - paverkbara_fore: MedelvÃ¤rde * 4 + Neonjusteringar
     - paverkbara_efter: From intaktsram (Paverkbara_Periodsumma)
     - effektivisering: paverkbara_fore - paverkbara_efter
     """
-    # Get påverkbara efter from intaktsram
+    # Get pÃ¥verkbara efter from intaktsram
     case_ir = case_result.post_dea.user_intaktsram
     baseline_ir = baseline_result.post_dea.user_intaktsram
     
     case_paverkbara_efter = float(case_ir.get('Paverkbara_Periodsumma', 0))
     baseline_paverkbara_efter = float(baseline_ir.get('Paverkbara_Periodsumma', 0))
     
-    # Get base values from SDF påverkbara sheet
+    # Get base values from SDF pÃ¥verkbara sheet
     sdf_paverkbara = case_result.baseline.sdf_paverkbara
     
     # Find column names (they vary)
-    medelvarde_col = _find_column(sdf_paverkbara, ['medelvärde', '2018-2021'])
+    medelvarde_col = _find_column(sdf_paverkbara, ['medelvÃ¤rde', '2018-2021'])
     neojust_col = _find_column(sdf_paverkbara, ['separerat yrkandet', 'neojust'])
     reid_col = 'REid' if 'REid' in sdf_paverkbara.columns else 'REId'
     
@@ -239,11 +238,11 @@ def _get_paverkbara_components(
         medelvarde = baseline_paverkbara_efter / 4
         neonjusteringar = 0
     
-    # Calculate påverkbara före avdrag
-    # Formula: (Medelvärde + Neonjusteringar/4) * 4 = Medelvärde * 4 + Neonjusteringar
+    # Calculate pÃ¥verkbara fÃ¶re avdrag
+    # Formula: (MedelvÃ¤rde + Neonjusteringar/4) * 4 = MedelvÃ¤rde * 4 + Neonjusteringar
     paverkbara_fore = medelvarde * 4 + neonjusteringar
     
-    # Effektivisering = före - efter
+    # Effektivisering = fÃ¶re - efter
     case_effektivisering = paverkbara_fore - case_paverkbara_efter
     baseline_effektivisering = paverkbara_fore - baseline_paverkbara_efter
     
@@ -273,7 +272,6 @@ def _get_capital_cost_components(
     
     Sources:
     - baseline: SDF columns '-varav Kapital-förslitning' and 'varav Kapital-bindning'
-    - wacc_scaling: SDF avskrivning + scaled avkastning
     - parameter_change: From pre_dea.df_all_companies (KENT output)
     """
     capex_method = case_result.pre_dea.capex_method
@@ -296,22 +294,7 @@ def _get_capital_cost_components(
             }
         }
     
-    elif capex_method == 'wacc_scaling':
-        scaling_factor = wacc_used / BASELINE_WACC
-        scaled_avkast = baseline_avkast * scaling_factor
-        
-        return {
-            'avskrivningar': {
-                'value': baseline_avskr,
-                'baseline': baseline_avskr
-            },
-            'avkastning': {
-                'value': scaled_avkast,
-                'baseline': baseline_avkast
-            }
-        }
-    
-    else:  # parameter_change or other KENT-based methods
+    else:  # parameter_change - uses KENT output
         case_avskr, case_avkast = _get_avskr_avkast_from_pre_dea(
             case_result.pre_dea.df_all_companies, user_reid
         )
@@ -409,9 +392,7 @@ def _get_capex_source_description(capex_method: str, wacc_used: float) -> str:
     """Generate source description for capital cost components."""
     if capex_method == 'baseline':
         return 'Baseline'
-    elif capex_method == 'wacc_scaling':
-        return f'WACC {wacc_used*100:.2f}%'
     elif capex_method == 'parameter_change':
-        return 'KENT'
+        return f'KENT (WACC {wacc_used*100:.2f}%)'
     else:
         return capex_method
