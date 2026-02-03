@@ -105,6 +105,10 @@ def render(
     wacc_case = case.pre_dea.wacc_used or BASELINE_WACC
     user_id_network = getattr(case.pre_dea, 'user_id_network', None)
     
+    # Get detailed incentive data
+    case_incentive_details = getattr(case.post_dea, 'user_incentive_details', None)
+    baseline_incentive_details = getattr(baseline.post_dea, 'user_incentive_details', None)
+    
     # === WACC SECTION ===
     _render_wacc_section(wacc_input_method, wacc_inputs, wacc_derived, wacc_case)
     
@@ -120,8 +124,8 @@ def render(
     
     st.divider()
     
-    # === FUTURE: DETAILED INCENTIVE BREAKDOWN ===
-    _render_incentive_placeholder()
+    # === DETAILED INCENTIVE BREAKDOWN ===
+    _render_incentive_detailed(case_incentive_details, baseline_incentive_details)
 
 
 def _get_variable_id_return(cat_encode: int, component: str = "ord") -> str:
@@ -549,14 +553,206 @@ def _render_incentive_section(case_ir: pd.Series, baseline_ir: pd.Series) -> Non
         st.warning("Incentive data incomplete for this company.")
 
 
-def _render_incentive_placeholder() -> None:
-    """Placeholder for detailed incentive breakdown (future feature)."""
+def _render_incentive_detailed(
+    case_details: Optional[pd.DataFrame],
+    baseline_details: Optional[pd.DataFrame]
+) -> None:
+    """Render detailed per-year incentive breakdown (User Manual Table 10)."""
     
-    with st.expander("Detailed incentive breakdown", expanded=False):
-        st.info(
-            "Detailed per-year and per-component incentive breakdown will be added in a future update. "
-            "This will include:\n"
-            "- Per-year breakdown of quality, network loss, and utilization adjustments\n"
-            "- CEMI4, AIT, and AIF component details\n"
-            "- Norm vs. observed values comparison"
-        )
+    st.markdown("**Detailed Incentive Breakdown**")
+    
+    if case_details is None:
+        st.info("Detailed incentive data not available.")
+        return
+    
+    # === Per-year main outputs (30.2.4/5, 30.3.4/5, 30.4.57/58/59, 30.5.1/2) ===
+    with st.expander("30.2-30.5 Per-year incentive outputs", expanded=True):
+        _render_peryear_table(case_details, baseline_details)
+    
+    # === AIT/AIF per customer type breakdown ===
+    with st.expander("Quality incentive by customer type (AIT/AIF)", expanded=False):
+        _render_ait_aif_breakdown(case_details, baseline_details)
+
+
+def _render_peryear_table(
+    case_df: pd.DataFrame,
+    baseline_df: Optional[pd.DataFrame]
+) -> None:
+    """Render per-year breakdown table for main incentive variables."""
+    
+    # Variable-ID mapping for User Manual Table 10
+    var_id_map = {
+        'loss_incentive_a': '30.2.4',
+        'loss_incentive': '30.2.5',
+        'util_incentive_a': '30.3.4',
+        'util_incentive': '30.3.5',
+        'inc_inter': '30.4.57',
+        'inter_incentive_a': '30.4.58',
+        'inter_incentive': '30.4.59',
+        'total_before_agg_cap': '30.5.1',
+        'incentive_total_year': '30.5.2',
+    }
+    
+    label_map = {
+        'loss_incentive_a': 'Network loss (before cap)',
+        'loss_incentive': 'Network loss (after cap)',
+        'util_incentive_a': 'Utilization (before cap)',
+        'util_incentive': 'Utilization (after cap)',
+        'inc_inter': 'Quality (before CEMI4)',
+        'inter_incentive_a': 'Quality (after CEMI4)',
+        'inter_incentive': 'Quality (after cap)',
+        'total_before_agg_cap': 'Total (before agg cap)',
+        'incentive_total_year': 'Total (after agg cap)',
+    }
+    
+    # Build table: rows = variables, columns = years
+    rows = []
+    for col_name, var_id in var_id_map.items():
+        if col_name not in case_df.columns:
+            continue
+        
+        row = {
+            'Var-ID': var_id,
+            'Description': label_map.get(col_name, col_name),
+        }
+        
+        # Add values for each year
+        for _, data_row in case_df.iterrows():
+            year = data_row['year']
+            val = data_row.get(col_name, 0)
+            # Convert to tkr
+            val_tkr = val / 1000 if pd.notna(val) else 0
+            row[f'{year}'] = val_tkr
+        
+        rows.append(row)
+    
+    if not rows:
+        st.warning("No incentive detail columns available.")
+        return
+    
+    df_display = pd.DataFrame(rows)
+    
+    st.caption("Values in tkr. Positive = revenue increase, negative = revenue decrease.")
+    
+    # Configure columns
+    column_config = {
+        'Var-ID': st.column_config.TextColumn('ID', width='small'),
+        'Description': st.column_config.TextColumn('Description', width='medium'),
+    }
+    
+    # Add year columns
+    for col in df_display.columns:
+        if col not in ['Var-ID', 'Description']:
+            column_config[col] = st.column_config.NumberColumn(col, format='%.1f')
+    
+    st.dataframe(
+        df_display,
+        hide_index=True,
+        use_container_width=True,
+        column_config=column_config
+    )
+    
+    # Show cap info
+    if 'max_adj' in case_df.columns and 'ret_period' in case_df.columns:
+        with st.expander("Cap calculation reference", expanded=False):
+            cap_rows = []
+            for _, data_row in case_df.iterrows():
+                year = data_row['year']
+                ret = data_row.get('ret_period', 0)
+                max_adj = data_row.get('max_adj', 0)
+                cap_rows.append({
+                    'Year': year,
+                    'Return (tkr)': ret / 1000 if pd.notna(ret) else 0,
+                    'Max adj (tkr)': max_adj / 1000 if pd.notna(max_adj) else 0,
+                })
+            st.dataframe(pd.DataFrame(cap_rows), hide_index=True, use_container_width=True)
+
+
+def _render_ait_aif_breakdown(
+    case_df: pd.DataFrame,
+    baseline_df: Optional[pd.DataFrame]
+) -> None:
+    """Render AIT/AIF breakdown per customer type."""
+    
+    # Customer type labels (SNI codes)
+    sni_labels = {
+        1: 'Agriculture',
+        2: 'Industry',
+        3: 'Trade/Services',
+        4: 'Public sector',
+        5: 'Household',
+        6: 'Boundary points',
+    }
+    
+    # Check if AIT/AIF columns exist
+    ait_cols = [c for c in case_df.columns if c.startswith('inc_ait_')]
+    aif_cols = [c for c in case_df.columns if c.startswith('inc_aif_')]
+    
+    if not ait_cols and not aif_cols:
+        st.info("AIT/AIF per customer type data not available.")
+        return
+    
+    st.caption("Values in tkr. No Variable-ID assigned in User Manual.")
+    
+    # === AIT Breakdown ===
+    if ait_cols:
+        st.markdown("**AIT (Average Interruption Time)**")
+        _render_indicator_table(case_df, 'ait', sni_labels)
+    
+    # === AIF Breakdown ===
+    if aif_cols:
+        st.markdown("**AIF (Average Interruption Frequency)**")
+        _render_indicator_table(case_df, 'aif', sni_labels)
+
+
+def _render_indicator_table(
+    case_df: pd.DataFrame,
+    indicator: str,  # 'ait' or 'aif'
+    sni_labels: dict
+) -> None:
+    """Render AIT or AIF table by customer type and planned/unplanned."""
+    
+    rows = []
+    
+    for ann, ann_label in [('o', 'Unplanned'), ('a', 'Planned')]:
+        for sni in range(1, 7):
+            col_name = f'inc_{indicator}_{ann}_{sni}'
+            if col_name not in case_df.columns:
+                continue
+            
+            row = {
+                'Var-ID': '',  # No Variable-ID in User Manual
+                'Type': ann_label,
+                'Customer': sni_labels.get(sni, f'SNI {sni}'),
+            }
+            
+            # Add values for each year
+            for _, data_row in case_df.iterrows():
+                year = data_row['year']
+                val = data_row.get(col_name, 0)
+                val_tkr = val / 1000 if pd.notna(val) else 0
+                row[f'{year}'] = val_tkr
+            
+            rows.append(row)
+    
+    if not rows:
+        return
+    
+    df_display = pd.DataFrame(rows)
+    
+    column_config = {
+        'Var-ID': st.column_config.TextColumn('ID', width='small'),
+        'Type': st.column_config.TextColumn('Type', width='small'),
+        'Customer': st.column_config.TextColumn('Customer', width='medium'),
+    }
+    
+    for col in df_display.columns:
+        if col not in ['Var-ID', 'Type', 'Customer']:
+            column_config[col] = st.column_config.NumberColumn(col, format='%.1f')
+    
+    st.dataframe(
+        df_display,
+        hide_index=True,
+        use_container_width=True,
+        column_config=column_config
+    )

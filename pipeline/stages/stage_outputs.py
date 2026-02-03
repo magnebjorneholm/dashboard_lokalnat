@@ -110,3 +110,9 @@ class PostDeaStageOutput:
     
     # Incentive adjustments (None if incentive data missing)
     all_incentives: Optional[pd.DataFrame] = None
+    
+    # Detailed per-year incentive breakdown for user (User Manual Table 10)
+    # Columns: year, loss_incentive_a, loss_incentive, util_incentive_a, util_incentive,
+    #          inc_inter, inter_incentive_a, inter_incentive, incentive_total_year,
+    #          total_before_agg_cap, inc_ait_*, inc_aif_*, max_adj, ret_period
+    user_incentive_details: Optional[pd.DataFrame] = None

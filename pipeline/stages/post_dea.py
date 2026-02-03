@@ -9,7 +9,7 @@ No print statements - logging handled by PipelineDebugLogger.
 """
 
 import pandas as pd
-from typing import Optional
+from typing import Optional, Tuple
 
 from config import PostDeaConfig
 from config.case_definition import PaverkbaraMethod
@@ -27,6 +27,7 @@ from data_loaders.incentive_data import (
     load_incentive_data,
     prepare_incentive_input,
     get_incentive_summary_by_reid,
+    get_incentive_detailed_by_reid,
     apply_variable_overrides,
 )
 
@@ -102,12 +103,17 @@ def stage_post_dea(
     capex_for_intaktsram = get_capex_period_sum(pre_dea, baseline)
     
     # STEP 5: Calculate incentive adjustments
-    all_incentives = _calculate_incentive_adjustments(
+    all_incentives, all_incentives_full = _calculate_incentive_adjustments(
         pre_dea=pre_dea,
         baseline=baseline,
         config=config,
         user_reid=user_reid
     )
+    
+    # Extract user's detailed incentive data (per-year breakdown)
+    user_incentive_details = None
+    if all_incentives_full is not None:
+        user_incentive_details = get_incentive_detailed_by_reid(all_incentives_full, user_reid)
     
     # STEP 6: Assemble revenue frame
     all_intaktsram = assemble_intaktsram(
@@ -127,7 +133,8 @@ def stage_post_dea(
         user_effkrav_proc=user_effkrav_proc,
         all_intaktsram=all_intaktsram,
         all_effkrav=all_effkrav,
-        all_incentives=all_incentives
+        all_incentives=all_incentives,
+        user_incentive_details=user_incentive_details
     )
 
 
@@ -140,7 +147,7 @@ def _calculate_incentive_adjustments(
     baseline: BaselineStageOutput,
     config: PostDeaConfig,
     user_reid: str
-) -> Optional[pd.DataFrame]:
+) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Calculate incentive adjustments for all companies.
     
@@ -150,6 +157,11 @@ def _calculate_incentive_adjustments(
     3. Load incentive
     
     Each incentive is capped at +/-1/3 of return per year (configurable).
+    
+    Returns:
+        Tuple of (summary_df, full_calc_df):
+        - summary_df: Aggregated per-company totals for intaktsram assembly
+        - full_calc_df: Complete per-year data with all intermediate values
     """
     try:
         incentive_data = load_incentive_data()
@@ -176,12 +188,12 @@ def _calculate_incentive_adjustments(
         
         df_summary = get_incentive_summary_by_reid(df_calc)
         
-        return df_summary
+        return df_summary, df_calc
         
     except FileNotFoundError:
-        return None
+        return None, None
     except Exception:
-        return None
+        return None, None
 
 
 def _extract_incentive_params(config: Optional[PostDeaConfig]) -> dict:
