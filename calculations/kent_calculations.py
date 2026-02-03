@@ -1,7 +1,7 @@
 """
 calculations/kent_calculations.py
 
-KENT-beräkningar för kapitalkostnader (Steg 5-8).
+KENT-berÃ¤kningar fÃ¶r kapitalkostnader (Steg 5-8).
 
 UPDATED: Normvalue adjustments now applied AFTER step 5, only to ordinarie
 capital base (nuav_ord_{time} columns), not to tail. This matches the
@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Optional, Tuple
 
-# Halvårsmappning till år
+# HalvÃ¥rsmappning till Ã¥r
 YEAR_TO_TIMECODES = {
     2024: [229, 230],  # H1 + H2
     2025: [231, 232],
@@ -26,24 +26,25 @@ def run_kent_calculations_batch(
     wacc: float = 0.0453,
     normvalue_adjustments: Optional[Dict[int, float]] = None,
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Kör KENT steg 5-8 för alla företag.
+    Run KENT steps 5-8 for all companies.
     
     Args:
-        capbase_data: DataFrame med alla komponenter (capbase_a format)
-        wacc: WACC att använda
+        capbase_data: DataFrame with all components (capbase_a format)
+        wacc: WACC to use
         normvalue_adjustments: {cat_encode: multiplier} - applied to ordinarie only
         lifetime_adjustments: {cat_encode: {'ekdep': X, 'maxdep': Y}}
         
     Returns:
-        Tuple av:
-        - df_detailed: Detaljerad data per komponent
-        - df_network: Aggregerad data per nätverk med per-år kolumner
+        Tuple of:
+        - df_detailed: Detailed data per component
+        - df_network: Aggregated per network with per-year columns (for DEA)
+        - df_category: Aggregated per (network, category, time) for M1/M2 output
     """
     df = capbase_data.copy()
     
-    # Applicera livslängdsjusteringar FÖRE steg 5 (påverkar ord/tail klassificering)
+    # Apply lifetime adjustments BEFORE step 5 (affects ord/tail classification)
     if lifetime_adjustments:
         for cat_encode, adjustments in lifetime_adjustments.items():
             mask = df['cat_encode'] == cat_encode
@@ -53,27 +54,28 @@ def run_kent_calculations_batch(
                 df.loc[mask, 'maxdep'] = adjustments['maxdep']
         print(f"  Applied lifetime adjustments for {len(lifetime_adjustments)} categories")
     
-    # Steg 5: Beräkna ålder och NUAV (skapar base_ord/base_tail, nuav_ord/nuav_tail)
+    # Step 5: Calculate ages and NUAV
     df = calculate_ages_and_nuav_batch(df)
     
-    # Applicera normvärdejusteringar EFTER steg 5, endast på ordinarie
+    # Apply normvalue adjustments AFTER step 5, only on ordinarie
     if normvalue_adjustments:
         df = _apply_normvalue_to_ordinarie(df, normvalue_adjustments)
         print(f"  Applied normvalue adjustments to ordinarie for {len(normvalue_adjustments)} categories")
     
-    # Steg 6: Beräkna avskrivningar
+    # Step 6: Calculate depreciation
     df = calculate_depreciation_batch(df)
     
-    # Steg 7: Beräkna avkastning
+    # Step 7: Calculate returns
     df = calculate_returns_batch(df, wacc=wacc)
     
-    # Steg 8: Aggregera till nätverksnivå
+    # Step 8a: Aggregate to network level (for DEA)
     df_network = aggregate_to_network_level(df)
-    
-    # Beräkna per-år kolumner (Avkastning_2024, etc.)
     df_network = calculate_capex_outputs(df_network)
     
-    return df, df_network
+    # Step 8b: Aggregate to category level (for M1/M2 output)
+    df_category = aggregate_to_category_level(df)
+    
+    return df, df_network, df_category
 
 
 def _apply_normvalue_to_ordinarie(
@@ -107,9 +109,9 @@ def _apply_normvalue_to_ordinarie(
 
 def calculate_ages_and_nuav_batch(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Steg 5: Beräkna ålder och NUAV för alla komponenter och tidsperioder.
+    Steg 5: BerÃ¤kna Ã¥lder och NUAV fÃ¶r alla komponenter och tidsperioder.
     
-    Klassificerar komponenter som ordinarie eller tail baserat på ålder vs ekdep/maxdep.
+    Klassificerar komponenter som ordinarie eller tail baserat pÃ¥ Ã¥lder vs ekdep/maxdep.
     Skapar nuav_ord_{time} och nuav_tail_{time} kolumner.
     """
     new_cols = {}
@@ -182,7 +184,7 @@ def calculate_ages_and_nuav_batch(df: pd.DataFrame) -> pd.DataFrame:
 
 def calculate_depreciation_batch(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Steg 6: Beräkna avskrivningar för alla komponenter och tidsperioder.
+    Steg 6: BerÃ¤kna avskrivningar fÃ¶r alla komponenter och tidsperioder.
     """
     new_cols = {}
     
@@ -229,7 +231,7 @@ def calculate_depreciation_batch(df: pd.DataFrame) -> pd.DataFrame:
 
 def calculate_returns_batch(df: pd.DataFrame, wacc: float = 0.0453) -> pd.DataFrame:
     """
-    Steg 7: Beräkna avkastning för alla komponenter och tidsperioder.
+    Steg 7: BerÃ¤kna avkastning fÃ¶r alla komponenter och tidsperioder.
     """
     df['ekdep2'] = df['ekdep'] / 2
     df['maxdep2'] = df['maxdep'] / 2
@@ -284,10 +286,10 @@ def calculate_returns_batch(df: pd.DataFrame, wacc: float = 0.0453) -> pd.DataFr
 
 def aggregate_to_network_level(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Steg 8: Aggregerar kapitalkostnader till id_network nivå (företagsnivå).
+    Steg 8: Aggregerar kapitalkostnader till id_network nivÃ¥ (fÃ¶retagsnivÃ¥).
     
-    Summerar dep_ord, dep_tail, return_ord, return_tail per id_network för varje tidsperiod.
-    Lägger också till REId för direct joining.
+    Summerar dep_ord, dep_tail, return_ord, return_tail per id_network fÃ¶r varje tidsperiod.
+    LÃ¤gger ocksÃ¥ till REId fÃ¶r direct joining.
     """
     aggregation_dict = {}
     
@@ -308,7 +310,7 @@ def aggregate_to_network_level(df: pd.DataFrame) -> pd.DataFrame:
     
     df_agg = df.groupby('id_network').agg(aggregation_dict).reset_index()
     
-    # Lägg till REId
+    # LÃ¤gg till REId
     df_agg['REId'] = 'REL' + df_agg['id_network'].astype(str).str.zfill(5)
     
     # Konvertera till tkr
@@ -316,7 +318,7 @@ def aggregate_to_network_level(df: pd.DataFrame) -> pd.DataFrame:
         if col not in ['id_network', 'REId']:
             df_agg[col] = df_agg[col] / 1000
     
-    # Byt namn på kolumner
+    # Byt namn pÃ¥ kolumner
     rename_dict = {}
     for t in range(229, 237):
         if f'comp_dep_{t}' in df_agg.columns:
@@ -326,7 +328,7 @@ def aggregate_to_network_level(df: pd.DataFrame) -> pd.DataFrame:
     
     df_agg = df_agg.rename(columns=rename_dict)
     
-    # Beräkna total kapitalkostnad per halvår
+    # BerÃ¤kna total kapitalkostnad per halvÃ¥r
     for t in range(229, 237):
         dep_ord = f'dep_ord_{t}'
         dep_tail = f'dep_tail_{t}'
@@ -347,11 +349,112 @@ def aggregate_to_network_level(df: pd.DataFrame) -> pd.DataFrame:
     return df_agg
 
 
+def aggregate_to_category_level(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate KENT results to (id_network, cat_encode, time) level.
+    
+    Parallel to aggregate_to_network_level() but retains category breakdown.
+    Used for M1/M2 output display.
+    
+    Args:
+        df: DataFrame from calculate_returns_batch() with columns:
+            - id_network, cat_encode
+            - nuav_ord_{time}, nuav_tail_{time}
+            - comp_dep_{time}, comp_dep_tail_{time}
+            - return_ord_{time}, return_tail_{time}
+    
+    Returns:
+        DataFrame with columns (all monetary values in tkr):
+            - id_network, cat_encode, time (229-236)
+            - nuav_ord, nuav_tail (tkr)
+            - dep_ord, dep_tail (tkr)
+            - return_ord, return_tail (tkr)
+            - capcost_sum (tkr)
+    """
+    rows = []
+    
+    for time in range(229, 237):
+        # Build aggregation dict for this time period
+        agg_dict = {}
+        col_mapping = {}
+        
+        # NUAV columns
+        nuav_ord_col = f'nuav_ord_{time}'
+        nuav_tail_col = f'nuav_tail_{time}'
+        if nuav_ord_col in df.columns:
+            agg_dict[nuav_ord_col] = 'sum'
+            col_mapping[nuav_ord_col] = 'nuav_ord'
+        if nuav_tail_col in df.columns:
+            agg_dict[nuav_tail_col] = 'sum'
+            col_mapping[nuav_tail_col] = 'nuav_tail'
+        
+        # Depreciation columns
+        dep_ord_col = f'comp_dep_{time}'
+        dep_tail_col = f'comp_dep_tail_{time}'
+        if dep_ord_col in df.columns:
+            agg_dict[dep_ord_col] = 'sum'
+            col_mapping[dep_ord_col] = 'dep_ord'
+        if dep_tail_col in df.columns:
+            agg_dict[dep_tail_col] = 'sum'
+            col_mapping[dep_tail_col] = 'dep_tail'
+        
+        # Return columns
+        ret_ord_col = f'return_ord_{time}'
+        ret_tail_col = f'return_tail_{time}'
+        if ret_ord_col in df.columns:
+            agg_dict[ret_ord_col] = 'sum'
+            col_mapping[ret_ord_col] = 'return_ord'
+        if ret_tail_col in df.columns:
+            agg_dict[ret_tail_col] = 'sum'
+            col_mapping[ret_tail_col] = 'return_tail'
+        
+        if not agg_dict:
+            continue
+        
+        # Aggregate per (id_network, cat_encode) for this time
+        df_time = df.groupby(['id_network', 'cat_encode']).agg(agg_dict).reset_index()
+        df_time['time'] = time
+        
+        # Rename to standard names
+        df_time = df_time.rename(columns=col_mapping)
+        
+        rows.append(df_time)
+    
+    if not rows:
+        return pd.DataFrame(columns=[
+            'id_network', 'cat_encode', 'time',
+            'nuav_ord', 'nuav_tail', 'dep_ord', 'dep_tail',
+            'return_ord', 'return_tail', 'capcost_sum'
+        ])
+    
+    result = pd.concat(rows, ignore_index=True)
+    
+    # Fill missing columns with 0
+    for col in ['nuav_ord', 'nuav_tail', 'dep_ord', 'dep_tail', 'return_ord', 'return_tail']:
+        if col not in result.columns:
+            result[col] = 0.0
+    
+    # Calculate total capital cost per category/time
+    result['capcost_sum'] = (
+        result['dep_ord'] + result['dep_tail'] + 
+        result['return_ord'] + result['return_tail']
+    )
+    
+    # Convert to tkr (matching capcost_a.parquet format and aggregate_to_network_level)
+    value_cols = ['nuav_ord', 'nuav_tail', 'dep_ord', 'dep_tail', 
+                  'return_ord', 'return_tail', 'capcost_sum']
+    for col in value_cols:
+        if col in result.columns:
+            result[col] = result[col] / 1000
+    
+    return result
+
+
 def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     """
-    Beräknar kapitalkostnads-outputs med KORREKT halvårsmappning.
+    BerÃ¤knar kapitalkostnads-outputs med KORREKT halvÃ¥rsmappning.
     
-    Tidskoder är HALVÅR: 229=2024H1, 230=2024H2, 231=2025H1, etc.
+    Tidskoder Ã¤r HALVÃ…R: 229=2024H1, 230=2024H2, 231=2025H1, etc.
     
     Genererar:
     - Kapitalkostnad_2024-2027 och Kapitalkostnad_Period
@@ -360,18 +463,18 @@ def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     """
     df = df_network.copy()
     
-    # Beräkna per-år värden genom att summera halvåren
+    # BerÃ¤kna per-Ã¥r vÃ¤rden genom att summera halvÃ¥ren
     for year, timecodes in YEAR_TO_TIMECODES.items():
         t1, t2 = timecodes
         
-        # Kapitalkostnad per år
+        # Kapitalkostnad per Ã¥r
         capcost_cols = [f'capcost_{t}' for t in [t1, t2] if f'capcost_{t}' in df.columns]
         if capcost_cols:
             df[f'Kapitalkostnad_{year}'] = df[capcost_cols].sum(axis=1)
         else:
             df[f'Kapitalkostnad_{year}'] = 0.0
         
-        # Avkastning per år (return_ord + return_tail för båda halvåren)
+        # Avkastning per Ã¥r (return_ord + return_tail fÃ¶r bÃ¥da halvÃ¥ren)
         return_cols = []
         for t in [t1, t2]:
             if f'return_ord_{t}' in df.columns:
@@ -384,7 +487,7 @@ def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
         else:
             df[f'Avkastning_{year}'] = 0.0
         
-        # Avskrivning per år (dep_ord + dep_tail för båda halvåren)
+        # Avskrivning per Ã¥r (dep_ord + dep_tail fÃ¶r bÃ¥da halvÃ¥ren)
         dep_cols = []
         for t in [t1, t2]:
             if f'dep_ord_{t}' in df.columns:
@@ -397,7 +500,7 @@ def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
         else:
             df[f'Avskrivning_{year}'] = 0.0
     
-    # Beräkna periodsummor
+    # BerÃ¤kna periodsummor
     yearly_capcost = [f'Kapitalkostnad_{year}' for year in [2024, 2025, 2026, 2027]]
     df['Kapitalkostnad_Period'] = df[yearly_capcost].sum(axis=1)
     
@@ -407,7 +510,7 @@ def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     yearly_dep = [f'Avskrivning_{year}' for year in [2024, 2025, 2026, 2027]]
     df['Avskrivning_Period'] = df[yearly_dep].sum(axis=1)
     
-    # Sätt standardkolumner för kompatibilitet med baseline
+    # SÃ¤tt standardkolumner fÃ¶r kompatibilitet med baseline
     if 'Kapitalkostnad_2024' in df.columns:
         df['CAPEX'] = df['Kapitalkostnad_2024']
     

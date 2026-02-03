@@ -6,9 +6,12 @@ Displays WACC calculation chain based on input method:
 - "derived": Partial chain 3.2.X (derived) -> WACC
 - "direct" or "baseline": Only final WACC (3.2.5)
 
+Also displays return on capital by category (30.1.X).
+
 Variable-IDs:
 - 3.1.X: CAPM base parameters
 - 3.2.X: Derived WACC values
+- 30.1.X: Return on capital by category (ord/tail)
 - 30.2.5: Network loss adjustment
 - 30.3.5: Utilization rate adjustment
 - 30.4.59: Quality adjustment
@@ -17,10 +20,22 @@ Variable-IDs:
 
 import streamlit as st
 import pandas as pd
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
+
+from frontend.common.asset_categories import ASSET_CATEGORIES, CATEGORY_BY_CODE
+
+# Time code to label mapping
+TIME_LABELS = {
+    229: "2024H1", 230: "2024H2",
+    231: "2025H1", 232: "2025H2",
+    233: "2026H1", 234: "2026H2",
+    235: "2027H1", 236: "2027H2",
+}
+
+TOLERANCE = 0.01  # tkr - threshold for filtering zero categories
 
 
 # Baseline values for comparison
@@ -88,9 +103,15 @@ def render(
     wacc_inputs = getattr(case.pre_dea, 'wacc_inputs', None)
     wacc_derived = getattr(case.pre_dea, 'wacc_derived', None)
     wacc_case = case.pre_dea.wacc_used or BASELINE_WACC
+    user_id_network = getattr(case.pre_dea, 'user_id_network', None)
     
     # === WACC SECTION ===
     _render_wacc_section(wacc_input_method, wacc_inputs, wacc_derived, wacc_case)
+    
+    st.divider()
+    
+    # === RETURN BY CATEGORY SECTION ===
+    _render_return_by_category(case, user_id_network)
     
     st.divider()
     
@@ -101,6 +122,273 @@ def render(
     
     # === FUTURE: DETAILED INCENTIVE BREAKDOWN ===
     _render_incentive_placeholder()
+
+
+def _get_variable_id_return(cat_encode: int, component: str = "ord") -> str:
+    """Get M3 Variable-ID for return from cat_encode. cat_encode 1 -> 30.1.2.1 (ord) or 30.1.2.2 (tail)"""
+    suffix = "1" if component == "ord" else "2"
+    return f"30.{cat_encode + 1}.{suffix}"
+
+
+def _load_baseline_category_data(user_id_network: int) -> Optional[pd.DataFrame]:
+    """Load baseline category data for user's company."""
+    try:
+        from data_loaders.rab_data import load_capcost_a
+        df = load_capcost_a()
+        return df[df['id_network'] == user_id_network].copy()
+    except (FileNotFoundError, ImportError):
+        return None
+
+
+def _get_case_category_data(
+    case: "PipelineResult", 
+    user_id_network: int
+) -> Optional[pd.DataFrame]:
+    """Get case category data from pipeline result."""
+    df_cat = getattr(case.pre_dea, 'df_by_category', None)
+    if df_cat is None:
+        return None
+    return df_cat[df_cat['id_network'] == user_id_network].copy()
+
+
+def _aggregate_return_to_period(df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate half-year data to period totals for return values."""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    
+    agg_cols = {}
+    for col in ['return_ord', 'return_tail']:
+        if col in df.columns:
+            agg_cols[col] = 'sum'
+    
+    if not agg_cols:
+        return pd.DataFrame()
+    
+    agg_df = df.groupby('cat_encode').agg(agg_cols).reset_index()
+    
+    for col in ['return_ord', 'return_tail']:
+        if col not in agg_df.columns:
+            agg_df[col] = 0.0
+    
+    agg_df['return_total'] = agg_df['return_ord'] + agg_df['return_tail']
+    
+    return agg_df
+
+
+def _aggregate_return_to_half_years(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep half-year breakdown per category with return values."""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    
+    result = df.copy()
+    result['time_label'] = result['time'].map(TIME_LABELS)
+    
+    for col in ['return_ord', 'return_tail']:
+        if col not in result.columns:
+            result[col] = 0.0
+    
+    result['return_total'] = result['return_ord'] + result['return_tail']
+    
+    return result
+
+
+def _build_return_comparison_table(
+    case_period: pd.DataFrame,
+    baseline_period: pd.DataFrame
+) -> pd.DataFrame:
+    """Build comparison table: Case vs Baseline return per category."""
+    rows = []
+    
+    for cat in ASSET_CATEGORIES:
+        cat_encode = cat.cat_encode
+        var_id_ord = _get_variable_id_return(cat_encode, "ord")
+        var_id_tail = _get_variable_id_return(cat_encode, "tail")
+        
+        # Case values
+        case_row = case_period[case_period['cat_encode'] == cat_encode] if not case_period.empty else pd.DataFrame()
+        if not case_row.empty:
+            c_ord = case_row['return_ord'].iloc[0]
+            c_tail = case_row['return_tail'].iloc[0]
+            c_total = case_row['return_total'].iloc[0]
+        else:
+            c_ord = c_tail = c_total = 0.0
+        
+        # Baseline values
+        base_row = baseline_period[baseline_period['cat_encode'] == cat_encode] if not baseline_period.empty else pd.DataFrame()
+        if not base_row.empty:
+            b_ord = base_row['return_ord'].iloc[0]
+            b_tail = base_row['return_tail'].iloc[0]
+            b_total = base_row['return_total'].iloc[0]
+        else:
+            b_ord = b_tail = b_total = 0.0
+        
+        # Skip categories where both case and baseline are below tolerance
+        if abs(c_total) < TOLERANCE and abs(b_total) < TOLERANCE:
+            continue
+        
+        rows.append({
+            'Var-ID': f"{var_id_ord}/{var_id_tail}",
+            'Category': cat.name,
+            'C Ord': c_ord,
+            'C Tail': c_tail,
+            'C Total': c_total,
+            'BL Ord': b_ord,
+            'BL Tail': b_tail,
+            'BL Total': b_total,
+        })
+    
+    return pd.DataFrame(rows)
+
+
+def _build_return_halfyear_table(
+    case_hy: pd.DataFrame,
+    baseline_hy: pd.DataFrame,
+    cat_encode: int
+) -> pd.DataFrame:
+    """Build half-year return comparison for a single category."""
+    rows = []
+    
+    for time_code, label in TIME_LABELS.items():
+        # Case
+        case_row = case_hy[(case_hy['cat_encode'] == cat_encode) & (case_hy['time'] == time_code)] if not case_hy.empty else pd.DataFrame()
+        if not case_row.empty:
+            c_ord = case_row['return_ord'].iloc[0]
+            c_tail = case_row['return_tail'].iloc[0]
+            c_total = case_row['return_total'].iloc[0]
+        else:
+            c_ord = c_tail = c_total = 0.0
+        
+        # Baseline
+        base_row = baseline_hy[(baseline_hy['cat_encode'] == cat_encode) & (baseline_hy['time'] == time_code)] if not baseline_hy.empty else pd.DataFrame()
+        if not base_row.empty:
+            b_ord = base_row['return_ord'].iloc[0]
+            b_tail = base_row['return_tail'].iloc[0]
+            b_total = base_row['return_total'].iloc[0]
+        else:
+            b_ord = b_tail = b_total = 0.0
+        
+        rows.append({
+            'Period': label,
+            'C Ord': c_ord,
+            'C Tail': c_tail,
+            'C Total': c_total,
+            'BL Ord': b_ord,
+            'BL Tail': b_tail,
+            'BL Total': b_total,
+        })
+    
+    return pd.DataFrame(rows)
+
+
+def _render_return_by_category(case: "PipelineResult", user_id_network: Optional[int]) -> None:
+    """Render return on capital by category section."""
+    st.markdown("**30.1 Return on Capital by Category**")
+    
+    if user_id_network is None:
+        st.warning("User company not identified.")
+        return
+    
+    baseline_cat = _load_baseline_category_data(user_id_network)
+    case_cat = _get_case_category_data(case, user_id_network)
+    
+    if baseline_cat is None or baseline_cat.empty:
+        st.info(
+            "Baseline category data not available. "
+            "Ensure capcost_a.parquet is in the data/ directory."
+        )
+        return
+    
+    if case_cat is None or case_cat.empty:
+        case_cat = baseline_cat.copy()
+        st.caption("Case uses baseline values (no parameter changes applied to category data).")
+    
+    case_period = _aggregate_return_to_period(case_cat)
+    baseline_period = _aggregate_return_to_period(baseline_cat)
+    case_hy = _aggregate_return_to_half_years(case_cat)
+    baseline_hy = _aggregate_return_to_half_years(baseline_cat)
+    
+    # Total return section
+    c_ord = case_period['return_ord'].sum() if not case_period.empty else 0
+    c_tail = case_period['return_tail'].sum() if not case_period.empty else 0
+    c_total = c_ord + c_tail
+    
+    b_ord = baseline_period['return_ord'].sum() if not baseline_period.empty else 0
+    b_tail = baseline_period['return_tail'].sum() if not baseline_period.empty else 0
+    b_total = b_ord + b_tail
+    
+    st.caption("Period sum (tkr / 1000 = MSEK)")
+    
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    with col1:
+        st.metric("Case Ord", f"{c_ord/1e3:,.1f} MSEK")
+    with col2:
+        st.metric("Case Tail", f"{c_tail/1e3:,.1f} MSEK")
+    with col3:
+        st.metric("Case Total", f"{c_total/1e3:,.1f} MSEK")
+    with col4:
+        st.metric("BL Ord", f"{b_ord/1e3:,.1f} MSEK")
+    with col5:
+        st.metric("BL Tail", f"{b_tail/1e3:,.1f} MSEK")
+    with col6:
+        st.metric("BL Total", f"{b_total/1e3:,.1f} MSEK")
+    
+    # Category table
+    st.markdown("**30.1.2-30.1.18 Return by Category**")
+    comparison_df = _build_return_comparison_table(case_period, baseline_period)
+    
+    if comparison_df.empty:
+        st.info("No category data available for this company.")
+    else:
+        st.caption("All values in tkr. C=Case, BL=Baseline")
+        st.dataframe(
+            comparison_df,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                'Var-ID': st.column_config.TextColumn('ID', width='small'),
+                'Category': st.column_config.TextColumn('Category', width='large'),
+                'C Ord': st.column_config.NumberColumn('C Ord', format='%.0f'),
+                'C Tail': st.column_config.NumberColumn('C Tail', format='%.0f'),
+                'C Total': st.column_config.NumberColumn('C Total', format='%.0f'),
+                'BL Ord': st.column_config.NumberColumn('BL Ord', format='%.0f'),
+                'BL Tail': st.column_config.NumberColumn('BL Tail', format='%.0f'),
+                'BL Total': st.column_config.NumberColumn('BL Total', format='%.0f'),
+            }
+        )
+    
+    # Half-year breakdown expander
+    with st.expander("Per-half-year breakdown by category", expanded=False):
+        st.caption("Select a category (values in tkr):")
+        
+        cat_names = [cat.name for cat in ASSET_CATEGORIES]
+        selected_name = st.selectbox(
+            "Category",
+            options=cat_names,
+            key="m3_halfyear_cat_select",
+            label_visibility="collapsed"
+        )
+        
+        selected_cat = next((c for c in ASSET_CATEGORIES if c.name == selected_name), None)
+        if selected_cat:
+            hy_table = _build_return_halfyear_table(case_hy, baseline_hy, selected_cat.cat_encode)
+            
+            if not hy_table.empty:
+                st.dataframe(
+                    hy_table,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        'Period': st.column_config.TextColumn('Period', width='small'),
+                        'C Ord': st.column_config.NumberColumn('C Ord', format='%.0f'),
+                        'C Tail': st.column_config.NumberColumn('C Tail', format='%.0f'),
+                        'C Total': st.column_config.NumberColumn('C Total', format='%.0f'),
+                        'BL Ord': st.column_config.NumberColumn('BL Ord', format='%.0f'),
+                        'BL Tail': st.column_config.NumberColumn('BL Tail', format='%.0f'),
+                        'BL Total': st.column_config.NumberColumn('BL Total', format='%.0f'),
+                    }
+                )
+            else:
+                st.info("No data available for this category.")
 
 
 def _render_wacc_section(

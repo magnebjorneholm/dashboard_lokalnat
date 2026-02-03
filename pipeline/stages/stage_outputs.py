@@ -51,6 +51,10 @@ class PreDeaStageOutput:
     wacc_input_method: str = "baseline"  # "capm", "derived", "direct", "baseline"
     wacc_inputs: Optional[dict] = None   # 3.1.X parameters (if capm)
     wacc_derived: Optional[dict] = None  # 3.2.X derived values (if capm or derived)
+    
+    # Category-level data for M1/M2 output display
+    # Structure: (id_network, cat_encode, time) with nuav/dep/return columns
+    df_by_category: Optional[pd.DataFrame] = None
 
 
 @dataclass(frozen=True)

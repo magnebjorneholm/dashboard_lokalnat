@@ -262,6 +262,14 @@ def _method_baseline_pure(
     wacc_chain: dict
 ) -> PreDeaStageOutput:
     """BASELINE method with BASELINE source. Return baseline directly."""
+    
+    # Load baseline category data for M1/M2 output
+    from data_loaders.rab_data import load_capcost_a
+    try:
+        df_by_category = load_capcost_a()
+    except FileNotFoundError:
+        df_by_category = None
+    
     return PreDeaStageOutput(
         df_all_companies=baseline.df_all_companies.copy(),
         capbase_source="baseline",
@@ -272,6 +280,7 @@ def _method_baseline_pure(
         wacc_input_method=wacc_chain["wacc_input_method"],
         wacc_inputs=wacc_chain["wacc_inputs"],
         wacc_derived=wacc_chain["wacc_derived"],
+        df_by_category=df_by_category,
     )
 
 
@@ -289,7 +298,7 @@ def _method_baseline_with_custom_source(
     wacc_to_use = wacc_chain["wacc_used"]
     
     try:
-        _, df_network = run_kent_calculations_batch(
+        _, df_network, df_category_user = run_kent_calculations_batch(
             user_capbase,
             wacc=wacc_to_use,
             normvalue_adjustments=None,
@@ -305,6 +314,16 @@ def _method_baseline_with_custom_source(
         sdf_ir=baseline.sdf_ir
     )
     
+    # Combine user's category data with baseline for other companies
+    from data_loaders.rab_data import load_capcost_a
+    try:
+        df_cat_baseline = load_capcost_a()
+        # Replace user's data with calculated
+        df_cat_others = df_cat_baseline[df_cat_baseline['id_network'] != user_id_network]
+        df_by_category = pd.concat([df_cat_others, df_category_user], ignore_index=True)
+    except FileNotFoundError:
+        df_by_category = df_category_user
+    
     return PreDeaStageOutput(
         df_all_companies=df_result,
         capbase_source=source_used,
@@ -315,6 +334,7 @@ def _method_baseline_with_custom_source(
         wacc_input_method=wacc_chain["wacc_input_method"],
         wacc_inputs=wacc_chain["wacc_inputs"],
         wacc_derived=wacc_chain["wacc_derived"],
+        df_by_category=df_by_category,
     )
 
 
@@ -330,13 +350,15 @@ def _method_wacc_scaling(
     WACC_SCALING method.
     If custom source: Run KENT for user first, then scale all.
     If baseline source: Scale directly from baseline.
+    
+    Note: df_by_category is not populated here - will be refactored later.
     """
     new_wacc = wacc_chain["wacc_used"]
     
     # Step 1: If custom source, run KENT for user with baseline WACC
     if user_capbase is not None:
         try:
-            _, df_network = run_kent_calculations_batch(
+            _, df_network, _ = run_kent_calculations_batch(
                 user_capbase,
                 wacc=baseline.wacc,
                 normvalue_adjustments=None,
@@ -369,6 +391,7 @@ def _method_wacc_scaling(
         wacc_input_method=wacc_chain["wacc_input_method"],
         wacc_inputs=wacc_chain["wacc_inputs"],
         wacc_derived=wacc_chain["wacc_derived"],
+        df_by_category=None,  # To be implemented in refactor
     )
 
 
@@ -400,7 +423,7 @@ def _method_parameter_change(
     
     # Run KENT steps 5-8 for all with new parameters
     try:
-        _, df_network = run_kent_calculations_batch(
+        _, df_network, df_by_category = run_kent_calculations_batch(
             capbase_data,
             wacc=wacc_to_use,
             normvalue_adjustments=config.normvalue_adjustments,
@@ -425,4 +448,5 @@ def _method_parameter_change(
         wacc_input_method=wacc_chain["wacc_input_method"],
         wacc_inputs=wacc_chain["wacc_inputs"],
         wacc_derived=wacc_chain["wacc_derived"],
+        df_by_category=df_by_category,
     )
