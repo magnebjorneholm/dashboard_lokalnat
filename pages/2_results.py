@@ -15,6 +15,13 @@ from frontend.utils.state_manager import (
     get_case_name,
     get_case_notes,
     get_filtered_ui_config,
+    is_snapshot_calculation,
+    has_main_config,
+    get_snapshots,
+    add_snapshot,
+    remove_snapshot,
+    promote_snapshot,
+    MAX_SNAPSHOTS,
 )
 from frontend.utils.export_button import render_export_button
 from frontend.utils.diagram_data import prepare_diagram_data
@@ -145,7 +152,8 @@ with col_map:
     try:
         gdf, user_geoms = prepare_map_data_from_pipeline(
             SHAPEFILE_PATH,
-            case
+            case,
+            value_columns=["Effektivitet", "Supereffektivitet"]
         )
         
         available_cols = get_available_value_columns(gdf)
@@ -200,58 +208,43 @@ with col2:
     st.metric(label="Baseline", value=f"{total_baseline:,.0f} tkr")
 
 with col3:
-    op_case = diagram_data['lopande']['value']
-    op_baseline = diagram_data['lopande']['baseline']
-    op_delta, op_pct = calc_delta(op_case, op_baseline)
+    cap_case = case_ir['Kapitalkostnad_Total']
+    cap_baseline = baseline_ir['Kapitalkostnad_Total']
+    cap_delta, cap_pct = calc_delta(cap_case, cap_baseline)
     st.metric(
-        label="Operating costs",
-        value=f"{op_case:,.0f} tkr",
-        delta=f"{op_pct:+.1f}%" if op_pct else None
+        label="30.1 Capital cost",
+        value=f"{cap_case:,.0f} tkr",
+        delta=f"{cap_pct:+.1f}%" if cap_pct else None
     )
 
 st.markdown("")
 
-
-def _diagram_row(var_id: str, label: str, key: str, negate: bool = False) -> dict:
-    """Build a table row from diagram_data component."""
-    comp = diagram_data.get(key, {})
-    case_val = comp.get('value', 0)
-    baseline_val = comp.get('baseline', 0)
-    if negate:
-        case_val = -abs(case_val)
-        baseline_val = -abs(baseline_val)
-    return render_metric_row(var_id, label, case_val, baseline_val, "tkr")
-
-
-method = diagram_data.get('method', 'OPEX')
-
-rows = [
-    _diagram_row("40.1", "Controllable costs", "paverkbara"),
-    _diagram_row("40.2", "Non-controllable costs", "ej_paverkbara"),
+component_list = [
+    ("30.1", "Capital cost", "Kapitalkostnad_Total", "tkr"),
+    ("40.1.1", "Controllable costs (paverkbara)", "Paverkbara_Periodsumma", "tkr"),
+    ("40.2.1", "Non-controllable costs", "Opaverkbara_Kostnader", "tkr"),
+    ("40.1.2", "Flexibility services", "Flexibilitetstjanster", "tkr"),
+    ("-", "Interruption compensation (12-24h)", "Avbrottsersattning_12_24h", "tkr"),
+    ("-", "State aid deduction", "Avdrag_Statligt_Stod", "tkr"),
+    ("30.5.2", "Incentive adjustment", "Incitamentjustering_Total", "tkr"),
 ]
 
-if method == 'TOTEX':
-    rows.append(_diagram_row("50.4.1", "OPEX efficiency", "opex_effektivisering", negate=True))
-else:
-    rows.append(_diagram_row("50.4", "OPEX efficiency", "effektivisering", negate=True))
-
-rows.append(_diagram_row("", "Operating costs", "lopande"))
-rows.append(_diagram_row("11.1", "Capital base", "kapitalbas"))
-rows.append(_diagram_row("20.1", "Depreciation", "avskrivningar"))
-rows.append(_diagram_row("30.1", "Return (WACC)", "avkastning"))
-
-if method == 'TOTEX':
-    rows.append(_diagram_row("50.4.2", "CAPEX efficiency", "capex_effektivisering", negate=True))
-
-rows.append(_diagram_row("30.5", "Quality & incentive adjustment", "kvalitet"))
-rows.append(_diagram_row("30.1", "Capital costs", "kapitalkostnader"))
-rows.append(_diagram_row("", "Other adjustments", "other_adjustments"))
+rows = []
+for var_id, label, col, unit in component_list:
+    case_val = case_ir.get(col, 0)
+    baseline_val = baseline_ir.get(col, 0)
+    
+    if col == "Avdrag_Statligt_Stod":
+        case_val = -case_val if case_val else 0
+        baseline_val = -baseline_val if baseline_val else 0
+    
+    rows.append(render_metric_row(var_id, label, case_val, baseline_val, unit))
 
 rows.append({
-    "ID": "60.1",
-    "Component": "REVENUE FRAME",
-    "Case": format_tkr(diagram_data['intaktsram']['value']),
-    "Baseline": format_tkr(diagram_data['intaktsram']['baseline']),
+    "ID": "",
+    "Component": "TOTAL REVENUE FRAME",
+    "Case": format_tkr(total_case),
+    "Baseline": format_tkr(total_baseline),
     "Delta (tkr)": format_tkr(delta_abs, show_sign=True),
     "Delta (%)": format_percent(delta_pct, show_sign=True)
 })
@@ -273,6 +266,103 @@ st.dataframe(
 )
 
 st.divider()
+
+
+# =============================================================================
+# SECTION B2: SNAPSHOT MANAGEMENT
+# =============================================================================
+
+_is_snapshot = is_snapshot_calculation()
+_snapshots = get_snapshots()
+
+# Status indicator
+if _is_snapshot:
+    st.info(
+        "Viewing: **Unsaved snapshot result.** "
+        "Save it below, or go back to Configure to discard and return to main."
+    )
+elif _snapshots:
+    st.caption("Viewing: Main result")
+
+# Save Snapshot form (only for snapshot-candidate calculations)
+if _is_snapshot:
+    st.markdown("##### Save as snapshot")
+    
+    col_name, col_desc, col_btn = st.columns([2, 3, 1])
+    
+    with col_name:
+        _snap_name = st.text_input(
+            "Snapshot name",
+            placeholder="e.g., WACC 5%",
+            key="snapshot_name_input",
+            label_visibility="collapsed",
+        )
+    
+    with col_desc:
+        _snap_desc = st.text_input(
+            "Description (optional)",
+            placeholder="Description (optional)",
+            key="snapshot_desc_input",
+            label_visibility="collapsed",
+        )
+    
+    with col_btn:
+        if st.button("Save Snapshot", type="primary", width='stretch'):
+            if not _snap_name or not _snap_name.strip():
+                st.warning("Enter a name for the snapshot.")
+            elif len(_snapshots) >= MAX_SNAPSHOTS:
+                st.warning(f"Maximum {MAX_SNAPSHOTS} snapshots reached. Delete one first.")
+            else:
+                success = add_snapshot(
+                    name=_snap_name.strip(),
+                    description=_snap_desc.strip() if _snap_desc else "",
+                    ui_config=st.session_state.get("ui_config", {}),
+                    selected_modules=st.session_state.get("selected_modules", set()),
+                    case_result=case,
+                )
+                if success:
+                    st.toast(f"Snapshot saved: {_snap_name.strip()}")
+                    st.rerun()
+
+# Snapshot list (only when snapshots exist)
+if _snapshots:
+    with st.expander(f"Saved snapshots ({len(_snapshots)}/{MAX_SNAPSHOTS})", expanded=False):
+        for _idx, _snap in enumerate(_snapshots):
+            with st.container(border=True):
+                _col_info, _col_promote, _col_delete = st.columns([4, 1, 1])
+                
+                with _col_info:
+                    st.markdown(f"**{_snap['name']}**")
+                    _desc_parts = []
+                    if _snap.get("description"):
+                        _desc_parts.append(_snap["description"])
+                    _desc_parts.append(_snap["timestamp"][:16].replace("T", " "))
+                    st.caption(" -- ".join(_desc_parts))
+                
+                with _col_promote:
+                    if st.button(
+                        "Promote to Main",
+                        key=f"promote_snap_{_idx}",
+                        width='stretch',
+                    ):
+                        _promoted_name = _snap["name"]
+                        promote_snapshot(_idx)
+                        st.toast(f"Promoted: {_promoted_name} is now the main result")
+                        st.rerun()
+                
+                with _col_delete:
+                    if st.button(
+                        "Delete",
+                        key=f"delete_snap_{_idx}",
+                        width='stretch',
+                    ):
+                        _deleted_name = _snap["name"]
+                        remove_snapshot(_idx)
+                        st.toast(f"Deleted snapshot: {_deleted_name}")
+                        st.rerun()
+
+if _is_snapshot or _snapshots:
+    st.divider()
 
 
 # =============================================================================

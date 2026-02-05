@@ -19,6 +19,7 @@ Document structure:
     - kent_file_name: str or null
 """
 
+import copy
 import json
 import os
 import uuid
@@ -567,7 +568,8 @@ def apply_case_to_session(
         del session_state["load_case_select"]
     
     # Apply ui_config
-    session_state["ui_config"] = _deserialize_ui_config(case.ui_config)
+    deserialized_config = _deserialize_ui_config(case.ui_config)
+    session_state["ui_config"] = deserialized_config
     
     # Apply case metadata
     session_state["case_id"] = case.id
@@ -580,6 +582,12 @@ def apply_case_to_session(
     session_state["calculation_done"] = False
     session_state["case_result"] = None
     session_state["baseline_result"] = None
+    
+    # Initialize snapshot system: set main config from loaded case, clear snapshots
+    session_state["main_ui_config"] = copy.deepcopy(deserialized_config)
+    session_state["main_selected_modules"] = set(selected_set)
+    session_state["main_case_result"] = None  # Must recalculate
+    session_state["result_snapshots"] = []
 
 
 def get_case_display_info(case: SavedCase) -> Dict[str, Any]:

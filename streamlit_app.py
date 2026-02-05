@@ -23,6 +23,10 @@ from frontend.utils.state_manager import (
     mark_case_saved,
     set_case_id,
     increment_saved_cases_count,
+    has_main_config,
+    set_main_config,
+    get_snapshots,
+    MAX_SNAPSHOTS,
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
@@ -30,7 +34,7 @@ from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
 # Page configuration
 st.set_page_config(
     page_title="Regumetrica",
-    page_icon="âš¡",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -127,6 +131,16 @@ def _run_calculation() -> None:
             st.session_state["case_result"] = case_result
             
             st.session_state["calculation_done"] = True
+            
+            # Snapshot system: first calculation becomes main, subsequent are candidates
+            if not has_main_config():
+                set_main_config(
+                    ui_config=st.session_state.get("ui_config", {}),
+                    selected_modules=get_selected_modules(),
+                    case_result=case_result,
+                )
+            # Else: this is a snapshot candidate -- main_* keys are not touched
+            
             status.update(label="Calculation complete", state="complete")
             
         except ValueError as e:
@@ -144,15 +158,21 @@ def _run_calculation() -> None:
 
 
 def _do_save_case() -> bool:
-    """Save the current case to storage."""
+    """Save the current case to storage. Uses main config if available."""
     from frontend.utils.case_storage import save_case
     
     user_reid = get_user_reid()
     case_name = get_case_name() or "Untitled Case"
     case_notes = get_case_notes()
     case_id = get_case_id()
-    ui_config = st.session_state.get("ui_config", {})
-    selected_modules = get_selected_modules()
+    
+    # Use main config if established, otherwise fall back to working state
+    if has_main_config():
+        ui_config = st.session_state["main_ui_config"]
+        selected_modules = st.session_state["main_selected_modules"]
+    else:
+        ui_config = st.session_state.get("ui_config", {})
+        selected_modules = get_selected_modules()
     
     try:
         saved = save_case(
@@ -196,6 +216,11 @@ def _render_sidebar_actions():
         if _do_save_case():
             action = "updated" if case_id else "saved"
             st.toast(f"Case {action} successfully")
+    
+    # Snapshot count indicator
+    snapshots = get_snapshots()
+    if snapshots:
+        st.caption(f"Snapshots: {len(snapshots)}/{MAX_SNAPSHOTS}")
 
 
 # =============================================================================

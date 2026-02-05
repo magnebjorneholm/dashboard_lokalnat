@@ -26,6 +26,9 @@ from frontend.utils.state_manager import (
     set_saved_cases_count,
     get_case_id,
     is_case_saved,
+    has_main_config,
+    restore_main_config,
+    is_snapshot_calculation,
 )
 from frontend.common.module_registry import (
     ALL_MODULES,
@@ -44,6 +47,12 @@ from frontend.utils.case_storage import (
 
 # Initialize state
 init_session_state()
+
+# Restore main config if navigating back from a snapshot calculation
+# Only triggers when case_result differs from main (i.e. a snapshot calc was run)
+# Does NOT trigger on normal reruns, allowing the user to edit freely
+if has_main_config() and is_snapshot_calculation():
+    restore_main_config()
 
 # Show pending toast messages (must be after init, before page content)
 if st.session_state.get("_toast_message"):
