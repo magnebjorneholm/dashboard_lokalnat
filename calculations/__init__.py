@@ -5,10 +5,6 @@ CAPEX calculations, DEA analysis, effektiviseringskrav, påverkbara kostnader,
 and intäktsram assembly for Regumetrica pipeline.
 """
 
-from .wacc_scaling import (
-    calculate_wacc_scaled_capex,
-    get_wacc_scaling_summary
-)
 from .kent_calculations import (
     calculate_ages_and_nuav_batch,
     calculate_depreciation_batch,
@@ -62,9 +58,6 @@ from .incentive_parameters import MISSING_DATA_IDS
 from .incentive_calculations import calculate_all_incentives
 
 __all__ = [
-    # WACC scaling
-    'calculate_wacc_scaled_capex',
-    'get_wacc_scaling_summary',
     
     # KENT calculations
     'calculate_ages_and_nuav_batch',

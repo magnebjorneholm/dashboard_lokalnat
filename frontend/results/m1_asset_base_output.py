@@ -269,7 +269,7 @@ def _render_category_section(case_period: pd.DataFrame, baseline_period: pd.Data
     st.dataframe(
         comparison_df,
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         column_config={
             'Var-ID': st.column_config.TextColumn('ID', width='small'),
             'Category': st.column_config.TextColumn('Category', width='large'),
@@ -306,7 +306,7 @@ def _render_halfyear_section(case_hy: pd.DataFrame, baseline_hy: pd.DataFrame):
             st.dataframe(
                 hy_table,
                 hide_index=True,
-                use_container_width=True,
+                width='stretch',
                 column_config={
                     'Period': st.column_config.TextColumn('Period', width='small'),
                     'C Ord': st.column_config.NumberColumn('C Ord', format='%.0f'),

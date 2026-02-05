@@ -34,23 +34,27 @@ MAP_STYLES = {
 COLUMN_LABELS = {
     "Effektivitet": "Efficiency",
     "Supereffektivitet": "Superefficiency",
-    "eff_gap": "Efficiency gap",
-    "potential": "Efficiency potential",
-    "grannsnitt": "Neighbor average",
+    "Effkrav_proc": "Efficiency requirement",
+    "IR_per_CU": "Revenue frame per customer",
+    "CAPEX_per_CU": "Capital cost per customer",
+    "OPEX_per_CU": "OPEX per customer",
 }
 
 
 def get_available_value_columns(gdf: gpd.GeoDataFrame) -> List[str]:
     """
     Returns list of numeric columns suitable for visualization.
+    Priority order: efficiency metrics first, then per-customer metrics.
     """
     numeric_cols = gdf.select_dtypes(include=['float64', 'float32', 'int64', 'int32']).columns
     
-    priority_order = ["Effektivitet", "Supereffektivitet", "eff_gap", "potential"]
+    priority_order = [
+        "Effektivitet", "Supereffektivitet", "Effkrav_proc",
+        "IR_per_CU", "CAPEX_per_CU", "OPEX_per_CU"
+    ]
     priority = [c for c in priority_order if c in numeric_cols]
-    others = [c for c in numeric_cols if c not in priority and c not in ['geom_id', 'index']]
     
-    return priority + others
+    return priority
 
 
 def get_column_label(column: str) -> str:
@@ -148,20 +152,42 @@ def create_efficiency_map(
 
 
 def _create_hover_text(row: pd.Series, value_column: str) -> str:
-    """Create hover text for a map feature."""
+    """
+    Create hover text showing all 6 metrics for a map feature.
+    The selected value_column is highlighted with bold.
+    """
     company = row.get("Företag", "N/A")
     reid = row.get("REId", "N/A")
-    value = row.get(value_column)
-    label = get_column_label(value_column)
     
-    if pd.notna(value):
-        if abs(value) < 10:
-            formatted = f"{value:.3f}"
+    lines = [f"<b>{company}</b>", f"REId: {reid}", ""]
+    
+    # All metrics to display
+    metrics = [
+        ("Effektivitet", "Efficiency", ".1%", True),
+        ("Supereffektivitet", "Superefficiency", ".3f", False),
+        ("Effkrav_proc", "Efficiency req.", ".2%", True),
+        ("IR_per_CU", "Rev. frame/cust.", ",.1f", False),
+        ("CAPEX_per_CU", "Capital cost/cust.", ",.1f", False),
+        ("OPEX_per_CU", "OPEX/cust.", ",.1f", False),
+    ]
+    
+    for col, label, fmt, is_percent in metrics:
+        value = row.get(col)
+        if pd.notna(value):
+            if is_percent:
+                formatted = f"{value:{fmt}}"
+            else:
+                formatted = f"{value:{fmt}}"
+            
+            # Bold the selected metric
+            if col == value_column:
+                lines.append(f"<b>{label}: {formatted}</b>")
+            else:
+                lines.append(f"{label}: {formatted}")
         else:
-            formatted = f"{value:,.1f}"
-        return f"<b>{company}</b><br>REId: {reid}<br>{label}: {formatted}"
-    else:
-        return f"<b>{company}</b><br>REId: {reid}<br>No data"
+            lines.append(f"{label}: -")
+    
+    return "<br>".join(lines)
 
 
 def _add_company_highlight(fig: go.Figure, user_geoms: gpd.GeoDataFrame) -> None:

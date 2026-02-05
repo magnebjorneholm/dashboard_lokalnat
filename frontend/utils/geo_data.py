@@ -158,28 +158,61 @@ def prepare_map_data(
 
 def prepare_map_data_from_pipeline(
     shapefile_path: str | Path,
-    pipeline_result: "PipelineResult",
-    value_columns: Optional[List[str]] = None
+    pipeline_result: "PipelineResult"
 ) -> Tuple[gpd.GeoDataFrame, Optional[gpd.GeoDataFrame]]:
     """
     Prepare map data from PipelineResult, with user company highlighted.
     
+    Includes 6 variables for visualization:
+    - Effektivitet, Supereffektivitet (from DEA)
+    - Effkrav_proc (from post_dea.all_effkrav)
+    - IR_per_CU, CAPEX_per_CU, OPEX_per_CU (calculated per customer)
+    
     Args:
         shapefile_path: Path to shapefile
         pipeline_result: PipelineResult object
-        value_columns: Columns to include (default: Effektivitet, Supereffektivitet)
         
     Returns:
         Tuple of (all_data, user_company_data)
     """
-    if value_columns is None:
-        value_columns = ["Effektivitet", "Supereffektivitet"]
-    
-    dea_results = pipeline_result.dea.dea_results
+    dea_results = pipeline_result.dea.dea_results.copy()
     user_reid = pipeline_result.user_reid.strip().upper()
     
+    # Get CU (customers) from pre_dea
+    df_companies = pipeline_result.pre_dea.df_all_companies
+    cu_data = df_companies[['REId', 'CU']].copy()
+    cu_data['REId'] = cu_data['REId'].str.strip().str.upper()
+    
+    # Get Effkrav_proc from post_dea.all_effkrav (calculated from potential)
+    effkrav_data = pipeline_result.post_dea.all_effkrav[['REId', 'Effkrav_proc']].copy()
+    effkrav_data['REId'] = effkrav_data['REId'].str.strip().str.upper()
+    
+    # Get intaktsram data from post_dea
+    ir_data = pipeline_result.post_dea.all_intaktsram[
+        ['REId', 'Intaktsram_Total', 'Kapitalkostnad_Total', 'Paverkbara_Periodsumma']
+    ].copy()
+    ir_data['REId'] = ir_data['REId'].str.strip().str.upper()
+    
+    # Merge all data sources
+    dea_results['REId'] = dea_results['REId'].str.strip().str.upper()
+    
+    combined = dea_results.merge(cu_data, on='REId', how='left')
+    combined = combined.merge(effkrav_data, on='REId', how='left')
+    combined = combined.merge(ir_data, on='REId', how='left')
+    
+    # Calculate per-customer values (CU is in thousands, values in tkr)
+    combined['IR_per_CU'] = combined['Intaktsram_Total'] / combined['CU']
+    combined['CAPEX_per_CU'] = combined['Kapitalkostnad_Total'] / combined['CU']
+    combined['OPEX_per_CU'] = combined['Paverkbara_Periodsumma'] / combined['CU']
+    
+    # Select columns for map visualization
+    value_columns = [
+        'Effektivitet', 'Supereffektivitet', 'Effkrav_proc',
+        'IR_per_CU', 'CAPEX_per_CU', 'OPEX_per_CU'
+    ]
+    
     # Aggregate by REId
-    gdf_agg = prepare_map_data(shapefile_path, dea_results, value_columns)
+    gdf_agg = prepare_map_data(shapefile_path, combined, value_columns)
     
     # Extract user company from aggregated data (same geometry source)
     user_geoms = gdf_agg[gdf_agg["REId"] == user_reid].copy()

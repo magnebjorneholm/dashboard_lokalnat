@@ -73,7 +73,7 @@ def render(
             },
         ]
         
-        st.dataframe(pd.DataFrame(comp_rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(comp_rows), hide_index=True, width='stretch')
         
     else:
         st.info("Using Ei's baseline DEA model.")

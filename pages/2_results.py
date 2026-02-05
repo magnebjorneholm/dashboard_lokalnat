@@ -145,8 +145,7 @@ with col_map:
     try:
         gdf, user_geoms = prepare_map_data_from_pipeline(
             SHAPEFILE_PATH,
-            case,
-            value_columns=["Effektivitet", "Supereffektivitet"]
+            case
         )
         
         available_cols = get_available_value_columns(gdf)

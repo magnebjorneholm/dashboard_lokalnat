@@ -140,7 +140,7 @@ def _render_parameters_section(m5_config: Dict[str, Any]) -> None:
             "Delta": delta_str,
         })
     
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
 
 
 def _render_efficiency_measures_section(
@@ -227,7 +227,7 @@ def _render_efficiency_measures_section(
         "Delta": f"{effkrav_delta*100:+.2f} pp" if effkrav_delta and abs(effkrav_delta) > 0.0001 else "-",
     })
     
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
     
     # Super-efficiency if available
     if user_reid and hasattr(case.dea, 'dea_results') and case.dea.dea_results is not None:
@@ -376,7 +376,7 @@ def _render_adjusted_costs_section(
                 "Delta (tkr)": _format_tkr(efter_delta, show_sign=True) if efter_delta else "-",
             })
         
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
     
     # Summary metrics
     total_eff_case = (opex_eff_case or 0) + (capex_eff_case or 0)

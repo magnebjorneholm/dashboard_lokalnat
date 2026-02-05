@@ -106,4 +106,4 @@ def render(
             "Delta (tkr)": _format_tkr(delta_abs, show_sign=True) if delta_abs is not None else "-",
         })
     
-    st.dataframe(pd.DataFrame(other_rows), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(other_rows), hide_index=True, width='stretch')
