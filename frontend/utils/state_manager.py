@@ -157,6 +157,7 @@ def init_session_state() -> None:
         "main_selected_modules": None,  # Frozen copy of selected_modules
         "main_case_result": None,     # The main calculation result (PipelineResult)
         "result_snapshots": [],       # List of snapshot dicts (session-only, max MAX_SNAPSHOTS)
+        "_is_snapshot_candidate": False,  # Explicit flag: True after calc when main already exists
         
         # Authentication
         "auth_user": None,            # Firebase user object
@@ -190,6 +191,7 @@ def reset_case() -> None:
     st.session_state["main_selected_modules"] = None
     st.session_state["main_case_result"] = None
     st.session_state["result_snapshots"] = []
+    st.session_state["_is_snapshot_candidate"] = False
     
     # Clear module/section checkbox widget keys
     _clear_selection_widget_keys()
@@ -498,6 +500,7 @@ def set_main_config(
     st.session_state["main_ui_config"] = copy.deepcopy(ui_config)
     st.session_state["main_selected_modules"] = set(selected_modules)
     st.session_state["main_case_result"] = case_result
+    st.session_state["_is_snapshot_candidate"] = False
 
 
 def restore_main_config() -> None:
@@ -524,6 +527,7 @@ def restore_main_config() -> None:
         st.session_state["main_selected_modules"]
     )
     st.session_state["case_result"] = st.session_state["main_case_result"]
+    st.session_state["_is_snapshot_candidate"] = False
     
     _clear_selection_widget_keys()
     _clear_config_widget_keys()
@@ -607,6 +611,7 @@ def promote_snapshot(index: int) -> None:
     
     # Mark case as unsaved (Firebase version is now outdated)
     st.session_state["case_saved"] = False
+    st.session_state["_is_snapshot_candidate"] = False
     
     # Remove promoted snapshot from list
     snapshots.pop(index)
@@ -617,18 +622,18 @@ def is_snapshot_calculation() -> bool:
     """
     Check if current case_result is a snapshot candidate (not the main result).
     
-    Returns True if main exists AND current case_result is a different object
-    than main_case_result. Returns False if no main exists (first calc)
-    or if viewing the main result.
+    Uses an explicit boolean flag rather than object identity, because
+    Streamlit may serialize/deserialize session_state objects across
+    page switches, making identity checks unreliable.
     """
-    if not has_main_config():
-        return False
+    return st.session_state.get("_is_snapshot_candidate", False)
+
+
+def mark_as_snapshot_candidate() -> None:
+    """
+    Mark the current calculation as a snapshot candidate.
     
-    main_result = st.session_state.get("main_case_result")
-    current_result = st.session_state.get("case_result")
-    
-    if main_result is None or current_result is None:
-        return False
-    
-    # Identity check -- same object means it's the main result
-    return main_result is not current_result
+    Called in _run_calculation when a main config already exists,
+    meaning this is a subsequent (non-main) calculation.
+    """
+    st.session_state["_is_snapshot_candidate"] = True

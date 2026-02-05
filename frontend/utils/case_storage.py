@@ -588,6 +588,7 @@ def apply_case_to_session(
     session_state["main_selected_modules"] = set(selected_set)
     session_state["main_case_result"] = None  # Must recalculate
     session_state["result_snapshots"] = []
+    session_state["_is_snapshot_candidate"] = False
 
 
 def get_case_display_info(case: SavedCase) -> Dict[str, Any]:

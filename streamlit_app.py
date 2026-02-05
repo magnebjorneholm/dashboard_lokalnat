@@ -26,6 +26,7 @@ from frontend.utils.state_manager import (
     has_main_config,
     set_main_config,
     get_snapshots,
+    mark_as_snapshot_candidate,
     MAX_SNAPSHOTS,
 )
 from frontend.common.styling import apply_styling
@@ -139,7 +140,9 @@ def _run_calculation() -> None:
                     selected_modules=get_selected_modules(),
                     case_result=case_result,
                 )
-            # Else: this is a snapshot candidate -- main_* keys are not touched
+            else:
+                # Subsequent calculation -- this is a snapshot candidate
+                mark_as_snapshot_candidate()
             
             status.update(label="Calculation complete", state="complete")
             
