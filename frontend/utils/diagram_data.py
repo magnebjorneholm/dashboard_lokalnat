@@ -2,11 +2,11 @@
 frontend/utils/diagram_data.py
 
 Prepares data for revenue frame decomposition diagram.
-Handles all capex_method variations and sources data correctly.
+Handles all capex_method variations, and OPEX vs TOTEX efficiency methods.
 
 Data flow:
-- Controllable costs (före avdrag): From SDF (Medelvärde 2018-2021 * 4 + Neonjusteringar)
-- Efficiency requirement: Calculated as (före - efter)
+- Controllable costs (fore avdrag): From SDF (Medelvarde 2018-2021 * 4 + Neonjusteringar)
+- Efficiency requirement: Calculated as (fore - efter), split OPEX/CAPEX for TOTEX
 - Depreciation/Return: From SDF (baseline) or KENT (parameter_change)
 - Capital base: Derived from return / WACC
 - Other adjustments: Flexibility services + interruption compensation - state aid deduction
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 # SDF column names (Swedish regulatory terminology)
 SDF_COL_KAPITALKOSTNAD = 'Kapitalkostnad'
-SDF_COL_KAPITALFORSLITNING = '-varav Kapital-fÃ¶rslitning'
+SDF_COL_KAPITALFORSLITNING = '-varav Kapital-förslitning'
 SDF_COL_KAPITALBINDNING = 'varav Kapital-bindning'
 
 BASELINE_WACC = 0.0453
@@ -34,82 +34,118 @@ def prepare_diagram_data(
     """
     Prepares data for revenue frame decomposition diagram.
     
-    Handles all capex_method variations:
-    - baseline: Use SDF values directly
-    - parameter_change: Use KENT output from pre_dea
+    Handles all capex_method variations and OPEX/TOTEX efficiency methods.
+    For TOTEX, provides separate OPEX/CAPEX efficiency components.
     
-    Args:
-        case_result: Pipeline result for current case
-        baseline_result: Pipeline result for baseline comparison
-        
     Returns:
-        Dict with component keys, each containing:
-        - value: Current case value (tkr, 4-year period sum)
-        - baseline: Baseline value (tkr)
-        - is_directly_modified: True if this component was directly changed
-        - source: Description of data source
+        Dict with component keys plus 'method' ('OPEX' or 'TOTEX').
     """
     user_reid = case_result.user_reid
     
-    # Get intaktsram series for user
     case_ir = case_result.post_dea.user_intaktsram
     baseline_ir = baseline_result.post_dea.user_intaktsram
     
-    # Get capex method info
     capex_method = case_result.pre_dea.capex_method
     wacc_used = case_result.pre_dea.wacc_used or BASELINE_WACC
+    method = str(case_ir.get('Method_used', 'OPEX'))
     
-    # Calculate pÃ¥verkbara components
+    # Paverkbara components (OPEX-side)
     pav_data = _get_paverkbara_components(
         case_result=case_result,
         baseline_result=baseline_result,
         user_reid=user_reid
     )
     
-    # Calculate capital cost components (avskrivning/avkastning)
+    # Capital cost components (avskrivning/avkastning)
     capex_data = _get_capital_cost_components(
         case_result=case_result,
         baseline_result=baseline_result,
         user_reid=user_reid
     )
     
-    # Get ej pÃ¥verkbara from intaktsram
+    # Ej paverkbara
     ej_paverkbara_value = float(case_ir.get('Opaverkbara_Kostnader', 0))
     ej_paverkbara_baseline = float(baseline_ir.get('Opaverkbara_Kostnader', 0))
     
-    # Get incentive (kvalitet) - total incentive adjustment
+    # Quality/incentive adjustment
     kvalitet_value = float(case_ir.get('Incitamentjustering_Total', 0))
     kvalitet_baseline = float(baseline_ir.get('Incitamentjustering_Total', 0))
     
-    # Calculate kapitalbas from avkastning
+    # Capital base derived from return
     kapitalbas_value = capex_data['avkastning']['value'] / wacc_used if wacc_used > 0 else 0
     kapitalbas_baseline = capex_data['avkastning']['baseline'] / BASELINE_WACC if BASELINE_WACC > 0 else 0
     
-    # Get "other adjustments" components (flexibility, interruption compensation, state aid)
+    # Other adjustments
     other_adj = _get_other_adjustments(case_ir, baseline_ir)
     
-    # Calculate derived values
-    kapitalkostnad_value = capex_data['avskrivningar']['value'] + capex_data['avkastning']['value'] + kvalitet_value
-    kapitalkostnad_baseline = capex_data['avskrivningar']['baseline'] + capex_data['avkastning']['baseline'] + kvalitet_baseline
-    
-    # LÃ¶pande = pÃ¥verkbara efter avdrag + ej pÃ¥verkbara
-    lopande_value = pav_data['paverkbara_efter']['value'] + ej_paverkbara_value
-    lopande_baseline = pav_data['paverkbara_efter']['baseline'] + ej_paverkbara_baseline
-    
-    # Total intÃ¤ktsram
-    intaktsram_value = float(case_ir.get('Intaktsram_Total', 0))
-    intaktsram_baseline = float(baseline_ir.get('Intaktsram_Total', 0))
-    
-    # Determine modification status
+    # Modification flags
     capex_modified = case_result.pre_dea.capex_modified
     effkrav_modified = _is_effkrav_modified(case_result, baseline_result, user_reid)
     
-    return {
+    # --- Method-dependent calculations ---
+    
+    if method == 'TOTEX':
+        # OPEX efficiency (reduction on controllable costs)
+        opex_eff_value = float(case_ir.get('OPEX_Effektivisering', 0))
+        opex_eff_baseline = float(baseline_ir.get('OPEX_Effektivisering', 0))
+        
+        # CAPEX efficiency (reduction on capital costs)
+        capex_eff_value = float(case_ir.get('CAPEX_Effektivisering', 0))
+        capex_eff_baseline = float(baseline_ir.get('CAPEX_Effektivisering', 0))
+        
+        # Operating costs = OPEX_Efter + ej paverkbara
+        opex_efter_value = float(case_ir.get('OPEX_Efter', 0))
+        opex_efter_baseline = float(baseline_ir.get('OPEX_Efter', 0))
+        lopande_value = opex_efter_value + ej_paverkbara_value
+        lopande_baseline = opex_efter_baseline + ej_paverkbara_baseline
+        
+        # Capital costs = Dep + Ret - CAPEX_eff + Quality
+        kapitalkostnad_value = (
+            capex_data['avskrivningar']['value']
+            + capex_data['avkastning']['value']
+            - capex_eff_value
+            + kvalitet_value
+        )
+        kapitalkostnad_baseline = (
+            capex_data['avskrivningar']['baseline']
+            + capex_data['avkastning']['baseline']
+            - capex_eff_baseline
+            + kvalitet_baseline
+        )
+    else:
+        # OPEX mode: single efficiency requirement on controllable costs only
+        opex_eff_value = 0
+        opex_eff_baseline = 0
+        capex_eff_value = 0
+        capex_eff_baseline = 0
+        
+        # Operating costs = paverkbara_efter + ej paverkbara
+        lopande_value = pav_data['paverkbara_efter']['value'] + ej_paverkbara_value
+        lopande_baseline = pav_data['paverkbara_efter']['baseline'] + ej_paverkbara_baseline
+        
+        # Capital costs = Dep + Ret + Quality (no CAPEX reduction)
+        kapitalkostnad_value = (
+            capex_data['avskrivningar']['value']
+            + capex_data['avkastning']['value']
+            + kvalitet_value
+        )
+        kapitalkostnad_baseline = (
+            capex_data['avskrivningar']['baseline']
+            + capex_data['avkastning']['baseline']
+            + kvalitet_baseline
+        )
+    
+    # Total intaktsram
+    intaktsram_value = float(case_ir.get('Intaktsram_Total', 0))
+    intaktsram_baseline = float(baseline_ir.get('Intaktsram_Total', 0))
+    
+    result = {
+        'method': method,
         'paverkbara': {
             'value': pav_data['paverkbara_fore']['value'],
             'baseline': pav_data['paverkbara_fore']['baseline'],
             'is_directly_modified': False,
-            'source': 'SDF MedelvÃ¤rde 2018-2021'
+            'source': 'SDF Medelvarde 2018-2021'
         },
         'ej_paverkbara': {
             'value': ej_paverkbara_value,
@@ -172,23 +208,35 @@ def prepare_diagram_data(
             'source': 'Total'
         }
     }
+    
+    # TOTEX-specific: separated efficiency components
+    if method == 'TOTEX':
+        result['opex_effektivisering'] = {
+            'value': opex_eff_value,
+            'baseline': opex_eff_baseline,
+            'is_directly_modified': effkrav_modified,
+            'source': 'TOTEX OPEX share'
+        }
+        result['capex_effektivisering'] = {
+            'value': capex_eff_value,
+            'baseline': capex_eff_baseline,
+            'is_directly_modified': effkrav_modified,
+            'source': 'TOTEX CAPEX share'
+        }
+    
+    return result
 
 
 def _get_other_adjustments(case_ir: pd.Series, baseline_ir: pd.Series) -> dict:
     """
     Calculate "other adjustments" = flexibility + interruption compensation - state aid.
-    
-    These components are in the intaktsram formula but not shown separately in the diagram.
     """
-    # Flexibility services
     flex_case = float(case_ir.get('Flexibilitetstjanster', 0))
     flex_baseline = float(baseline_ir.get('Flexibilitetstjanster', 0))
     
-    # Interruption compensation 12-24h
     avbrott_case = float(case_ir.get('Avbrottsersattning_12_24h', 0))
     avbrott_baseline = float(baseline_ir.get('Avbrottsersattning_12_24h', 0))
     
-    # State aid deduction (subtracted in formula, so we subtract here too)
     avdrag_case = float(case_ir.get('Avdrag_Statligt_Stod', 0))
     avdrag_baseline = float(baseline_ir.get('Avdrag_Statligt_Stod', 0))
     
@@ -204,29 +252,23 @@ def _get_paverkbara_components(
     user_reid: str
 ) -> Dict[str, dict]:
     """
-    Calculate pÃ¥verkbara components: fÃ¶re avdrag, efter avdrag, och effektivisering.
+    Calculate paverkbara components: fore avdrag, efter avdrag, och effektivisering.
     
-    Uses SDF data for base values and calculates:
-    - paverkbara_fore: MedelvÃ¤rde * 4 + Neonjusteringar
-    - paverkbara_efter: From intaktsram (Paverkbara_Periodsumma)
-    - effektivisering: paverkbara_fore - paverkbara_efter
+    Uses SDF data for base values. In both OPEX and TOTEX mode, paverkbara_fore
+    represents the OPEX-only base (Medelvarde * 4 + Neonjusteringar).
     """
-    # Get pÃ¥verkbara efter from intaktsram
     case_ir = case_result.post_dea.user_intaktsram
     baseline_ir = baseline_result.post_dea.user_intaktsram
     
     case_paverkbara_efter = float(case_ir.get('Paverkbara_Periodsumma', 0))
     baseline_paverkbara_efter = float(baseline_ir.get('Paverkbara_Periodsumma', 0))
     
-    # Get base values from SDF pÃ¥verkbara sheet
     sdf_paverkbara = case_result.baseline.sdf_paverkbara
     
-    # Find column names (they vary)
-    medelvarde_col = _find_column(sdf_paverkbara, ['medelvÃ¤rde', '2018-2021'])
+    medelvarde_col = _find_column(sdf_paverkbara, ['medelvärde', '2018-2021'])
     neojust_col = _find_column(sdf_paverkbara, ['separerat yrkandet', 'neojust'])
     reid_col = 'REid' if 'REid' in sdf_paverkbara.columns else 'REId'
     
-    # Filter to user
     user_mask = sdf_paverkbara[reid_col] == user_reid
     
     if user_mask.any() and medelvarde_col:
@@ -234,15 +276,11 @@ def _get_paverkbara_components(
         medelvarde = float(user_row.get(medelvarde_col, 0) or 0)
         neonjusteringar = float(user_row.get(neojust_col, 0) or 0) if neojust_col else 0
     else:
-        # Fallback: estimate from periodsumma and effkrav
         medelvarde = baseline_paverkbara_efter / 4
         neonjusteringar = 0
     
-    # Calculate pÃ¥verkbara fÃ¶re avdrag
-    # Formula: (MedelvÃ¤rde + Neonjusteringar/4) * 4 = MedelvÃ¤rde * 4 + Neonjusteringar
     paverkbara_fore = medelvarde * 4 + neonjusteringar
     
-    # Effektivisering = fÃ¶re - efter
     case_effektivisering = paverkbara_fore - case_paverkbara_efter
     baseline_effektivisering = paverkbara_fore - baseline_paverkbara_efter
     
@@ -269,15 +307,10 @@ def _get_capital_cost_components(
 ) -> Dict[str, dict]:
     """
     Get avskrivningar and avkastning based on capex_method.
-    
-    Sources:
-    - baseline: SDF columns '-varav Kapital-förslitning' and 'varav Kapital-bindning'
-    - parameter_change: From pre_dea.df_all_companies (KENT output)
     """
     capex_method = case_result.pre_dea.capex_method
     wacc_used = case_result.pre_dea.wacc_used or BASELINE_WACC
     
-    # Get baseline values from SDF (always needed for comparison)
     baseline_avskr, baseline_avkast = _get_avskr_avkast_from_sdf(
         baseline_result.baseline.sdf_ir, user_reid
     )
@@ -294,7 +327,7 @@ def _get_capital_cost_components(
             }
         }
     
-    else:  # parameter_change - uses KENT output
+    else:  # parameter_change
         case_avskr, case_avkast = _get_avskr_avkast_from_pre_dea(
             case_result.pre_dea.df_all_companies, user_reid
         )
@@ -320,17 +353,14 @@ def _get_avskr_avkast_from_sdf(sdf_ir: pd.DataFrame, user_reid: str) -> tuple:
     
     user_row = sdf_ir[user_mask].iloc[0]
     
-    # Get avkastning (kapitalbindning)
     avkastning = 0.0
     if SDF_COL_KAPITALBINDNING in sdf_ir.columns:
         avkastning = float(pd.to_numeric(user_row.get(SDF_COL_KAPITALBINDNING, 0), errors='coerce') or 0)
     
-    # Get kapitalkostnad total
     kapitalkostnad = 0.0
     if SDF_COL_KAPITALKOSTNAD in sdf_ir.columns:
         kapitalkostnad = float(pd.to_numeric(user_row.get(SDF_COL_KAPITALKOSTNAD, 0), errors='coerce') or 0)
     
-    # Avskrivning = Kapitalkostnad - Avkastning
     avskrivning = kapitalkostnad - avkastning
     
     return avskrivning, avkastning
@@ -348,7 +378,6 @@ def _get_avskr_avkast_from_pre_dea(df: pd.DataFrame, user_reid: str) -> tuple:
     avskrivning = 0.0
     avkastning = 0.0
     
-    # Avskrivning
     if 'Avskrivning_Period' in df.columns:
         avskrivning = float(user_row.get('Avskrivning_Period', 0) or 0)
     elif all(f'Avskrivning_{y}' in df.columns for y in [2024, 2025, 2026, 2027]):
@@ -356,7 +385,6 @@ def _get_avskr_avkast_from_pre_dea(df: pd.DataFrame, user_reid: str) -> tuple:
     elif 'Avskrivning' in df.columns:
         avskrivning = float(user_row.get('Avskrivning', 0) or 0) * 4
     
-    # Avkastning
     if 'Avkastning_Period' in df.columns:
         avkastning = float(user_row.get('Avkastning_Period', 0) or 0)
     elif all(f'Avkastning_{y}' in df.columns for y in [2024, 2025, 2026, 2027]):
