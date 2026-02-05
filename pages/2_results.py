@@ -200,43 +200,58 @@ with col2:
     st.metric(label="Baseline", value=f"{total_baseline:,.0f} tkr")
 
 with col3:
-    cap_case = case_ir['Kapitalkostnad_Total']
-    cap_baseline = baseline_ir['Kapitalkostnad_Total']
-    cap_delta, cap_pct = calc_delta(cap_case, cap_baseline)
+    op_case = diagram_data['lopande']['value']
+    op_baseline = diagram_data['lopande']['baseline']
+    op_delta, op_pct = calc_delta(op_case, op_baseline)
     st.metric(
-        label="30.1 Capital cost",
-        value=f"{cap_case:,.0f} tkr",
-        delta=f"{cap_pct:+.1f}%" if cap_pct else None
+        label="Operating costs",
+        value=f"{op_case:,.0f} tkr",
+        delta=f"{op_pct:+.1f}%" if op_pct else None
     )
 
 st.markdown("")
 
-component_list = [
-    ("30.1", "Capital cost", "Kapitalkostnad_Total", "tkr"),
-    ("40.1.1", "Controllable costs (paverkbara)", "Paverkbara_Periodsumma", "tkr"),
-    ("40.2.1", "Non-controllable costs", "Opaverkbara_Kostnader", "tkr"),
-    ("40.1.2", "Flexibility services", "Flexibilitetstjanster", "tkr"),
-    ("-", "Interruption compensation (12-24h)", "Avbrottsersattning_12_24h", "tkr"),
-    ("-", "State aid deduction", "Avdrag_Statligt_Stod", "tkr"),
-    ("30.5.2", "Incentive adjustment", "Incitamentjustering_Total", "tkr"),
+
+def _diagram_row(var_id: str, label: str, key: str, negate: bool = False) -> dict:
+    """Build a table row from diagram_data component."""
+    comp = diagram_data.get(key, {})
+    case_val = comp.get('value', 0)
+    baseline_val = comp.get('baseline', 0)
+    if negate:
+        case_val = -abs(case_val)
+        baseline_val = -abs(baseline_val)
+    return render_metric_row(var_id, label, case_val, baseline_val, "tkr")
+
+
+method = diagram_data.get('method', 'OPEX')
+
+rows = [
+    _diagram_row("40.1", "Controllable costs", "paverkbara"),
+    _diagram_row("40.2", "Non-controllable costs", "ej_paverkbara"),
 ]
 
-rows = []
-for var_id, label, col, unit in component_list:
-    case_val = case_ir.get(col, 0)
-    baseline_val = baseline_ir.get(col, 0)
-    
-    if col == "Avdrag_Statligt_Stod":
-        case_val = -case_val if case_val else 0
-        baseline_val = -baseline_val if baseline_val else 0
-    
-    rows.append(render_metric_row(var_id, label, case_val, baseline_val, unit))
+if method == 'TOTEX':
+    rows.append(_diagram_row("50.4.1", "OPEX efficiency", "opex_effektivisering", negate=True))
+else:
+    rows.append(_diagram_row("50.4", "OPEX efficiency", "effektivisering", negate=True))
+
+rows.append(_diagram_row("", "Operating costs", "lopande"))
+rows.append(_diagram_row("11.1", "Capital base", "kapitalbas"))
+rows.append(_diagram_row("20.1", "Depreciation", "avskrivningar"))
+rows.append(_diagram_row("30.1", "Return (WACC)", "avkastning"))
+
+if method == 'TOTEX':
+    rows.append(_diagram_row("50.4.2", "CAPEX efficiency", "capex_effektivisering", negate=True))
+
+rows.append(_diagram_row("30.5", "Quality & incentive adjustment", "kvalitet"))
+rows.append(_diagram_row("30.1", "Capital costs", "kapitalkostnader"))
+rows.append(_diagram_row("", "Other adjustments", "other_adjustments"))
 
 rows.append({
-    "ID": "",
-    "Component": "TOTAL REVENUE FRAME",
-    "Case": format_tkr(total_case),
-    "Baseline": format_tkr(total_baseline),
+    "ID": "60.1",
+    "Component": "REVENUE FRAME",
+    "Case": format_tkr(diagram_data['intaktsram']['value']),
+    "Baseline": format_tkr(diagram_data['intaktsram']['baseline']),
     "Delta (tkr)": format_tkr(delta_abs, show_sign=True),
     "Delta (%)": format_percent(delta_pct, show_sign=True)
 })
