@@ -44,7 +44,7 @@ from frontend.results import (
 
 init_session_state()
 
-SHAPEFILE_PATH = "data/shapefiles/Samtliga nätföretags del- och verksamhetsområden.shp"
+SHAPEFILE_PATH = "data/shapefiles/Samtliga nÃ¤tfÃ¶retags del- och verksamhetsomrÃ¥den.shp"
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -218,29 +218,48 @@ with col3:
 
 st.markdown("")
 
-component_list = [
-    ("30.1", "Capital cost", "Kapitalkostnad_Total", "tkr"),
-    ("40.1.1", "Controllable costs (paverkbara)", "Paverkbara_Periodsumma", "tkr"),
-    ("40.2.1", "Non-controllable costs", "Opaverkbara_Kostnader", "tkr"),
-    ("40.1.2", "Flexibility services", "Flexibilitetstjanster", "tkr"),
-    ("-", "Interruption compensation (12-24h)", "Avbrottsersattning_12_24h", "tkr"),
-    ("-", "State aid deduction", "Avdrag_Statligt_Stod", "tkr"),
-    ("30.5.2", "Incentive adjustment", "Incitamentjustering_Total", "tkr"),
+# Build table from diagram_data (same source of truth as decomposition diagram)
+dd = diagram_data
+method = dd.get('method', 'OPEX')
+
+# Components matching diagram decomposition
+# (var_id, label, diagram_key, negate)
+if method == 'TOTEX' and 'opex_effektivisering' in dd:
+    dd_components = [
+        ("40.1", "Controllable costs", "paverkbara", False),
+        ("40.2", "Non-controllable costs", "ej_paverkbara", False),
+        ("50.4.1", "OPEX efficiency", "opex_effektivisering", True),
+        ("50.4.2", "CAPEX efficiency", "capex_effektivisering", True),
+    ]
+else:
+    dd_components = [
+        ("40.1", "Controllable costs", "paverkbara", False),
+        ("40.2", "Non-controllable costs", "ej_paverkbara", False),
+        ("50.4.1", "OPEX efficiency", "effektivisering", True),
+    ]
+
+dd_components += [
+    ("11.1", "Capital base", "kapitalbas", False),
+    ("20.1", "Depreciation", "avskrivningar", False),
+    ("30.1", "Return (WACC)", "avkastning", False),
+    ("30.5", "Quality & incentive adjustment", "kvalitet", False),
+    ("", "Operating costs", "lopande", False),
+    ("", "Capital costs", "kapitalkostnader", False),
+    ("", "Other adjustments", "other_adjustments", False),
 ]
 
 rows = []
-for var_id, label, col, unit in component_list:
-    case_val = case_ir.get(col, 0)
-    baseline_val = baseline_ir.get(col, 0)
-    
-    if col == "Avdrag_Statligt_Stod":
-        case_val = -case_val if case_val else 0
-        baseline_val = -baseline_val if baseline_val else 0
-    
-    rows.append(render_metric_row(var_id, label, case_val, baseline_val, unit))
+for var_id, label, dd_key, negate in dd_components:
+    comp = dd.get(dd_key, {})
+    case_val = float(comp.get('value', 0))
+    baseline_val = float(comp.get('baseline', 0))
+    if negate:
+        case_val = -case_val
+        baseline_val = -baseline_val
+    rows.append(render_metric_row(var_id, label, case_val, baseline_val, "tkr"))
 
 rows.append({
-    "ID": "",
+    "ID": "60.1",
     "Component": "TOTAL REVENUE FRAME",
     "Case": format_tkr(total_case),
     "Baseline": format_tkr(total_baseline),
