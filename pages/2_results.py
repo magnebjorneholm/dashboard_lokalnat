@@ -36,8 +36,8 @@ from frontend.modules.base import case_summary
 from frontend.results import (
     m1_asset_base_output,
     m2_depreciation_output,
-    m3_cost_of_capital_output,
     m3_return_output,
+    m3_incentive_output,
     m4_operating_exp_output,
     m5_efficiency_output,
     m7_benchmarking_output,
@@ -45,7 +45,7 @@ from frontend.results import (
 
 init_session_state()
 
-SHAPEFILE_PATH = "data/shapefiles/Samtliga nÃ¤tfÃ¶retags del- och verksamhetsomrÃ¥den.shp"
+SHAPEFILE_PATH = "data/shapefiles/Samtliga nÃƒÂ¤tfÃƒÂ¶retags del- och verksamhetsomrÃƒÂ¥den.shp"
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -471,7 +471,7 @@ with tabs[1]:
 with tabs[2]:
     m3_return_output.render(case, baseline, ui_config)
     st.divider()
-    m3_cost_of_capital_output.render_incentives(case, baseline, ui_config)
+    m3_incentive_output.render(case, baseline, ui_config)
 
 # Tab 4: Operating expenditures (M4)
 with tabs[3]:
