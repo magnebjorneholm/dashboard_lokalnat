@@ -71,10 +71,10 @@ def _calc_trunkering_min(outlier_krav, kunddelning, realiseringstid, tillsynsper
 
 def _get_params(m5_config):
     """Extract efficiency parameters, falling back to baseline defaults."""
-    trunkering_max = m5_config.get("trunkering_max", BASELINE_PARAMS["trunkering_max"])
-    realiseringstid = m5_config.get("realiseringstid", BASELINE_PARAMS["realiseringstid"])
-    kunddelning = m5_config.get("kunddelning", BASELINE_PARAMS["kunddelning"])
-    outlier_krav = m5_config.get("outlier_krav", BASELINE_PARAMS["outlier_krav"])
+    trunkering_max = m5_config.get("trunkering_max") or BASELINE_PARAMS["trunkering_max"]
+    realiseringstid = m5_config.get("realiseringstid") or BASELINE_PARAMS["realiseringstid"]
+    kunddelning = m5_config.get("kunddelning") or BASELINE_PARAMS["kunddelning"]
+    outlier_krav = m5_config.get("outlier_krav") or BASELINE_PARAMS["outlier_krav"]
     tillsynsperiod = BASELINE_PARAMS["tillsynsperiod"]
 
     trunkering_min = _calc_trunkering_min(
@@ -120,7 +120,7 @@ def _tmpl_safe():
     """Get plotly template dict with xaxis/yaxis removed to avoid conflicts."""
     tmpl = get_plotly_template()
     return (
-        {k: v for k, v in tmpl.items() if k not in ("template", "xaxis", "yaxis")},
+        {k: v for k, v in tmpl.items() if k not in ("template", "xaxis", "yaxis", "margin")},
         tmpl.get("template", "plotly_white"),
     )
 
@@ -631,18 +631,21 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
         fig.add_hline(
             y=bl_net,
             line_dash="dash",
-            line_color=COLORS["text_muted"],
-            line_width=1,
-            annotation_text=f"Baseline net: {_fmt_tkr(bl_net)}",
+            line_color=COLORS["text_primary"],
+            line_width=1.5,
+            annotation_text=f"Baseline net: {_fmt_tkr(bl_net)} tkr",
             annotation_position="top right",
-            annotation_font_size=10,
-            annotation_font_color=COLORS["text_muted"],
+            annotation_font_size=11,
+            annotation_font_color=COLORS["text_primary"],
+            annotation_bgcolor="rgba(255,255,255,0.9)",
+            annotation_borderpad=3,
         )
 
     fig.update_layout(
         **layout_kwargs,
         template=template,
-        height=340,
+        height=380,
+        margin=dict(t=40),
         showlegend=False,
         yaxis_title="tkr",
         xaxis=dict(showgrid=False, linecolor=COLORS["bg_muted"]),
