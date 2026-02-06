@@ -1,16 +1,19 @@
 """
 M5 Efficiency Incentive - Output Display
 
-Displays:
-- 5.2-5.3 Efficiency parameters (reference)
-- 50.3 DEA efficiency measures with full calculation chain
-- 50.4 Efficiency-adjusted costs (OPEX/CAPEX before/after)
+Three visual blocks:
+1. Efficiency Distribution -- Two Plotly histograms side-by-side:
+   (a) Efficiency scores with truncation zone overlay and company markers.
+   (b) Annual efficiency requirements distribution with company marker.
+2. Company Efficiency Card -- KPI metrics + full 50.3 measures table + parameters.
+3. Cost Impact -- Plotly waterfall showing cost base -> efficiency deduction -> net,
+   adapting to OPEX vs TOTEX method, with baseline reference when delta exists.
 
 Variable-IDs:
 - 5.2.1-5.3.2: Efficiency calculation parameters
 - 50.3.1: Efficiency score
 - 50.3.2: Super-efficiency score
-- 50.3.3: Efficiency potential
+- 50.3.3: Efficiency potential (raw)
 - 50.3.4: Applied efficiency requirement
 - 50.4.1: OPEX efficiency adjustment
 - 50.4.2: CAPEX efficiency adjustment (TOTEX only)
@@ -21,45 +24,110 @@ Variable-IDs:
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 from typing import Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
+from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
 
-# Baseline parameter values
+
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+
 BASELINE_PARAMS = {
     "trunkering_max": 0.30,
     "realiseringstid": 8,
     "kunddelning": 0.50,
     "tillsynsperiod": 4,
     "outlier_krav": 0.01,
-    "trunkering_min": 0.162416,  # Derived from outlier_krav
 }
 
+# Zone colors (subtle, professional)
+ZONE_CAP = "rgba(234, 88, 12, 0.08)"
+ZONE_ACTIVE = "rgba(37, 99, 235, 0.06)"
+ZONE_FLOOR = "rgba(5, 150, 105, 0.08)"
+ZONE_CAP_BORDER = "rgba(234, 88, 12, 0.25)"
+ZONE_FLOOR_BORDER = "rgba(5, 150, 105, 0.25)"
 
-def _format_tkr(value: float, show_sign: bool = False) -> str:
-    if pd.isna(value) or value is None:
+# Waterfall colors (consulting standard)
+WF_BASE = "#3B82F6"        # Blue-500: cost bases (positive absolute/relative)
+WF_DEDUCTION = "#DC2626"   # Red-600: efficiency deductions
+WF_TOTAL = "#1E3A5F"       # Dark navy: net totals
+
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+def _calc_trunkering_min(outlier_krav, kunddelning, realiseringstid, tillsynsperiod):
+    """Calculate trunkering_min from outlier_krav (inverse formula)."""
+    total_eff = (1 + outlier_krav) ** tillsynsperiod - 1
+    realization_factor = tillsynsperiod / realiseringstid
+    return total_eff / (kunddelning * realization_factor)
+
+
+def _get_params(m5_config):
+    """Extract efficiency parameters, falling back to baseline defaults."""
+    trunkering_max = m5_config.get("trunkering_max", BASELINE_PARAMS["trunkering_max"])
+    realiseringstid = m5_config.get("realiseringstid", BASELINE_PARAMS["realiseringstid"])
+    kunddelning = m5_config.get("kunddelning", BASELINE_PARAMS["kunddelning"])
+    outlier_krav = m5_config.get("outlier_krav", BASELINE_PARAMS["outlier_krav"])
+    tillsynsperiod = BASELINE_PARAMS["tillsynsperiod"]
+
+    trunkering_min = _calc_trunkering_min(
+        outlier_krav, kunddelning, realiseringstid, tillsynsperiod
+    )
+
+    return {
+        "trunkering_max": trunkering_max,
+        "realiseringstid": realiseringstid,
+        "kunddelning": kunddelning,
+        "outlier_krav": outlier_krav,
+        "tillsynsperiod": tillsynsperiod,
+        "trunkering_min": trunkering_min,
+    }
+
+
+def _get_baseline_trunkering_min():
+    """Baseline trunkering_min for comparison."""
+    return _calc_trunkering_min(
+        BASELINE_PARAMS["outlier_krav"],
+        BASELINE_PARAMS["kunddelning"],
+        BASELINE_PARAMS["realiseringstid"],
+        BASELINE_PARAMS["tillsynsperiod"],
+    )
+
+
+def _fmt_pct(val, decimals=2):
+    """Format decimal as percentage string."""
+    if val is None or (isinstance(val, float) and np.isnan(val)):
         return "-"
-    if show_sign and value > 0:
-        return f"+{value:,.0f}"
-    elif show_sign and value < 0:
-        return f"{value:,.0f}"
-    return f"{value:,.0f}"
+    return f"{val * 100:.{decimals}f}%"
 
 
-def _format_percent(value: float, decimals: int = 2) -> str:
-    if pd.isna(value) or value is None:
+def _fmt_tkr(val, show_sign=False):
+    """Format value as tkr with optional sign."""
+    if val is None or (isinstance(val, float) and np.isnan(val)):
         return "-"
-    return f"{value*100:.{decimals}f}%"
+    prefix = "+" if show_sign and val > 0 else ""
+    return f"{prefix}{val:,.0f}"
 
 
-def _calc_delta(case_val: float, baseline_val: float) -> tuple:
-    if pd.isna(case_val) or pd.isna(baseline_val) or case_val is None or baseline_val is None:
-        return None, None
-    delta_abs = case_val - baseline_val
-    return delta_abs, None
+def _tmpl_safe():
+    """Get plotly template dict with xaxis/yaxis removed to avoid conflicts."""
+    tmpl = get_plotly_template()
+    return (
+        {k: v for k, v in tmpl.items() if k not in ("template", "xaxis", "yaxis")},
+        tmpl.get("template", "plotly_white"),
+    )
 
+
+# ============================================================================
+# MAIN RENDER
+# ============================================================================
 
 def render(
     case: "PipelineResult",
@@ -68,92 +136,264 @@ def render(
     user_reid: str = None
 ) -> None:
     """Render M5 efficiency incentive outputs."""
-    
+
+    m5_config = ui_config.get("m5_efficiency", {})
+    params = _get_params(m5_config)
+
     case_ir = case.post_dea.user_intaktsram
     baseline_ir = baseline.post_dea.user_intaktsram
-    
-    # Get M5 config for parameter display
-    m5_config = ui_config.get("m5_efficiency", {})
-    
-    # === SECTION 1: EFFICIENCY PARAMETERS ===
-    _render_parameters_section(m5_config)
-    
+
+    # --- Block 1: Distributions ---
+    _render_distributions(case, baseline, params)
+
     st.divider()
-    
-    # === SECTION 2: DEA EFFICIENCY MEASURES ===
-    _render_efficiency_measures_section(case, baseline, m5_config, user_reid)
-    
+
+    # --- Block 2: Company efficiency card ---
+    _render_efficiency_card(case, baseline, params, user_reid)
+
     st.divider()
-    
-    # === SECTION 3: EFFICIENCY-ADJUSTED COSTS ===
-    _render_adjusted_costs_section(case_ir, baseline_ir, m5_config)
+
+    # --- Block 3: Cost impact ---
+    _render_cost_waterfall(case_ir, baseline_ir, m5_config)
 
 
-def _render_parameters_section(m5_config: Dict[str, Any]) -> None:
-    """Render 5.2-5.3 efficiency parameters as reference."""
-    
-    st.markdown("**5.2-5.3 Efficiency Parameters**")
-    st.caption("Parameters used for efficiency requirement calculation")
-    
-    # Get current values (from config or baseline)
-    trunkering_max = m5_config.get("trunkering_max", BASELINE_PARAMS["trunkering_max"])
-    realiseringstid = m5_config.get("realiseringstid", BASELINE_PARAMS["realiseringstid"])
-    kunddelning = m5_config.get("kunddelning", BASELINE_PARAMS["kunddelning"])
-    outlier_krav = m5_config.get("outlier_krav", BASELINE_PARAMS["outlier_krav"])
-    tillsynsperiod = BASELINE_PARAMS["tillsynsperiod"]  # Fixed
-    
-    # Calculate derived trunkering_min
-    total_eff = (1 + outlier_krav) ** tillsynsperiod - 1
-    realization_factor = tillsynsperiod / realiseringstid
-    trunkering_min = total_eff / (kunddelning * realization_factor)
-    
-    params = [
-        ("5.2.1", "Max potential cap", trunkering_max, BASELINE_PARAMS["trunkering_max"], "percent"),
-        ("5.2.2", "Realization time", realiseringstid, BASELINE_PARAMS["realiseringstid"], "years"),
-        ("5.2.3", "Customer sharing", kunddelning, BASELINE_PARAMS["kunddelning"], "percent"),
-        ("5.3.1", "Min annual requirement", outlier_krav, BASELINE_PARAMS["outlier_krav"], "percent"),
-        ("5.3.2", "Truncation min (derived)", trunkering_min, BASELINE_PARAMS["trunkering_min"], "percent"),
-    ]
-    
-    rows = []
-    for param_id, label, case_val, baseline_val, fmt in params:
-        if fmt == "percent":
-            case_str = _format_percent(case_val, 2)
-            baseline_str = _format_percent(baseline_val, 2)
-            delta, _ = _calc_delta(case_val, baseline_val)
-            delta_str = f"{delta*100:+.2f} pp" if delta and abs(delta) > 0.0001 else "-"
-        elif fmt == "years":
-            case_str = f"{int(case_val)} yr"
-            baseline_str = f"{int(baseline_val)} yr"
-            delta = case_val - baseline_val
-            delta_str = f"{int(delta):+d} yr" if delta != 0 else "-"
-        else:
-            case_str = f"{case_val}"
-            baseline_str = f"{baseline_val}"
-            delta_str = "-"
-        
-        rows.append({
-            "ID": param_id,
-            "Parameter": label,
-            "Case": case_str,
-            "Baseline": baseline_str,
-            "Delta": delta_str,
-        })
-    
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
+# ============================================================================
+# BLOCK 1 -- EFFICIENCY DISTRIBUTIONS (two side-by-side histograms)
+# ============================================================================
+
+def _render_distributions(case, baseline, params):
+    """Two side-by-side histograms: efficiency scores and efficiency requirements."""
+
+    st.markdown("**Efficiency Distribution**")
+
+    # Zone explanation caption (point 2)
+    cap_pct = params["trunkering_max"] * 100
+    floor_pct = params["trunkering_min"] * 100
+    st.caption(
+        f"Left chart: distribution of DEA efficiency scores for all 148 companies. "
+        f"Companies with potential above {cap_pct:.0f}% (efficiency below {1 - params['trunkering_max']:.2f}) "
+        f"are capped at {cap_pct:.0f}%. "
+        f"Companies with potential below {floor_pct:.1f}% (efficiency above {1 - params['trunkering_min']:.3f}) "
+        f"are floored at {floor_pct:.1f}%. "
+        f"Right chart: resulting annual efficiency requirements after truncation and realization."
+    )
+
+    col_left, col_right = st.columns(2)
+
+    # Common data
+    dea_case = case.dea.dea_results.copy()
+    eff_scores = dea_case["Effektivitet"].dropna().values
+    eff_case = case.extraction.efficiency
+    eff_baseline = baseline.extraction.efficiency
+
+    effkrav_all = case.post_dea.all_effkrav
+    effkrav_case = case.post_dea.user_effkrav_proc
+    effkrav_baseline = baseline.post_dea.user_effkrav_proc
+
+    with col_left:
+        _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params)
+
+    with col_right:
+        _render_effkrav_histogram(effkrav_all, effkrav_case, effkrav_baseline)
 
 
-def _render_efficiency_measures_section(
-    case: "PipelineResult",
-    baseline: "PipelineResult",
-    m5_config: Dict[str, Any],
-    user_reid: str
-) -> None:
-    """Render 50.3 DEA efficiency measures."""
-    
-    st.markdown("**50.3 Efficiency Measures**")
-    
-    # Get values
+def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params):
+    """Histogram of efficiency scores with truncation zones."""
+
+    eff_cap = 1 - params["trunkering_max"]
+    eff_floor = 1 - params["trunkering_min"]
+
+    layout_kwargs, template = _tmpl_safe()
+    fig = go.Figure()
+
+    fig.add_trace(go.Histogram(
+        x=eff_scores,
+        nbinsx=25,
+        marker_color=CHART_COLORS[0],
+        marker_line_color="white",
+        marker_line_width=1,
+        opacity=0.85,
+        hovertemplate="Efficiency: %{x:.3f}<br>Companies: %{y}<extra></extra>",
+        name="",
+        showlegend=False,
+    ))
+
+    # Truncation zones
+    fig.add_vrect(
+        x0=0, x1=eff_cap,
+        fillcolor=ZONE_CAP,
+        line=dict(color=ZONE_CAP_BORDER, width=1, dash="dot"),
+        annotation_text=f"Cap ({params['trunkering_max']*100:.0f}%)",
+        annotation_position="top left",
+        annotation_font_size=10,
+        annotation_font_color=COLORS["warning"],
+    )
+
+    fig.add_vrect(
+        x0=eff_cap, x1=eff_floor,
+        fillcolor=ZONE_ACTIVE,
+        line_width=0,
+    )
+
+    fig.add_vrect(
+        x0=eff_floor, x1=max(eff_scores.max() * 1.02, 1.05),
+        fillcolor=ZONE_FLOOR,
+        line=dict(color=ZONE_FLOOR_BORDER, width=1, dash="dot"),
+        annotation_text=f"Floor ({params['outlier_krav']*100:.1f}%/yr)",
+        annotation_position="top right",
+        annotation_font_size=10,
+        annotation_font_color=COLORS["success"],
+    )
+
+    # Company markers
+    y_max_approx = len(eff_scores) / 6
+
+    if eff_baseline is not None:
+        fig.add_vline(
+            x=eff_baseline,
+            line_dash="dash",
+            line_color=COLORS["text_muted"],
+            line_width=1.5,
+        )
+        fig.add_annotation(
+            x=eff_baseline, y=y_max_approx * 0.92,
+            text=f"Baseline: {eff_baseline:.3f}",
+            showarrow=False,
+            font=dict(size=10, color=COLORS["text_muted"]),
+            bgcolor="rgba(255,255,255,0.85)",
+            borderpad=3, yanchor="bottom",
+        )
+
+    if eff_case is not None:
+        fig.add_vline(
+            x=eff_case,
+            line_dash="solid",
+            line_color=CHART_COLORS[0],
+            line_width=2,
+        )
+        fig.add_annotation(
+            x=eff_case, y=y_max_approx * 1.05,
+            text=f"<b>Case: {eff_case:.3f}</b>",
+            showarrow=False,
+            font=dict(size=11, color=CHART_COLORS[0]),
+            bgcolor="rgba(255,255,255,0.9)",
+            borderpad=3, yanchor="bottom",
+        )
+
+    fig.update_layout(
+        **layout_kwargs,
+        template=template,
+        title=dict(text="Efficiency Scores", font=dict(size=13)),
+        xaxis_title="Efficiency score",
+        yaxis_title="Number of companies",
+        height=340,
+        bargap=0.03,
+        xaxis=dict(
+            range=[
+                max(0, min(eff_scores.min(), eff_cap) - 0.05),
+                max(eff_scores.max() * 1.02, 1.05),
+            ],
+            dtick=0.05,
+            showgrid=False,
+            linecolor=COLORS["bg_muted"],
+        ),
+        yaxis=dict(
+            gridcolor=COLORS["bg_subtle"],
+            linecolor=COLORS["bg_muted"],
+        ),
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+def _render_effkrav_histogram(effkrav_all, effkrav_case, effkrav_baseline):
+    """Histogram of annual efficiency requirements for all companies."""
+
+    if effkrav_all is None or "Effkrav_proc" not in effkrav_all.columns:
+        st.info("Efficiency requirement data not available.")
+        return
+
+    effkrav_values = effkrav_all["Effkrav_proc"].dropna().values * 100  # to %
+
+    layout_kwargs, template = _tmpl_safe()
+    fig = go.Figure()
+
+    fig.add_trace(go.Histogram(
+        x=effkrav_values,
+        nbinsx=20,
+        marker_color=CHART_COLORS[1],
+        marker_line_color="white",
+        marker_line_width=1,
+        opacity=0.85,
+        hovertemplate="Requirement: %{x:.2f}%/yr<br>Companies: %{y}<extra></extra>",
+        name="",
+        showlegend=False,
+    ))
+
+    y_max_approx = len(effkrav_values) / 5
+
+    if effkrav_baseline is not None:
+        fig.add_vline(
+            x=effkrav_baseline * 100,
+            line_dash="dash",
+            line_color=COLORS["text_muted"],
+            line_width=1.5,
+        )
+        fig.add_annotation(
+            x=effkrav_baseline * 100, y=y_max_approx * 0.92,
+            text=f"Baseline: {effkrav_baseline*100:.2f}%",
+            showarrow=False,
+            font=dict(size=10, color=COLORS["text_muted"]),
+            bgcolor="rgba(255,255,255,0.85)",
+            borderpad=3, yanchor="bottom",
+        )
+
+    if effkrav_case is not None:
+        fig.add_vline(
+            x=effkrav_case * 100,
+            line_dash="solid",
+            line_color=CHART_COLORS[1],
+            line_width=2,
+        )
+        fig.add_annotation(
+            x=effkrav_case * 100, y=y_max_approx * 1.05,
+            text=f"<b>Case: {effkrav_case*100:.2f}%</b>",
+            showarrow=False,
+            font=dict(size=11, color=CHART_COLORS[1]),
+            bgcolor="rgba(255,255,255,0.9)",
+            borderpad=3, yanchor="bottom",
+        )
+
+    fig.update_layout(
+        **layout_kwargs,
+        template=template,
+        title=dict(text="Annual Efficiency Requirements", font=dict(size=13)),
+        xaxis_title="Requirement (%/yr)",
+        yaxis_title="Number of companies",
+        height=340,
+        bargap=0.03,
+        xaxis=dict(
+            showgrid=False,
+            linecolor=COLORS["bg_muted"],
+        ),
+        yaxis=dict(
+            gridcolor=COLORS["bg_subtle"],
+            linecolor=COLORS["bg_muted"],
+        ),
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+# ============================================================================
+# BLOCK 2 -- COMPANY EFFICIENCY CARD
+# ============================================================================
+
+def _render_efficiency_card(case, baseline, params, user_reid):
+    """KPI metrics + full 50.3 measures table + parameter reference."""
+
+    st.markdown("**Company Efficiency**")
+
     eff_case = case.extraction.efficiency
     eff_baseline = baseline.extraction.efficiency
     potential_case = case.extraction.potential
@@ -161,234 +401,297 @@ def _render_efficiency_measures_section(
     effkrav_case = case.post_dea.user_effkrav_proc
     effkrav_baseline = baseline.post_dea.user_effkrav_proc
     is_outlier = case.extraction.is_outlier
-    
-    # Get parameters for truncation display
-    trunkering_max = m5_config.get("trunkering_max", BASELINE_PARAMS["trunkering_max"])
-    outlier_krav = m5_config.get("outlier_krav", BASELINE_PARAMS["outlier_krav"])
-    realiseringstid = m5_config.get("realiseringstid", BASELINE_PARAMS["realiseringstid"])
-    kunddelning = m5_config.get("kunddelning", BASELINE_PARAMS["kunddelning"])
-    tillsynsperiod = BASELINE_PARAMS["tillsynsperiod"]
-    
-    # Calculate trunkering_min
-    total_eff = (1 + outlier_krav) ** tillsynsperiod - 1
-    realization_factor = tillsynsperiod / realiseringstid
-    trunkering_min = total_eff / (kunddelning * realization_factor)
-    
-    # Calculate truncated potential
-    if potential_case is not None:
-        potential_trunkerad_case = np.clip(potential_case, trunkering_min, trunkering_max)
-    else:
-        potential_trunkerad_case = None
-    
-    if potential_baseline is not None:
-        potential_trunkerad_baseline = np.clip(potential_baseline, trunkering_min, trunkering_max)
-    else:
-        potential_trunkerad_baseline = None
-    
-    rows = []
-    
-    # 50.3.1 Efficiency score
-    eff_delta, _ = _calc_delta(eff_case, eff_baseline)
-    rows.append({
-        "ID": "50.3.1",
-        "Measure": "Efficiency score",
-        "Case": f"{eff_case:.3f}" if eff_case else "-",
-        "Baseline": f"{eff_baseline:.3f}" if eff_baseline else "-",
-        "Delta": f"{eff_delta:+.3f}" if eff_delta and abs(eff_delta) > 0.0001 else "-",
-    })
-    
-    # 50.3.3 Efficiency potential (raw)
-    pot_delta, _ = _calc_delta(potential_case, potential_baseline)
-    rows.append({
-        "ID": "50.3.3",
-        "Measure": "Efficiency potential (raw)",
-        "Case": _format_percent(potential_case, 1) if potential_case is not None else "-",
-        "Baseline": _format_percent(potential_baseline, 1) if potential_baseline is not None else "-",
-        "Delta": f"{pot_delta*100:+.1f} pp" if pot_delta and abs(pot_delta) > 0.001 else "-",
-    })
-    
-    # Truncated potential (not in spec but useful)
-    pot_tr_delta, _ = _calc_delta(potential_trunkerad_case, potential_trunkerad_baseline)
-    rows.append({
-        "ID": "-",
-        "Measure": "Truncated potential",
-        "Case": _format_percent(potential_trunkerad_case, 2) if potential_trunkerad_case is not None else "-",
-        "Baseline": _format_percent(potential_trunkerad_baseline, 2) if potential_trunkerad_baseline is not None else "-",
-        "Delta": f"{pot_tr_delta*100:+.2f} pp" if pot_tr_delta and abs(pot_tr_delta) > 0.001 else "-",
-    })
-    
-    # 50.3.4 Applied requirement
-    effkrav_delta, _ = _calc_delta(effkrav_case, effkrav_baseline)
-    rows.append({
-        "ID": "50.3.4",
-        "Measure": "Applied requirement (annual)",
-        "Case": _format_percent(effkrav_case, 2) if effkrav_case else "-",
-        "Baseline": _format_percent(effkrav_baseline, 2) if effkrav_baseline else "-",
-        "Delta": f"{effkrav_delta*100:+.2f} pp" if effkrav_delta and abs(effkrav_delta) > 0.0001 else "-",
-    })
-    
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
-    
-    # Super-efficiency if available
-    if user_reid and hasattr(case.dea, 'dea_results') and case.dea.dea_results is not None:
-        dea_df = case.dea.dea_results
-        user_row = dea_df[dea_df['REId'] == user_reid]
-        if not user_row.empty and 'Supereffektivitet' in user_row.columns:
-            super_eff = user_row['Supereffektivitet'].iloc[0]
-            if super_eff is not None and not pd.isna(super_eff):
-                st.metric("50.3.2 Super-efficiency score", f"{super_eff:.3f}")
-    
+
+    # Truncated potential
+    bl_trunkering_min = _get_baseline_trunkering_min()
+    pot_tr_case = np.clip(potential_case, params["trunkering_min"], params["trunkering_max"]) if potential_case is not None else None
+    pot_tr_baseline = np.clip(potential_baseline, bl_trunkering_min, BASELINE_PARAMS["trunkering_max"]) if potential_baseline is not None else None
+
+    # --- Top row: 3 KPI metrics ---
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        delta_eff = (eff_case - eff_baseline) if eff_case and eff_baseline else None
+        st.metric(
+            "50.3.1 Efficiency score",
+            f"{eff_case:.3f}" if eff_case else "-",
+            delta=f"{delta_eff:+.3f}" if delta_eff and abs(delta_eff) > 0.0001 else None,
+        )
+
+    with col2:
+        delta_pot = None
+        if pot_tr_case is not None and pot_tr_baseline is not None:
+            delta_pot = pot_tr_case - pot_tr_baseline
+        st.metric(
+            "Truncated potential",
+            _fmt_pct(pot_tr_case, 2) if pot_tr_case is not None else "-",
+            delta=f"{delta_pot*100:+.2f} pp" if delta_pot and abs(delta_pot) > 0.0001 else None,
+            delta_color="inverse",
+        )
+
+    with col3:
+        delta_ek = (effkrav_case - effkrav_baseline) if effkrav_case and effkrav_baseline else None
+        st.metric(
+            "50.3.4 Annual requirement",
+            _fmt_pct(effkrav_case, 2) if effkrav_case else "-",
+            delta=f"{delta_ek*100:+.2f} pp" if delta_ek and abs(delta_ek) > 0.0001 else None,
+            delta_color="inverse",
+        )
+
     # Outlier warning
     if is_outlier:
         st.warning(
             f"This company is classified as an outlier. "
-            f"Fixed minimum requirement ({outlier_krav*100:.1f}%) applies instead of DEA-based calculation."
+            f"Fixed minimum requirement ({params['outlier_krav']*100:.1f}%/yr) "
+            f"applies instead of DEA-based calculation."
+        )
+
+    # --- 50.3 Efficiency Measures table (including 50.3.3 raw potential) ---
+    with st.expander("50.3 Efficiency measures"):
+        rows_m = []
+        _add_measure_row(rows_m, "50.3.1", "Efficiency score",
+                         f"{eff_case:.3f}" if eff_case else "-",
+                         f"{eff_baseline:.3f}" if eff_baseline else "-",
+                         eff_case, eff_baseline, fmt="score")
+
+        _add_measure_row(rows_m, "50.3.3", "Efficiency potential (raw)",
+                         _fmt_pct(potential_case, 1),
+                         _fmt_pct(potential_baseline, 1),
+                         potential_case, potential_baseline, fmt="pp1")
+
+        _add_measure_row(rows_m, "-", "Truncated potential",
+                         _fmt_pct(pot_tr_case, 2),
+                         _fmt_pct(pot_tr_baseline, 2),
+                         pot_tr_case, pot_tr_baseline, fmt="pp2")
+
+        _add_measure_row(rows_m, "50.3.4", "Applied requirement (annual)",
+                         _fmt_pct(effkrav_case, 2),
+                         _fmt_pct(effkrav_baseline, 2),
+                         effkrav_case, effkrav_baseline, fmt="pp2")
+
+        # Super-efficiency (if > 1.0)
+        super_eff = _get_super_efficiency(case, user_reid)
+        if super_eff is not None:
+            rows_m.append({
+                "ID": "50.3.2", "Measure": "Super-efficiency score",
+                "Case": f"{super_eff:.3f}", "Baseline": "-", "Delta": "-",
+            })
+
+        st.dataframe(pd.DataFrame(rows_m), hide_index=True, width="stretch")
+
+    # --- Parameter reference table ---
+    with st.expander("5.2-5.3 Efficiency parameters"):
+        p = params
+        bp = BASELINE_PARAMS
+        rows_p = [
+            ("5.2.1", "Max potential cap", _fmt_pct(p["trunkering_max"]), _fmt_pct(bp["trunkering_max"]),
+             f"{(p['trunkering_max'] - bp['trunkering_max'])*100:+.2f} pp" if abs(p["trunkering_max"] - bp["trunkering_max"]) > 0.0001 else "-"),
+            ("5.2.2", "Realization time", f"{int(p['realiseringstid'])} yr", f"{int(bp['realiseringstid'])} yr",
+             f"{int(p['realiseringstid'] - bp['realiseringstid']):+d} yr" if p["realiseringstid"] != bp["realiseringstid"] else "-"),
+            ("5.2.3", "Customer sharing", _fmt_pct(p["kunddelning"]), _fmt_pct(bp["kunddelning"]),
+             f"{(p['kunddelning'] - bp['kunddelning'])*100:+.2f} pp" if abs(p["kunddelning"] - bp["kunddelning"]) > 0.0001 else "-"),
+            ("5.3.1", "Min annual requirement", _fmt_pct(p["outlier_krav"]), _fmt_pct(bp["outlier_krav"]),
+             f"{(p['outlier_krav'] - bp['outlier_krav'])*100:+.2f} pp" if abs(p["outlier_krav"] - bp["outlier_krav"]) > 0.0001 else "-"),
+            ("5.3.2", "Truncation min (derived)", _fmt_pct(p["trunkering_min"], 2), _fmt_pct(bl_trunkering_min, 2),
+             f"{(p['trunkering_min'] - bl_trunkering_min)*100:+.2f} pp" if abs(p["trunkering_min"] - bl_trunkering_min) > 0.0001 else "-"),
+        ]
+        df_params = pd.DataFrame(rows_p, columns=["ID", "Parameter", "Case", "Baseline", "Delta"])
+        st.dataframe(df_params, hide_index=True, width="stretch")
+
+
+def _add_measure_row(rows, var_id, label, case_str, bl_str, case_val, bl_val, fmt="score"):
+    """Add a row to the efficiency measures table."""
+    delta_str = "-"
+    if case_val is not None and bl_val is not None:
+        delta = case_val - bl_val
+        if abs(delta) > 0.0001:
+            if fmt == "score":
+                delta_str = f"{delta:+.3f}"
+            elif fmt == "pp1":
+                delta_str = f"{delta*100:+.1f} pp"
+            elif fmt == "pp2":
+                delta_str = f"{delta*100:+.2f} pp"
+    rows.append({"ID": var_id, "Measure": label, "Case": case_str, "Baseline": bl_str, "Delta": delta_str})
+
+
+def _get_super_efficiency(case, user_reid):
+    """Extract super-efficiency score if available and > 1.0."""
+    if not user_reid or not hasattr(case.dea, "dea_results") or case.dea.dea_results is None:
+        return None
+    dea_df = case.dea.dea_results
+    user_row = dea_df[dea_df["REId"] == user_reid]
+    if user_row.empty or "Supereffektivitet" not in user_row.columns:
+        return None
+    val = user_row["Supereffektivitet"].iloc[0]
+    if val is not None and not pd.isna(val) and val > 1.0:
+        return val
+    return None
+
+
+# ============================================================================
+# BLOCK 3 -- COST IMPACT (WATERFALL)
+# ============================================================================
+
+def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
+    """Waterfall chart showing cost base -> efficiency deduction -> net."""
+
+    st.markdown("**50.4 Efficiency-Adjusted Costs**")
+
+    method_used = case_ir.get("Method_used", "OPEX")
+
+    # --- Extract values (with legacy fallback) ---
+    opex_fore = case_ir.get("OPEX_Fore")
+    opex_eff = case_ir.get("OPEX_Effektivisering")
+    opex_efter = case_ir.get("OPEX_Efter")
+
+    capex_fore = case_ir.get("CAPEX_Fore")
+    capex_eff = case_ir.get("CAPEX_Effektivisering")
+    capex_efter = case_ir.get("CAPEX_Efter")
+
+    # Legacy fallback
+    if opex_fore is None:
+        opex_fore = case_ir.get("Paverkbara_Fore_Periodsumma", 0)
+        opex_efter = case_ir.get("Paverkbara_Periodsumma", 0)
+        opex_eff = case_ir.get("Effektivisering_Total", 0)
+        capex_eff = 0
+        capex_fore = 0
+        capex_efter = 0
+
+    # Baseline values
+    bl_opex_fore = baseline_ir.get("OPEX_Fore", baseline_ir.get("Paverkbara_Fore_Periodsumma", 0))
+    bl_opex_eff = baseline_ir.get("OPEX_Effektivisering", baseline_ir.get("Effektivisering_Total", 0))
+    bl_opex_efter = baseline_ir.get("OPEX_Efter", baseline_ir.get("Paverkbara_Periodsumma", 0))
+    bl_capex_fore = baseline_ir.get("CAPEX_Fore", 0)
+    bl_capex_eff = baseline_ir.get("CAPEX_Effektivisering", 0)
+    bl_capex_efter = baseline_ir.get("CAPEX_Efter", 0)
+
+    # Allocation percentages (TOTEX)
+    opex_andel = case_ir.get("OPEX_Andel")
+    capex_andel = case_ir.get("CAPEX_Andel")
+
+    if method_used == "TOTEX":
+        if opex_andel is not None and capex_andel is not None:
+            st.caption(f"TOTEX method -- allocation: OPEX {opex_andel*100:.1f}% / CAPEX {capex_andel*100:.1f}%")
+        else:
+            st.caption("Cost base: TOTEX")
+    else:
+        st.caption("Cost base: OPEX")
+
+    # --- Build waterfall ---
+    layout_kwargs, template = _tmpl_safe()
+
+    # Check if there is a meaningful delta vs baseline
+    bl_net = (bl_opex_efter or 0) + (bl_capex_efter or 0)
+    case_net = (opex_efter or 0) + (capex_efter or 0)
+    has_delta = abs(case_net - bl_net) > 0.5
+
+    if method_used == "TOTEX" and capex_fore and capex_fore > 0:
+        labels = ["OPEX base", "OPEX eff. adj.", "CAPEX base", "CAPEX eff. adj.", "Net cost"]
+        measures = ["absolute", "relative", "relative", "relative", "total"]
+        values = [
+            opex_fore or 0,
+            -(opex_eff or 0),
+            capex_fore or 0,
+            -(capex_eff or 0),
+            0,
+        ]
+        text_vals = [
+            _fmt_tkr(opex_fore),
+            _fmt_tkr(-(opex_eff or 0), show_sign=True),
+            _fmt_tkr(capex_fore),
+            _fmt_tkr(-(capex_eff or 0), show_sign=True),
+            _fmt_tkr(case_net),
+        ]
+    else:
+        labels = ["OPEX base", "Efficiency adj.", "Net OPEX"]
+        measures = ["absolute", "relative", "total"]
+        values = [opex_fore or 0, -(opex_eff or 0), 0]
+        text_vals = [
+            _fmt_tkr(opex_fore),
+            _fmt_tkr(-(opex_eff or 0), show_sign=True),
+            _fmt_tkr(opex_efter),
+        ]
+
+    fig = go.Figure(go.Waterfall(
+        orientation="v",
+        measure=measures,
+        x=labels,
+        y=values,
+        text=text_vals,
+        textposition="outside",
+        textfont=dict(size=11),
+        connector=dict(line=dict(color=COLORS["bg_muted"], width=1, dash="dot")),
+        increasing=dict(marker_color=WF_BASE),
+        decreasing=dict(marker_color=WF_DEDUCTION),
+        totals=dict(marker_color=WF_TOTAL),
+    ))
+
+    # Baseline reference line (only when case differs from baseline)
+    if has_delta:
+        fig.add_hline(
+            y=bl_net,
+            line_dash="dash",
+            line_color=COLORS["text_muted"],
+            line_width=1,
+            annotation_text=f"Baseline net: {_fmt_tkr(bl_net)}",
+            annotation_position="top right",
+            annotation_font_size=10,
+            annotation_font_color=COLORS["text_muted"],
+        )
+
+    fig.update_layout(
+        **layout_kwargs,
+        template=template,
+        height=340,
+        showlegend=False,
+        yaxis_title="tkr",
+        xaxis=dict(showgrid=False, linecolor=COLORS["bg_muted"]),
+        yaxis=dict(gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"]),
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # --- Comparison table below waterfall ---
+    rows = []
+
+    _add_cost_row(rows, "-", "OPEX before efficiency adj.", opex_fore, bl_opex_fore)
+    _add_cost_row(rows, "50.4.1", "OPEX efficiency adjustment", -(opex_eff or 0), -(bl_opex_eff or 0), negate_delta=True)
+    _add_cost_row(rows, "50.4.3", "OPEX after efficiency adj.", opex_efter, bl_opex_efter)
+
+    if method_used == "TOTEX":
+        rows.append({"ID": "", "Component": "", "Case (tkr)": "", "Baseline (tkr)": "", "Delta (tkr)": ""})
+        _add_cost_row(rows, "-", "CAPEX before efficiency adj.", capex_fore, bl_capex_fore)
+        _add_cost_row(rows, "50.4.2", "CAPEX efficiency adjustment", -(capex_eff or 0), -(bl_capex_eff or 0), negate_delta=True)
+        _add_cost_row(rows, "50.4.4", "CAPEX after efficiency adj.", capex_efter, bl_capex_efter)
+
+    with st.expander("Detailed cost breakdown"):
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+
+    # Summary metric
+    total_eff_case = (opex_eff or 0) + (capex_eff or 0)
+    total_eff_baseline = (bl_opex_eff or 0) + (bl_capex_eff or 0)
+
+    if total_eff_case != 0 or total_eff_baseline != 0:
+        delta = total_eff_case - total_eff_baseline
+        st.metric(
+            "Total efficiency adjustment (period)",
+            f"-{total_eff_case:,.0f} tkr",
+            delta=f"{-delta:,.0f} tkr" if abs(delta) > 0.5 else None,
+            delta_color="inverse",
         )
 
 
-def _render_adjusted_costs_section(
-    case_ir: pd.Series,
-    baseline_ir: pd.Series,
-    m5_config: Dict[str, Any]
-) -> None:
-    """Render 50.4 efficiency-adjusted costs."""
-    
-    st.markdown("**50.4 Efficiency-Adjusted Costs**")
-    
-    # Get method
-    method_used = case_ir.get('Method_used', 'OPEX')
-    if method_used == 'TOTEX':
-        st.caption("Cost base: TOTEX (CAPEX excl. incentive adjustments)")
-    else:
-        st.caption("Cost base: OPEX")
-    
-    # Get new separated OPEX/CAPEX values
-    opex_fore_case = case_ir.get('OPEX_Fore', None)
-    opex_fore_baseline = baseline_ir.get('OPEX_Fore', None)
-    opex_efter_case = case_ir.get('OPEX_Efter', None)
-    opex_efter_baseline = baseline_ir.get('OPEX_Efter', None)
-    opex_eff_case = case_ir.get('OPEX_Effektivisering', None)
-    opex_eff_baseline = baseline_ir.get('OPEX_Effektivisering', None)
-    
-    capex_fore_case = case_ir.get('CAPEX_Fore', None)
-    capex_fore_baseline = baseline_ir.get('CAPEX_Fore', None)
-    capex_efter_case = case_ir.get('CAPEX_Efter', None)
-    capex_efter_baseline = baseline_ir.get('CAPEX_Efter', None)
-    capex_eff_case = case_ir.get('CAPEX_Effektivisering', None)
-    capex_eff_baseline = baseline_ir.get('CAPEX_Effektivisering', None)
-    
-    # Fallback to legacy fields if new fields not available
-    if opex_fore_case is None:
-        opex_fore_case = case_ir.get('Paverkbara_Fore_Periodsumma', 0)
-        opex_fore_baseline = baseline_ir.get('Paverkbara_Fore_Periodsumma', 0)
-        opex_efter_case = case_ir.get('Paverkbara_Periodsumma', 0)
-        opex_efter_baseline = baseline_ir.get('Paverkbara_Periodsumma', 0)
-        opex_eff_case = case_ir.get('Effektivisering_Total', 0)
-        opex_eff_baseline = baseline_ir.get('Effektivisering_Total', 0)
-        capex_eff_case = 0
-        capex_eff_baseline = 0
-    
-    rows = []
-    
-    # Show allocation percentages for TOTEX
-    if method_used == 'TOTEX':
-        opex_andel = case_ir.get('OPEX_Andel', None)
-        capex_andel = case_ir.get('CAPEX_Andel', None)
-        if opex_andel is not None and capex_andel is not None:
-            st.caption(
-                f"Efficiency allocation: OPEX {opex_andel*100:.1f}% / CAPEX {capex_andel*100:.1f}%"
-            )
-    
-    # OPEX before
-    if opex_fore_case is not None:
-        fore_delta, _ = _calc_delta(opex_fore_case, opex_fore_baseline)
-        rows.append({
-            "ID": "-",
-            "Component": "OPEX before efficiency adj.",
-            "Case (tkr)": _format_tkr(opex_fore_case),
-            "Baseline (tkr)": _format_tkr(opex_fore_baseline),
-            "Delta (tkr)": _format_tkr(fore_delta, show_sign=True) if fore_delta else "-",
-        })
-    
-    # 50.4.1 OPEX efficiency adjustment
-    if opex_eff_case is not None:
-        adj_delta, _ = _calc_delta(opex_eff_case, opex_eff_baseline)
-        rows.append({
-            "ID": "50.4.1",
-            "Component": "OPEX efficiency adjustment",
-            "Case (tkr)": _format_tkr(-opex_eff_case, show_sign=True),  # Show as negative (reduction)
-            "Baseline (tkr)": _format_tkr(-opex_eff_baseline, show_sign=True),
-            "Delta (tkr)": _format_tkr(-adj_delta, show_sign=True) if adj_delta else "-",
-        })
-    
-    # 50.4.3 OPEX after adjustment
-    if opex_efter_case is not None:
-        efter_delta, _ = _calc_delta(opex_efter_case, opex_efter_baseline)
-        rows.append({
-            "ID": "50.4.3",
-            "Component": "OPEX after efficiency adj.",
-            "Case (tkr)": _format_tkr(opex_efter_case),
-            "Baseline (tkr)": _format_tkr(opex_efter_baseline),
-            "Delta (tkr)": _format_tkr(efter_delta, show_sign=True) if efter_delta else "-",
-        })
-    
-    # --- CAPEX Section (only for TOTEX) ---
-    if method_used == 'TOTEX':
-        # Add separator row
-        rows.append({
-            "ID": "",
-            "Component": "",
-            "Case (tkr)": "",
-            "Baseline (tkr)": "",
-            "Delta (tkr)": "",
-        })
-        
-        # CAPEX before
-        if capex_fore_case is not None:
-            fore_delta, _ = _calc_delta(capex_fore_case, capex_fore_baseline)
-            rows.append({
-                "ID": "-",
-                "Component": "CAPEX before efficiency adj.",
-                "Case (tkr)": _format_tkr(capex_fore_case),
-                "Baseline (tkr)": _format_tkr(capex_fore_baseline),
-                "Delta (tkr)": _format_tkr(fore_delta, show_sign=True) if fore_delta else "-",
-            })
-        
-        # 50.4.2 CAPEX efficiency adjustment
-        if capex_eff_case is not None:
-            adj_delta, _ = _calc_delta(capex_eff_case, capex_eff_baseline)
-            rows.append({
-                "ID": "50.4.2",
-                "Component": "CAPEX efficiency adjustment",
-                "Case (tkr)": _format_tkr(-capex_eff_case, show_sign=True),  # Show as negative (reduction)
-                "Baseline (tkr)": _format_tkr(-capex_eff_baseline, show_sign=True),
-                "Delta (tkr)": _format_tkr(-adj_delta, show_sign=True) if adj_delta else "-",
-            })
-        
-        # 50.4.4 CAPEX after adjustment
-        if capex_efter_case is not None:
-            efter_delta, _ = _calc_delta(capex_efter_case, capex_efter_baseline)
-            rows.append({
-                "ID": "50.4.4",
-                "Component": "CAPEX after efficiency adj.",
-                "Case (tkr)": _format_tkr(capex_efter_case),
-                "Baseline (tkr)": _format_tkr(capex_efter_baseline),
-                "Delta (tkr)": _format_tkr(efter_delta, show_sign=True) if efter_delta else "-",
-            })
-        
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
-    
-    # Summary metrics
-    total_eff_case = (opex_eff_case or 0) + (capex_eff_case or 0)
-    total_eff_baseline = (opex_eff_baseline or 0) + (capex_eff_baseline or 0)
-    
-    if total_eff_case != 0 or total_eff_baseline != 0:
-        col1, col2 = st.columns(2)
-        with col1:
-            delta = total_eff_case - total_eff_baseline
-            st.metric(
-                "Total efficiency adjustment",
-                f"-{total_eff_case:,.0f} tkr",
-                delta=f"{-delta:,.0f} tkr" if delta != 0 else None,
-                delta_color="inverse"
-            )
+def _add_cost_row(rows, var_id, label, case_val, bl_val, negate_delta=False):
+    """Append a row to the cost comparison table."""
+    case_val = case_val or 0
+    bl_val = bl_val or 0
+    delta = case_val - bl_val
+    if negate_delta:
+        delta = -delta
+    rows.append({
+        "ID": var_id,
+        "Component": label,
+        "Case (tkr)": _fmt_tkr(case_val, show_sign=(case_val < 0)),
+        "Baseline (tkr)": _fmt_tkr(bl_val, show_sign=(bl_val < 0)),
+        "Delta (tkr)": _fmt_tkr(delta, show_sign=True) if abs(delta) > 0.5 else "-",
+    })
