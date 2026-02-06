@@ -400,23 +400,26 @@ def _render_ait_aif_section(
     if not ait_cols and not aif_cols:
         return
 
-    with st.expander("Quality incentive by customer type (AIT / AIF)", expanded=False):
-        if ait_cols and aif_cols:
-            col_left, col_right = st.columns(2)
-            with col_left:
-                _render_heatmap(case_details, "ait", "AIT Quality Incentive")
-            with col_right:
-                _render_heatmap(case_details, "aif", "AIF Quality Incentive")
-        elif ait_cols:
-            _render_heatmap(case_details, "ait", "AIT Quality Incentive")
-        elif aif_cols:
-            _render_heatmap(case_details, "aif", "AIF Quality Incentive")
+    st.markdown("")  # spacing after cap info box
 
-        st.caption(
-            "Values in MSEK. Red = positive (revenue increase), "
-            "blue = negative (revenue decrease). "
-            "Rows: Plan. = planned (aviserat), Unplan. = unplanned (oaviserat)."
-        )
+    st.markdown("**Quality Incentive by Customer Type (AIT / AIF)**")
+
+    if ait_cols and aif_cols:
+        col_left, col_right = st.columns(2)
+        with col_left:
+            _render_heatmap(case_details, "ait", "AIT Quality Incentive")
+        with col_right:
+            _render_heatmap(case_details, "aif", "AIF Quality Incentive")
+    elif ait_cols:
+        _render_heatmap(case_details, "ait", "AIT Quality Incentive")
+    elif aif_cols:
+        _render_heatmap(case_details, "aif", "AIF Quality Incentive")
+
+    st.caption(
+        "Values in MSEK. Red = positive (revenue increase), "
+        "blue = negative (revenue decrease). "
+        "Rows: Plan. = planned (aviserat), Unplan. = unplanned (oaviserat)."
+    )
 
 
 def _render_heatmap(
