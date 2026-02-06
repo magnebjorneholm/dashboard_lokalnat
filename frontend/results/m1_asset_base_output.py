@@ -2,21 +2,34 @@
 M1 Regulatory Asset Base Valuation - Output Display
 
 Variable-IDs: 11.1 (total), 11.2-11.18 (per category)
-Displays NUAV (nuanskaffningsvarde) for ordinary and tail components.
+Displays NUAV (nuanskaffningsvärde) for ordinary and tail components.
 
 This module shows ONLY NUAV values. Depreciation is in M2, Return is in M3.
+
+Layout:
+  1. KPI Hero Section (3 metrics: Total, Ordinarie, Svans -- with delta)
+  2. Category Composition Chart (Plotly horizontal stacked bar, Case vs Baseline)
+  3. Category Detail Table (st.dataframe with sparklines + progress)
+  4. Half-year Drill-down (expander: Plotly chart + detail table per category)
 """
 
 import streamlit as st
 import pandas as pd
-from typing import Dict, Any, Optional, TYPE_CHECKING
+import plotly.graph_objects as go
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
-from frontend.common.asset_categories import ASSET_CATEGORIES, CATEGORY_BY_CODE
+from frontend.common.asset_categories import (
+    ASSET_CATEGORIES, CATEGORY_BY_CODE, get_category_short_name,
+)
+from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
 
-# Time code to label mapping
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
 TIME_LABELS = {
     229: "2024H1", 230: "2024H2",
     231: "2025H1", 232: "2025H2",
@@ -24,16 +37,32 @@ TIME_LABELS = {
     235: "2027H1", 236: "2027H2",
 }
 
-TOLERANCE = 0.01  # tkr - threshold for filtering zero categories
+TIME_CODES_ORDERED = [229, 230, 231, 232, 233, 234, 235, 236]
+
+TOLERANCE = 0.01  # tkr
+
+# Chart colours
+CLR_CASE_ORD = CHART_COLORS[0]       # Primary Blue
+CLR_CASE_TAIL = "#93C5FD"            # Light blue (blue-300)
+CLR_BL_ORD = "#64748B"               # Slate-500
+CLR_BL_TAIL = "#CBD5E1"              # Slate-300
 
 
-def _get_variable_id(cat_encode: int) -> str:
-    """Get M1 Variable-ID from cat_encode. cat_encode 1 -> 11.2"""
+# ---------------------------------------------------------------------------
+# Variable-ID helper
+# ---------------------------------------------------------------------------
+
+def _var_id(cat_encode: int) -> str:
+    """11.{cat_encode + 1}"""
     return f"11.{cat_encode + 1}"
 
 
+# ---------------------------------------------------------------------------
+# Data loading / aggregation (unchanged logic, cleaner helpers)
+# ---------------------------------------------------------------------------
+
 def _load_baseline_category_data(user_id_network: int) -> Optional[pd.DataFrame]:
-    """Load baseline category data for user's company."""
+    """Load baseline category data for user's company from capcost_a."""
     try:
         from data_loaders.rab_data import load_capcost_a
         df = load_capcost_a()
@@ -43,8 +72,8 @@ def _load_baseline_category_data(user_id_network: int) -> Optional[pd.DataFrame]
 
 
 def _get_case_category_data(
-    case: "PipelineResult", 
-    user_id_network: int
+    case: "PipelineResult",
+    user_id_network: int,
 ) -> Optional[pd.DataFrame]:
     """Get case category data from pipeline result."""
     df_cat = getattr(case.pre_dea, 'df_by_category', None)
@@ -53,269 +82,540 @@ def _get_case_category_data(
     return df_cat[df_cat['id_network'] == user_id_network].copy()
 
 
-def _aggregate_to_period(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Aggregate half-year data to period totals per category.
-    Returns NUAV values (ord, tail, total) per category.
-    """
+def _ensure_nuav_cols(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure nuav_ord, nuav_tail, nuav_total columns exist."""
+    for col in ['nuav_ord', 'nuav_tail']:
+        if col not in df.columns:
+            df[col] = 0.0
+    df['nuav_total'] = df['nuav_ord'] + df['nuav_tail']
+    return df
+
+
+def _aggregate_period(df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Aggregate half-year data to period totals per category."""
     if df is None or df.empty:
         return pd.DataFrame()
-    
-    agg_cols = {}
-    for col in ['nuav_ord', 'nuav_tail']:
-        if col in df.columns:
-            agg_cols[col] = 'sum'
-    
+    agg_cols = {c: 'sum' for c in ['nuav_ord', 'nuav_tail'] if c in df.columns}
     if not agg_cols:
         return pd.DataFrame()
-    
-    agg_df = df.groupby('cat_encode').agg(agg_cols).reset_index()
-    
-    for col in ['nuav_ord', 'nuav_tail']:
-        if col not in agg_df.columns:
-            agg_df[col] = 0.0
-    
-    agg_df['nuav_total'] = agg_df['nuav_ord'] + agg_df['nuav_tail']
-    
-    return agg_df
+    result = df.groupby('cat_encode').agg(agg_cols).reset_index()
+    return _ensure_nuav_cols(result)
 
 
-def _aggregate_to_half_years(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep half-year breakdown per category with NUAV values."""
+def _aggregate_halfyears(df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Keep half-year granularity with nuav totals."""
     if df is None or df.empty:
         return pd.DataFrame()
-    
     result = df.copy()
     result['time_label'] = result['time'].map(TIME_LABELS)
-    
-    for col in ['nuav_ord', 'nuav_tail']:
-        if col not in result.columns:
-            result[col] = 0.0
-    
-    result['nuav_total'] = result['nuav_ord'] + result['nuav_tail']
-    
-    return result
+    return _ensure_nuav_cols(result)
 
 
-def _build_comparison_table(
+def _active_categories(
     case_period: pd.DataFrame,
-    baseline_period: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    Build comparison table: Case vs Baseline NUAV per category.
-    Only includes categories where case OR baseline has data above tolerance.
-    """
-    rows = []
-    
-    for cat in ASSET_CATEGORIES:
-        cat_encode = cat.cat_encode
-        var_id = _get_variable_id(cat_encode)
-        
-        # Case values
-        case_row = case_period[case_period['cat_encode'] == cat_encode] if not case_period.empty else pd.DataFrame()
-        if not case_row.empty:
-            c_ord = case_row['nuav_ord'].iloc[0]
-            c_tail = case_row['nuav_tail'].iloc[0]
-            c_total = case_row['nuav_total'].iloc[0]
-        else:
-            c_ord = c_tail = c_total = 0.0
-        
-        # Baseline values
-        base_row = baseline_period[baseline_period['cat_encode'] == cat_encode] if not baseline_period.empty else pd.DataFrame()
-        if not base_row.empty:
-            b_ord = base_row['nuav_ord'].iloc[0]
-            b_tail = base_row['nuav_tail'].iloc[0]
-            b_total = base_row['nuav_total'].iloc[0]
-        else:
-            b_ord = b_tail = b_total = 0.0
-        
-        # Skip categories where both case and baseline are below tolerance
-        if abs(c_total) < TOLERANCE and abs(b_total) < TOLERANCE:
+    baseline_period: pd.DataFrame,
+) -> List[int]:
+    """Return cat_encode values that have data above tolerance in either set."""
+    active = set()
+    for df in [case_period, baseline_period]:
+        if df.empty:
             continue
-        
-        rows.append({
-            'Var-ID': var_id,
-            'Category': cat.name,
-            'C Ord': c_ord,
-            'C Tail': c_tail,
-            'C Total': c_total,
-            'BL Ord': b_ord,
-            'BL Tail': b_tail,
-            'BL Total': b_total,
-        })
-    
-    return pd.DataFrame(rows)
+        above = df[df['nuav_total'].abs() > TOLERANCE]
+        active.update(above['cat_encode'].tolist())
+    return sorted(active)
 
 
-def _build_halfyear_table(
-    case_hy: pd.DataFrame,
-    baseline_hy: pd.DataFrame,
-    cat_encode: int
-) -> pd.DataFrame:
-    """Build half-year NUAV comparison for a single category."""
-    rows = []
-    
-    for time_code, label in TIME_LABELS.items():
-        # Case
-        case_row = case_hy[(case_hy['cat_encode'] == cat_encode) & (case_hy['time'] == time_code)] if not case_hy.empty else pd.DataFrame()
-        if not case_row.empty:
-            c_ord = case_row['nuav_ord'].iloc[0]
-            c_tail = case_row['nuav_tail'].iloc[0]
-            c_total = case_row['nuav_total'].iloc[0]
-        else:
-            c_ord = c_tail = c_total = 0.0
-        
-        # Baseline
-        base_row = baseline_hy[(baseline_hy['cat_encode'] == cat_encode) & (baseline_hy['time'] == time_code)] if not baseline_hy.empty else pd.DataFrame()
-        if not base_row.empty:
-            b_ord = base_row['nuav_ord'].iloc[0]
-            b_tail = base_row['nuav_tail'].iloc[0]
-            b_total = base_row['nuav_total'].iloc[0]
-        else:
-            b_ord = b_tail = b_total = 0.0
-        
-        rows.append({
-            'Period': label,
-            'C Ord': c_ord,
-            'C Tail': c_tail,
-            'C Total': c_total,
-            'BL Ord': b_ord,
-            'BL Tail': b_tail,
-            'BL Total': b_total,
-        })
-    
-    return pd.DataFrame(rows)
+# ---------------------------------------------------------------------------
+# Category helpers for half-year sparkline data
+# ---------------------------------------------------------------------------
 
+def _halfyear_values(
+    df_hy: pd.DataFrame,
+    cat_encode: int,
+    col: str = 'nuav_total',
+) -> List[float]:
+    """Extract ordered list of 8 half-year values for one category."""
+    if df_hy.empty:
+        return [0.0] * 8
+    cat_df = df_hy[df_hy['cat_encode'] == cat_encode]
+    values = []
+    for tc in TIME_CODES_ORDERED:
+        row = cat_df[cat_df['time'] == tc]
+        values.append(float(row[col].iloc[0]) if not row.empty else 0.0)
+    return values
+
+
+# ---------------------------------------------------------------------------
+# Main render
+# ---------------------------------------------------------------------------
 
 def render(
     case: "PipelineResult",
     baseline: "PipelineResult",
-    ui_config: Dict[str, Any]
+    ui_config: Dict[str, Any],
 ) -> None:
     """Render M1 asset base outputs (NUAV only)."""
-    
+
     user_id_network = getattr(case.pre_dea, 'user_id_network', None)
     if user_id_network is None:
         st.warning("User company not identified.")
         return
-    
+
+    # Load data
     baseline_cat = _load_baseline_category_data(user_id_network)
     case_cat = _get_case_category_data(case, user_id_network)
-    
+
     if baseline_cat is None or baseline_cat.empty:
         st.info(
             "Baseline category data not available. "
             "Ensure capcost_a.parquet is in the data/ directory."
         )
         return
-    
+
+    is_baseline_case = False
     if case_cat is None or case_cat.empty:
         case_cat = baseline_cat.copy()
-        st.caption("Case uses baseline values (no parameter changes applied to category data).")
-    
-    case_period = _aggregate_to_period(case_cat)
-    baseline_period = _aggregate_to_period(baseline_cat)
-    case_hy = _aggregate_to_half_years(case_cat)
-    baseline_hy = _aggregate_to_half_years(baseline_cat)
-    
-    _render_total_section(case_period, baseline_period)
+        is_baseline_case = True
+
+    # Aggregate
+    case_period = _aggregate_period(case_cat)
+    bl_period = _aggregate_period(baseline_cat)
+    case_hy = _aggregate_halfyears(case_cat)
+    bl_hy = _aggregate_halfyears(baseline_cat)
+
+    active_cats = _active_categories(case_period, bl_period)
+
+    if is_baseline_case:
+        st.caption(
+            "Case uses baseline values (no parameter changes applied to category data)."
+        )
+
+    # --- Sections ---
+    _render_kpi_hero(case_period, bl_period)
     st.divider()
-    _render_category_section(case_period, baseline_period)
+    _render_category_chart(case_period, bl_period, active_cats)
     st.divider()
-    _render_halfyear_section(case_hy, baseline_hy)
+    _render_category_table(case_period, bl_period, case_hy, active_cats)
+    st.divider()
+    _render_halfyear_drilldown(case_hy, bl_hy, active_cats)
 
 
-def _render_total_section(case_period: pd.DataFrame, baseline_period: pd.DataFrame):
-    """Render 11.1 Total NUAV values."""
-    st.markdown("**11.1 Total Asset Value (NUAV)**")
-    
-    c_ord = case_period['nuav_ord'].sum() if not case_period.empty else 0
-    c_tail = case_period['nuav_tail'].sum() if not case_period.empty else 0
+# ---------------------------------------------------------------------------
+# Section 1: KPI Hero
+# ---------------------------------------------------------------------------
+
+def _render_kpi_hero(
+    case_period: pd.DataFrame,
+    bl_period: pd.DataFrame,
+) -> None:
+    """11.1 Total NUAV -- three key metrics with delta."""
+
+    st.markdown("#### 11.1 Total Asset Value (NUAV)")
+
+    c_ord = case_period['nuav_ord'].sum() if not case_period.empty else 0.0
+    c_tail = case_period['nuav_tail'].sum() if not case_period.empty else 0.0
     c_total = c_ord + c_tail
-    
-    b_ord = baseline_period['nuav_ord'].sum() if not baseline_period.empty else 0
-    b_tail = baseline_period['nuav_tail'].sum() if not baseline_period.empty else 0
+
+    b_ord = bl_period['nuav_ord'].sum() if not bl_period.empty else 0.0
+    b_tail = bl_period['nuav_tail'].sum() if not bl_period.empty else 0.0
     b_total = b_ord + b_tail
-    
-    st.caption("Period sum (tkr / 1000 = MSEK)")
-    
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+    d_total = c_total - b_total
+    d_ord = c_ord - b_ord
+    d_tail = c_tail - b_tail
+
+    def _fmt_msek(v: float) -> str:
+        return f"{v / 1e3:,.1f} MSEK"
+
+    def _fmt_delta(d: float) -> Optional[str]:
+        if abs(d) < TOLERANCE:
+            return None
+        return f"{d / 1e3:+,.1f} MSEK"
+
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Case Ord", f"{c_ord/1e3:,.1f} MSEK")
+        st.metric("Total", _fmt_msek(c_total), _fmt_delta(d_total))
     with col2:
-        st.metric("Case Tail", f"{c_tail/1e3:,.1f} MSEK")
+        st.metric("Ordinarie", _fmt_msek(c_ord), _fmt_delta(d_ord))
     with col3:
-        st.metric("Case Total", f"{c_total/1e3:,.1f} MSEK")
-    with col4:
-        st.metric("BL Ord", f"{b_ord/1e3:,.1f} MSEK")
-    with col5:
-        st.metric("BL Tail", f"{b_tail/1e3:,.1f} MSEK")
-    with col6:
-        st.metric("BL Total", f"{b_total/1e3:,.1f} MSEK")
+        st.metric("Svans (tail)", _fmt_msek(c_tail), _fmt_delta(d_tail))
 
 
-def _render_category_section(case_period: pd.DataFrame, baseline_period: pd.DataFrame):
-    """Render 11.2-11.18 NUAV by category."""
-    st.markdown("**11.2-11.18 NUAV by Category**")
-    
-    comparison_df = _build_comparison_table(case_period, baseline_period)
-    
-    if comparison_df.empty:
-        st.info("No category data available for this company.")
+
+
+# ---------------------------------------------------------------------------
+# Section 2: Category Composition Chart
+# ---------------------------------------------------------------------------
+
+def _render_category_chart(
+    case_period: pd.DataFrame,
+    bl_period: pd.DataFrame,
+    active_cats: List[int],
+) -> None:
+    """Horizontal stacked bar: Case vs Baseline NUAV per category."""
+
+    st.markdown("#### 11.2-11.18 Asset Value by Category")
+
+    if not active_cats:
+        st.info("No category data available.")
         return
-    
-    st.caption("All values in tkr. C=Case, BL=Baseline")
-    
+
+    # Build data sorted by case total descending
+    rows = []
+    for ce in active_cats:
+        c_row = case_period[case_period['cat_encode'] == ce]
+        b_row = bl_period[bl_period['cat_encode'] == ce]
+        rows.append({
+            'cat_encode': ce,
+            'label': get_category_short_name(ce),
+            'c_ord': float(c_row['nuav_ord'].iloc[0]) if not c_row.empty else 0.0,
+            'c_tail': float(c_row['nuav_tail'].iloc[0]) if not c_row.empty else 0.0,
+            'b_ord': float(b_row['nuav_ord'].iloc[0]) if not b_row.empty else 0.0,
+            'b_tail': float(b_row['nuav_tail'].iloc[0]) if not b_row.empty else 0.0,
+        })
+
+    chart_df = pd.DataFrame(rows)
+    chart_df['c_total'] = chart_df['c_ord'] + chart_df['c_tail']
+    chart_df = chart_df.sort_values('c_total', ascending=True)  # bottom = largest
+
+    tmpl = get_plotly_template()
+    fig = go.Figure()
+
+    # Baseline bars (behind)
+    fig.add_trace(go.Bar(
+        y=chart_df['label'],
+        x=chart_df['b_ord'],
+        name='Baseline Ord',
+        orientation='h',
+        marker_color=CLR_BL_ORD,
+        offsetgroup='baseline',
+        hovertemplate='%{y}<br>Baseline Ord: %{x:,.0f} tkr<extra></extra>',
+    ))
+    fig.add_trace(go.Bar(
+        y=chart_df['label'],
+        x=chart_df['b_tail'],
+        name='Baseline Tail',
+        orientation='h',
+        marker_color=CLR_BL_TAIL,
+        offsetgroup='baseline',
+        hovertemplate='%{y}<br>Baseline Tail: %{x:,.0f} tkr<extra></extra>',
+    ))
+
+    # Case bars (in front)
+    fig.add_trace(go.Bar(
+        y=chart_df['label'],
+        x=chart_df['c_ord'],
+        name='Case Ord',
+        orientation='h',
+        marker_color=CLR_CASE_ORD,
+        offsetgroup='case',
+        hovertemplate='%{y}<br>Case Ord: %{x:,.0f} tkr<extra></extra>',
+    ))
+    fig.add_trace(go.Bar(
+        y=chart_df['label'],
+        x=chart_df['c_tail'],
+        name='Case Tail',
+        orientation='h',
+        marker_color=CLR_CASE_TAIL,
+        offsetgroup='case',
+        hovertemplate='%{y}<br>Case Tail: %{x:,.0f} tkr<extra></extra>',
+    ))
+
+    fig.update_layout(
+        barmode='stack',
+        font=tmpl.get('font', {}),
+        paper_bgcolor=tmpl.get('paper_bgcolor', 'rgba(0,0,0,0)'),
+        plot_bgcolor=tmpl.get('plot_bgcolor', 'rgba(0,0,0,0)'),
+        margin=dict(l=10, r=20, t=10, b=30),
+        height=max(250, len(active_cats) * 50),
+        xaxis=dict(
+            title='NUAV (tkr)',
+            showgrid=True,
+            gridcolor=COLORS['bg_subtle'],
+        ),
+        yaxis=dict(
+            showgrid=False,
+            automargin=True,
+        ),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='left',
+            x=0,
+        ),
+        bargroupgap=0.15,
+    )
+
+    st.plotly_chart(fig, use_container_width=True, key="m1_category_chart")
+
+
+# ---------------------------------------------------------------------------
+# Section 3: Category Detail Table
+# ---------------------------------------------------------------------------
+
+def _render_category_table(
+    case_period: pd.DataFrame,
+    bl_period: pd.DataFrame,
+    case_hy: pd.DataFrame,
+    active_cats: List[int],
+) -> None:
+    """Detailed category table with sparklines and ord-share indicator."""
+
+    if not active_cats:
+        return
+
+    rows = []
+    for ce in active_cats:
+        cat = CATEGORY_BY_CODE.get(ce)
+        if cat is None:
+            continue
+
+        c_row = case_period[case_period['cat_encode'] == ce]
+        b_row = bl_period[bl_period['cat_encode'] == ce]
+
+        c_ord = float(c_row['nuav_ord'].iloc[0]) if not c_row.empty else 0.0
+        c_tail = float(c_row['nuav_tail'].iloc[0]) if not c_row.empty else 0.0
+        c_total = c_ord + c_tail
+
+        b_ord = float(b_row['nuav_ord'].iloc[0]) if not b_row.empty else 0.0
+        b_tail = float(b_row['nuav_tail'].iloc[0]) if not b_row.empty else 0.0
+        b_total = b_ord + b_tail
+
+        delta = c_total - b_total
+        delta_pct = (delta / b_total * 100) if abs(b_total) > TOLERANCE else 0.0
+
+        # Ord share of case total (0-100 for ProgressColumn display)
+        ord_share = (c_ord / c_total * 100) if abs(c_total) > TOLERANCE else 0.0
+
+        # Half-year sparkline values
+        hy_vals = _halfyear_values(case_hy, ce, 'nuav_total')
+
+        rows.append({
+            'Var-ID': _var_id(ce),
+            'Category': cat.name,
+            'Ord (tkr)': c_ord,
+            'Tail (tkr)': c_tail,
+            'Total (tkr)': c_total,
+            'Delta (tkr)': delta,
+            'Delta (%)': delta_pct,
+            'Half-years': hy_vals,
+            'Ord share': ord_share,
+        })
+
+    table_df = pd.DataFrame(rows)
+
+    st.caption(
+        "Case values in tkr. Delta vs baseline. "
+        "Ord share = share of ordinarie components in total."
+    )
+
     st.dataframe(
-        comparison_df,
+        table_df,
         hide_index=True,
-        width='stretch',
+        use_container_width=True,
         column_config={
-            'Var-ID': st.column_config.TextColumn('ID', width='small'),
-            'Category': st.column_config.TextColumn('Category', width='large'),
-            'C Ord': st.column_config.NumberColumn('C Ord', format='%.0f'),
-            'C Tail': st.column_config.NumberColumn('C Tail', format='%.0f'),
-            'C Total': st.column_config.NumberColumn('C Total', format='%.0f'),
-            'BL Ord': st.column_config.NumberColumn('BL Ord', format='%.0f'),
-            'BL Tail': st.column_config.NumberColumn('BL Tail', format='%.0f'),
-            'BL Total': st.column_config.NumberColumn('BL Total', format='%.0f'),
-        }
+            'Var-ID': st.column_config.TextColumn(
+                'ID', width='small',
+            ),
+            'Category': st.column_config.TextColumn(
+                'Category', width='large',
+            ),
+            'Ord (tkr)': st.column_config.NumberColumn(
+                'Ord', format='%.0f',
+            ),
+            'Tail (tkr)': st.column_config.NumberColumn(
+                'Tail', format='%.0f',
+            ),
+            'Total (tkr)': st.column_config.NumberColumn(
+                'Total', format='%.0f',
+            ),
+            'Delta (tkr)': st.column_config.NumberColumn(
+                'Delta', format='%+.0f',
+            ),
+            'Delta (%)': st.column_config.NumberColumn(
+                'Delta %', format='%+.1f%%',
+            ),
+            'Half-years': st.column_config.BarChartColumn(
+                'Half-years (2024H1-2027H2)',
+                width='medium',
+                y_min=0,
+            ),
+            'Ord share': st.column_config.ProgressColumn(
+                'Ord share',
+                format='%.0f%%',
+                min_value=0.0,
+                max_value=100.0,
+                width='small',
+            ),
+        },
+        column_order=[
+            'Var-ID', 'Category',
+            'Ord (tkr)', 'Tail (tkr)', 'Total (tkr)',
+            'Delta (tkr)', 'Delta (%)',
+            'Half-years', 'Ord share',
+        ],
     )
 
 
-def _render_halfyear_section(case_hy: pd.DataFrame, baseline_hy: pd.DataFrame):
-    """Render expandable half-year NUAV breakdown."""
+# ---------------------------------------------------------------------------
+# Section 4: Half-year Drill-down
+# ---------------------------------------------------------------------------
+
+def _render_halfyear_drilldown(
+    case_hy: pd.DataFrame,
+    bl_hy: pd.DataFrame,
+    active_cats: List[int],
+) -> None:
+    """Expandable half-year breakdown with chart + table per category."""
+
     with st.expander("Per-half-year breakdown by category", expanded=False):
-        st.caption("Select a category (values in tkr):")
-        
-        cat_names = [cat.name for cat in ASSET_CATEGORIES]
-        selected_name = st.selectbox(
-            "Category",
-            options=cat_names,
-            key="m1_halfyear_cat_select",
-            label_visibility="collapsed"
-        )
-        
-        selected_cat = next((c for c in ASSET_CATEGORIES if c.name == selected_name), None)
-        if selected_cat is None:
+        if not active_cats:
+            st.info("No category data available.")
             return
-        
-        hy_table = _build_halfyear_table(case_hy, baseline_hy, selected_cat.cat_encode)
-        
-        if not hy_table.empty:
-            st.dataframe(
-                hy_table,
-                hide_index=True,
-                width='stretch',
-                column_config={
-                    'Period': st.column_config.TextColumn('Period', width='small'),
-                    'C Ord': st.column_config.NumberColumn('C Ord', format='%.0f'),
-                    'C Tail': st.column_config.NumberColumn('C Tail', format='%.0f'),
-                    'C Total': st.column_config.NumberColumn('C Total', format='%.0f'),
-                    'BL Ord': st.column_config.NumberColumn('BL Ord', format='%.0f'),
-                    'BL Tail': st.column_config.NumberColumn('BL Tail', format='%.0f'),
-                    'BL Total': st.column_config.NumberColumn('BL Total', format='%.0f'),
-                }
-            )
-        else:
-            st.info("No data available for this category.")
+
+        # Dropdown only shows active categories
+        cat_options = {
+            f"{_var_id(ce)} {CATEGORY_BY_CODE[ce].short_name}": ce
+            for ce in active_cats
+            if ce in CATEGORY_BY_CODE
+        }
+
+        selected_label = st.selectbox(
+            "Category",
+            options=list(cat_options.keys()),
+            key="m1_halfyear_cat_select",
+            label_visibility="collapsed",
+        )
+
+        if selected_label is None:
+            return
+
+        selected_ce = cat_options[selected_label]
+
+        # Build half-year comparison data
+        hy_rows = []
+        for tc in TIME_CODES_ORDERED:
+            label = TIME_LABELS[tc]
+
+            c_vals = _hy_row_values(case_hy, selected_ce, tc)
+            b_vals = _hy_row_values(bl_hy, selected_ce, tc)
+
+            hy_rows.append({
+                'Period': label,
+                'Case Ord': c_vals[0],
+                'Case Tail': c_vals[1],
+                'Case Total': c_vals[2],
+                'BL Ord': b_vals[0],
+                'BL Tail': b_vals[1],
+                'BL Total': b_vals[2],
+            })
+
+        hy_df = pd.DataFrame(hy_rows)
+
+        # --- Plotly chart ---
+        _render_halfyear_chart(hy_df, selected_label)
+
+        # --- Detail table ---
+        st.dataframe(
+            hy_df,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                'Period': st.column_config.TextColumn('Period', width='small'),
+                'Case Ord': st.column_config.NumberColumn('Case Ord', format='%.0f'),
+                'Case Tail': st.column_config.NumberColumn('Case Tail', format='%.0f'),
+                'Case Total': st.column_config.NumberColumn('Case Total', format='%.0f'),
+                'BL Ord': st.column_config.NumberColumn('BL Ord', format='%.0f'),
+                'BL Tail': st.column_config.NumberColumn('BL Tail', format='%.0f'),
+                'BL Total': st.column_config.NumberColumn('BL Total', format='%.0f'),
+            },
+        )
+
+        st.caption("Values in tkr.")
+
+
+def _hy_row_values(
+    df_hy: pd.DataFrame,
+    cat_encode: int,
+    time_code: int,
+) -> tuple:
+    """Return (ord, tail, total) for one category + time code."""
+    if df_hy.empty:
+        return (0.0, 0.0, 0.0)
+    row = df_hy[(df_hy['cat_encode'] == cat_encode) & (df_hy['time'] == time_code)]
+    if row.empty:
+        return (0.0, 0.0, 0.0)
+    return (
+        float(row['nuav_ord'].iloc[0]),
+        float(row['nuav_tail'].iloc[0]),
+        float(row['nuav_total'].iloc[0]),
+    )
+
+
+def _render_halfyear_chart(hy_df: pd.DataFrame, title_label: str) -> None:
+    """Stacked bar chart showing Case vs Baseline per half-year."""
+
+    tmpl = get_plotly_template()
+    fig = go.Figure()
+
+    # Baseline (behind)
+    fig.add_trace(go.Bar(
+        x=hy_df['Period'],
+        y=hy_df['BL Ord'],
+        name='Baseline Ord',
+        marker_color=CLR_BL_ORD,
+        offsetgroup='baseline',
+        hovertemplate='%{x}<br>BL Ord: %{y:,.0f} tkr<extra></extra>',
+    ))
+    fig.add_trace(go.Bar(
+        x=hy_df['Period'],
+        y=hy_df['BL Tail'],
+        name='Baseline Tail',
+        marker_color=CLR_BL_TAIL,
+        offsetgroup='baseline',
+        hovertemplate='%{x}<br>BL Tail: %{y:,.0f} tkr<extra></extra>',
+    ))
+
+    # Case (in front)
+    fig.add_trace(go.Bar(
+        x=hy_df['Period'],
+        y=hy_df['Case Ord'],
+        name='Case Ord',
+        marker_color=CLR_CASE_ORD,
+        offsetgroup='case',
+        hovertemplate='%{x}<br>Case Ord: %{y:,.0f} tkr<extra></extra>',
+    ))
+    fig.add_trace(go.Bar(
+        x=hy_df['Period'],
+        y=hy_df['Case Tail'],
+        name='Case Tail',
+        marker_color=CLR_CASE_TAIL,
+        offsetgroup='case',
+        hovertemplate='%{x}<br>Case Tail: %{y:,.0f} tkr<extra></extra>',
+    ))
+
+    fig.update_layout(
+        barmode='stack',
+        font=tmpl.get('font', {}),
+        paper_bgcolor=tmpl.get('paper_bgcolor', 'rgba(0,0,0,0)'),
+        plot_bgcolor=tmpl.get('plot_bgcolor', 'rgba(0,0,0,0)'),
+        margin=dict(l=10, r=20, t=10, b=30),
+        height=300,
+        xaxis=dict(showgrid=False),
+        yaxis=dict(
+            title='NUAV (tkr)',
+            showgrid=True,
+            gridcolor=COLORS['bg_subtle'],
+        ),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='left',
+            x=0,
+        ),
+        bargroupgap=0.15,
+    )
+
+    st.plotly_chart(fig, use_container_width=True, key="m1_halfyear_chart")

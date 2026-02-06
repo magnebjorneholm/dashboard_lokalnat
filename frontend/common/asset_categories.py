@@ -16,7 +16,8 @@ from typing import Dict, List, NamedTuple
 class AssetCategory(NamedTuple):
     """Asset category with baseline values and Parameter-IDs."""
     cat_encode: int
-    name: str                       # Swedish name (per User Manual)
+    name: str                       # Full Swedish name (per User Manual)
+    short_name: str                 # Abbreviated name for charts/compact displays
     ekdep: int                      # Ordinary lifetime (years)
     maxdep: int                     # Maximum lifetime (years) = ekdep + tail
     param_id_ekdep: str             # Parameter-ID for ordinary lifetime (2.X.1)
@@ -29,85 +30,102 @@ ASSET_CATEGORIES: List[AssetCategory] = [
     AssetCategory(
         1,
         "Andra markarbeten och byggnader, linjekoncession",
+        "Markarbeten, LK",
         100, 124, "2.1.1", "2.1.2", "1.2.1"
     ),
     AssetCategory(
         2,
         "Annan ledning, linjekoncession",
+        "Annan ledning, LK",
         100, 124, "2.2.1", "2.2.2", "1.2.2"
     ),
     AssetCategory(
         3,
         "Annan ledning, områdeskoncession",
+        "Annan ledning, OK",
         100, 124, "2.3.1", "2.3.2", "1.2.3"
     ),
     AssetCategory(
         4,
         "Annan luftledning, linjekoncession",
+        "Luftledning (annan), LK",
         100, 124, "2.4.1", "2.4.2", "1.2.4"
     ),
     AssetCategory(
         5,
+        "It-system",
         "It-system",
         20, 24, "2.5.1", "2.5.2", "1.2.5"
     ),
     AssetCategory(
         6,
         "Kabelskåp",
+        "Kabelskåp",
         60, 74, "2.6.1", "2.6.2", "1.2.6"
     ),
     AssetCategory(
         7,
         "Ledning med en spänning om 220 kV eller mer, med undantag för luftledning, linjekoncession",
+        "Kabel 220kV+, LK",
         80, 100, "2.7.1", "2.7.2", "1.2.7"
     ),
     AssetCategory(
         8,
         "Luftledning med en spänning om 220 kV eller mer, linjekoncession",
+        "Luftledning 220kV+, LK",
         120, 150, "2.8.1", "2.8.2", "1.2.8"
     ),
     AssetCategory(
         9,
         "Luftledning, områdeskoncession",
+        "Luftledning, OK",
         80, 100, "2.9.1", "2.9.2", "1.2.9"
     ),
     AssetCategory(
         10,
         "Markarbeten och byggnader med anknytning till ett ledningsnät med en spänning om 220 kV eller mer, linjekoncession",
+        "Markarbeten 220kV+, LK",
         80, 100, "2.10.1", "2.10.2", "1.2.10"
     ),
     AssetCategory(
         11,
         "Markarbeten och byggnader, områdeskoncession",
+        "Markarbeten, OK",
         100, 124, "2.11.1", "2.11.2", "1.2.11"
     ),
     AssetCategory(
         12,
+        "Mätare",
         "Mätare",
         20, 24, "2.12.1", "2.12.2", "1.2.12"
     ),
     AssetCategory(
         13,
         "Nätstation",
+        "Nätstation",
         80, 100, "2.13.1", "2.13.2", "1.2.13"
     ),
     AssetCategory(
         14,
+        "Shuntreaktor",
         "Shuntreaktor",
         80, 100, "2.14.1", "2.14.2", "1.2.14"
     ),
     AssetCategory(
         15,
         "Styr- och kontrollutrustning",
+        "Styr/kontroll",
         30, 36, "2.15.1", "2.15.2", "1.2.15"
     ),
     AssetCategory(
         16,
         "Ställverk utan sekundärapparater",
+        "Ställverk",
         80, 100, "2.16.1", "2.16.2", "1.2.16"
     ),
     AssetCategory(
         17,
+        "Transformator",
         "Transformator",
         100, 124, "2.17.1", "2.17.2", "1.2.17"
     ),
@@ -135,10 +153,17 @@ GENERAL_SCALING_FACTOR_BASELINE = 1.00
 
 
 def get_category_name(cat_encode: int) -> str:
-    """Get category name from cat_encode."""
+    """Get full category name from cat_encode."""
     if cat_encode in CATEGORY_BY_CODE:
         return CATEGORY_BY_CODE[cat_encode].name
     return f"Unknown category ({cat_encode})"
+
+
+def get_category_short_name(cat_encode: int) -> str:
+    """Get abbreviated category name from cat_encode (for charts)."""
+    if cat_encode in CATEGORY_BY_CODE:
+        return CATEGORY_BY_CODE[cat_encode].short_name
+    return f"Cat {cat_encode}"
 
 
 def get_baseline_lifetime(cat_encode: int) -> Dict[str, int]:
