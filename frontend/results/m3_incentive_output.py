@@ -13,9 +13,8 @@ Layout
 ------
 1. KPI hero row          -- 4 metrics (total + 3 sub-incentives), MSEK
 2. Waterfall pipeline    -- step-by-step from raw to final, dropdown for
-                            aggregate / per-year view
-3. Calculation chain     -- User Manual Table 10 (9 variables x years)
-4. AIT / AIF heatmaps   -- quality incentive by customer type (expander)
+                            aggregate / per-year view, with cap reference
+3. AIT / AIF heatmaps   -- quality incentive by customer type (expander)
 
 All monetary values displayed in MSEK (pipeline data is in kr).
 
@@ -171,11 +170,7 @@ def render(
     else:
         st.info("Detailed incentive data not available for waterfall chart.")
 
-    # Section 3: Calculation chain table (User Manual Table 10)
-    if case_details is not None:
-        _render_calculation_chain(case_details, baseline_details)
-
-    # Section 4: AIT / AIF heatmaps
+    # Section 3: AIT / AIF heatmaps
     if case_details is not None:
         _render_ait_aif_section(case_details, baseline_details)
 
@@ -367,137 +362,29 @@ def _render_waterfall_chart(row: pd.Series, title_suffix: str) -> None:
 
     st.plotly_chart(fig, use_container_width=True, key="m3_inc_waterfall")
 
-    # Cap reference line below chart
+    # Cap reference below chart -- styled as a subtle info row
     max_adj = _safe_col(row, "max_adj")
     ret_period = _safe_col(row, "ret_period")
     if ret_period > 0:
-        st.caption(
-            f"Return for cap: {ret_period / 1e6:,.2f} MSEK | "
-            f"Max adjustment (1/3): {max_adj / 1e6:+,.2f} MSEK"
+        cap_binding = abs(final_total) >= abs(max_adj) * 0.99
+        cap_note = " — <b>cap is binding</b>" if cap_binding else ""
+        bg = COLORS["bg_subtle"]
+        border = COLORS["primary"]
+        fg = COLORS["text_secondary"]
+        st.markdown(
+            f"<div style='background:{bg};border-left:3px solid "
+            f"{border};padding:8px 12px;border-radius:4px;margin-top:-8px;"
+            f"font-size:0.88em;color:{fg}'>"
+            f"Return for cap calculation: <b>{ret_period / 1e6:,.2f} MSEK</b>"
+            f" &nbsp;|&nbsp; "
+            f"Max adjustment (±1/3): <b>{abs(max_adj) / 1e6:,.2f} MSEK</b>"
+            f"{cap_note}</div>",
+            unsafe_allow_html=True,
         )
 
 
 # ===================================================================
-# SECTION 3: CALCULATION CHAIN TABLE (User Manual Table 10)
-# ===================================================================
-
-def _render_calculation_chain(
-    case_details: pd.DataFrame,
-    baseline_details: Optional[pd.DataFrame],
-) -> None:
-    """Detailed per-year table with all 9 incentive variables."""
-
-    st.markdown("**Calculation Chain (UM Table 10)**")
-
-    # Variable mapping: internal column -> (Var-ID, description)
-    var_map = [
-        ("loss_incentive_a",    "30.2.4", "Network loss (before cap)"),
-        ("loss_incentive",      "30.2.5", "Network loss (after cap)"),
-        ("util_incentive_a",    "30.3.4", "Utilization (before cap)"),
-        ("util_incentive",      "30.3.5", "Utilization (after cap)"),
-        ("inc_inter",           "30.4.57", "Quality (before CEMI4)"),
-        ("inter_incentive_a",   "30.4.58", "Quality (after CEMI4)"),
-        ("inter_incentive",     "30.4.59", "Quality (after cap)"),
-        ("total_before_agg_cap","30.5.1", "Total (before agg. cap)"),
-        ("incentive_total_year","30.5.2", "Total (after agg. cap)"),
-    ]
-
-    case_years = _year_rows(case_details)
-    case_total = _total_row(case_details)
-    bl_total = (
-        _total_row(baseline_details)
-        if baseline_details is not None and not baseline_details.empty
-        else pd.Series(dtype=float)
-    )
-
-    rows = []
-    for col_name, var_id, label in var_map:
-        if col_name not in case_details.columns:
-            continue
-
-        row_data: Dict[str, Any] = {
-            "ID": var_id,
-            "Description": label,
-        }
-
-        # Per-year values (kr -> MSEK)
-        for _, yr_row in case_years.iterrows():
-            year = yr_row["year"]
-            val = yr_row.get(col_name, 0)
-            row_data[str(int(year))] = _kr_to_msek(float(val) if pd.notna(val) else 0)
-
-        # Case period total
-        c_tot = _safe_col(case_total, col_name)
-        row_data["Case Tot"] = _kr_to_msek(c_tot)
-
-        # Baseline period total
-        b_tot = _safe_col(bl_total, col_name)
-        row_data["BL Tot"] = _kr_to_msek(b_tot)
-
-        # Delta
-        row_data["Delta"] = _kr_to_msek(c_tot - b_tot)
-
-        rows.append(row_data)
-
-    if not rows:
-        st.info("No incentive calculation data available.")
-        return
-
-    df_display = pd.DataFrame(rows)
-
-    st.caption(
-        "Values in MSEK. Positive = revenue increase, negative = revenue decrease."
-    )
-
-    # Column config
-    col_config: Dict[str, Any] = {
-        "ID": st.column_config.TextColumn("ID", width="small"),
-        "Description": st.column_config.TextColumn("Description", width="medium"),
-    }
-    for col in df_display.columns:
-        if col not in ("ID", "Description"):
-            col_config[col] = st.column_config.NumberColumn(col, format="%.3f")
-
-    st.dataframe(
-        df_display,
-        hide_index=True,
-        use_container_width=True,
-        column_config=col_config,
-    )
-
-    # Cap reference expander
-    with st.expander("Cap calculation reference", expanded=False):
-        _render_cap_reference(case_details)
-
-
-def _render_cap_reference(details: pd.DataFrame) -> None:
-    """Show return and max_adj per year."""
-    if "max_adj" not in details.columns or "ret_period" not in details.columns:
-        st.info("Cap reference data not available.")
-        return
-
-    cap_rows = []
-    for _, row in details.iterrows():
-        cap_rows.append({
-            "Year": row["year"],
-            "Return (MSEK)": _kr_to_msek(_safe_col(row, "ret_period")),
-            "Max adj (MSEK)": _kr_to_msek(_safe_col(row, "max_adj")),
-        })
-
-    st.dataframe(
-        pd.DataFrame(cap_rows),
-        hide_index=True,
-        use_container_width=True,
-        column_config={
-            "Year": st.column_config.TextColumn("Year", width="small"),
-            "Return (MSEK)": st.column_config.NumberColumn("Return", format="%.3f"),
-            "Max adj (MSEK)": st.column_config.NumberColumn("Max adj", format="%.3f"),
-        },
-    )
-
-
-# ===================================================================
-# SECTION 4: AIT / AIF HEATMAPS
+# SECTION 3: AIT / AIF HEATMAPS
 # ===================================================================
 
 def _render_ait_aif_section(
