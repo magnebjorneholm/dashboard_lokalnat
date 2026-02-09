@@ -49,8 +49,8 @@ def render(
         eff_case_val = case.extraction.efficiency
         pot_baseline_val = baseline.extraction.potential
         pot_case_val = case.extraction.potential
-        effkrav_baseline = baseline.post_dea.user_effkrav_proc
-        effkrav_case = case.post_dea.user_effkrav_proc
+        effkrav_baseline = baseline.post_dea.user_eff_req_pct
+        effkrav_case = case.post_dea.user_eff_req_pct
         
         comp_rows = [
             {

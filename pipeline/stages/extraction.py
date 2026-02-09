@@ -58,7 +58,7 @@ def stage_extraction(
     # Extract all values
     return ExtractionStageOutput(
         user_reid=user_reid,
-        foretag=str(row['Företag']),
+        company_name=str(row['Företag']),
         
         # From Pre-DEA
         capex=float(row['Kapitalkostnad_2024']),

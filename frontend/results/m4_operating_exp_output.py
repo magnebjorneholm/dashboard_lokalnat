@@ -38,11 +38,11 @@ def render(
 ) -> None:
     """Render M4 operating expenditures outputs."""
     
-    case_ir = case.post_dea.user_intaktsram
-    baseline_ir = baseline.post_dea.user_intaktsram
-    
+    case_ir = case.post_dea.user_revenue_frame
+    baseline_ir = baseline.post_dea.user_revenue_frame
+
     # Controllable costs
-    st.markdown("**40.1 Controllable costs (påverkbara)**")
+    st.markdown("**40.1 Controllable costs**")
     
     pav_case = case_ir.get('Paverkbara_Periodsumma', 0)
     pav_baseline = baseline_ir.get('Paverkbara_Periodsumma', 0)

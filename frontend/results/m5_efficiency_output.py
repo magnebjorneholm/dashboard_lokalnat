@@ -140,8 +140,8 @@ def render(
     m5_config = ui_config.get("m5_efficiency", {})
     params = _get_params(m5_config)
 
-    case_ir = case.post_dea.user_intaktsram
-    baseline_ir = baseline.post_dea.user_intaktsram
+    case_ir = case.post_dea.user_revenue_frame
+    baseline_ir = baseline.post_dea.user_revenue_frame
 
     # --- Block 1: Distributions ---
     _render_distributions(case, baseline, params)
@@ -186,9 +186,9 @@ def _render_distributions(case, baseline, params):
     eff_case = case.extraction.efficiency
     eff_baseline = baseline.extraction.efficiency
 
-    effkrav_all = case.post_dea.all_effkrav
-    effkrav_case = case.post_dea.user_effkrav_proc
-    effkrav_baseline = baseline.post_dea.user_effkrav_proc
+    effkrav_all = case.post_dea.all_eff_reqs
+    effkrav_case = case.post_dea.user_eff_req_pct
+    effkrav_baseline = baseline.post_dea.user_eff_req_pct
 
     with col_left:
         _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params)
@@ -303,7 +303,7 @@ def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params):
         ),
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
 
 
 def _render_effkrav_histogram(effkrav_all, effkrav_case, effkrav_baseline):
@@ -382,7 +382,7 @@ def _render_effkrav_histogram(effkrav_all, effkrav_case, effkrav_baseline):
         ),
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
 
 
 # ============================================================================
@@ -398,8 +398,8 @@ def _render_efficiency_card(case, baseline, params, user_reid):
     eff_baseline = baseline.extraction.efficiency
     potential_case = case.extraction.potential
     potential_baseline = baseline.extraction.potential
-    effkrav_case = case.post_dea.user_effkrav_proc
-    effkrav_baseline = baseline.post_dea.user_effkrav_proc
+    effkrav_case = case.post_dea.user_eff_req_pct
+    effkrav_baseline = baseline.post_dea.user_eff_req_pct
     is_outlier = case.extraction.is_outlier
 
     # Truncated potential
@@ -652,7 +652,7 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
         yaxis=dict(gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"]),
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
 
     # --- Comparison table below waterfall ---
     rows = []

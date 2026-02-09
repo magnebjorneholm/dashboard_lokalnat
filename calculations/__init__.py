@@ -1,10 +1,20 @@
 """
 calculations module
 
-CAPEX calculations, DEA analysis, effektiviseringskrav, påverkbara kostnader, 
-and intäktsram assembly for Regumetrica pipeline.
+CAPEX calculations, DEA analysis, efficiency requirements, controllable costs,
+and revenue frame assembly for Regumetrica pipeline.
 """
 
+from .kent_capbase_prep import (
+    read_kent_excel,
+    process_kent_components,
+    build_capbase_a_from_kent,
+    validate_capbase_a,
+    get_category_encode,
+    year_to_time_code,
+    halvar_to_time_code,
+    CATEGORY_MAPPING,
+)
 from .kent_calculations import (
     calculate_ages_and_nuav_batch,
     calculate_depreciation_batch,
@@ -21,20 +31,20 @@ from .dea_calculations import (
     run_dea_analysis,
     BASELINE_DEA_SPEC
 )
-from .effektiviseringskrav import (
-    calculate_effkrav_from_potential,
-    calculate_effkrav_for_dataframe,
-    DEFAULT_EFFKRAV_PARAMS
+from .efficiency_requirement import (
+    calculate_eff_req_from_potential,
+    calculate_eff_req_for_dataframe,
+    DEFAULT_EFF_REQ_PARAMS
 )
-from .paverkbara_calculations import (
-    calculate_paverkbara_with_effkrav,
-    get_paverkbara_from_sdf,
-    DEFAULT_PAVERKBARA_METHOD
+from .controllable_cost_calculations import (
+    calculate_controllable_with_eff_req,
+    get_controllable_from_sdf,
+    DEFAULT_CONTROLLABLE_METHOD
 )
-from .intaktsram_assembly import (
-    assemble_intaktsram,
-    extract_user_intaktsram,
-    create_intaktsram_breakdown
+from .revenue_frame_assembly import (
+    assemble_revenue_frame,
+    extract_user_revenue_frame,
+    create_revenue_frame_breakdown
 )
 from .wacc_calculations import (
     CAPMInputs,
@@ -75,20 +85,20 @@ __all__ = [
     'run_dea_analysis',
     'BASELINE_DEA_SPEC',
     
-    # Effektiviseringskrav
-    'calculate_effkrav_from_potential',
-    'calculate_effkrav_for_dataframe',
-    'DEFAULT_EFFKRAV_PARAMS',
-    
-    # Påverkbara kostnader
-    'calculate_paverkbara_with_effkrav',
-    'get_paverkbara_from_sdf',
-    'DEFAULT_PAVERKBARA_METHOD',
-    
-    # Intäktsram assembly
-    'assemble_intaktsram',
-    'extract_user_intaktsram',
-    'create_intaktsram_breakdown',
+    # Efficiency requirements
+    'calculate_eff_req_from_potential',
+    'calculate_eff_req_for_dataframe',
+    'DEFAULT_EFF_REQ_PARAMS',
+
+    # Controllable costs
+    'calculate_controllable_with_eff_req',
+    'get_controllable_from_sdf',
+    'DEFAULT_CONTROLLABLE_METHOD',
+
+    # Revenue frame assembly
+    'assemble_revenue_frame',
+    'extract_user_revenue_frame',
+    'create_revenue_frame_breakdown',
 
     # WACC calculations
     'CAPMInputs',

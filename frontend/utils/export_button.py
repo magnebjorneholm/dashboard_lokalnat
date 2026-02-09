@@ -10,7 +10,7 @@ from .export_excel import create_case_export, get_export_filename
 
 def render_export_button(
     user_reid: str,
-    foretag: str,
+    company_name: str,
     baseline_result,
     case_result,
     ui_config: dict
@@ -20,7 +20,7 @@ def render_export_button(
     
     Args:
         user_reid: AnvÃ¤ndarens REId
-        foretag: FÃ¶retagsnamn
+        company_name: Company name
         baseline_result: Baseline pipeline-resultat
         case_result: Case pipeline-resultat
         ui_config: UI-konfiguration
@@ -31,7 +31,7 @@ def render_export_button(
             with st.spinner("Creating Excel file..."):
                 excel_data = create_case_export(
                     user_reid=user_reid,
-                    foretag=foretag,
+                    company_name=company_name,
                     baseline_result=baseline_result,
                     case_result=case_result,
                     ui_config=ui_config

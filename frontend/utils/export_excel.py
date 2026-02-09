@@ -18,7 +18,7 @@ HEADER_FILL = PatternFill("solid", fgColor="1F4E79")
 
 def create_case_export(
     user_reid: str,
-    foretag: str,
+    company_name: str,
     baseline_result,
     case_result,
     ui_config: Dict[str, Any]
@@ -26,8 +26,8 @@ def create_case_export(
     """Export all available DataFrames from pipeline results."""
     wb = Workbook()
     wb.remove(wb.active)
-    
-    _create_info_sheet(wb, user_reid, foretag, ui_config)
+
+    _create_info_sheet(wb, user_reid, company_name, ui_config)
     _dump_pipeline_result(wb, case_result, prefix="case")
     _dump_pipeline_result(wb, baseline_result, prefix="bl")
     
@@ -43,12 +43,12 @@ def get_export_filename(user_reid: str) -> str:
     return f"regumetrica_{user_reid}_{timestamp}.xlsx"
 
 
-def _create_info_sheet(wb: Workbook, user_reid: str, foretag: str, ui_config: Dict):
+def _create_info_sheet(wb: Workbook, user_reid: str, company_name: str, ui_config: Dict):
     """Create metadata/info sheet."""
     ws = wb.create_sheet("Info")
-    
+
     info_rows = [
-        ("Company", f"{foretag} ({user_reid})"),
+        ("Company", f"{company_name} ({user_reid})"),
         ("Exported", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         ("", ""),
         ("Configuration", ""),

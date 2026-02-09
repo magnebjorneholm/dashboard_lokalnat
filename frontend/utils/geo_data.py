@@ -165,7 +165,7 @@ def prepare_map_data_from_pipeline(
     
     Includes 6 variables for visualization:
     - Effektivitet, Supereffektivitet (from DEA)
-    - Effkrav_proc (from post_dea.all_effkrav)
+    - Effkrav_proc (from post_dea.all_eff_reqs)
     - IR_per_CU, CAPEX_per_CU, OPEX_per_CU (calculated per customer)
     
     Args:
@@ -183,12 +183,12 @@ def prepare_map_data_from_pipeline(
     cu_data = df_companies[['REId', 'CU']].copy()
     cu_data['REId'] = cu_data['REId'].str.strip().str.upper()
     
-    # Get Effkrav_proc from post_dea.all_effkrav (calculated from potential)
-    effkrav_data = pipeline_result.post_dea.all_effkrav[['REId', 'Effkrav_proc']].copy()
+    # Get Effkrav_proc from post_dea.all_eff_reqs (calculated from potential)
+    effkrav_data = pipeline_result.post_dea.all_eff_reqs[['REId', 'Effkrav_proc']].copy()
     effkrav_data['REId'] = effkrav_data['REId'].str.strip().str.upper()
     
     # Get intaktsram data from post_dea
-    ir_data = pipeline_result.post_dea.all_intaktsram[
+    ir_data = pipeline_result.post_dea.all_revenue_frames[
         ['REId', 'Intaktsram_Total', 'Kapitalkostnad_Total', 'Paverkbara_Periodsumma']
     ].copy()
     ir_data['REId'] = ir_data['REId'].str.strip().str.upper()

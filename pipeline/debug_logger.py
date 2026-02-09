@@ -73,8 +73,8 @@ class PipelineDebugLogger:
             print(f"    outlier: q=[{dea.q_lower}, {dea.q_upper}], k={dea.multiplier}")
 
         post = cfg.post_dea
-        print(f"\n  [Post-DEA]  trunkering=[{post.trunkering_min:.2%}, {post.trunkering_max:.2%}]"
-              f"  kunddelning={post.kunddelning:.0%}  realiseringstid={post.realiseringstid}yr")
+        print(f"\n  [Post-DEA]  truncation=[{post.truncation_min:.2%}, {post.truncation_max:.2%}]"
+              f"  customer_sharing={post.customer_sharing:.0%}  realization_time={post.realization_time}yr")
 
         if hasattr(post, 'incentive'):
             inc = post.incentive
@@ -177,7 +177,7 @@ class PipelineDebugLogger:
         if output.user_reid != self.user_reid:
             errors.append(f"REId mismatch: expected {self.user_reid}, got {output.user_reid}")
 
-        print(f"  REId={output.user_reid}  Företag={output.foretag}")
+        print(f"  REId={output.user_reid}  Företag={output.company_name}")
         print(f"  CAPEX={output.capex:,.0f}  OPEX={output.opex:,.0f}  TOTEX={output.totex:,.0f}")
         print(f"  Efficiency={output.efficiency:.4f}  Potential={output.potential:.4f}"
               f"  Outlier={output.is_outlier}")
@@ -198,20 +198,20 @@ class PipelineDebugLogger:
         if output.user_reid != self.user_reid:
             errors.append(f"REId mismatch: expected {self.user_reid}, got {output.user_reid}")
 
-        if output.all_intaktsram is not None:
-            print(f"  all_intaktsram: {output.all_intaktsram.shape}")
+        if output.all_revenue_frames is not None:
+            print(f"  all_revenue_frames: {output.all_revenue_frames.shape}")
 
-        ir = output.user_intaktsram
+        ir = output.user_revenue_frame
         ir_dict = ir.to_dict() if hasattr(ir, 'to_dict') else dict(ir)
 
-        print(f"  Effkrav (annual): {output.user_effkrav_proc:.2%}")
+        print(f"  Effkrav (annual): {output.user_eff_req_pct:.2%}")
         for key in ['Paverkbara_Periodsumma', 'Opaverkbara_Kostnader',
                      'Kapitalkostnad_Total', 'Intaktsram_Total']:
             if key in ir_dict:
                 print(f"  {key}: {ir_dict[key]:,.0f} tkr")
 
         # User spotlight
-        self.user['effkrav_arligt'] = output.user_effkrav_proc
+        self.user['effkrav_arligt'] = output.user_eff_req_pct
         if 'Intaktsram_Total' in ir_dict:
             self.user['intaktsram_total'] = ir_dict['Intaktsram_Total']
         if 'Paverkbara_Periodsumma' in ir_dict:

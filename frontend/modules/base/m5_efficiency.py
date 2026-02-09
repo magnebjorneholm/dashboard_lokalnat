@@ -13,7 +13,7 @@ import streamlit as st
 from typing import Dict, Any
 
 from frontend.common.parameter_input import parameter_input, parameter_select
-from calculations.effektiviseringskrav import get_max_effkrav
+from calculations.efficiency_requirement import get_max_eff_req
 from frontend.utils.state_manager import get_config_value
 
 MODULE_KEY = "m5_efficiency"
@@ -131,11 +131,11 @@ def render_efficiency_params() -> Dict[str, Any]:
     current_max_pot = max_pot if max_pot_changed else BASELINE_MAX_POTENTIAL
     
     # Calculate and display resulting range
-    max_annual_req = get_max_effkrav(
-        trunkering_max=current_max_pot,
-        kunddelning=current_kund_del,
-        realiseringstid=current_real_time,
-        tillsynsperiod=BASELINE_SUPERVISION_PERIOD
+    max_annual_req = get_max_eff_req(
+        truncation_max=current_max_pot,
+        customer_sharing=current_kund_del,
+        realization_time=current_real_time,
+        supervision_period=BASELINE_SUPERVISION_PERIOD
     )
     
     st.caption(

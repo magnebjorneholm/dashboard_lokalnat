@@ -11,7 +11,7 @@ from .case_definition import (
     PostDeaConfig,
     CapexMethod,
     EfficiencyMethod,
-    PaverkbaraMethod,
+    ControllableMethod,
     get_baseline_config,
     create_parameter_change_config,
     create_kent_upload_config,
@@ -24,7 +24,7 @@ __all__ = [
     'PostDeaConfig',
     'CapexMethod',
     'EfficiencyMethod',
-    'PaverkbaraMethod',
+    'ControllableMethod',
     'get_baseline_config',
     'create_parameter_change_config',
     'create_kent_upload_config'

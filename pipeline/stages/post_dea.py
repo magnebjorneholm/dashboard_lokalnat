@@ -12,16 +12,16 @@ import pandas as pd
 from typing import Optional, Tuple
 
 from config import PostDeaConfig
-from config.case_definition import PaverkbaraMethod
+from config.case_definition import ControllableMethod
 from pipeline.stages.stage_outputs import (
     DeaStageOutput,
     PreDeaStageOutput,
     BaselineStageOutput,
     PostDeaStageOutput,
 )
-from calculations.effektiviseringskrav import calculate_effkrav_for_dataframe
-from calculations.paverkbara_calculations import calculate_paverkbara_with_effkrav, get_paverkbara_from_sdf
-from calculations.intaktsram_assembly import assemble_intaktsram, extract_user_intaktsram
+from calculations.efficiency_requirement import calculate_eff_req_for_dataframe
+from calculations.controllable_cost_calculations import calculate_controllable_with_eff_req, get_controllable_from_sdf
+from calculations.revenue_frame_assembly import assemble_revenue_frame, extract_user_revenue_frame
 from calculations.incentive_calculations import calculate_all_incentives
 from data_loaders.incentive_data import (
     load_incentive_data,
@@ -68,39 +68,39 @@ def stage_post_dea(
     """
     
     # STEP 1: Calculate efficiency requirements for all 148 companies
-    all_effkrav = calculate_effkrav_for_dataframe(
+    all_eff_reqs = calculate_eff_req_for_dataframe(
         df=dea.dea_results,
         potential_col='potential',
         outlier_col='is_outlier',
-        trunkering_min=config.trunkering_min,
-        trunkering_max=config.trunkering_max,
-        outlier_krav=config.outlier_krav,
-        kunddelning=config.kunddelning,
-        realiseringstid=config.realiseringstid,
-        tillsynsperiod=config.tillsynsperiod
+        truncation_min=config.truncation_min,
+        truncation_max=config.truncation_max,
+        outlier_req=config.outlier_req,
+        customer_sharing=config.customer_sharing,
+        realization_time=config.realization_time,
+        supervision_period=config.supervision_period
     )
-    
-    # STEP 2: Prepare adjustable costs baseline from SDF
-    sdf_paverkbara = get_paverkbara_from_sdf(
+
+    # STEP 2: Prepare controllable costs baseline from SDF
+    sdf_controllable = get_controllable_from_sdf(
         sdf_ir=baseline.sdf_ir,
-        sdf_paverkbara=baseline.sdf_paverkbara
+        sdf_controllable=baseline.sdf_controllable
     )
-    
-    # STEP 3: Calculate adjustable costs with efficiency requirements
-    if config.paverkbara_method == PaverkbaraMethod.TOTEX:
-        capex_for_paverkbara = get_capex_period_sum(pre_dea, baseline)
+
+    # STEP 3: Calculate controllable costs with efficiency requirements
+    if config.controllable_method == ControllableMethod.TOTEX:
+        capex_for_controllable = get_capex_period_sum(pre_dea, baseline)
     else:
-        capex_for_paverkbara = pd.DataFrame({'REId': pre_dea.df_all_companies['REId']})
-    
-    all_paverkbara = calculate_paverkbara_with_effkrav(
-        effkrav_data=all_effkrav,
-        sdf_baseline=sdf_paverkbara,
-        capex_data=capex_for_paverkbara,
-        method=config.paverkbara_method.value
+        capex_for_controllable = pd.DataFrame({'REId': pre_dea.df_all_companies['REId']})
+
+    all_controllable = calculate_controllable_with_eff_req(
+        eff_req_data=all_eff_reqs,
+        sdf_baseline=sdf_controllable,
+        capex_data=capex_for_controllable,
+        method=config.controllable_method.value
     )
-    
+
     # STEP 4: Prepare capital cost for revenue frame
-    capex_for_intaktsram = get_capex_period_sum(pre_dea, baseline)
+    capex_for_revenue_frame = get_capex_period_sum(pre_dea, baseline)
     
     # STEP 5: Calculate incentive adjustments
     all_incentives, all_incentives_full = _calculate_incentive_adjustments(
@@ -116,23 +116,23 @@ def stage_post_dea(
         user_incentive_details = get_incentive_detailed_by_reid(all_incentives_full, user_reid)
     
     # STEP 6: Assemble revenue frame
-    all_intaktsram = assemble_intaktsram(
-        capex_result=capex_for_intaktsram,
-        paverkbara_result=all_paverkbara,
+    all_revenue_frames = assemble_revenue_frame(
+        capex_result=capex_for_revenue_frame,
+        controllable_result=all_controllable,
         sdf_baseline=baseline.sdf_ir,
         incentive_result=all_incentives
     )
-    
+
     # Extract user's specific data
-    user_intaktsram = extract_user_intaktsram(all_intaktsram, user_reid)
-    user_effkrav_proc = all_effkrav[all_effkrav['REId'] == user_reid]['Effkrav_proc'].iloc[0]
-    
+    user_revenue_frame = extract_user_revenue_frame(all_revenue_frames, user_reid)
+    user_eff_req_pct = all_eff_reqs[all_eff_reqs['REId'] == user_reid]['Effkrav_proc'].iloc[0]
+
     return PostDeaStageOutput(
         user_reid=user_reid,
-        user_intaktsram=user_intaktsram,
-        user_effkrav_proc=user_effkrav_proc,
-        all_intaktsram=all_intaktsram,
-        all_effkrav=all_effkrav,
+        user_revenue_frame=user_revenue_frame,
+        user_eff_req_pct=user_eff_req_pct,
+        all_revenue_frames=all_revenue_frames,
+        all_eff_reqs=all_eff_reqs,
         all_incentives=all_incentives,
         user_incentive_details=user_incentive_details
     )

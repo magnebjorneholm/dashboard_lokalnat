@@ -124,11 +124,11 @@ if not st.session_state.get("calculation_done"):
 baseline = st.session_state.get("baseline_result")
 case = st.session_state.get("case_result")
 
-case_ir = case.post_dea.user_intaktsram
-baseline_ir = baseline.post_dea.user_intaktsram
-foretag = case.extraction.foretag
+case_ir = case.post_dea.user_revenue_frame
+baseline_ir = baseline.post_dea.user_revenue_frame
+company_name = case.extraction.company_name
 
-st.markdown(f"**{foretag}** ({user_reid})")
+st.markdown(f"**{company_name}** ({user_reid})")
 
 case_notes = get_case_notes()
 if case_notes:
@@ -518,7 +518,7 @@ st.markdown("##### Export")
 
 render_export_button(
     user_reid=user_reid,
-    foretag=foretag,
+    company_name=company_name,
     baseline_result=baseline,
     case_result=case,
     ui_config=st.session_state.get("ui_config", {})

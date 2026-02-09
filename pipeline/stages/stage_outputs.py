@@ -23,7 +23,7 @@ class BaselineStageOutput:
     
     # SDF data for Post-DEA
     sdf_ir: pd.DataFrame            # Sheet "IR 2024-2027"
-    sdf_paverkbara: pd.DataFrame    # Sheet "Paverkbara"
+    sdf_controllable: pd.DataFrame  # Sheet "Paverkbara" (controllable costs)
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,7 @@ class ExtractionStageOutput:
     Extracted values for user's company.
     """
     user_reid: str
-    foretag: str
+    company_name: str
     
     # From Pre-DEA
     capex: float
@@ -101,12 +101,12 @@ class PostDeaStageOutput:
     and complete revenue frame.
     """
     user_reid: str
-    user_intaktsram: pd.Series  # All components for user (incl. Intaktsram_Total)
-    user_effkrav_proc: float    # Annual efficiency requirement for user
-    
+    user_revenue_frame: pd.Series  # All components for user (incl. RevenueFrame_Total)
+    user_eff_req_pct: float        # Annual efficiency requirement for user
+
     # For all 148 companies (for comparison/analysis)
-    all_intaktsram: pd.DataFrame   # Complete revenue frames for all companies
-    all_effkrav: pd.DataFrame      # Efficiency requirements for all companies
+    all_revenue_frames: pd.DataFrame  # Complete revenue frames for all companies
+    all_eff_reqs: pd.DataFrame        # Efficiency requirements for all companies
     
     # Incentive adjustments (None if incentive data missing)
     all_incentives: Optional[pd.DataFrame] = None

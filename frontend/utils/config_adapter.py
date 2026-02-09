@@ -26,7 +26,7 @@ from config.case_definition import (
     CapbaseSource,
     CapexMethod,
     EfficiencyMethod,
-    PaverkbaraMethod,
+    ControllableMethod,
 )
 
 
@@ -465,57 +465,57 @@ def _convert_incentive_keys(m3q: Dict[str, Any]) -> Dict[str, Any]:
     return converted
 
 
-def calculate_trunkering_min_from_outlier_krav(
-    outlier_krav: float,
-    kunddelning: float,
-    realiseringstid: int,
-    tillsynsperiod: int
+def calculate_truncation_min_from_outlier_req(
+    outlier_req: float,
+    customer_sharing: float,
+    realization_time: int,
+    supervision_period: int
 ) -> float:
     """
-    Calculate trunkering_min that gives same annual requirement as outlier_krav.
-    
+    Calculate truncation_min that gives same annual requirement as outlier_req.
+
     This is the INVERSE calculation of the efficiency requirement formula.
-    With baseline parameters (outlier_krav=1%) this gives trunkering_min ~ 16.24%
+    With baseline parameters (outlier_req=1%) this gives truncation_min ~ 16.24%
     """
-    total_eff = (1 + outlier_krav) ** tillsynsperiod - 1
-    realization_factor = tillsynsperiod / realiseringstid
-    potential = total_eff / (kunddelning * realization_factor)
+    total_eff = (1 + outlier_req) ** supervision_period - 1
+    realization_factor = supervision_period / realization_time
+    potential = total_eff / (customer_sharing * realization_factor)
     return potential
 
 
 def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
     """Build PostDeaConfig from m5_efficiency, m3_quality_adjustments."""
     m5 = ui_config.get("m5_efficiency", {})
-    
-    trunkering_max = m5.get("trunkering_max") if m5.get("trunkering_max") is not None else 0.30
-    outlier_krav = m5.get("outlier_krav") if m5.get("outlier_krav") is not None else 0.01
-    realiseringstid = m5.get("realiseringstid") if m5.get("realiseringstid") is not None else 8
-    kunddelning = m5.get("kunddelning") if m5.get("kunddelning") is not None else 0.50
-    tillsynsperiod = m5.get("tillsynsperiod") if m5.get("tillsynsperiod") is not None else 4
-    
-    trunkering_min_explicit = m5.get("trunkering_min")
-    if trunkering_min_explicit is not None:
-        trunkering_min = trunkering_min_explicit
+
+    truncation_max = m5.get("trunkering_max") if m5.get("trunkering_max") is not None else 0.30
+    outlier_req = m5.get("outlier_krav") if m5.get("outlier_krav") is not None else 0.01
+    realization_time = m5.get("realiseringstid") if m5.get("realiseringstid") is not None else 8
+    customer_sharing = m5.get("kunddelning") if m5.get("kunddelning") is not None else 0.50
+    supervision_period = m5.get("tillsynsperiod") if m5.get("tillsynsperiod") is not None else 4
+
+    truncation_min_explicit = m5.get("trunkering_min")
+    if truncation_min_explicit is not None:
+        truncation_min = truncation_min_explicit
     else:
-        trunkering_min = calculate_trunkering_min_from_outlier_krav(
-            outlier_krav=outlier_krav,
-            kunddelning=kunddelning,
-            realiseringstid=realiseringstid,
-            tillsynsperiod=tillsynsperiod
+        truncation_min = calculate_truncation_min_from_outlier_req(
+            outlier_req=outlier_req,
+            customer_sharing=customer_sharing,
+            realization_time=realization_time,
+            supervision_period=supervision_period
         )
-    
-    # paverkbara_method is set in M5 (5.4.1 Cost base application)
-    paverkbara_method_str = m5.get("paverkbara_method", "OPEX")
+
+    # controllable_method is set in M5 (5.4.1 Cost base application)
+    controllable_method_str = m5.get("paverkbara_method", "OPEX")
     incentive = _build_incentive_config(ui_config)
-    
+
     return PostDeaConfig(
-        trunkering_min=trunkering_min,
-        trunkering_max=trunkering_max,
-        outlier_krav=outlier_krav,
-        kunddelning=kunddelning,
-        realiseringstid=realiseringstid,
-        tillsynsperiod=tillsynsperiod,
-        paverkbara_method=PaverkbaraMethod(paverkbara_method_str),
+        truncation_min=truncation_min,
+        truncation_max=truncation_max,
+        outlier_req=outlier_req,
+        customer_sharing=customer_sharing,
+        realization_time=realization_time,
+        supervision_period=supervision_period,
+        controllable_method=ControllableMethod(controllable_method_str),
         incentive=incentive
     )
 

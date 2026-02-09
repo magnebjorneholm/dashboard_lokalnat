@@ -111,8 +111,8 @@ def render_incentives(
 
     Public entry point so 2_results.py can call WACC and incentives separately.
     """
-    case_ir = case.post_dea.user_intaktsram
-    baseline_ir = baseline.post_dea.user_intaktsram
+    case_ir = case.post_dea.user_revenue_frame
+    baseline_ir = baseline.post_dea.user_revenue_frame
 
     case_incentive_details = getattr(case.post_dea, 'user_incentive_details', None)
     baseline_incentive_details = getattr(baseline.post_dea, 'user_incentive_details', None)
@@ -345,7 +345,7 @@ def _render_return_by_category(case: "PipelineResult", user_id_network: Optional
         st.dataframe(
             comparison_df,
             hide_index=True,
-            use_container_width=True,
+            width='stretch',
             column_config={
                 'Var-ID': st.column_config.TextColumn('ID', width='small'),
                 'Category': st.column_config.TextColumn('Category', width='large'),
@@ -378,7 +378,7 @@ def _render_return_by_category(case: "PipelineResult", user_id_network: Optional
                 st.dataframe(
                     hy_table,
                     hide_index=True,
-                    use_container_width=True,
+                    width='stretch',
                     column_config={
                         'Period': st.column_config.TextColumn('Period', width='small'),
                         'C Ord': st.column_config.NumberColumn('C Ord', format='%.0f'),
@@ -448,7 +448,7 @@ def _render_wacc_section(
                 "Delta": delta_str,
             })
         
-        st.dataframe(pd.DataFrame(capm_rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(capm_rows), hide_index=True, width='stretch')
         st.markdown("")
     
     # === CAPM or DERIVED: Show 3.2.X derived values ===
@@ -490,7 +490,7 @@ def _render_wacc_section(
                 "Delta": delta_str,
             })
         
-        st.dataframe(pd.DataFrame(derived_rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(derived_rows), hide_index=True, width='stretch')
     
     # === DIRECT or BASELINE: Show only final WACC ===
     elif wacc_input_method in ["direct", "baseline"]:
@@ -545,7 +545,7 @@ def _render_incentive_section(case_ir: pd.Series, baseline_ir: pd.Series) -> Non
         "Delta (tkr)": _format_tkr(total_delta, show_sign=True) if total_delta is not None else "-",
     })
     
-    st.dataframe(pd.DataFrame(inc_rows), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(inc_rows), hide_index=True, width='stretch')
     
     if case_ir.get('Missing_Incentive_Data', False):
         st.warning("Incentive data incomplete for this company.")
@@ -670,7 +670,7 @@ def _render_peryear_table(
     st.dataframe(
         df_display,
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         column_config=column_config
     )
     
@@ -687,7 +687,7 @@ def _render_peryear_table(
                     'Return (tkr)': ret / 1000 if pd.notna(ret) else 0,
                     'Max adj (tkr)': max_adj / 1000 if pd.notna(max_adj) else 0,
                 })
-            st.dataframe(pd.DataFrame(cap_rows), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(cap_rows), hide_index=True, width='stretch')
 
 
 def _render_ait_aif_breakdown(
@@ -801,6 +801,6 @@ def _render_indicator_table(
     st.dataframe(
         df_display,
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         column_config=column_config
     )

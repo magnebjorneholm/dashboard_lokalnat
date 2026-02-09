@@ -149,8 +149,8 @@ def render(
 ) -> None:
     """Render M3 incentive adjustment outputs (30.2 -- 30.5)."""
 
-    case_ir = case.post_dea.user_intaktsram
-    baseline_ir = baseline.post_dea.user_intaktsram
+    case_ir = case.post_dea.user_revenue_frame
+    baseline_ir = baseline.post_dea.user_revenue_frame
 
     case_details = _get_incentive_details(case)
     baseline_details = _get_incentive_details(baseline)
@@ -360,7 +360,7 @@ def _render_waterfall_chart(row: pd.Series, title_suffix: str) -> None:
         showlegend=False,
     )
 
-    st.plotly_chart(fig, use_container_width=True, key="m3_inc_waterfall")
+    st.plotly_chart(fig, width='stretch', key="m3_inc_waterfall")
 
     # Cap reference below chart -- styled as a subtle info row
     max_adj = _safe_col(row, "max_adj")
@@ -501,4 +501,4 @@ def _render_heatmap(
         yaxis=dict(automargin=True, autorange="reversed"),
     )
 
-    st.plotly_chart(fig, use_container_width=True, key=f"m3_inc_{indicator}_heatmap")
+    st.plotly_chart(fig, width='stretch', key=f"m3_inc_{indicator}_heatmap")

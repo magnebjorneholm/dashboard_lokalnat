@@ -356,7 +356,7 @@ def _render_category_chart(
         bargroupgap=0.15,
     )
 
-    st.plotly_chart(fig, use_container_width=True, key="m2_category_chart")
+    st.plotly_chart(fig, width='stretch', key="m2_category_chart")
 
 
 # ---------------------------------------------------------------------------
@@ -422,7 +422,7 @@ def _render_category_table(
     st.dataframe(
         table_df,
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         column_config={
             'Var-ID': st.column_config.TextColumn(
                 'ID', width='small',
@@ -529,7 +529,7 @@ def _render_halfyear_drilldown(
         st.dataframe(
             hy_df,
             hide_index=True,
-            use_container_width=True,
+            width='stretch',
             column_config={
                 'Period': st.column_config.TextColumn('Period', width='small'),
                 'Case Ord': st.column_config.NumberColumn('Case Ord', format='%.2f'),
@@ -627,4 +627,4 @@ def _render_halfyear_chart(hy_df: pd.DataFrame, title_label: str) -> None:
         bargroupgap=0.15,
     )
 
-    st.plotly_chart(fig, use_container_width=True, key="m2_halfyear_chart")
+    st.plotly_chart(fig, width='stretch', key="m2_halfyear_chart")

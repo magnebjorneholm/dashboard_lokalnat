@@ -42,8 +42,8 @@ def prepare_diagram_data(
     """
     user_reid = case_result.user_reid
     
-    case_ir = case_result.post_dea.user_intaktsram
-    baseline_ir = baseline_result.post_dea.user_intaktsram
+    case_ir = case_result.post_dea.user_revenue_frame
+    baseline_ir = baseline_result.post_dea.user_revenue_frame
     
     capex_method = case_result.pre_dea.capex_method
     wacc_used = case_result.pre_dea.wacc_used or BASELINE_WACC
@@ -376,8 +376,8 @@ def _is_effkrav_modified(
     user_reid: str
 ) -> bool:
     """Check if efficiency requirement differs from baseline."""
-    case_effkrav = case_result.post_dea.user_effkrav_proc
-    baseline_effkrav = baseline_result.post_dea.user_effkrav_proc
+    case_effkrav = case_result.post_dea.user_eff_req_pct
+    baseline_effkrav = baseline_result.post_dea.user_eff_req_pct
     
     return abs(case_effkrav - baseline_effkrav) > 0.0001
 

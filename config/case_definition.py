@@ -48,8 +48,8 @@ class EfficiencyMethod(str, Enum):
     # Phase 2: STONED = "stoned"
 
 
-class PaverkbaraMethod(str, Enum):
-    """Method for adjustable costs (Post-DEA)."""
+class ControllableMethod(str, Enum):
+    """Method for controllable costs (Post-DEA)."""
     OPEX = "OPEX"
     TOTEX = "TOTEX"
 
@@ -176,15 +176,15 @@ class IncentiveConfig:
 class PostDeaConfig:
     """Configuration for Post-DEA stage."""
     # Efficiency requirements
-    trunkering_min: float = 0.01
-    trunkering_max: float = 0.30
-    outlier_krav: float = 0.01
-    kunddelning: float = 0.50
-    realiseringstid: int = 8
-    tillsynsperiod: int = 4
-    
-    # Adjustable costs
-    paverkbara_method: PaverkbaraMethod = PaverkbaraMethod.OPEX
+    truncation_min: float = 0.01
+    truncation_max: float = 0.30
+    outlier_req: float = 0.01
+    customer_sharing: float = 0.50
+    realization_time: int = 8
+    supervision_period: int = 4
+
+    # Controllable costs
+    controllable_method: ControllableMethod = ControllableMethod.OPEX
     
     # Incentives
     incentive: IncentiveConfig = field(default_factory=IncentiveConfig)
