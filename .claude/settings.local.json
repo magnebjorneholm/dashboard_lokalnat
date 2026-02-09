@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(git commit:*)",
+      "Bash(python -c:*)",
+      "Bash(c:\\\\Users\\\\IFNguest\\\\dashboard_lokalnat\\\\venv\\\\Scripts\\\\python.exe:*)"
     ]
   }
 }

@@ -13,8 +13,6 @@ from .core import (
 
 from .debug_logger import (
     PipelineDebugLogger,
-    StageMetrics,
-    UserSpotlight,
     create_logger
 )
 
@@ -40,8 +38,6 @@ __all__ = [
     
     # Debug logger
     'PipelineDebugLogger',
-    'StageMetrics',
-    'UserSpotlight',
     'create_logger',
     
     # Stage outputs

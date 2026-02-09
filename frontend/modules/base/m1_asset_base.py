@@ -352,10 +352,11 @@ def _render_variables_scaling(
     return adjustments if adjustments else None
 
 
+@st.cache_data(ttl=3600, show_spinner="Loading capital base...")
 def _get_ordinarie_summary(user_id_network: int) -> pd.DataFrame:
     """
     Load user's capital base and return ordinarie summary per category.
-    
+
     Ordinarie = components where age <= ekdep at period start (t=229).
     """
     from data_loaders.rab_data import load_user_capbase

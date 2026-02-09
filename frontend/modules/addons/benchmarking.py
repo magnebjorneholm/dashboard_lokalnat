@@ -11,7 +11,6 @@ Section-based rendering:
 import streamlit as st
 from typing import Dict, Any, List
 
-from frontend.common.formulas import FORMULA_OUTLIER_THRESHOLD
 from frontend.utils.state_manager import get_config_value
 
 MODULE_KEY = "addon_benchmarking"
@@ -27,6 +26,9 @@ BASELINE_RTS = "crs"
 BASELINE_MULTIPLIER = 2.0
 BASELINE_Q_LOWER = 25.0
 BASELINE_Q_UPPER = 75.0
+
+# Outlier threshold formula (IQR method) for display
+FORMULA_OUTLIER_THRESHOLD = r"\text{threshold} = Q_{75} + k \times (Q_{75} - Q_{25})"
 
 
 def is_baseline_dea_config(config: Dict[str, Any]) -> bool:

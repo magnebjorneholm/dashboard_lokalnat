@@ -30,5 +30,5 @@ requests>=2.31.0
 # Låsta versioner för kompatibilitet med `pyrebase4`
 requests-toolbelt==0.10.1
 urllib3==1.26.20
-setuptools>=67.0.0
+setuptools>=67.0.0,<81  # pkg_resources removed in setuptools 82+
 toml>=0.10.2
