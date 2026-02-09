@@ -30,7 +30,6 @@
 "frontend/modules/addons/__init__.py" "7 rader"
 "frontend/modules/addons/benchmarking.py" "173 rader"
 "frontend/modules/base/__init__.py" "15 rader"
-"frontend/modules/base/case_summary.py" "458 rader"
 "frontend/modules/base/m1_asset_base.py" "488 rader"
 "frontend/modules/base/m2_depreciation.py" "287 rader"
 "frontend/modules/base/m3_cost_of_capital.py" "726 rader"
