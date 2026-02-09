@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 # SDF column names (Swedish regulatory terminology)
 SDF_COL_KAPITALKOSTNAD = 'Kapitalkostnad'
-SDF_COL_KAPITALFORSLITNING = '-varav Kapital-förslitning'
+SDF_COL_KAPITALFORSLITNING = '-varav Kapital-fÃ¶rslitning'
 SDF_COL_KAPITALBINDNING = 'varav Kapital-bindning'
 
 BASELINE_WACC = 0.0453
@@ -75,8 +75,16 @@ def prepare_diagram_data(
     kapitalbas_value = capex_data['avkastning']['value'] / wacc_used if wacc_used > 0 else 0
     kapitalbas_baseline = capex_data['avkastning']['baseline'] / BASELINE_WACC if BASELINE_WACC > 0 else 0
     
-    # Other adjustments
+    # Other adjustments (aggregate + decomposed)
     other_adj = _get_other_adjustments(case_ir, baseline_ir)
+    
+    # Decomposed components for waterfall chart
+    flex_case = float(case_ir.get('Flexibilitetstjanster', 0))
+    flex_baseline = float(baseline_ir.get('Flexibilitetstjanster', 0))
+    avbrott_case = float(case_ir.get('Avbrottsersattning_12_24h', 0))
+    avbrott_baseline = float(baseline_ir.get('Avbrottsersattning_12_24h', 0))
+    avdrag_case = float(case_ir.get('Avdrag_Statligt_Stod', 0))
+    avdrag_baseline = float(baseline_ir.get('Avdrag_Statligt_Stod', 0))
     
     # Modification flags
     capex_modified = case_result.pre_dea.capex_modified
@@ -201,6 +209,24 @@ def prepare_diagram_data(
             'is_directly_modified': False,
             'source': 'Flexibility + Interruption - State aid'
         },
+        'flexibilitetstjanster': {
+            'value': flex_case,
+            'baseline': flex_baseline,
+            'is_directly_modified': False,
+            'source': 'SDF'
+        },
+        'avbrottsersattning': {
+            'value': avbrott_case,
+            'baseline': avbrott_baseline,
+            'is_directly_modified': False,
+            'source': 'SDF'
+        },
+        'avdrag_statligt_stod': {
+            'value': avdrag_case,
+            'baseline': avdrag_baseline,
+            'is_directly_modified': False,
+            'source': 'SDF'
+        },
         'intaktsram': {
             'value': intaktsram_value,
             'baseline': intaktsram_baseline,
@@ -265,7 +291,7 @@ def _get_paverkbara_components(
     
     sdf_paverkbara = case_result.baseline.sdf_paverkbara
     
-    medelvarde_col = _find_column(sdf_paverkbara, ['medelvärde', '2018-2021'])
+    medelvarde_col = _find_column(sdf_paverkbara, ['medelvÃ¤rde', '2018-2021'])
     neojust_col = _find_column(sdf_paverkbara, ['separerat yrkandet', 'neojust'])
     reid_col = 'REid' if 'REid' in sdf_paverkbara.columns else 'REId'
     

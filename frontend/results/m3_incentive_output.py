@@ -155,7 +155,7 @@ def render(
     case_details = _get_incentive_details(case)
     baseline_details = _get_incentive_details(baseline)
 
-    st.markdown("#### 30.2--30.5 Incentive Adjustments")
+    st.markdown("#### 30.2-30.5 Incentive Adjustments")
 
     # Missing data warning
     if _get_ir_value(case_ir, "Missing_Incentive_Data", 0):
@@ -223,7 +223,7 @@ def _render_waterfall_section(
     st.markdown("**Incentive Pipeline**")
 
     # Dropdown: aggregate (period total) or per-year
-    view_options = ["Period total (2024--2027)"] + [str(y) for y in YEARS]
+    view_options = ["Period total (2024-2027)"] + [str(y) for y in YEARS]
     selected_view = st.selectbox(
         "View",
         options=view_options,

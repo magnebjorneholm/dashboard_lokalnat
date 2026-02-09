@@ -8,6 +8,7 @@ Follows Regumetrica User Manual nomenclature and variable IDs.
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
+import plotly.graph_objects as go
 
 from frontend.utils.state_manager import (
     init_session_state, 
@@ -32,7 +33,8 @@ from frontend.utils.geo_visualization import (
     get_available_value_columns,
     get_column_label
 )
-from frontend.modules.base import case_summary
+
+from frontend.common.styling import COLORS, get_plotly_template
 from frontend.results import (
     m1_asset_base_output,
     m2_depreciation_output,
@@ -115,7 +117,6 @@ if user_reid is None:
 
 # If no calculation done yet, show case summary
 if not st.session_state.get("calculation_done"):
-    case_summary.render()
     st.info("Use the **Compute Revenue Frame** button in the sidebar to run the calculation.")
     st.stop()
 
@@ -219,70 +220,91 @@ with col3:
 
 st.markdown("")
 
-# Build table from diagram_data (same source of truth as decomposition diagram)
+# Build waterfall from diagram_data (same source of truth as decomposition diagram)
 dd = diagram_data
 method = dd.get('method', 'OPEX')
 
-# Components matching diagram decomposition
-# (var_id, label, diagram_key, negate)
+# --- Waterfall chart: Revenue frame decomposition ---
+# Components: (label, diagram_key, negate, measure)
+# measure: "relative" for additive steps, "total" for subtotals/final
 if method == 'TOTEX' and 'opex_effektivisering' in dd:
-    dd_components = [
-        ("40.1", "Controllable costs", "paverkbara", False),
-        ("40.2", "Non-controllable costs", "ej_paverkbara", False),
-        ("50.4.1", "OPEX efficiency", "opex_effektivisering", True),
-        ("50.4.2", "CAPEX efficiency", "capex_effektivisering", True),
+    wf_components = [
+        ("40.1.1 Controllable costs",     "paverkbara",            False, "relative"),
+        ("40.2.1 Non-controllable costs",  "ej_paverkbara",         False, "relative"),
+        ("50.4.1 OPEX efficiency adj.",    "opex_effektivisering",  True,  "relative"),
+        ("50.4.2 CAPEX efficiency adj.",   "capex_effektivisering", True,  "relative"),
     ]
 else:
-    dd_components = [
-        ("40.1", "Controllable costs", "paverkbara", False),
-        ("40.2", "Non-controllable costs", "ej_paverkbara", False),
-        ("50.4.1", "OPEX efficiency", "effektivisering", True),
+    wf_components = [
+        ("40.1.1 Controllable costs",     "paverkbara",       False, "relative"),
+        ("40.2.1 Non-controllable costs",  "ej_paverkbara",    False, "relative"),
+        ("50.4.1 Efficiency adj.",         "effektivisering",  True,  "relative"),
     ]
 
-dd_components += [
-    ("11.1", "Capital base", "kapitalbas", False),
-    ("20.1", "Depreciation", "avskrivningar", False),
-    ("30.1", "Return (WACC)", "avkastning", False),
-    ("30.5", "Quality & incentive adjustment", "kvalitet", False),
-    ("", "Operating costs", "lopande", False),
-    ("", "Capital costs", "kapitalkostnader", False),
-    ("", "Other adjustments", "other_adjustments", False),
+wf_components += [
+    ("20.1 Depreciation",                 "avskrivningar",         False, "relative"),
+    ("30.1 Return (WACC)",                "avkastning",            False, "relative"),
+    ("30.5.2 Incentive adjustment",       "kvalitet",              False, "relative"),
+    ("40.1.2 Flexibility services",       "flexibilitetstjanster", False, "relative"),
+    ("Interruption compensation",         "avbrottsersattning",    False, "relative"),
+    ("State aid deduction",               "avdrag_statligt_stod",  True,  "relative"),
+    ("Total Revenue Frame",               "intaktsram",            False, "total"),
 ]
 
-rows = []
-for var_id, label, dd_key, negate in dd_components:
+wf_labels = []
+wf_values = []
+wf_measures = []
+
+for label, dd_key, negate, measure in wf_components:
     comp = dd.get(dd_key, {})
-    case_val = float(comp.get('value', 0))
-    baseline_val = float(comp.get('baseline', 0))
+    val = float(comp.get('value', 0))
     if negate:
-        case_val = -case_val
-        baseline_val = -baseline_val
-    rows.append(render_metric_row(var_id, label, case_val, baseline_val, "tkr"))
+        val = -val
+    wf_labels.append(label)
+    wf_values.append(val / 1e3)  # tkr to MSEK
+    wf_measures.append(measure)
 
-rows.append({
-    "ID": "60.1",
-    "Component": "TOTAL REVENUE FRAME",
-    "Case": format_tkr(total_case),
-    "Baseline": format_tkr(total_baseline),
-    "Delta (tkr)": format_tkr(delta_abs, show_sign=True),
-    "Delta (%)": format_percent(delta_pct, show_sign=True)
-})
+tmpl = get_plotly_template()
 
-df_summary = pd.DataFrame(rows)
+fig_wf = go.Figure(go.Waterfall(
+    orientation="h",
+    y=wf_labels,
+    x=wf_values,
+    measure=wf_measures,
+    textposition="outside",
+    text=[f"{v:+,.1f}" if m != "total" and abs(v) > 0.05 else (f"{v:,.1f}" if m == "total" else "") for v, m in zip(wf_values, wf_measures)],
+    textfont=dict(size=11, family="Inter, sans-serif"),
+    connector=dict(
+        line=dict(color=COLORS["bg_muted"], width=1, dash="dot")
+    ),
+    increasing=dict(marker=dict(color=COLORS["success"])),
+    decreasing=dict(marker=dict(color=COLORS["error"])),
+    totals=dict(marker=dict(color=COLORS["primary"])),
+))
 
-st.dataframe(
-    df_summary,
-    hide_index=True,
-    width='stretch',
-    column_config={
-        "ID": st.column_config.TextColumn("ID", width="small"),
-        "Component": st.column_config.TextColumn("Component", width="large"),
-        "Case": st.column_config.TextColumn("Case (tkr)", width="small"),
-        "Baseline": st.column_config.TextColumn("Baseline (tkr)", width="small"),
-        "Delta (tkr)": st.column_config.TextColumn("Delta (tkr)", width="small"),
-        "Delta (%)": st.column_config.TextColumn("Delta (%)", width="small"),
-    }
+fig_wf.update_layout(
+    font=tmpl.get("font", {}),
+    paper_bgcolor=tmpl.get("paper_bgcolor", "rgba(0,0,0,0)"),
+    plot_bgcolor=tmpl.get("plot_bgcolor", "rgba(0,0,0,0)"),
+    margin=dict(l=10, r=80, t=10, b=40),
+    height=max(380, len(wf_labels) * 38),
+    xaxis=dict(
+        title="MSEK",
+        showgrid=True,
+        gridcolor=COLORS["bg_subtle"],
+        zeroline=True,
+        zerolinecolor=COLORS["bg_muted"],
+        zerolinewidth=1,
+    ),
+    yaxis=dict(
+        showgrid=False,
+        automargin=True,
+        autorange="reversed",
+    ),
+    showlegend=False,
 )
+
+st.plotly_chart(fig_wf, key="revenue_frame_waterfall", width='stretch')
 
 st.divider()
 
