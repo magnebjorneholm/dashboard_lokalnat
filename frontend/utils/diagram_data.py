@@ -12,7 +12,7 @@ Data flow:
 - Other adjustments: Flexibility services + interruption compensation - state aid deduction
 """
 
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Dict, TYPE_CHECKING
 import pandas as pd
 
 if TYPE_CHECKING:
@@ -49,12 +49,13 @@ def prepare_diagram_data(
     wacc_used = case_result.pre_dea.wacc_used or BASELINE_WACC
     method = str(case_ir.get('Method_used', 'OPEX'))
     
-    # Paverkbara components (OPEX-side)
-    pav_data = _get_paverkbara_components(
-        case_result=case_result,
-        baseline_result=baseline_result,
-        user_reid=user_reid
-    )
+    # Paverkbara components - read directly from intaktsram (same approach as TOTEX)
+    paverkbara_fore_value = float(case_ir.get('OPEX_Fore', case_ir.get('Paverkbara_Fore_Periodsumma', 0)))
+    paverkbara_fore_baseline = float(baseline_ir.get('OPEX_Fore', baseline_ir.get('Paverkbara_Fore_Periodsumma', 0)))
+    paverkbara_efter_value = float(case_ir.get('OPEX_Efter', case_ir.get('Paverkbara_Periodsumma', 0)))
+    paverkbara_efter_baseline = float(baseline_ir.get('OPEX_Efter', baseline_ir.get('Paverkbara_Periodsumma', 0)))
+    effektivisering_value = float(case_ir.get('OPEX_Effektivisering', case_ir.get('Effektivisering_Total', 0)))
+    effektivisering_baseline = float(baseline_ir.get('OPEX_Effektivisering', baseline_ir.get('Effektivisering_Total', 0)))
     
     # Capital cost components (avskrivning/avkastning)
     capex_data = _get_capital_cost_components(
@@ -128,8 +129,8 @@ def prepare_diagram_data(
         capex_eff_baseline = 0
         
         # Operating costs = paverkbara_efter + ej paverkbara
-        lopande_value = pav_data['paverkbara_efter']['value'] + ej_paverkbara_value
-        lopande_baseline = pav_data['paverkbara_efter']['baseline'] + ej_paverkbara_baseline
+        lopande_value = paverkbara_efter_value + ej_paverkbara_value
+        lopande_baseline = paverkbara_efter_baseline + ej_paverkbara_baseline
         
         # Capital costs = Dep + Ret + Quality (no CAPEX reduction)
         kapitalkostnad_value = (
@@ -150,10 +151,10 @@ def prepare_diagram_data(
     result = {
         'method': method,
         'paverkbara': {
-            'value': pav_data['paverkbara_fore']['value'],
-            'baseline': pav_data['paverkbara_fore']['baseline'],
+            'value': paverkbara_fore_value,
+            'baseline': paverkbara_fore_baseline,
             'is_directly_modified': False,
-            'source': 'SDF Medelvarde 2018-2021'
+            'source': 'Intaktsram (OPEX_Fore)'
         },
         'ej_paverkbara': {
             'value': ej_paverkbara_value,
@@ -168,8 +169,8 @@ def prepare_diagram_data(
             'source': _get_capex_source_description(capex_method, wacc_used)
         },
         'effektivisering': {
-            'value': pav_data['effektivisering']['value'],
-            'baseline': pav_data['effektivisering']['baseline'],
+            'value': effektivisering_value,
+            'baseline': effektivisering_baseline,
             'is_directly_modified': effkrav_modified,
             'source': 'DEA' if effkrav_modified else 'Baseline DEA'
         },
@@ -272,59 +273,6 @@ def _get_other_adjustments(case_ir: pd.Series, baseline_ir: pd.Series) -> dict:
     }
 
 
-def _get_paverkbara_components(
-    case_result: "PipelineResult",
-    baseline_result: "PipelineResult",
-    user_reid: str
-) -> Dict[str, dict]:
-    """
-    Calculate paverkbara components: fore avdrag, efter avdrag, och effektivisering.
-    
-    Uses SDF data for base values. In both OPEX and TOTEX mode, paverkbara_fore
-    represents the OPEX-only base (Medelvarde * 4 + Neonjusteringar).
-    """
-    case_ir = case_result.post_dea.user_intaktsram
-    baseline_ir = baseline_result.post_dea.user_intaktsram
-    
-    case_paverkbara_efter = float(case_ir.get('Paverkbara_Periodsumma', 0))
-    baseline_paverkbara_efter = float(baseline_ir.get('Paverkbara_Periodsumma', 0))
-    
-    sdf_paverkbara = case_result.baseline.sdf_paverkbara
-    
-    medelvarde_col = _find_column(sdf_paverkbara, ['medelvÃ¤rde', '2018-2021'])
-    neojust_col = _find_column(sdf_paverkbara, ['separerat yrkandet', 'neojust'])
-    reid_col = 'REid' if 'REid' in sdf_paverkbara.columns else 'REId'
-    
-    user_mask = sdf_paverkbara[reid_col] == user_reid
-    
-    if user_mask.any() and medelvarde_col:
-        user_row = sdf_paverkbara[user_mask].iloc[0]
-        medelvarde = float(user_row.get(medelvarde_col, 0) or 0)
-        neonjusteringar = float(user_row.get(neojust_col, 0) or 0) if neojust_col else 0
-    else:
-        medelvarde = baseline_paverkbara_efter / 4
-        neonjusteringar = 0
-    
-    paverkbara_fore = medelvarde * 4 + neonjusteringar
-    
-    case_effektivisering = paverkbara_fore - case_paverkbara_efter
-    baseline_effektivisering = paverkbara_fore - baseline_paverkbara_efter
-    
-    return {
-        'paverkbara_fore': {
-            'value': paverkbara_fore,
-            'baseline': paverkbara_fore
-        },
-        'paverkbara_efter': {
-            'value': case_paverkbara_efter,
-            'baseline': baseline_paverkbara_efter
-        },
-        'effektivisering': {
-            'value': case_effektivisering,
-            'baseline': baseline_effektivisering
-        }
-    }
-
 
 def _get_capital_cost_components(
     case_result: "PipelineResult",
@@ -420,14 +368,6 @@ def _get_avskr_avkast_from_pre_dea(df: pd.DataFrame, user_reid: str) -> tuple:
     
     return avskrivning, avkastning
 
-
-def _find_column(df: pd.DataFrame, keywords: list) -> Optional[str]:
-    """Find column containing all keywords (case-insensitive)."""
-    for col in df.columns:
-        col_lower = col.lower()
-        if all(kw.lower() in col_lower for kw in keywords):
-            return col
-    return None
 
 
 def _is_effkrav_modified(
