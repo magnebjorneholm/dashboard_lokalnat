@@ -103,25 +103,16 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
 
 def reid_to_id_network(reid: str) -> Optional[int]:
     """
-    Convert REId to id_network.
-    
-    REId format: "REL00886" -> 886
-    This is the single source of truth for this conversion.
-    
-    Args:
-        reid: REId string (e.g., "REL00886")
-        
-    Returns:
-        id_network as int, or None if invalid
+    Convert REId to id_network. Returns None on invalid input.
+
+    Wraps config.case_definition.reid_to_id_network with None-safe handling.
     """
     if not reid or not isinstance(reid, str):
         return None
-    if not reid.startswith("REL"):
-        return None
     try:
-        numeric_part = reid.replace("REL", "").lstrip("0")
-        return int(numeric_part) if numeric_part else 0
-    except ValueError:
+        from config.case_definition import reid_to_id_network as _reid_to_id_network
+        return _reid_to_id_network(reid)
+    except (ValueError, AttributeError):
         return None
 
 

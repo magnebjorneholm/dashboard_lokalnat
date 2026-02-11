@@ -25,124 +25,38 @@ from frontend.common.asset_categories import (
     ASSET_CATEGORIES, CATEGORY_BY_CODE, get_category_short_name,
 )
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-TIME_LABELS = {
-    229: "2024H1", 230: "2024H2",
-    231: "2025H1", 232: "2025H2",
-    233: "2026H1", 234: "2026H2",
-    235: "2027H1", 236: "2027H2",
-}
-
-TIME_CODES_ORDERED = [229, 230, 231, 232, 233, 234, 235, 236]
-
-TOLERANCE = 0.01  # tkr
-
-# Chart colours
-CLR_CASE_ORD = CHART_COLORS[0]       # Primary Blue
-CLR_CASE_TAIL = "#93C5FD"            # Light blue (blue-300)
-CLR_BL_ORD = "#64748B"               # Slate-500
-CLR_BL_TAIL = "#CBD5E1"              # Slate-300
+from frontend.common.result_helpers import (
+    TIME_LABELS, TIME_CODES_ORDERED, TOLERANCE,
+    CLR_CASE_ORD, CLR_CASE_TAIL, CLR_BL_ORD, CLR_BL_TAIL,
+    load_baseline_category_data, get_case_category_data,
+    ensure_component_cols, aggregate_period, aggregate_halfyears,
+    active_categories, halfyear_values, hy_row_values,
+)
 
 
 # ---------------------------------------------------------------------------
 # Variable-ID helper
 # ---------------------------------------------------------------------------
 
+# NUAV column names
+_ORD, _TAIL, _TOTAL = 'nuav_ord', 'nuav_tail', 'nuav_total'
+
+
 def _var_id(cat_encode: int) -> str:
     """11.{cat_encode + 1}"""
     return f"11.{cat_encode + 1}"
 
 
-# ---------------------------------------------------------------------------
-# Data loading / aggregation (unchanged logic, cleaner helpers)
-# ---------------------------------------------------------------------------
-
-def _load_baseline_category_data(user_id_network: int) -> Optional[pd.DataFrame]:
-    """Load baseline category data for user's company from capcost_a."""
-    try:
-        from data_loaders.rab_data import load_capcost_a
-        df = load_capcost_a()
-        return df[df['id_network'] == user_id_network].copy()
-    except (FileNotFoundError, ImportError):
-        return None
+def _agg_period(df):
+    return aggregate_period(df, _ORD, _TAIL, _TOTAL)
 
 
-def _get_case_category_data(
-    case: "PipelineResult",
-    user_id_network: int,
-) -> Optional[pd.DataFrame]:
-    """Get case category data from pipeline result."""
-    df_cat = getattr(case.pre_dea, 'df_by_category', None)
-    if df_cat is None:
-        return None
-    return df_cat[df_cat['id_network'] == user_id_network].copy()
+def _agg_halfyears(df):
+    return aggregate_halfyears(df, _ORD, _TAIL, _TOTAL)
 
 
-def _ensure_nuav_cols(df: pd.DataFrame) -> pd.DataFrame:
-    """Ensure nuav_ord, nuav_tail, nuav_total columns exist."""
-    for col in ['nuav_ord', 'nuav_tail']:
-        if col not in df.columns:
-            df[col] = 0.0
-    df['nuav_total'] = df['nuav_ord'] + df['nuav_tail']
-    return df
-
-
-def _aggregate_period(df: Optional[pd.DataFrame]) -> pd.DataFrame:
-    """Aggregate half-year data to period totals per category."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-    agg_cols = {c: 'sum' for c in ['nuav_ord', 'nuav_tail'] if c in df.columns}
-    if not agg_cols:
-        return pd.DataFrame()
-    result = df.groupby('cat_encode').agg(agg_cols).reset_index()
-    return _ensure_nuav_cols(result)
-
-
-def _aggregate_halfyears(df: Optional[pd.DataFrame]) -> pd.DataFrame:
-    """Keep half-year granularity with nuav totals."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-    result = df.copy()
-    result['time_label'] = result['time'].map(TIME_LABELS)
-    return _ensure_nuav_cols(result)
-
-
-def _active_categories(
-    case_period: pd.DataFrame,
-    baseline_period: pd.DataFrame,
-) -> List[int]:
-    """Return cat_encode values that have data above tolerance in either set."""
-    active = set()
-    for df in [case_period, baseline_period]:
-        if df.empty:
-            continue
-        above = df[df['nuav_total'].abs() > TOLERANCE]
-        active.update(above['cat_encode'].tolist())
-    return sorted(active)
-
-
-# ---------------------------------------------------------------------------
-# Category helpers for half-year sparkline data
-# ---------------------------------------------------------------------------
-
-def _halfyear_values(
-    df_hy: pd.DataFrame,
-    cat_encode: int,
-    col: str = 'nuav_total',
-) -> List[float]:
-    """Extract ordered list of 8 half-year values for one category."""
-    if df_hy.empty:
-        return [0.0] * 8
-    cat_df = df_hy[df_hy['cat_encode'] == cat_encode]
-    values = []
-    for tc in TIME_CODES_ORDERED:
-        row = cat_df[cat_df['time'] == tc]
-        values.append(float(row[col].iloc[0]) if not row.empty else 0.0)
-    return values
+def _active_cats(case_p, bl_p):
+    return active_categories(case_p, bl_p, _TOTAL)
 
 
 # ---------------------------------------------------------------------------
@@ -162,8 +76,8 @@ def render(
         return
 
     # Load data
-    baseline_cat = _load_baseline_category_data(user_id_network)
-    case_cat = _get_case_category_data(case, user_id_network)
+    baseline_cat = load_baseline_category_data(user_id_network)
+    case_cat = get_case_category_data(case, user_id_network)
 
     if baseline_cat is None or baseline_cat.empty:
         st.info(
@@ -178,12 +92,12 @@ def render(
         is_baseline_case = True
 
     # Aggregate
-    case_period = _aggregate_period(case_cat)
-    bl_period = _aggregate_period(baseline_cat)
-    case_hy = _aggregate_halfyears(case_cat)
-    bl_hy = _aggregate_halfyears(baseline_cat)
+    case_period = _agg_period(case_cat)
+    bl_period = _agg_period(baseline_cat)
+    case_hy = _agg_halfyears(case_cat)
+    bl_hy = _agg_halfyears(baseline_cat)
 
-    active_cats = _active_categories(case_period, bl_period)
+    active_cats = _active_cats(case_period, bl_period)
 
     if is_baseline_case:
         st.caption(
@@ -389,7 +303,7 @@ def _render_category_table(
         ord_share = (c_ord / c_total * 100) if abs(c_total) > TOLERANCE else 0.0
 
         # Half-year sparkline values
-        hy_vals = _halfyear_values(case_hy, ce, 'nuav_total')
+        hy_vals = halfyear_values(case_hy, ce, 'nuav_total')
 
         rows.append({
             'Var-ID': _var_id(ce),
@@ -498,8 +412,8 @@ def _render_halfyear_drilldown(
         for tc in TIME_CODES_ORDERED:
             label = TIME_LABELS[tc]
 
-            c_vals = _hy_row_values(case_hy, selected_ce, tc)
-            b_vals = _hy_row_values(bl_hy, selected_ce, tc)
+            c_vals = hy_row_values(case_hy, selected_ce, tc, _ORD, _TAIL, _TOTAL)
+            b_vals = hy_row_values(bl_hy, selected_ce, tc, _ORD, _TAIL, _TOTAL)
 
             hy_rows.append({
                 'Period': label,
@@ -533,24 +447,6 @@ def _render_halfyear_drilldown(
         )
 
         st.caption("Values in tkr.")
-
-
-def _hy_row_values(
-    df_hy: pd.DataFrame,
-    cat_encode: int,
-    time_code: int,
-) -> tuple:
-    """Return (ord, tail, total) for one category + time code."""
-    if df_hy.empty:
-        return (0.0, 0.0, 0.0)
-    row = df_hy[(df_hy['cat_encode'] == cat_encode) & (df_hy['time'] == time_code)]
-    if row.empty:
-        return (0.0, 0.0, 0.0)
-    return (
-        float(row['nuav_ord'].iloc[0]),
-        float(row['nuav_tail'].iloc[0]),
-        float(row['nuav_total'].iloc[0]),
-    )
 
 
 def _render_halfyear_chart(hy_df: pd.DataFrame, title_label: str) -> None:

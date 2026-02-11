@@ -13,8 +13,6 @@ from .case_definition import (
     EfficiencyMethod,
     ControllableMethod,
     get_baseline_config,
-    create_parameter_change_config,
-    create_kent_upload_config,
 )
 
 __all__ = [
@@ -26,6 +24,4 @@ __all__ = [
     'EfficiencyMethod',
     'ControllableMethod',
     'get_baseline_config',
-    'create_parameter_change_config',
-    'create_kent_upload_config'
 ]

@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
+from frontend.common.result_helpers import TOLERANCE
 from config.column_names import (
     COL_INCENTIVE_TOTAL, COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
     COL_LOAD_INCENTIVE, COL_MISSING_INCENTIVE,
@@ -52,8 +53,6 @@ CLR_CAP = CHART_COLORS[4]          # Orange  -- cap adjustments
 CLR_TOTAL = CHART_COLORS[3]        # Emerald -- totals / subtotals
 CLR_NEGATIVE = "#DC2626"           # Red (for negative waterfall bars)
 CLR_POSITIVE = "#059669"           # Emerald (for positive waterfall bars)
-
-TOLERANCE = 0.01  # tkr
 
 SNI_LABELS = {
     1: "Agriculture",

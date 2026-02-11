@@ -26,20 +26,17 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.asset_categories import ASSET_CATEGORIES, CATEGORY_BY_CODE
+from frontend.common.result_helpers import (
+    TIME_LABELS, TOLERANCE,
+    load_baseline_category_data, get_case_category_data,
+    fmt_tkr as _format_tkr,
+    fmt_percent, fmt_number as _format_number,
+    calc_delta as _calc_delta,
+)
 from config.column_names import (
     COL_NETLOSS_INCENTIVE, COL_LOAD_INCENTIVE, COL_QUALITY_INCENTIVE,
     COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,
 )
-
-# Time code to label mapping
-TIME_LABELS = {
-    229: "2024H1", 230: "2024H2",
-    231: "2025H1", 232: "2025H2",
-    233: "2026H1", 234: "2026H2",
-    235: "2027H1", 236: "2027H2",
-}
-
-TOLERANCE = 0.01  # tkr - threshold for filtering zero categories
 
 
 # Baseline values for comparison
@@ -61,35 +58,12 @@ BASELINE_DERIVED = {
     "wacc_real_pre_tax": 0.0453,
 }
 
-BASELINE_WACC = 0.0453
-
-
-def _format_tkr(value: float, show_sign: bool = False) -> str:
-    if pd.isna(value):
-        return "-"
-    if show_sign and value > 0:
-        return f"+{value:,.0f}"
-    return f"{value:,.0f}"
+from calculations.wacc_calculations import BASELINE_WACC
 
 
 def _format_percent(value: float, decimals: int = 2) -> str:
-    if pd.isna(value):
-        return "-"
-    return f"{value*100:.{decimals}f}%"
-
-
-def _format_number(value: float, decimals: int = 4) -> str:
-    if pd.isna(value):
-        return "-"
-    return f"{value:.{decimals}f}"
-
-
-def _calc_delta(case_val: float, baseline_val: float) -> tuple:
-    if pd.isna(case_val) or pd.isna(baseline_val):
-        return None, None
-    delta_abs = case_val - baseline_val
-    delta_pct = (delta_abs / baseline_val * 100) if baseline_val != 0 else 0
-    return delta_abs, delta_pct
+    """Wrapper: formats decimal (0.0453) as '4.53%'."""
+    return fmt_percent(value, decimals=decimals, from_decimal=True)
 
 
 def render(
@@ -134,27 +108,6 @@ def _get_variable_id_return(cat_encode: int, component: str = "ord") -> str:
     """Get M3 Variable-ID for return from cat_encode. cat_encode 1 -> 30.1.2.1 (ord) or 30.1.2.2 (tail)"""
     suffix = "1" if component == "ord" else "2"
     return f"30.{cat_encode + 1}.{suffix}"
-
-
-def _load_baseline_category_data(user_id_network: int) -> Optional[pd.DataFrame]:
-    """Load baseline category data for user's company."""
-    try:
-        from data_loaders.rab_data import load_capcost_a
-        df = load_capcost_a()
-        return df[df['id_network'] == user_id_network].copy()
-    except (FileNotFoundError, ImportError):
-        return None
-
-
-def _get_case_category_data(
-    case: "PipelineResult", 
-    user_id_network: int
-) -> Optional[pd.DataFrame]:
-    """Get case category data from pipeline result."""
-    df_cat = getattr(case.pre_dea, 'df_by_category', None)
-    if df_cat is None:
-        return None
-    return df_cat[df_cat['id_network'] == user_id_network].copy()
 
 
 def _aggregate_return_to_period(df: pd.DataFrame) -> pd.DataFrame:
@@ -294,8 +247,8 @@ def _render_return_by_category(case: "PipelineResult", user_id_network: Optional
         st.warning("User company not identified.")
         return
     
-    baseline_cat = _load_baseline_category_data(user_id_network)
-    case_cat = _get_case_category_data(case, user_id_network)
+    baseline_cat = load_baseline_category_data(user_id_network)
+    case_cat = get_case_category_data(case, user_id_network)
     
     if baseline_cat is None or baseline_cat.empty:
         st.info(

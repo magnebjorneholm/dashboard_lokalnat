@@ -27,6 +27,7 @@ from config.case_definition import (
     CapexMethod,
     EfficiencyMethod,
     ControllableMethod,
+    reid_to_id_network,
 )
 
 
@@ -34,7 +35,7 @@ from config.case_definition import (
 # BASELINE VALUES
 # =============================================================================
 
-BASELINE_WACC = 0.0453
+from calculations.wacc_calculations import BASELINE_WACC
 
 BASELINE_INCENTIVE = {
     "kpi": {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
@@ -80,7 +81,7 @@ def build_case_definition(
     if not user_reid.startswith("REL"):
         raise ValueError(f"Invalid REId format: {user_reid}")
     
-    user_id_network = _reid_to_id_network(user_reid)
+    user_id_network = reid_to_id_network(user_reid)
     
     pre_dea = _build_pre_dea_config(ui_config, user_id_network)
     dea = _build_dea_config(ui_config)
@@ -98,17 +99,6 @@ def build_case_definition(
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
-
-def _reid_to_id_network(reid: str) -> int:
-    """Convert REId to id_network. Ex: "REL00886" -> 886"""
-    try:
-        numeric_part = reid.replace("REL", "").lstrip("0")
-        if not numeric_part:
-            return 0
-        return int(numeric_part)
-    except (ValueError, AttributeError):
-        raise ValueError(f"Could not convert REId to id_network: {reid}")
-
 
 def _build_pre_dea_config(
     ui_config: Dict[str, Any],

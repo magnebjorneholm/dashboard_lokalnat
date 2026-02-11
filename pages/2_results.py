@@ -35,6 +35,11 @@ from frontend.utils.geo_visualization import (
 )
 
 from frontend.common.styling import COLORS, get_plotly_template
+from frontend.common.result_helpers import (
+    fmt_tkr as format_tkr,
+    fmt_percent as format_percent,
+    calc_delta,
+)
 from config.column_names import COL_REVENUE_FRAME, COL_CAPITAL_COST_PERIOD
 from frontend.results import (
     m1_asset_base_output,
@@ -53,29 +58,6 @@ SHAPEFILE_PATH = "data/shapefiles/all_network_operator_areas.shp"
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
-
-def format_tkr(value: float, show_sign: bool = False) -> str:
-    if pd.isna(value):
-        return "-"
-    if show_sign and value > 0:
-        return f"+{value:,.0f}"
-    return f"{value:,.0f}"
-
-
-def format_percent(value: float, show_sign: bool = False) -> str:
-    if pd.isna(value):
-        return "-"
-    if show_sign and value > 0:
-        return f"+{value:.1f}%"
-    return f"{value:.1f}%"
-
-
-def calc_delta(case_val: float, baseline_val: float) -> tuple:
-    if pd.isna(case_val) or pd.isna(baseline_val):
-        return None, None
-    delta_abs = case_val - baseline_val
-    delta_pct = (delta_abs / baseline_val * 100) if baseline_val != 0 else 0
-    return delta_abs, delta_pct
 
 
 def render_metric_row(

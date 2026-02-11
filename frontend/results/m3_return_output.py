@@ -27,34 +27,23 @@ from frontend.common.asset_categories import (
     ASSET_CATEGORIES, CATEGORY_BY_CODE, get_category_short_name,
 )
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-TIME_LABELS = {
-    229: "2024H1", 230: "2024H2",
-    231: "2025H1", 232: "2025H2",
-    233: "2026H1", 234: "2026H2",
-    235: "2027H1", 236: "2027H2",
-}
-
-TIME_CODES_ORDERED = [229, 230, 231, 232, 233, 234, 235, 236]
-
-TOLERANCE = 0.01  # tkr
-
-# Chart colours (consistent with M1)
-CLR_CASE_ORD = CHART_COLORS[0]       # Primary Blue
-CLR_CASE_TAIL = "#93C5FD"            # Light blue (blue-300)
-CLR_BL_ORD = "#64748B"               # Slate-500
-CLR_BL_TAIL = "#CBD5E1"              # Slate-300
-
-BASELINE_WACC = 0.0453
+from frontend.common.result_helpers import (
+    TIME_LABELS, TIME_CODES_ORDERED, TOLERANCE,
+    CLR_CASE_ORD, CLR_CASE_TAIL, CLR_BL_ORD, CLR_BL_TAIL,
+    load_baseline_category_data, get_case_category_data,
+    aggregate_period, aggregate_halfyears,
+    active_categories, halfyear_values, hy_row_values,
+)
+from calculations.wacc_calculations import BASELINE_WACC
 
 
 # ---------------------------------------------------------------------------
 # Variable-ID helpers
 # ---------------------------------------------------------------------------
+
+# Return column names
+_ORD, _TAIL, _TOTAL = 'return_ord', 'return_tail', 'return_total'
+
 
 def _var_id_return(cat_encode: int, component: str = "ord") -> str:
     """30.1.{cat_encode+1}.1 (ord) or 30.1.{cat_encode+1}.2 (tail)"""
@@ -88,97 +77,19 @@ def _fmt_pct(v: float, decimals: int = 2) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Data loading / aggregation (return_ord, return_tail)
+# Module-local aggregation wrappers
 # ---------------------------------------------------------------------------
 
-def _load_baseline_category_data(user_id_network: int) -> Optional[pd.DataFrame]:
-    try:
-        from data_loaders.rab_data import load_capcost_a
-        df = load_capcost_a()
-        return df[df['id_network'] == user_id_network].copy()
-    except (FileNotFoundError, ImportError):
-        return None
+def _agg_period(df):
+    return aggregate_period(df, _ORD, _TAIL, _TOTAL)
 
 
-def _get_case_category_data(
-    case: "PipelineResult",
-    user_id_network: int,
-) -> Optional[pd.DataFrame]:
-    df_cat = getattr(case.pre_dea, 'df_by_category', None)
-    if df_cat is None:
-        return None
-    return df_cat[df_cat['id_network'] == user_id_network].copy()
+def _agg_halfyears(df):
+    return aggregate_halfyears(df, _ORD, _TAIL, _TOTAL)
 
 
-def _ensure_return_cols(df: pd.DataFrame) -> pd.DataFrame:
-    for col in ['return_ord', 'return_tail']:
-        if col not in df.columns:
-            df[col] = 0.0
-    df['return_total'] = df['return_ord'] + df['return_tail']
-    return df
-
-
-def _aggregate_period(df: Optional[pd.DataFrame]) -> pd.DataFrame:
-    if df is None or df.empty:
-        return pd.DataFrame()
-    agg_cols = {c: 'sum' for c in ['return_ord', 'return_tail'] if c in df.columns}
-    if not agg_cols:
-        return pd.DataFrame()
-    result = df.groupby('cat_encode').agg(agg_cols).reset_index()
-    return _ensure_return_cols(result)
-
-
-def _aggregate_halfyears(df: Optional[pd.DataFrame]) -> pd.DataFrame:
-    if df is None or df.empty:
-        return pd.DataFrame()
-    result = df.copy()
-    result['time_label'] = result['time'].map(TIME_LABELS)
-    return _ensure_return_cols(result)
-
-
-def _active_categories(
-    case_period: pd.DataFrame,
-    baseline_period: pd.DataFrame,
-) -> List[int]:
-    active = set()
-    for df in [case_period, baseline_period]:
-        if df.empty:
-            continue
-        above = df[df['return_total'].abs() > TOLERANCE]
-        active.update(above['cat_encode'].tolist())
-    return sorted(active)
-
-
-def _halfyear_values(
-    df_hy: pd.DataFrame,
-    cat_encode: int,
-    col: str = 'return_total',
-) -> List[float]:
-    if df_hy.empty:
-        return [0.0] * 8
-    cat_df = df_hy[df_hy['cat_encode'] == cat_encode]
-    values = []
-    for tc in TIME_CODES_ORDERED:
-        row = cat_df[cat_df['time'] == tc]
-        values.append(float(row[col].iloc[0]) if not row.empty else 0.0)
-    return values
-
-
-def _hy_row_values(
-    df_hy: pd.DataFrame,
-    cat_encode: int,
-    time_code: int,
-) -> tuple:
-    if df_hy.empty:
-        return (0.0, 0.0, 0.0)
-    row = df_hy[(df_hy['cat_encode'] == cat_encode) & (df_hy['time'] == time_code)]
-    if row.empty:
-        return (0.0, 0.0, 0.0)
-    return (
-        float(row['return_ord'].iloc[0]),
-        float(row['return_tail'].iloc[0]),
-        float(row['return_total'].iloc[0]),
-    )
+def _active_cats(case_p, bl_p):
+    return active_categories(case_p, bl_p, _TOTAL)
 
 
 # ===================================================================
@@ -218,8 +129,8 @@ def _render_return_section(
         return
 
     # Load data
-    baseline_cat = _load_baseline_category_data(user_id_network)
-    case_cat = _get_case_category_data(case, user_id_network)
+    baseline_cat = load_baseline_category_data(user_id_network)
+    case_cat = get_case_category_data(case, user_id_network)
 
     if baseline_cat is None or baseline_cat.empty:
         st.info(
@@ -234,12 +145,12 @@ def _render_return_section(
         is_baseline_case = True
 
     # Aggregate
-    case_period = _aggregate_period(case_cat)
-    bl_period = _aggregate_period(baseline_cat)
-    case_hy = _aggregate_halfyears(case_cat)
-    bl_hy = _aggregate_halfyears(baseline_cat)
+    case_period = _agg_period(case_cat)
+    bl_period = _agg_period(baseline_cat)
+    case_hy = _agg_halfyears(case_cat)
+    bl_hy = _agg_halfyears(baseline_cat)
 
-    active_cats = _active_categories(case_period, bl_period)
+    active_cats = _active_cats(case_period, bl_period)
 
     if is_baseline_case:
         st.caption(
@@ -416,7 +327,7 @@ def _render_return_category_table(
         ord_share = (c_ord / c_total * 100) if abs(c_total) > TOLERANCE else 0.0
 
         # Half-year sparkline (in MSEK)
-        hy_vals_tkr = _halfyear_values(case_hy, ce, 'return_total')
+        hy_vals_tkr = halfyear_values(case_hy, ce, 'return_total')
         hy_vals = [v / 1e3 for v in hy_vals_tkr]
 
         rows.append({
@@ -505,8 +416,8 @@ def _render_return_halfyear_drilldown(
         hy_rows = []
         for tc in TIME_CODES_ORDERED:
             label = TIME_LABELS[tc]
-            c_vals = _hy_row_values(case_hy, selected_ce, tc)
-            b_vals = _hy_row_values(bl_hy, selected_ce, tc)
+            c_vals = hy_row_values(case_hy, selected_ce, tc, _ORD, _TAIL, _TOTAL)
+            b_vals = hy_row_values(bl_hy, selected_ce, tc, _ORD, _TAIL, _TOTAL)
             hy_rows.append({
                 'Period': label,
                 'Case Ord': c_vals[0] / 1e3,

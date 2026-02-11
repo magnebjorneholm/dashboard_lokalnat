@@ -28,9 +28,7 @@ from config.column_names import (
     COL_DEPRECIATION_PERIOD, COL_RETURN_PERIOD,
     COL_CAPITAL_COST_PERIOD,
 )
-
-
-BASELINE_WACC = 0.0453
+from calculations.wacc_calculations import BASELINE_WACC
 
 
 def prepare_diagram_data(

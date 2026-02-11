@@ -11,7 +11,7 @@ Old print statements replaced with structured logging.
 from dataclasses import dataclass
 from typing import Optional
 
-from config.case_definition import CaseDefinition
+from config.case_definition import CaseDefinition, reid_to_id_network
 from data_loaders.baseline_data import BaselineData
 from pipeline.stages.stage_outputs import (
     BaselineStageOutput,
@@ -80,7 +80,7 @@ def run_pipeline(
         raise ValueError(f"Invalid user_reid format: {user_reid} (must start with 'REL')")
     
     # Get user_id_network for Pre-DEA
-    user_id_network = _reid_to_id_network(user_reid)
+    user_id_network = reid_to_id_network(user_reid)
     
     # Initialize logger
     logger = PipelineDebugLogger(case_config, user_reid)
@@ -170,20 +170,6 @@ def run_pipeline(
     )
 
 
-def _reid_to_id_network(reid: str) -> int:
-    """
-    Convert REId to id_network.
-    Ex: "REL00886" -> 886
-    """
-    try:
-        numeric_part = reid.replace("REL", "").lstrip("0")
-        if not numeric_part:
-            return 0
-        return int(numeric_part)
-    except (ValueError, AttributeError):
-        raise ValueError(f"Could not convert REId to id_network: {reid}")
-
-
 def validate_pipeline_result(result: PipelineResult) -> bool:
     """
     Validate that pipeline result is complete and consistent.
@@ -223,39 +209,3 @@ def validate_pipeline_result(result: PipelineResult) -> bool:
         raise ValueError(f"Pipeline validation failed: {', '.join(errors)}")
     
     return True
-
-
-def get_pipeline_summary(result: PipelineResult) -> dict:
-    """
-    Generate pipeline result summary for UI/logging.
-    
-    Args:
-        result: PipelineResult
-        
-    Returns:
-        Dict with summary
-    """
-    return {
-        "case_name": result.case_name,
-        "user_reid": result.user_reid,
-        "pre_dea": {
-            "capbase_source": result.pre_dea.capbase_source,
-            "capex_method": result.pre_dea.capex_method,
-            "capex_modified": result.pre_dea.capex_modified,
-            "wacc_used": result.pre_dea.wacc_used,
-        },
-        "dea": {
-            "method": result.dea.dea_method,
-            "executed": result.dea.dea_executed,
-        },
-        "extraction": {
-            "efficiency": result.extraction.efficiency,
-            "potential": result.extraction.potential,
-            "is_outlier": result.extraction.is_outlier,
-            "capex": result.extraction.capex,
-            "opex": result.extraction.opex,
-        },
-        "post_dea": {
-            "user_reid": result.post_dea.user_reid,
-        }
-    }

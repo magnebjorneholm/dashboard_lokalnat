@@ -55,6 +55,28 @@ class ControllableMethod(str, Enum):
 
 
 # =============================================================================
+# REID CONVERSION
+# =============================================================================
+
+def reid_to_id_network(reid: str) -> int:
+    """
+    Convert REId to id_network.
+
+    Ex: "REL00886" -> 886
+
+    This is the single source of truth for this conversion.
+    Raises ValueError on invalid input.
+    """
+    try:
+        numeric_part = reid.replace("REL", "").lstrip("0")
+        if not numeric_part:
+            return 0
+        return int(numeric_part)
+    except (ValueError, AttributeError):
+        raise ValueError(f"Could not convert REId to id_network: {reid}")
+
+
+# =============================================================================
 # CONFIG DATACLASSES PER STAGE
 # =============================================================================
 
@@ -224,118 +246,6 @@ def get_baseline_config(user_reid: str) -> CaseDefinition:
         pre_dea=PreDeaConfig(
             capbase_source=CapbaseSource.BASELINE,
             method=CapexMethod.BASELINE
-        ),
-        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
-        post_dea=PostDeaConfig()
-    )
-
-
-def create_var_scaled_config(
-    user_reid: str,
-    user_capbase_scaled: Any,  # pd.DataFrame
-    method: CapexMethod = CapexMethod.BASELINE,
-    wacc: Optional[float] = None,
-    normvalue_adjustments: Optional[Dict[int, float]] = None,
-    lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None
-) -> CaseDefinition:
-    """
-    Create config for variable-scaled capital base with optional calculation method.
-    
-    Args:
-        user_reid: User's REId
-        user_capbase_scaled: Scaled capbase_a DataFrame (ordinarie scaled)
-        method: Calculation method (BASELINE or PARAMETER_CHANGE)
-        wacc: WACC if method == PARAMETER_CHANGE
-        normvalue_adjustments: Normvalue adjustments if PARAMETER_CHANGE
-        lifetime_adjustments: Lifetime adjustments if PARAMETER_CHANGE
-        
-    Returns:
-        CaseDefinition for variable scaling
-    """
-    return CaseDefinition(
-        name=f"Var Scaled ({method.value})",
-        user_reid=user_reid,
-        pre_dea=PreDeaConfig(
-            capbase_source=CapbaseSource.VAR_SCALED,
-            user_capbase_scaled=user_capbase_scaled,
-            method=method,
-            wacc=wacc,
-            normvalue_adjustments=normvalue_adjustments,
-            lifetime_adjustments=lifetime_adjustments
-        ),
-        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
-        post_dea=PostDeaConfig()
-    )
-
-
-def create_kent_upload_config(
-    user_reid: str,
-    kent_file_bytes: bytes,
-    kent_user_id_network: int,
-    method: CapexMethod = CapexMethod.BASELINE,
-    wacc: Optional[float] = None,
-    normvalue_adjustments: Optional[Dict[int, float]] = None,
-    lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None
-) -> CaseDefinition:
-    """
-    Create config for KENT upload with optional calculation method.
-    
-    Args:
-        user_reid: User's REId
-        kent_file_bytes: KENT Excel file as bytes
-        kent_user_id_network: User's id_network
-        method: Calculation method (BASELINE or PARAMETER_CHANGE)
-        wacc: WACC if method == PARAMETER_CHANGE
-        normvalue_adjustments: Normvalue adjustments if PARAMETER_CHANGE
-        lifetime_adjustments: Lifetime adjustments if PARAMETER_CHANGE
-        
-    Returns:
-        CaseDefinition for KENT upload
-    """
-    return CaseDefinition(
-        name=f"KENT Upload ({method.value})",
-        user_reid=user_reid,
-        pre_dea=PreDeaConfig(
-            capbase_source=CapbaseSource.KENT_UPLOAD,
-            kent_file_bytes=kent_file_bytes,
-            kent_user_id_network=kent_user_id_network,
-            method=method,
-            wacc=wacc,
-            normvalue_adjustments=normvalue_adjustments,
-            lifetime_adjustments=lifetime_adjustments
-        ),
-        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
-        post_dea=PostDeaConfig()
-    )
-
-
-def create_parameter_change_config(
-    user_reid: str,
-    normvalue_adjustments: Optional[Dict[int, float]] = None,
-    lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None,
-    wacc: Optional[float] = None
-) -> CaseDefinition:
-    """
-    Create config for parameter changes (without KENT upload or variable scaling).
-    
-    Args:
-        user_reid: User's REId
-        normvalue_adjustments: Dict {cat_encode: multiplier}
-        lifetime_adjustments: Dict {cat_encode: {'ekdep': X, 'maxdep': Y}}
-        wacc: WACC to use (default: baseline 0.0453)
-        
-    Returns:
-        CaseDefinition for parameter changes
-    """
-    return CaseDefinition(
-        name="Parameter changes",
-        user_reid=user_reid,
-        pre_dea=PreDeaConfig(
-            capbase_source=CapbaseSource.BASELINE,
-            method=CapexMethod.PARAMETER_CHANGE,
-            wacc=wacc,
-            normvalue_adjustments=normvalue_adjustments,
-            lifetime_adjustments=lifetime_adjustments
         ),
         dea=DeaConfig(method=EfficiencyMethod.BASELINE),
         post_dea=PostDeaConfig()

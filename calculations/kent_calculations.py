@@ -505,13 +505,3 @@ def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     df['depreciation_period'] = df[[f'depreciation_{y}' for y in [2024, 2025, 2026, 2027]]].sum(axis=1)
 
     return df
-
-
-def get_capex_summary(df_network: pd.DataFrame) -> Dict:
-    """Create summary of capital costs."""
-    summary = {
-        'total_companies': len(df_network),
-        'total_capex_2024': df_network['capital_cost_2024'].sum() if 'capital_cost_2024' in df_network.columns else 0,
-        'total_capex_period': df_network['capital_cost_period'].sum() if 'capital_cost_period' in df_network.columns else 0,
-    }
-    return summary

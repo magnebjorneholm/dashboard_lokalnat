@@ -18,9 +18,9 @@ from config.column_names import (
     COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
     COL_LOAD_INCENTIVE, COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,
 )
+from calculations.wacc_calculations import BASELINE_WACC
 
 EXPECTED_COMPANY_COUNT = 148
-BASELINE_WACC = 0.0453
 
 
 class PipelineDebugLogger:
@@ -346,8 +346,3 @@ class PipelineDebugLogger:
             'errors': errors,
             'warnings': [],
         })
-
-
-def create_logger(case_config: Any, user_reid: str) -> PipelineDebugLogger:
-    """Create and initialize a pipeline debug logger."""
-    return PipelineDebugLogger(case_config, user_reid)

@@ -18,22 +18,7 @@ from config.column_names import (
     COL_CONTROLLABLE_PERIOD, COL_METHOD_USED, COL_NON_CONTROLLABLE,
     COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
 )
-
-
-def _format_tkr(value: float, show_sign: bool = False) -> str:
-    if pd.isna(value):
-        return "-"
-    if show_sign and value > 0:
-        return f"+{value:,.0f}"
-    return f"{value:,.0f}"
-
-
-def _calc_delta(case_val: float, baseline_val: float) -> tuple:
-    if pd.isna(case_val) or pd.isna(baseline_val):
-        return None, None
-    delta_abs = case_val - baseline_val
-    delta_pct = (delta_abs / baseline_val * 100) if baseline_val != 0 else 0
-    return delta_abs, delta_pct
+from frontend.common.result_helpers import fmt_tkr as _format_tkr, calc_delta as _calc_delta
 
 
 def render(
