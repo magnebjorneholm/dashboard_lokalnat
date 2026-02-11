@@ -23,6 +23,10 @@ shapely
 # Annat
 pyyaml
 
+# Testning
+pytest
+pytest-cov
+
 # Firebase Authentication
 Pyrebase4>=4.7.1
 firebase-admin>=6.5.0
