@@ -12,6 +12,16 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any, Tuple
 
+from config.column_names import (
+    COL_EFF_REQ_ANNUAL, COL_CONTROLLABLE_AVG, COL_NEO_ADJUSTMENTS,
+    COL_CAPITAL_COST_PERIOD, COL_CONTROLLABLE_PERIOD,
+    COL_CONTROLLABLE_BEFORE, COL_EFFICIENCY_DEDUCTION,
+    COL_METHOD_USED, COL_OPEX_BEFORE, COL_OPEX_AFTER,
+    COL_OPEX_EFF_DEDUCTION, COL_OPEX_SHARE,
+    COL_CAPEX_BEFORE, COL_CAPEX_AFTER,
+    COL_CAPEX_EFF_DEDUCTION, COL_CAPEX_SHARE,
+)
+
 
 def calculate_controllable_with_eff_req(
     eff_req_data: pd.DataFrame,
@@ -22,54 +32,41 @@ def calculate_controllable_with_eff_req(
     """
     Calculate controllable costs with efficiency requirements for all companies.
 
-    Implements Ei's method:
-    1. Define starting value (OPEX: only controllable, TOTEX: controllable + CAPEX/4)
-    2. Calculate annual deductions with compound growth
-    3. Calculate controllable per year (2024-2027)
-    4. Sum period total
-    5. For TOTEX: Allocate efficiency proportionally between OPEX and CAPEX
-
     Args:
-        eff_req_data: DataFrame with REId, Effkrav_proc (from efficiency requirement stage)
-        sdf_baseline: DataFrame with REId, Paverkbara_Medelvarde, Neonjusteringar
-        capex_data: DataFrame with REId, Kapitalkostnad_Total (period sum 2024-2027)
+        eff_req_data: DataFrame with REId, efficiency_requirement_annual
+        sdf_baseline: DataFrame with REId, controllable_cost_average, neo_adjustments_period
+        capex_data: DataFrame with REId, capital_cost_period (period sum 2024-2027)
         method: 'OPEX' or 'TOTEX'
 
     Returns:
-        DataFrame with columns:
-        - REId
-        - Paverkbara_2024, Paverkbara_2025, Paverkbara_2026, Paverkbara_2027
-        - Paverkbara_Periodsumma
-        - Method_used
-        - OPEX_Fore, OPEX_Efter, OPEX_Effektivisering
-        - CAPEX_Fore, CAPEX_Efter, CAPEX_Effektivisering
+        DataFrame with English column names for all controllable cost fields
     """
     if method not in ['OPEX', 'TOTEX']:
         raise ValueError(f"Method must be 'OPEX' or 'TOTEX', got '{method}'")
 
     # Merge all datasets on REId
-    df = eff_req_data[['REId', 'Effkrav_proc']].copy()
+    df = eff_req_data[['REId', COL_EFF_REQ_ANNUAL]].copy()
 
     # Merge with SDF baseline
     df = df.merge(
-        sdf_baseline[['REId', 'Paverkbara_Medelvarde', 'Neonjusteringar']],
+        sdf_baseline[['REId', COL_CONTROLLABLE_AVG, COL_NEO_ADJUSTMENTS]],
         on='REId',
         how='left'
     )
 
-    # Merge with CAPEX data (needed for TOTEX, and for CAPEX_Fore even in OPEX mode)
-    if 'Kapitalkostnad_Total' in capex_data.columns:
+    # Merge with CAPEX data (needed for TOTEX, and for capex_before even in OPEX mode)
+    if COL_CAPITAL_COST_PERIOD in capex_data.columns:
         df = df.merge(
-            capex_data[['REId', 'Kapitalkostnad_Total']],
+            capex_data[['REId', COL_CAPITAL_COST_PERIOD]],
             on='REId',
             how='left'
         )
-        df['Kapitalkostnad_Total'] = df['Kapitalkostnad_Total'].fillna(0)
+        df[COL_CAPITAL_COST_PERIOD] = df[COL_CAPITAL_COST_PERIOD].fillna(0)
     else:
-        df['Kapitalkostnad_Total'] = 0
+        df[COL_CAPITAL_COST_PERIOD] = 0
 
     # Validate that we have data
-    required_cols = ['REId', 'Effkrav_proc', 'Paverkbara_Medelvarde', 'Neonjusteringar']
+    required_cols = ['REId', COL_EFF_REQ_ANNUAL, COL_CONTROLLABLE_AVG, COL_NEO_ADJUSTMENTS]
     missing = [col for col in required_cols if col not in df.columns or df[col].isna().all()]
     if missing:
         raise ValueError(f"Missing or empty columns: {missing}")
@@ -80,10 +77,10 @@ def calculate_controllable_with_eff_req(
     for _, row in df.iterrows():
         result = _calculate_controllable_single_company(
             reid=row['REId'],
-            eff_req_pct=row['Effkrav_proc'],
-            controllable_average=row['Paverkbara_Medelvarde'],
-            neon_adjustments=row['Neonjusteringar'],
-            capital_cost_total=row.get('Kapitalkostnad_Total', 0),
+            eff_req_pct=row[COL_EFF_REQ_ANNUAL],
+            controllable_average=row[COL_CONTROLLABLE_AVG],
+            neon_adjustments=row[COL_NEO_ADJUSTMENTS],
+            capital_cost_total=row.get(COL_CAPITAL_COST_PERIOD, 0),
             method=method
         )
         results.append(result)
@@ -102,18 +99,6 @@ def _calculate_controllable_single_company(
     """
     Calculate controllable costs for a single company.
 
-    Calculation chain (according to Ei's method):
-    1. Starting value = Controllable_Average (OPEX) or + CAPEX/4 (TOTEX)
-    2. Annual_Adjustment = Neon_Adjustments / 4
-    3. Annual_Base_EffReq = Starting_Value + Annual_Adjustment
-    4. For each year t:
-       - Growth_Factor_t = (1 + eff_req)^(t-1)
-       - Annual_Deduction_t = eff_req * Annual_Base * Growth_Factor_t
-       - Cumulative_Deduction_t = sum(Annual_Deduction[1:t+1])
-       - Controllable_t = Starting_Value - Cumulative_Deduction_t + Annual_Adjustment
-    5. Period_Sum = sum(Controllable[2024:2028])
-    6. For TOTEX: Allocate efficiency proportionally between OPEX and CAPEX
-
     Args:
         reid: REId for the company
         eff_req_pct: Annual efficiency requirement (decimal)
@@ -123,7 +108,7 @@ def _calculate_controllable_single_company(
         method: 'OPEX' or 'TOTEX'
 
     Returns:
-        Dict with results for this company
+        Dict with results for this company using English column names
     """
     annual_adjustment = neon_adjustments / 4
 
@@ -153,7 +138,7 @@ def _calculate_controllable_single_company(
         cumulative_deduction += annual_deduction
         controllable_after_deduction = starting_value - cumulative_deduction + annual_adjustment
         year = 2023 + t
-        controllable_per_year[f'Paverkbara_{year}'] = controllable_after_deduction
+        controllable_per_year[f'controllable_cost_{year}'] = controllable_after_deduction
 
     # Total efficiency (period sum)
     total_before = (starting_value + annual_adjustment) * 4
@@ -183,29 +168,29 @@ def _calculate_controllable_single_company(
         capex_efficiency = 0.0
         capex_after = capex_before
 
-    # Return results
+    # Return results with English column names
     result = {
         'REId': reid,
-        'Method_used': method,
+        COL_METHOD_USED: method,
 
-        # Legacy fields (backwards compatibility)
-        'Paverkbara_Fore_Periodsumma': total_before,
-        'Paverkbara_Periodsumma': total_after,
-        'Effektivisering_Total': efficiency_total,
+        # Controllable cost totals
+        COL_CONTROLLABLE_BEFORE: total_before,
+        COL_CONTROLLABLE_PERIOD: total_after,
+        COL_EFFICIENCY_DEDUCTION: efficiency_total,
 
         # Separated OPEX fields
-        'OPEX_Fore': opex_before,
-        'OPEX_Efter': opex_after,
-        'OPEX_Effektivisering': opex_efficiency,
+        COL_OPEX_BEFORE: opex_before,
+        COL_OPEX_AFTER: opex_after,
+        COL_OPEX_EFF_DEDUCTION: opex_efficiency,
 
         # Separated CAPEX fields
-        'CAPEX_Fore': capex_before,
-        'CAPEX_Efter': capex_after,
-        'CAPEX_Effektivisering': capex_efficiency,
+        COL_CAPEX_BEFORE: capex_before,
+        COL_CAPEX_AFTER: capex_after,
+        COL_CAPEX_EFF_DEDUCTION: capex_efficiency,
 
         # Shares (for transparency)
-        'OPEX_Andel': opex_share,
-        'CAPEX_Andel': capex_share,
+        COL_OPEX_SHARE: opex_share,
+        COL_CAPEX_SHARE: capex_share,
     }
     result.update(controllable_per_year)
 
@@ -227,7 +212,7 @@ def get_controllable_from_sdf(
         sdf_controllable: DataFrame from sheet "Påverkbara"
 
     Returns:
-        DataFrame with REId, Paverkbara_Medelvarde, Neonjusteringar
+        DataFrame with REId, controllable_cost_average, neo_adjustments_period
     """
     # REId column may be named 'REid' or 'REId' in the sheet
     reid_col = 'REid' if 'REid' in sdf_controllable.columns else 'REId'
@@ -259,19 +244,19 @@ def get_controllable_from_sdf(
                 neojust_col = col
                 break
 
-    # Extract data
+    # Extract data with English column names
     result = sdf_controllable[[reid_col, average_col]].copy()
-    result.columns = ['REId', 'Paverkbara_Medelvarde']
+    result.columns = ['REId', COL_CONTROLLABLE_AVG]
 
     # Add neon adjustments
     if neojust_col:
-        result['Neonjusteringar'] = sdf_controllable[neojust_col]
+        result[COL_NEO_ADJUSTMENTS] = sdf_controllable[neojust_col]
     else:
-        result['Neonjusteringar'] = 0
+        result[COL_NEO_ADJUSTMENTS] = 0
 
     # Fill NaN with 0
-    result['Neonjusteringar'] = result['Neonjusteringar'].fillna(0)
-    result['Paverkbara_Medelvarde'] = result['Paverkbara_Medelvarde'].fillna(0)
+    result[COL_NEO_ADJUSTMENTS] = result[COL_NEO_ADJUSTMENTS].fillna(0)
+    result[COL_CONTROLLABLE_AVG] = result[COL_CONTROLLABLE_AVG].fillna(0)
 
     return result
 

@@ -11,10 +11,13 @@ SIMPLIFIED: With wacc_scaling removed, logic is now:
 import pandas as pd
 from typing import List
 
+from config.column_names import (
+    COL_CAPITAL_COST_PERIOD, COL_CAPITAL_COST_2024, COL_CAPITAL_COST_2025,
+    COL_CAPITAL_COST_2026, COL_CAPITAL_COST_2027,
+    COL_RETURN_2024, COL_RETURN_2025, COL_RETURN_2026, COL_RETURN_2027,
+    COL_RETURN_PERIOD,
+)
 from pipeline.stages.stage_outputs import PreDeaStageOutput, BaselineStageOutput
-
-
-SDF_COL_KAPITALKOSTNAD = 'Kapitalkostnad'
 
 
 def get_return_per_year(
@@ -23,20 +26,20 @@ def get_return_per_year(
 ) -> pd.DataFrame:
     """
     Get return per year for all 148 companies.
-    
+
     Used for incentive adjustment 1/3-cap applied per year.
-    
+
     Logic:
     - baseline + baseline: From baseline df_all_companies
     - Any other: From pre_dea.df_all_companies (KENT output)
-    
+
     Returns:
-        DataFrame with: REId, Avkastning_2024-2027 (all in tkr)
+        DataFrame with: REId, return_on_assets_2024-2027 (all in tkr)
     """
     source = pre_dea.capbase_source
     method = pre_dea.capex_method
-    yearly_cols = [f'Avkastning_{year}' for year in [2024, 2025, 2026, 2027]]
-    
+    yearly_cols = [COL_RETURN_2024, COL_RETURN_2025, COL_RETURN_2026, COL_RETURN_2027]
+
     if method == 'baseline' and source == 'baseline':
         return _get_return_from_baseline(baseline, yearly_cols)
     else:
@@ -50,18 +53,15 @@ def _get_return_from_baseline(
 ) -> pd.DataFrame:
     """Get return per year from baseline df_all_companies."""
     df = baseline.df_all_companies
-    
+
     missing_cols = [col for col in yearly_cols if col not in df.columns]
-    
+
     if missing_cols:
         result = df[['REId']].copy()
         for col in yearly_cols:
-            if 'Avkastning' in df.columns:
-                result[col] = df['Avkastning']
-            else:
-                result[col] = 0
+            result[col] = 0
         return result
-    
+
     return df[['REId'] + yearly_cols].copy()
 
 
@@ -71,24 +71,24 @@ def _get_return_from_pre_dea(
 ) -> pd.DataFrame:
     """Get return per year from pre_dea.df_all_companies (KENT output)."""
     df = pre_dea.df_all_companies
-    
+
     missing_cols = [col for col in yearly_cols if col not in df.columns]
-    
+
     if missing_cols:
-        # Fallback: use Avkastning_Period / 4
-        if 'Avkastning_Period' in df.columns:
+        # Fallback: use return_on_assets_period / 4
+        if COL_RETURN_PERIOD in df.columns:
             result = df[['REId']].copy()
-            avg_return = df['Avkastning_Period'] / 4
+            avg_return = df[COL_RETURN_PERIOD] / 4
             for col in yearly_cols:
                 result[col] = avg_return
             return result
-        
+
         # Last fallback: 0
         result = df[['REId']].copy()
         for col in yearly_cols:
             result[col] = 0
         return result
-    
+
     return df[['REId'] + yearly_cols].copy()
 
 
@@ -98,19 +98,19 @@ def get_capex_period_sum(
 ) -> pd.DataFrame:
     """
     Get capital cost period sum (4 years) for all 148 companies.
-    
+
     CRITICAL: Returns PERIOD SUM (4 years), NOT annual value!
-    
+
     Logic:
-    - baseline + baseline: SDF "Kapitalkostnad" (period sum)
-    - Any other: KENT output Kapitalkostnad_Period
-    
+    - baseline + baseline: SDF capital_cost_period (period sum)
+    - Any other: KENT output capital_cost_period
+
     Returns:
-        DataFrame with: REId, Kapitalkostnad_Total (period sum in tkr)
+        DataFrame with: REId, capital_cost_period (period sum in tkr)
     """
     source = pre_dea.capbase_source
     method = pre_dea.capex_method
-    
+
     if method == 'baseline' and source == 'baseline':
         return _get_capex_from_sdf(baseline)
     else:
@@ -121,16 +121,15 @@ def get_capex_period_sum(
 def _get_capex_from_sdf(baseline: BaselineStageOutput) -> pd.DataFrame:
     """Get capital cost period sum from SDF."""
     sdf = baseline.sdf_ir.copy()
-    
-    if SDF_COL_KAPITALKOSTNAD not in sdf.columns:
-        raise ValueError(f"Column '{SDF_COL_KAPITALKOSTNAD}' missing in SDF IR")
-    
-    df = sdf[['REId', SDF_COL_KAPITALKOSTNAD]].copy()
-    df.columns = ['REId', 'Kapitalkostnad_Total']
-    df['Kapitalkostnad_Total'] = pd.to_numeric(
-        df['Kapitalkostnad_Total'], errors='coerce'
+
+    if COL_CAPITAL_COST_PERIOD not in sdf.columns:
+        raise ValueError(f"Column '{COL_CAPITAL_COST_PERIOD}' missing in SDF IR")
+
+    df = sdf[['REId', COL_CAPITAL_COST_PERIOD]].copy()
+    df[COL_CAPITAL_COST_PERIOD] = pd.to_numeric(
+        df[COL_CAPITAL_COST_PERIOD], errors='coerce'
     ).fillna(0)
-    
+
     return df
 
 
@@ -140,27 +139,22 @@ def _get_capex_from_pre_dea(
 ) -> pd.DataFrame:
     """Get capital cost period sum from pre_dea.df_all_companies."""
     df = pre_dea.df_all_companies
-    
-    if 'Kapitalkostnad_Period' in df.columns:
-        result = df[['REId', 'Kapitalkostnad_Period']].copy()
-        result.columns = ['REId', 'Kapitalkostnad_Total']
-        return result
-    
-    elif 'Kapitalkostnad_Total' in df.columns:
-        return df[['REId', 'Kapitalkostnad_Total']].copy()
-    
+
+    if COL_CAPITAL_COST_PERIOD in df.columns:
+        return df[['REId', COL_CAPITAL_COST_PERIOD]].copy()
+
     else:
         # Try summing per-year columns
-        yearly_cols = ['Kapitalkostnad_2024', 'Kapitalkostnad_2025',
-                      'Kapitalkostnad_2026', 'Kapitalkostnad_2027']
-        
+        yearly_cols = [COL_CAPITAL_COST_2024, COL_CAPITAL_COST_2025,
+                      COL_CAPITAL_COST_2026, COL_CAPITAL_COST_2027]
+
         if all(col in df.columns for col in yearly_cols):
             result = df[['REId']].copy()
-            result['Kapitalkostnad_Total'] = (
-                df['Kapitalkostnad_2024'] + df['Kapitalkostnad_2025'] +
-                df['Kapitalkostnad_2026'] + df['Kapitalkostnad_2027']
+            result[COL_CAPITAL_COST_PERIOD] = (
+                df[COL_CAPITAL_COST_2024] + df[COL_CAPITAL_COST_2025] +
+                df[COL_CAPITAL_COST_2026] + df[COL_CAPITAL_COST_2027]
             )
             return result
-        
+
         # Last fallback: use SDF
         return _get_capex_from_sdf(baseline)

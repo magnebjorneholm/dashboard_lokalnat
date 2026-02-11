@@ -14,6 +14,11 @@ from typing import Dict, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
+from config.column_names import (
+    COL_CONTROLLABLE_PERIOD, COL_METHOD_USED, COL_NON_CONTROLLABLE,
+    COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
+)
+
 
 def _format_tkr(value: float, show_sign: bool = False) -> str:
     if pd.isna(value):
@@ -44,11 +49,11 @@ def render(
     # Controllable costs
     st.markdown("**40.1 Controllable costs**")
     
-    pav_case = case_ir.get('Paverkbara_Periodsumma', 0)
-    pav_baseline = baseline_ir.get('Paverkbara_Periodsumma', 0)
+    pav_case = case_ir.get(COL_CONTROLLABLE_PERIOD, 0)
+    pav_baseline = baseline_ir.get(COL_CONTROLLABLE_PERIOD, 0)
     _, pav_pct = _calc_delta(pav_case, pav_baseline)
     
-    method_used = case_ir.get('Method_used', 'OPEX')
+    method_used = case_ir.get(COL_METHOD_USED, 'OPEX')
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -66,8 +71,8 @@ def render(
     st.markdown("")
     st.markdown("**40.2 Non-controllable costs (opåverkbara)**")
     
-    opav_case = case_ir.get('Opaverkbara_Kostnader', 0)
-    opav_baseline = baseline_ir.get('Opaverkbara_Kostnader', 0)
+    opav_case = case_ir.get(COL_NON_CONTROLLABLE, 0)
+    opav_baseline = baseline_ir.get(COL_NON_CONTROLLABLE, 0)
     _, opav_pct = _calc_delta(opav_case, opav_baseline)
     
     col1, col2 = st.columns(2)
@@ -85,16 +90,16 @@ def render(
     st.markdown("**Other OPEX components**")
     
     other_components = [
-        ("40.1.2", "Flexibility services", "Flexibilitetstjanster"),
-        ("-", "Interruption compensation (12-24h)", "Avbrottsersattning_12_24h"),
-        ("-", "State aid deduction", "Avdrag_Statligt_Stod"),
+        ("40.1.2", "Flexibility services", COL_FLEXIBILITY),
+        ("-", "Interruption compensation (12-24h)", COL_INTERRUPTION),
+        ("-", "State aid deduction", COL_STATE_DEDUCTION),
     ]
     
     other_rows = []
     for var_id, label, col_key in other_components:
         c_val = case_ir.get(col_key, 0)
         b_val = baseline_ir.get(col_key, 0)
-        if col_key == "Avdrag_Statligt_Stod":
+        if col_key == COL_STATE_DEDUCTION:
             c_val = -c_val if c_val else 0
             b_val = -b_val if b_val else 0
         delta_abs, _ = _calc_delta(c_val, b_val)

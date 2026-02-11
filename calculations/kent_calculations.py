@@ -452,84 +452,66 @@ def aggregate_to_category_level(df: pd.DataFrame) -> pd.DataFrame:
 
 def calculate_capex_outputs(df_network: pd.DataFrame) -> pd.DataFrame:
     """
-    BerÃ¤knar kapitalkostnads-outputs med KORREKT halvÃ¥rsmappning.
-    
-    Tidskoder Ã¤r HALVÃ…R: 229=2024H1, 230=2024H2, 231=2025H1, etc.
-    
-    Genererar:
-    - Kapitalkostnad_2024-2027 och Kapitalkostnad_Period
-    - Avkastning_2024-2027 och Avkastning_Period
-    - Avskrivning_2024-2027 och Avskrivning_Period
+    Calculate capital cost outputs with correct half-year mapping.
+
+    Timecodes are HALF-YEARS: 229=2024H1, 230=2024H2, 231=2025H1, etc.
+
+    Generates English column names:
+    - capital_cost_2024-2027 and capital_cost_period
+    - return_on_assets_2024-2027 and return_on_assets_period
+    - depreciation_2024-2027 and depreciation_period
     """
     df = df_network.copy()
-    
-    # BerÃ¤kna per-Ã¥r vÃ¤rden genom att summera halvÃ¥ren
+
     for year, timecodes in YEAR_TO_TIMECODES.items():
         t1, t2 = timecodes
-        
-        # Kapitalkostnad per Ã¥r
+
+        # Capital cost per year
         capcost_cols = [f'capcost_{t}' for t in [t1, t2] if f'capcost_{t}' in df.columns]
         if capcost_cols:
-            df[f'Kapitalkostnad_{year}'] = df[capcost_cols].sum(axis=1)
+            df[f'capital_cost_{year}'] = df[capcost_cols].sum(axis=1)
         else:
-            df[f'Kapitalkostnad_{year}'] = 0.0
-        
-        # Avkastning per Ã¥r (return_ord + return_tail fÃ¶r bÃ¥da halvÃ¥ren)
+            df[f'capital_cost_{year}'] = 0.0
+
+        # Return on assets per year
         return_cols = []
         for t in [t1, t2]:
             if f'return_ord_{t}' in df.columns:
                 return_cols.append(f'return_ord_{t}')
             if f'return_tail_{t}' in df.columns:
                 return_cols.append(f'return_tail_{t}')
-        
+
         if return_cols:
-            df[f'Avkastning_{year}'] = df[return_cols].sum(axis=1)
+            df[f'return_on_assets_{year}'] = df[return_cols].sum(axis=1)
         else:
-            df[f'Avkastning_{year}'] = 0.0
-        
-        # Avskrivning per Ã¥r (dep_ord + dep_tail fÃ¶r bÃ¥da halvÃ¥ren)
+            df[f'return_on_assets_{year}'] = 0.0
+
+        # Depreciation per year
         dep_cols = []
         for t in [t1, t2]:
             if f'dep_ord_{t}' in df.columns:
                 dep_cols.append(f'dep_ord_{t}')
             if f'dep_tail_{t}' in df.columns:
                 dep_cols.append(f'dep_tail_{t}')
-        
+
         if dep_cols:
-            df[f'Avskrivning_{year}'] = df[dep_cols].sum(axis=1)
+            df[f'depreciation_{year}'] = df[dep_cols].sum(axis=1)
         else:
-            df[f'Avskrivning_{year}'] = 0.0
-    
-    # BerÃ¤kna periodsummor
-    yearly_capcost = [f'Kapitalkostnad_{year}' for year in [2024, 2025, 2026, 2027]]
-    df['Kapitalkostnad_Period'] = df[yearly_capcost].sum(axis=1)
-    
-    yearly_return = [f'Avkastning_{year}' for year in [2024, 2025, 2026, 2027]]
-    df['Avkastning_Period'] = df[yearly_return].sum(axis=1)
-    
-    yearly_dep = [f'Avskrivning_{year}' for year in [2024, 2025, 2026, 2027]]
-    df['Avskrivning_Period'] = df[yearly_dep].sum(axis=1)
-    
-    # SÃ¤tt standardkolumner fÃ¶r kompatibilitet med baseline
-    if 'Kapitalkostnad_2024' in df.columns:
-        df['CAPEX'] = df['Kapitalkostnad_2024']
-    
-    if 'Avkastning_2024' in df.columns:
-        df['Avkastning'] = df['Avkastning_2024']
-    
-    if 'Avskrivning_2024' in df.columns:
-        df['Avskrivning'] = df['Avskrivning_2024']
-    
+            df[f'depreciation_{year}'] = 0.0
+
+    # Period sums
+    df['capital_cost_period'] = df[[f'capital_cost_{y}' for y in [2024, 2025, 2026, 2027]]].sum(axis=1)
+    df['return_on_assets_period'] = df[[f'return_on_assets_{y}' for y in [2024, 2025, 2026, 2027]]].sum(axis=1)
+    df['depreciation_period'] = df[[f'depreciation_{y}' for y in [2024, 2025, 2026, 2027]]].sum(axis=1)
+
     return df
 
 
 def get_capex_summary(df_network: pd.DataFrame) -> Dict:
-    """
-    Skapar sammanfattning av kapitalkostnader.
-    """
+    """Create summary of capital costs."""
     summary = {
         'total_companies': len(df_network),
-        'total_capex_2024': df_network['Kapitalkostnad_2024'].sum() if 'Kapitalkostnad_2024' in df_network.columns else 0,
-        'total_capex_period': df_network['Kapitalkostnad_Period'].sum() if 'Kapitalkostnad_Period' in df_network.columns else 0,
+        'total_capex_2024': df_network['capital_cost_2024'].sum() if 'capital_cost_2024' in df_network.columns else 0,
+        'total_capex_period': df_network['capital_cost_period'].sum() if 'capital_cost_period' in df_network.columns else 0,
     }
     return summary

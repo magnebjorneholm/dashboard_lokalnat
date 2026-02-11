@@ -81,28 +81,28 @@ def prepare_incentive_input(
     return_per_year: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    FÃ¶rbereder komplett input fÃ¶r incitamentberÃ¤kning genom att
-    slÃ¥ ihop incitamentdata med avkastning per Ã¥r.
-    
+    Prepare complete input for incentive calculation by merging
+    incentive data with return per year.
+
     Args:
-        incentive_data: DataFrame frÃ¥n load_incentive_data()
-        return_per_year: DataFrame med REId, Avkastning_2024..2027 (tkr)
-    
+        incentive_data: DataFrame from load_incentive_data()
+        return_per_year: DataFrame with REId, return_on_assets_2024..2027 (tkr)
+
     Returns:
-        DataFrame med alla variabler redo fÃ¶r calculate_all_incentives().
-        InnehÃ¥ller kolumnen 'ret_period' (avkastning i kr fÃ¶r respektive Ã¥r).
+        DataFrame with all variables ready for calculate_all_incentives().
+        Contains column 'ret_period' (return in kr for each year).
     """
     df = incentive_data.copy()
-    
-    # SlÃ¥ ihop med avkastning per Ã¥r
+
+    # Merge with return per year
     df = df.merge(return_per_year, on='REId', how='left')
-    
-    # Skapa ret_period baserat pÃ¥ Ã¥r (konvertera tkr -> kr)
+
+    # Create ret_period based on year (convert tkr -> kr)
     df['ret_period'] = df.apply(
-        lambda row: row.get(f"Avkastning_{int(row['year'])}", 0) * 1000,
+        lambda row: row.get(f"return_on_assets_{int(row['year'])}", 0) * 1000,
         axis=1
     )
-    
+
     return df
 
 
@@ -110,58 +110,62 @@ def get_incentive_summary_by_reid(
     incentive_results: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Aggregerar incitamentresultat till en rad per REId (periodsumma).
-    
+    Aggregate incentive results to one row per REId (period sum).
+
     Args:
-        incentive_results: Output frÃ¥n calculate_all_incentives()
-    
+        incentive_results: Output from calculate_all_incentives()
+
     Returns:
-        DataFrame med en rad per REId:
+        DataFrame with one row per REId:
         - REId
-        - Kvalitetsjustering_Total (tkr)
-        - Natforlustjustering_Total (tkr)
-        - Belastningsjustering_Total (tkr)
-        - Incitamentjustering_Total (tkr)
+        - quality_incentive_total (tkr)
+        - network_loss_incentive_total (tkr)
+        - load_incentive_total (tkr)
+        - incentive_adjustment_total (tkr)
         - Missing_Incentive_Data (bool)
     """
     from calculations.incentive_parameters import MISSING_DATA_IDS
-    
-    # Periodsummorna finns redan pÃ¥ alla rader (aggregate_period_totals)
-    # Extrahera en rad per REId
+    from config.column_names import (
+        COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
+        COL_LOAD_INCENTIVE, COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,
+    )
+
+    # Period sums are already on all rows (aggregate_period_totals)
+    # Extract one row per REId
     df_summary = incentive_results.groupby('REId').first().reset_index()
-    
-    # VÃ¤lj relevanta kolumner
+
+    # Select relevant columns
     cols_to_keep = ['REId']
     rename_map = {}
-    
-    # Periodsummor (frÃ¥n aggregate_period_totals)
+
+    # Period sums (from aggregate_period_totals)
     if 'inter_incentive_sum' in df_summary.columns:
         cols_to_keep.append('inter_incentive_sum')
-        rename_map['inter_incentive_sum'] = 'Kvalitetsjustering_Total'
+        rename_map['inter_incentive_sum'] = COL_QUALITY_INCENTIVE
     if 'loss_incentive_sum' in df_summary.columns:
         cols_to_keep.append('loss_incentive_sum')
-        rename_map['loss_incentive_sum'] = 'Natforlustjustering_Total'
+        rename_map['loss_incentive_sum'] = COL_NETLOSS_INCENTIVE
     if 'util_incentive_sum' in df_summary.columns:
         cols_to_keep.append('util_incentive_sum')
-        rename_map['util_incentive_sum'] = 'Belastningsjustering_Total'
+        rename_map['util_incentive_sum'] = COL_LOAD_INCENTIVE
     if 'incentive_total' in df_summary.columns:
         cols_to_keep.append('incentive_total')
-        rename_map['incentive_total'] = 'Incitamentjustering_Total'
-    
+        rename_map['incentive_total'] = COL_INCENTIVE_TOTAL
+
     df_summary = df_summary[cols_to_keep].copy()
-    
-    # Konvertera frÃ¥n kr till tkr
-    for col in cols_to_keep[1:]:  # Skippa REId
+
+    # Convert from kr to tkr
+    for col in cols_to_keep[1:]:  # Skip REId
         df_summary[col] = df_summary[col] / 1000
-    
-    # Byt namn
+
+    # Rename to English
     df_summary = df_summary.rename(columns=rename_map)
-    
-    # Flagga fÃ¶r saknad data (baserat pÃ¥ numerisk reid i MISSING_DATA_IDS)
-    df_summary['Missing_Incentive_Data'] = df_summary['REId'].apply(
+
+    # Flag for missing data (based on numeric reid in MISSING_DATA_IDS)
+    df_summary[COL_MISSING_INCENTIVE] = df_summary['REId'].apply(
         lambda x: int(x.replace('REL', '')) in MISSING_DATA_IDS
     )
-    
+
     return df_summary
 
 

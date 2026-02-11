@@ -125,7 +125,8 @@ def stage_post_dea(
 
     # Extract user's specific data
     user_revenue_frame = extract_user_revenue_frame(all_revenue_frames, user_reid)
-    user_eff_req_pct = all_eff_reqs[all_eff_reqs['REId'] == user_reid]['Effkrav_proc'].iloc[0]
+    from config.column_names import COL_EFF_REQ_ANNUAL
+    user_eff_req_pct = all_eff_reqs[all_eff_reqs['REId'] == user_reid][COL_EFF_REQ_ANNUAL].iloc[0]
 
     return PostDeaStageOutput(
         user_reid=user_reid,

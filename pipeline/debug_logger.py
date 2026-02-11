@@ -10,6 +10,15 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from config.column_names import (
+    COL_COMPANY_NAME, COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+    COL_DEA_EFFICIENCY, COL_DEA_POTENTIAL, COL_IS_OUTLIER,
+    COL_CONTROLLABLE_PERIOD, COL_NON_CONTROLLABLE,
+    COL_CAPITAL_COST_PERIOD, COL_REVENUE_FRAME,
+    COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
+    COL_LOAD_INCENTIVE, COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,
+)
+
 EXPECTED_COMPANY_COUNT = 148
 BASELINE_WACC = 0.0453
 
@@ -100,15 +109,15 @@ class PipelineDebugLogger:
         user_row = df[df['REId'] == self.user_reid]
         if not user_row.empty:
             row = user_row.iloc[0]
-            self.user['foretag'] = str(row.get('Företag', ''))
-            self.user['capex_baseline'] = float(row['Kapitalkostnad_2024'])
-            self.user['opex_baseline'] = float(row['OPEXp'])
+            self.user['company_name'] = str(row.get(COL_COMPANY_NAME, ''))
+            self.user['capex_baseline'] = float(row[COL_CAPITAL_COST_2024])
+            self.user['opex_baseline'] = float(row[COL_CONTROLLABLE_AVG])
 
         dea_row = output.dea_baseline[output.dea_baseline['REId'] == self.user_reid]
         if not dea_row.empty:
             row = dea_row.iloc[0]
-            self.user['efficiency_baseline'] = float(row['Effektivitet'])
-            self.user['potential_baseline'] = float(row['potential'])
+            self.user['efficiency_baseline'] = float(row[COL_DEA_EFFICIENCY])
+            self.user['potential_baseline'] = float(row[COL_DEA_POTENTIAL])
 
         self._record_stage("baseline", t0, errors)
 
@@ -125,8 +134,8 @@ class PipelineDebugLogger:
               f"  modified={output.capex_modified}  wacc={output.wacc_used}")
 
         # Track whether CAPEX actually changed
-        bl_capex = baseline.df_all_companies['Kapitalkostnad_2024'].sum()
-        case_capex = df['Kapitalkostnad_2024'].sum()
+        bl_capex = baseline.df_all_companies[COL_CAPITAL_COST_2024].sum()
+        case_capex = df[COL_CAPITAL_COST_2024].sum()
         capex_changed = abs(case_capex - bl_capex) > 1
         if capex_changed != output.capex_modified:
             msg = f"capex_modified={output.capex_modified} but actual change={capex_changed}"
@@ -137,8 +146,8 @@ class PipelineDebugLogger:
         user_row = df[df['REId'] == self.user_reid]
         if not user_row.empty:
             row = user_row.iloc[0]
-            self.user['capex_case'] = float(row['Kapitalkostnad_2024'])
-            self.user['opex_case'] = float(row['OPEXp'])
+            self.user['capex_case'] = float(row[COL_CAPITAL_COST_2024])
+            self.user['opex_case'] = float(row[COL_CONTROLLABLE_AVG])
 
         self._record_stage("pre_dea", t0, errors)
 
@@ -150,21 +159,21 @@ class PipelineDebugLogger:
         df = output.dea_results
         errors = self._validate_companies(df, "dea")
 
-        eff = df['Effektivitet']
+        eff = df[COL_DEA_EFFICIENCY]
         print(f"  Output: {df.shape[0]} rows x {df.shape[1]} cols")
         print(f"  method={output.dea_method}  executed={output.dea_executed}")
         print(f"  Efficiency: mean={eff.mean():.4f}  std={eff.std():.4f}"
               f"  min={eff.min():.4f}  max={eff.max():.4f}")
         print(f"  Efficient (>=1): {(eff >= 1.0).sum()}"
-              f"  Outliers: {df['is_outlier'].sum() if 'is_outlier' in df.columns else 0}")
+              f"  Outliers: {df[COL_IS_OUTLIER].sum() if COL_IS_OUTLIER in df.columns else 0}")
 
         # User spotlight
         user_row = df[df['REId'] == self.user_reid]
         if not user_row.empty:
             row = user_row.iloc[0]
-            self.user['efficiency_case'] = float(row['Effektivitet'])
-            self.user['potential_case'] = float(row['potential'])
-            self.user['is_outlier'] = bool(row['is_outlier'])
+            self.user['efficiency_case'] = float(row[COL_DEA_EFFICIENCY])
+            self.user['potential_case'] = float(row[COL_DEA_POTENTIAL])
+            self.user['is_outlier'] = bool(row[COL_IS_OUTLIER])
 
         self._record_stage("dea", t0, errors)
 
@@ -177,7 +186,7 @@ class PipelineDebugLogger:
         if output.user_reid != self.user_reid:
             errors.append(f"REId mismatch: expected {self.user_reid}, got {output.user_reid}")
 
-        print(f"  REId={output.user_reid}  Företag={output.company_name}")
+        print(f"  REId={output.user_reid}  Company={output.company_name}")
         print(f"  CAPEX={output.capex:,.0f}  OPEX={output.opex:,.0f}  TOTEX={output.totex:,.0f}")
         print(f"  Efficiency={output.efficiency:.4f}  Potential={output.potential:.4f}"
               f"  Outlier={output.is_outlier}")
@@ -204,22 +213,22 @@ class PipelineDebugLogger:
         ir = output.user_revenue_frame
         ir_dict = ir.to_dict() if hasattr(ir, 'to_dict') else dict(ir)
 
-        print(f"  Effkrav (annual): {output.user_eff_req_pct:.2%}")
-        for key in ['Paverkbara_Periodsumma', 'Opaverkbara_Kostnader',
-                     'Kapitalkostnad_Total', 'Intaktsram_Total']:
+        print(f"  Eff req (annual): {output.user_eff_req_pct:.2%}")
+        for key in [COL_CONTROLLABLE_PERIOD, COL_NON_CONTROLLABLE,
+                     COL_CAPITAL_COST_PERIOD, COL_REVENUE_FRAME]:
             if key in ir_dict:
                 print(f"  {key}: {ir_dict[key]:,.0f} tkr")
 
         # User spotlight
-        self.user['effkrav_arligt'] = output.user_eff_req_pct
-        if 'Intaktsram_Total' in ir_dict:
-            self.user['intaktsram_total'] = ir_dict['Intaktsram_Total']
-        if 'Paverkbara_Periodsumma' in ir_dict:
-            self.user['paverkbara_total'] = ir_dict['Paverkbara_Periodsumma']
-        if 'Opaverkbara_Kostnader' in ir_dict:
-            self.user['opaverkbara_total'] = ir_dict['Opaverkbara_Kostnader']
-        if 'Kapitalkostnad_Total' in ir_dict:
-            self.user['kapitalkostnad_total'] = ir_dict['Kapitalkostnad_Total']
+        self.user['eff_req_annual'] = output.user_eff_req_pct
+        if COL_REVENUE_FRAME in ir_dict:
+            self.user['revenue_frame_total'] = ir_dict[COL_REVENUE_FRAME]
+        if COL_CONTROLLABLE_PERIOD in ir_dict:
+            self.user['controllable_total'] = ir_dict[COL_CONTROLLABLE_PERIOD]
+        if COL_NON_CONTROLLABLE in ir_dict:
+            self.user['non_controllable_total'] = ir_dict[COL_NON_CONTROLLABLE]
+        if COL_CAPITAL_COST_PERIOD in ir_dict:
+            self.user['capital_cost_total'] = ir_dict[COL_CAPITAL_COST_PERIOD]
 
         # Incentive breakdown
         if output.all_incentives is not None:
@@ -227,16 +236,16 @@ class PipelineDebugLogger:
             if not user_inc.empty:
                 row = user_inc.iloc[0]
                 for col, key in [
-                    ('Kvalitetsjustering_Total', 'incentive_quality'),
-                    ('Natforlustjustering_Total', 'incentive_netloss'),
-                    ('Belastningsjustering_Total', 'incentive_load'),
-                    ('Incitamentjustering_Total', 'incentive_total'),
+                    (COL_QUALITY_INCENTIVE, 'incentive_quality'),
+                    (COL_NETLOSS_INCENTIVE, 'incentive_netloss'),
+                    (COL_LOAD_INCENTIVE, 'incentive_load'),
+                    (COL_INCENTIVE_TOTAL, 'incentive_total'),
                 ]:
                     if col in row:
                         self.user[key] = float(row[col])
                         print(f"  {col}: {float(row[col]):,.0f} tkr")
-                if 'Missing_Incentive_Data' in row:
-                    self.user['incentive_missing_data'] = bool(row['Missing_Incentive_Data'])
+                if COL_MISSING_INCENTIVE in row:
+                    self.user['incentive_missing_data'] = bool(row[COL_MISSING_INCENTIVE])
 
         self._record_stage("post_dea", t0, errors)
 
@@ -298,8 +307,8 @@ class PipelineDebugLogger:
         # User spotlight
         u = self.user
         print(f"\n  [User: {u['reid']}]")
-        if u.get('foretag'):
-            print(f"    {u['foretag']}")
+        if u.get('company_name'):
+            print(f"    {u['company_name']}")
 
         if u.get('capex_baseline') is not None:
             delta = (u.get('capex_case', 0) or 0) - u['capex_baseline']
@@ -310,10 +319,10 @@ class PipelineDebugLogger:
         if u.get('efficiency_baseline') is not None:
             delta = (u.get('efficiency_case', 0) or 0) - u['efficiency_baseline']
             print(f"    Eff:   {u['efficiency_baseline']:.4f} → {u.get('efficiency_case', 0):.4f}  ({delta:+.4f})")
-        if u.get('effkrav_arligt') is not None:
-            print(f"    Effkrav: {u['effkrav_arligt']:.2%}")
-        if u.get('intaktsram_total') is not None:
-            print(f"    Intaktsram: {u['intaktsram_total']:,.0f} tkr")
+        if u.get('eff_req_annual') is not None:
+            print(f"    Eff req: {u['eff_req_annual']:.2%}")
+        if u.get('revenue_frame_total') is not None:
+            print(f"    Revenue frame: {u['revenue_frame_total']:,.0f} tkr")
         print()
 
     # =========================================================================

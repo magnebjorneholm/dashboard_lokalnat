@@ -5,8 +5,8 @@ Prepares data for revenue frame decomposition diagram.
 Handles all capex_method variations, and OPEX vs TOTEX efficiency methods.
 
 Data flow:
-- Controllable costs (fore avdrag): From SDF (Medelvarde 2018-2021 * 4 + Neonjusteringar)
-- Efficiency requirement: Calculated as (fore - efter), split OPEX/CAPEX for TOTEX
+- Controllable costs (before deduction): From SDF (Average 2018-2021 * 4 + Neo adjustments)
+- Efficiency requirement: Calculated as (before - after), split OPEX/CAPEX for TOTEX
 - Depreciation/Return: From SDF (baseline) or KENT (parameter_change)
 - Capital base: Derived from return / WACC
 - Other adjustments: Flexibility services + interruption compensation - state aid deduction
@@ -18,11 +18,17 @@ import pandas as pd
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
+from config.column_names import (
+    COL_METHOD_USED, COL_OPEX_BEFORE, COL_CONTROLLABLE_BEFORE,
+    COL_OPEX_AFTER, COL_CONTROLLABLE_PERIOD,
+    COL_OPEX_EFF_DEDUCTION, COL_EFFICIENCY_DEDUCTION,
+    COL_NON_CONTROLLABLE, COL_INCENTIVE_TOTAL,
+    COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
+    COL_CAPEX_EFF_DEDUCTION, COL_REVENUE_FRAME,
+    COL_DEPRECIATION_PERIOD, COL_RETURN_PERIOD,
+    COL_CAPITAL_COST_PERIOD,
+)
 
-# SDF column names (Swedish regulatory terminology)
-SDF_COL_KAPITALKOSTNAD = 'Kapitalkostnad'
-SDF_COL_KAPITALFORSLITNING = '-varav Kapital-fÃ¶rslitning'
-SDF_COL_KAPITALBINDNING = 'varav Kapital-bindning'
 
 BASELINE_WACC = 0.0453
 
@@ -33,81 +39,81 @@ def prepare_diagram_data(
 ) -> Dict[str, dict]:
     """
     Prepares data for revenue frame decomposition diagram.
-    
+
     Handles all capex_method variations and OPEX/TOTEX efficiency methods.
     For TOTEX, provides separate OPEX/CAPEX efficiency components.
-    
+
     Returns:
         Dict with component keys plus 'method' ('OPEX' or 'TOTEX').
     """
     user_reid = case_result.user_reid
-    
+
     case_ir = case_result.post_dea.user_revenue_frame
     baseline_ir = baseline_result.post_dea.user_revenue_frame
-    
+
     capex_method = case_result.pre_dea.capex_method
     wacc_used = case_result.pre_dea.wacc_used or BASELINE_WACC
-    method = str(case_ir.get('Method_used', 'OPEX'))
-    
-    # Paverkbara components - read directly from intaktsram (same approach as TOTEX)
-    paverkbara_fore_value = float(case_ir.get('OPEX_Fore', case_ir.get('Paverkbara_Fore_Periodsumma', 0)))
-    paverkbara_fore_baseline = float(baseline_ir.get('OPEX_Fore', baseline_ir.get('Paverkbara_Fore_Periodsumma', 0)))
-    paverkbara_efter_value = float(case_ir.get('OPEX_Efter', case_ir.get('Paverkbara_Periodsumma', 0)))
-    paverkbara_efter_baseline = float(baseline_ir.get('OPEX_Efter', baseline_ir.get('Paverkbara_Periodsumma', 0)))
-    effektivisering_value = float(case_ir.get('OPEX_Effektivisering', case_ir.get('Effektivisering_Total', 0)))
-    effektivisering_baseline = float(baseline_ir.get('OPEX_Effektivisering', baseline_ir.get('Effektivisering_Total', 0)))
-    
-    # Capital cost components (avskrivning/avkastning)
+    method = str(case_ir.get(COL_METHOD_USED, 'OPEX'))
+
+    # Controllable components - read directly from revenue frame
+    paverkbara_fore_value = float(case_ir.get(COL_OPEX_BEFORE, case_ir.get(COL_CONTROLLABLE_BEFORE, 0)))
+    paverkbara_fore_baseline = float(baseline_ir.get(COL_OPEX_BEFORE, baseline_ir.get(COL_CONTROLLABLE_BEFORE, 0)))
+    paverkbara_efter_value = float(case_ir.get(COL_OPEX_AFTER, case_ir.get(COL_CONTROLLABLE_PERIOD, 0)))
+    paverkbara_efter_baseline = float(baseline_ir.get(COL_OPEX_AFTER, baseline_ir.get(COL_CONTROLLABLE_PERIOD, 0)))
+    effektivisering_value = float(case_ir.get(COL_OPEX_EFF_DEDUCTION, case_ir.get(COL_EFFICIENCY_DEDUCTION, 0)))
+    effektivisering_baseline = float(baseline_ir.get(COL_OPEX_EFF_DEDUCTION, baseline_ir.get(COL_EFFICIENCY_DEDUCTION, 0)))
+
+    # Capital cost components (depreciation/return)
     capex_data = _get_capital_cost_components(
         case_result=case_result,
         baseline_result=baseline_result,
         user_reid=user_reid
     )
-    
-    # Ej paverkbara
-    ej_paverkbara_value = float(case_ir.get('Opaverkbara_Kostnader', 0))
-    ej_paverkbara_baseline = float(baseline_ir.get('Opaverkbara_Kostnader', 0))
-    
+
+    # Non-controllable
+    ej_paverkbara_value = float(case_ir.get(COL_NON_CONTROLLABLE, 0))
+    ej_paverkbara_baseline = float(baseline_ir.get(COL_NON_CONTROLLABLE, 0))
+
     # Quality/incentive adjustment
-    kvalitet_value = float(case_ir.get('Incitamentjustering_Total', 0))
-    kvalitet_baseline = float(baseline_ir.get('Incitamentjustering_Total', 0))
-    
+    kvalitet_value = float(case_ir.get(COL_INCENTIVE_TOTAL, 0))
+    kvalitet_baseline = float(baseline_ir.get(COL_INCENTIVE_TOTAL, 0))
+
     # Capital base derived from return
     kapitalbas_value = capex_data['avkastning']['value'] / wacc_used if wacc_used > 0 else 0
     kapitalbas_baseline = capex_data['avkastning']['baseline'] / BASELINE_WACC if BASELINE_WACC > 0 else 0
-    
+
     # Other adjustments (aggregate + decomposed)
     other_adj = _get_other_adjustments(case_ir, baseline_ir)
-    
+
     # Decomposed components for waterfall chart
-    flex_case = float(case_ir.get('Flexibilitetstjanster', 0))
-    flex_baseline = float(baseline_ir.get('Flexibilitetstjanster', 0))
-    avbrott_case = float(case_ir.get('Avbrottsersattning_12_24h', 0))
-    avbrott_baseline = float(baseline_ir.get('Avbrottsersattning_12_24h', 0))
-    avdrag_case = float(case_ir.get('Avdrag_Statligt_Stod', 0))
-    avdrag_baseline = float(baseline_ir.get('Avdrag_Statligt_Stod', 0))
-    
+    flex_case = float(case_ir.get(COL_FLEXIBILITY, 0))
+    flex_baseline = float(baseline_ir.get(COL_FLEXIBILITY, 0))
+    avbrott_case = float(case_ir.get(COL_INTERRUPTION, 0))
+    avbrott_baseline = float(baseline_ir.get(COL_INTERRUPTION, 0))
+    avdrag_case = float(case_ir.get(COL_STATE_DEDUCTION, 0))
+    avdrag_baseline = float(baseline_ir.get(COL_STATE_DEDUCTION, 0))
+
     # Modification flags
     capex_modified = case_result.pre_dea.capex_modified
     effkrav_modified = _is_effkrav_modified(case_result, baseline_result, user_reid)
-    
+
     # --- Method-dependent calculations ---
-    
+
     if method == 'TOTEX':
         # OPEX efficiency (reduction on controllable costs)
-        opex_eff_value = float(case_ir.get('OPEX_Effektivisering', 0))
-        opex_eff_baseline = float(baseline_ir.get('OPEX_Effektivisering', 0))
-        
+        opex_eff_value = float(case_ir.get(COL_OPEX_EFF_DEDUCTION, 0))
+        opex_eff_baseline = float(baseline_ir.get(COL_OPEX_EFF_DEDUCTION, 0))
+
         # CAPEX efficiency (reduction on capital costs)
-        capex_eff_value = float(case_ir.get('CAPEX_Effektivisering', 0))
-        capex_eff_baseline = float(baseline_ir.get('CAPEX_Effektivisering', 0))
-        
-        # Operating costs = OPEX_Efter + ej paverkbara
-        opex_efter_value = float(case_ir.get('OPEX_Efter', 0))
-        opex_efter_baseline = float(baseline_ir.get('OPEX_Efter', 0))
+        capex_eff_value = float(case_ir.get(COL_CAPEX_EFF_DEDUCTION, 0))
+        capex_eff_baseline = float(baseline_ir.get(COL_CAPEX_EFF_DEDUCTION, 0))
+
+        # Operating costs = OPEX_After + non-controllable
+        opex_efter_value = float(case_ir.get(COL_OPEX_AFTER, 0))
+        opex_efter_baseline = float(baseline_ir.get(COL_OPEX_AFTER, 0))
         lopande_value = opex_efter_value + ej_paverkbara_value
         lopande_baseline = opex_efter_baseline + ej_paverkbara_baseline
-        
+
         # Capital costs = Dep + Ret - CAPEX_eff + Quality
         kapitalkostnad_value = (
             capex_data['avskrivningar']['value']
@@ -127,11 +133,11 @@ def prepare_diagram_data(
         opex_eff_baseline = 0
         capex_eff_value = 0
         capex_eff_baseline = 0
-        
-        # Operating costs = paverkbara_efter + ej paverkbara
+
+        # Operating costs = controllable_after + non-controllable
         lopande_value = paverkbara_efter_value + ej_paverkbara_value
         lopande_baseline = paverkbara_efter_baseline + ej_paverkbara_baseline
-        
+
         # Capital costs = Dep + Ret + Quality (no CAPEX reduction)
         kapitalkostnad_value = (
             capex_data['avskrivningar']['value']
@@ -143,18 +149,18 @@ def prepare_diagram_data(
             + capex_data['avkastning']['baseline']
             + kvalitet_baseline
         )
-    
-    # Total intaktsram
-    intaktsram_value = float(case_ir.get('Intaktsram_Total', 0))
-    intaktsram_baseline = float(baseline_ir.get('Intaktsram_Total', 0))
-    
+
+    # Total revenue frame
+    intaktsram_value = float(case_ir.get(COL_REVENUE_FRAME, 0))
+    intaktsram_baseline = float(baseline_ir.get(COL_REVENUE_FRAME, 0))
+
     result = {
         'method': method,
         'paverkbara': {
             'value': paverkbara_fore_value,
             'baseline': paverkbara_fore_baseline,
             'is_directly_modified': False,
-            'source': 'Intaktsram (OPEX_Fore)'
+            'source': 'Revenue frame (opex_before)'
         },
         'ej_paverkbara': {
             'value': ej_paverkbara_value,
@@ -235,7 +241,7 @@ def prepare_diagram_data(
             'source': 'Total'
         }
     }
-    
+
     # TOTEX-specific: separated efficiency components
     if method == 'TOTEX':
         result['opex_effektivisering'] = {
@@ -250,7 +256,7 @@ def prepare_diagram_data(
             'is_directly_modified': effkrav_modified,
             'source': 'TOTEX CAPEX share'
         }
-    
+
     return result
 
 
@@ -258,15 +264,15 @@ def _get_other_adjustments(case_ir: pd.Series, baseline_ir: pd.Series) -> dict:
     """
     Calculate "other adjustments" = flexibility + interruption compensation - state aid.
     """
-    flex_case = float(case_ir.get('Flexibilitetstjanster', 0))
-    flex_baseline = float(baseline_ir.get('Flexibilitetstjanster', 0))
-    
-    avbrott_case = float(case_ir.get('Avbrottsersattning_12_24h', 0))
-    avbrott_baseline = float(baseline_ir.get('Avbrottsersattning_12_24h', 0))
-    
-    avdrag_case = float(case_ir.get('Avdrag_Statligt_Stod', 0))
-    avdrag_baseline = float(baseline_ir.get('Avdrag_Statligt_Stod', 0))
-    
+    flex_case = float(case_ir.get(COL_FLEXIBILITY, 0))
+    flex_baseline = float(baseline_ir.get(COL_FLEXIBILITY, 0))
+
+    avbrott_case = float(case_ir.get(COL_INTERRUPTION, 0))
+    avbrott_baseline = float(baseline_ir.get(COL_INTERRUPTION, 0))
+
+    avdrag_case = float(case_ir.get(COL_STATE_DEDUCTION, 0))
+    avdrag_baseline = float(baseline_ir.get(COL_STATE_DEDUCTION, 0))
+
     return {
         'value': flex_case + avbrott_case - avdrag_case,
         'baseline': flex_baseline + avbrott_baseline - avdrag_baseline
@@ -280,15 +286,15 @@ def _get_capital_cost_components(
     user_reid: str
 ) -> Dict[str, dict]:
     """
-    Get avskrivningar and avkastning based on capex_method.
+    Get depreciation and return on assets based on capex_method.
     """
     capex_method = case_result.pre_dea.capex_method
     wacc_used = case_result.pre_dea.wacc_used or BASELINE_WACC
-    
+
     baseline_avskr, baseline_avkast = _get_avskr_avkast_from_sdf(
         baseline_result.baseline.sdf_ir, user_reid
     )
-    
+
     if capex_method == 'baseline':
         return {
             'avskrivningar': {
@@ -300,12 +306,12 @@ def _get_capital_cost_components(
                 'baseline': baseline_avkast
             }
         }
-    
+
     else:  # parameter_change
         case_avskr, case_avkast = _get_avskr_avkast_from_pre_dea(
             case_result.pre_dea.df_all_companies, user_reid
         )
-        
+
         return {
             'avskrivningar': {
                 'value': case_avskr,
@@ -319,53 +325,49 @@ def _get_capital_cost_components(
 
 
 def _get_avskr_avkast_from_sdf(sdf_ir: pd.DataFrame, user_reid: str) -> tuple:
-    """Extract avskrivning and avkastning period sums from SDF IR sheet."""
+    """Extract depreciation and return period sums from SDF IR sheet."""
     user_mask = sdf_ir['REId'] == user_reid
-    
+
     if not user_mask.any():
         return 0.0, 0.0
-    
+
     user_row = sdf_ir[user_mask].iloc[0]
-    
+
     avkastning = 0.0
-    if SDF_COL_KAPITALBINDNING in sdf_ir.columns:
-        avkastning = float(pd.to_numeric(user_row.get(SDF_COL_KAPITALBINDNING, 0), errors='coerce') or 0)
-    
+    if COL_RETURN_PERIOD in sdf_ir.columns:
+        avkastning = float(pd.to_numeric(user_row.get(COL_RETURN_PERIOD, 0), errors='coerce') or 0)
+
     kapitalkostnad = 0.0
-    if SDF_COL_KAPITALKOSTNAD in sdf_ir.columns:
-        kapitalkostnad = float(pd.to_numeric(user_row.get(SDF_COL_KAPITALKOSTNAD, 0), errors='coerce') or 0)
-    
+    if COL_CAPITAL_COST_PERIOD in sdf_ir.columns:
+        kapitalkostnad = float(pd.to_numeric(user_row.get(COL_CAPITAL_COST_PERIOD, 0), errors='coerce') or 0)
+
     avskrivning = kapitalkostnad - avkastning
-    
+
     return avskrivning, avkastning
 
 
 def _get_avskr_avkast_from_pre_dea(df: pd.DataFrame, user_reid: str) -> tuple:
-    """Extract avskrivning and avkastning from pre_dea DataFrame (KENT output)."""
+    """Extract depreciation and return from pre_dea DataFrame (KENT output)."""
     user_mask = df['REId'] == user_reid
-    
+
     if not user_mask.any():
         return 0.0, 0.0
-    
+
     user_row = df[user_mask].iloc[0]
-    
+
     avskrivning = 0.0
     avkastning = 0.0
-    
-    if 'Avskrivning_Period' in df.columns:
-        avskrivning = float(user_row.get('Avskrivning_Period', 0) or 0)
-    elif all(f'Avskrivning_{y}' in df.columns for y in [2024, 2025, 2026, 2027]):
-        avskrivning = sum(float(user_row.get(f'Avskrivning_{y}', 0) or 0) for y in [2024, 2025, 2026, 2027])
-    elif 'Avskrivning' in df.columns:
-        avskrivning = float(user_row.get('Avskrivning', 0) or 0) * 4
-    
-    if 'Avkastning_Period' in df.columns:
-        avkastning = float(user_row.get('Avkastning_Period', 0) or 0)
-    elif all(f'Avkastning_{y}' in df.columns for y in [2024, 2025, 2026, 2027]):
-        avkastning = sum(float(user_row.get(f'Avkastning_{y}', 0) or 0) for y in [2024, 2025, 2026, 2027])
-    elif 'Avkastning' in df.columns:
-        avkastning = float(user_row.get('Avkastning', 0) or 0) * 4
-    
+
+    if 'depreciation_period' in df.columns:
+        avskrivning = float(user_row.get('depreciation_period', 0) or 0)
+    elif all(f'depreciation_{y}' in df.columns for y in [2024, 2025, 2026, 2027]):
+        avskrivning = sum(float(user_row.get(f'depreciation_{y}', 0) or 0) for y in [2024, 2025, 2026, 2027])
+
+    if 'return_on_assets_period' in df.columns:
+        avkastning = float(user_row.get('return_on_assets_period', 0) or 0)
+    elif all(f'return_on_assets_{y}' in df.columns for y in [2024, 2025, 2026, 2027]):
+        avkastning = sum(float(user_row.get(f'return_on_assets_{y}', 0) or 0) for y in [2024, 2025, 2026, 2027])
+
     return avskrivning, avkastning
 
 
@@ -378,7 +380,7 @@ def _is_effkrav_modified(
     """Check if efficiency requirement differs from baseline."""
     case_effkrav = case_result.post_dea.user_eff_req_pct
     baseline_effkrav = baseline_result.post_dea.user_eff_req_pct
-    
+
     return abs(case_effkrav - baseline_effkrav) > 0.0001
 
 

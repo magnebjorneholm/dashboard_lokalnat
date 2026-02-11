@@ -31,6 +31,13 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
+from config.column_names import (
+    COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_EFF_REQ_ANNUAL,
+    COL_METHOD_USED, COL_OPEX_BEFORE, COL_OPEX_AFTER, COL_OPEX_EFF_DEDUCTION,
+    COL_CAPEX_BEFORE, COL_CAPEX_AFTER, COL_CAPEX_EFF_DEDUCTION,
+    COL_CONTROLLABLE_BEFORE, COL_CONTROLLABLE_PERIOD, COL_EFFICIENCY_DEDUCTION,
+    COL_OPEX_SHARE, COL_CAPEX_SHARE,
+)
 
 
 # ============================================================================
@@ -182,7 +189,7 @@ def _render_distributions(case, baseline, params):
 
     # Common data
     dea_case = case.dea.dea_results.copy()
-    eff_scores = dea_case["Effektivitet"].dropna().values
+    eff_scores = dea_case[COL_DEA_EFFICIENCY].dropna().values
     eff_case = case.extraction.efficiency
     eff_baseline = baseline.extraction.efficiency
 
@@ -309,11 +316,11 @@ def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params):
 def _render_effkrav_histogram(effkrav_all, effkrav_case, effkrav_baseline):
     """Histogram of annual efficiency requirements for all companies."""
 
-    if effkrav_all is None or "Effkrav_proc" not in effkrav_all.columns:
+    if effkrav_all is None or COL_EFF_REQ_ANNUAL not in effkrav_all.columns:
         st.info("Efficiency requirement data not available.")
         return
 
-    effkrav_values = effkrav_all["Effkrav_proc"].dropna().values * 100  # to %
+    effkrav_values = effkrav_all[COL_EFF_REQ_ANNUAL].dropna().values * 100  # to %
 
     layout_kwargs, template = _tmpl_safe()
     fig = go.Figure()
@@ -520,9 +527,9 @@ def _get_super_efficiency(case, user_reid):
         return None
     dea_df = case.dea.dea_results
     user_row = dea_df[dea_df["REId"] == user_reid]
-    if user_row.empty or "Supereffektivitet" not in user_row.columns:
+    if user_row.empty or COL_DEA_SUPER_EFF not in user_row.columns:
         return None
-    val = user_row["Supereffektivitet"].iloc[0]
+    val = user_row[COL_DEA_SUPER_EFF].iloc[0]
     if val is not None and not pd.isna(val) and val > 1.0:
         return val
     return None
@@ -537,37 +544,37 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
 
     st.markdown("**50.4 Efficiency-Adjusted Costs**")
 
-    method_used = case_ir.get("Method_used", "OPEX")
+    method_used = case_ir.get(COL_METHOD_USED, "OPEX")
 
     # --- Extract values (with legacy fallback) ---
-    opex_fore = case_ir.get("OPEX_Fore")
-    opex_eff = case_ir.get("OPEX_Effektivisering")
-    opex_efter = case_ir.get("OPEX_Efter")
+    opex_fore = case_ir.get(COL_OPEX_BEFORE)
+    opex_eff = case_ir.get(COL_OPEX_EFF_DEDUCTION)
+    opex_efter = case_ir.get(COL_OPEX_AFTER)
 
-    capex_fore = case_ir.get("CAPEX_Fore")
-    capex_eff = case_ir.get("CAPEX_Effektivisering")
-    capex_efter = case_ir.get("CAPEX_Efter")
+    capex_fore = case_ir.get(COL_CAPEX_BEFORE)
+    capex_eff = case_ir.get(COL_CAPEX_EFF_DEDUCTION)
+    capex_efter = case_ir.get(COL_CAPEX_AFTER)
 
     # Legacy fallback
     if opex_fore is None:
-        opex_fore = case_ir.get("Paverkbara_Fore_Periodsumma", 0)
-        opex_efter = case_ir.get("Paverkbara_Periodsumma", 0)
-        opex_eff = case_ir.get("Effektivisering_Total", 0)
+        opex_fore = case_ir.get(COL_CONTROLLABLE_BEFORE, 0)
+        opex_efter = case_ir.get(COL_CONTROLLABLE_PERIOD, 0)
+        opex_eff = case_ir.get(COL_EFFICIENCY_DEDUCTION, 0)
         capex_eff = 0
         capex_fore = 0
         capex_efter = 0
 
     # Baseline values
-    bl_opex_fore = baseline_ir.get("OPEX_Fore", baseline_ir.get("Paverkbara_Fore_Periodsumma", 0))
-    bl_opex_eff = baseline_ir.get("OPEX_Effektivisering", baseline_ir.get("Effektivisering_Total", 0))
-    bl_opex_efter = baseline_ir.get("OPEX_Efter", baseline_ir.get("Paverkbara_Periodsumma", 0))
-    bl_capex_fore = baseline_ir.get("CAPEX_Fore", 0)
-    bl_capex_eff = baseline_ir.get("CAPEX_Effektivisering", 0)
-    bl_capex_efter = baseline_ir.get("CAPEX_Efter", 0)
+    bl_opex_fore = baseline_ir.get(COL_OPEX_BEFORE, baseline_ir.get(COL_CONTROLLABLE_BEFORE, 0))
+    bl_opex_eff = baseline_ir.get(COL_OPEX_EFF_DEDUCTION, baseline_ir.get(COL_EFFICIENCY_DEDUCTION, 0))
+    bl_opex_efter = baseline_ir.get(COL_OPEX_AFTER, baseline_ir.get(COL_CONTROLLABLE_PERIOD, 0))
+    bl_capex_fore = baseline_ir.get(COL_CAPEX_BEFORE, 0)
+    bl_capex_eff = baseline_ir.get(COL_CAPEX_EFF_DEDUCTION, 0)
+    bl_capex_efter = baseline_ir.get(COL_CAPEX_AFTER, 0)
 
     # Allocation percentages (TOTEX)
-    opex_andel = case_ir.get("OPEX_Andel")
-    capex_andel = case_ir.get("CAPEX_Andel")
+    opex_andel = case_ir.get(COL_OPEX_SHARE)
+    capex_andel = case_ir.get(COL_CAPEX_SHARE)
 
     if method_used == "TOTEX":
         if opex_andel is not None and capex_andel is not None:

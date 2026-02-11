@@ -35,6 +35,10 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
+from config.column_names import (
+    COL_INCENTIVE_TOTAL, COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
+    COL_LOAD_INCENTIVE, COL_MISSING_INCENTIVE,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -158,7 +162,7 @@ def render(
     st.markdown("#### 30.2-30.5 Incentive Adjustments")
 
     # Missing data warning
-    if _get_ir_value(case_ir, "Missing_Incentive_Data", 0):
+    if _get_ir_value(case_ir, COL_MISSING_INCENTIVE, 0):
         st.warning("Incentive data incomplete for this company.")
 
     # Section 1: KPI Hero
@@ -184,10 +188,10 @@ def _render_kpi_hero(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
 
     # intaktsram values are in tkr -- convert to kr for uniform _fmt_msek
     components = [
-        ("30.5.2 Total",    "Incitamentjustering_Total"),
-        ("30.4.59 Quality", "Kvalitetsjustering_Total"),
-        ("30.2.5 Net loss", "Natforlustjustering_Total"),
-        ("30.3.5 Load",     "Belastningsjustering_Total"),
+        ("30.5.2 Total",    COL_INCENTIVE_TOTAL),
+        ("30.4.59 Quality", COL_QUALITY_INCENTIVE),
+        ("30.2.5 Net loss", COL_NETLOSS_INCENTIVE),
+        ("30.3.5 Load",     COL_LOAD_INCENTIVE),
     ]
 
     cols = st.columns(len(components))

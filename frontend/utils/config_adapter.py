@@ -46,8 +46,10 @@ BASELINE_INCENTIVE = {
     "aif_costs": None,
 }
 
+from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG
+
 DEA_OUTPUT_OPTIONS = ['CU', 'MW', 'NS', 'MWhl', 'MWhh']
-DEA_INPUT_OPTIONS = ['Kapitalkostnad_2024', 'OPEXp']
+DEA_INPUT_OPTIONS = [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG]
 
 PARAM_TO_CONFIG = {
     "3.2.5": "m3_cost_of_capital.wacc_override",
@@ -344,7 +346,7 @@ def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
     if addon.get("dea_method") == "custom":
         return DeaConfig(
             method=EfficiencyMethod.DEA,
-            inputs=addon.get("dea_inputs", ["CAPEX", "OPEXp"]),
+            inputs=addon.get("dea_inputs", [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG]),
             outputs=addon.get("dea_outputs", DEA_OUTPUT_OPTIONS),
             rts=addon.get("dea_rts", "crs"),
             multiplier=addon.get("dea_multiplier", 2.0),

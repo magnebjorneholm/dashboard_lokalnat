@@ -372,10 +372,10 @@ def calculate_incentives_summary(
     Returns:
         DataFrame med en rad per reid, kolumner:
             - reid
-            - Kvalitetsjustering_Total (tkr)
-            - Natforlustjustering_Total (tkr)
-            - Belastningsjustering_Total (tkr)
-            - Incitamentjustering_Total (tkr)
+            - quality_incentive_total (tkr)
+            - network_loss_incentive_total (tkr)
+            - load_incentive_total (tkr)
+            - incentive_adjustment_total (tkr)
             - Missing_Incentive_Data (bool)
     """
     # Kör fullständig beräkning
@@ -394,12 +394,16 @@ def calculate_incentives_summary(
     for col in ['inter_incentive_sum', 'loss_incentive_sum', 'util_incentive_sum', 'incentive_total']:
         df_summary[col] = df_summary[col] / 1000
     
-    # Rename till svenska
+    # Rename to canonical English column names
+    from config.column_names import (
+        COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
+        COL_LOAD_INCENTIVE, COL_INCENTIVE_TOTAL,
+    )
     df_summary = df_summary.rename(columns={
-        'inter_incentive_sum': 'Kvalitetsjustering_Total',
-        'loss_incentive_sum': 'Natforlustjustering_Total',
-        'util_incentive_sum': 'Belastningsjustering_Total',
-        'incentive_total': 'Incitamentjustering_Total',
+        'inter_incentive_sum': COL_QUALITY_INCENTIVE,
+        'loss_incentive_sum': COL_NETLOSS_INCENTIVE,
+        'util_incentive_sum': COL_LOAD_INCENTIVE,
+        'incentive_total': COL_INCENTIVE_TOTAL,
     })
     
     # Flagga för saknad data

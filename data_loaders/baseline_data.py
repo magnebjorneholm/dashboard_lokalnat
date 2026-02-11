@@ -4,15 +4,26 @@ data_loaders/baseline_data.py
 Baseline data loader.
 Loads all data needed for baseline calculations.
 
-Updated for Data_modeller with per-year return:
-- Avkastning_2024, Avkastning_2025, Avkastning_2026, Avkastning_2027
-- Avkastning_Period (period sum)
+Column names are renamed from Swedish to English at the load boundary.
+After loading, all DataFrames use canonical English names from config.column_names.
 """
 
 from dataclasses import dataclass
 import pandas as pd
 from typing import Dict, Optional
 from pathlib import Path
+
+from config.column_names import (
+    COL_REID, COL_DMU, COL_COMPANY_NAME,
+    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_DEPRECIATION_2024,
+    COL_RETURN_2024, COL_RETURN_2025, COL_RETURN_2026, COL_RETURN_2027,
+    COL_RETURN_PERIOD, COL_TOTEX,
+    COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_DEA_POTENTIAL,
+    COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL,
+    DATA_MODELLER_RENAME, EIS_DEA_RENAME, SDF_IR_RENAME,
+    SDF_IR_REVENUE_FRAME_PATTERNS, COL_REVENUE_FRAME,
+    COL_CAPITAL_COST_PERIOD, COL_DEPRECIATION_PERIOD, COL_RETURN_PERIOD,
+)
 
 
 @dataclass(frozen=True)
@@ -131,11 +142,16 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
         )
         print("  WARNING: Avkastning_Period missing, calculated from per-year values")
 
-    # Explicit alias for annual value (CAPEX is source name in Excel)
-    df["Kapitalkostnad_2024"] = df["CAPEX"]
+    # Calculate TOTEX (before rename, using original column names)
+    df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
 
-    # Calculate TOTEX
-    df["TOTEX"] = df["OPEXp"] + df["Kapitalkostnad_2024"]
+    # Drop legacy aggregate columns that conflict with per-year columns
+    # Avkastning (aggregate) conflicts with Avkastning_2024; per-year is more accurate
+    if 'Avkastning' in df.columns and 'Avkastning_2024' in df.columns:
+        df = df.drop(columns=['Avkastning'])
+
+    # Rename Swedish → English at the load boundary
+    df = df.rename(columns=DATA_MODELLER_RENAME)
 
     return df
 
@@ -216,6 +232,9 @@ def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
     else:
         df['Effkrav_proc'] = 0.0
 
+    # Rename Swedish → English at the load boundary
+    df = df.rename(columns=EIS_DEA_RENAME)
+
     return df
 
 
@@ -271,6 +290,21 @@ def _load_sdf_data(data_path: Optional[str] = None) -> Dict[str, pd.DataFrame]:
         if key not in result:
             print(f"  WARNING: Could not read SDF sheet '{key}'")
             result[key] = pd.DataFrame()
+
+    # Rename IR sheet columns: Swedish → English at the load boundary
+    if 'ir' in result and not result['ir'].empty:
+        ir_df = result['ir']
+        ir_df = ir_df.rename(columns=SDF_IR_RENAME)
+        # Rename revenue frame total column (varies by file version)
+        for pattern in SDF_IR_REVENUE_FRAME_PATTERNS:
+            for col in ir_df.columns:
+                if pattern.lower() in col.lower():
+                    ir_df = ir_df.rename(columns={col: COL_REVENUE_FRAME})
+                    break
+        # Normalize REId column name
+        if 'REid' in ir_df.columns and 'REId' not in ir_df.columns:
+            ir_df = ir_df.rename(columns={'REid': 'REId'})
+        result['ir'] = ir_df
 
     return result
 
@@ -337,8 +371,8 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     print(f"  Loaded {len(df_all_companies)} companies")
 
     # Verify per-year return
-    yearly_cols = ['Avkastning_2024', 'Avkastning_2025',
-                   'Avkastning_2026', 'Avkastning_2027']
+    yearly_cols = [COL_RETURN_2024, COL_RETURN_2025,
+                   COL_RETURN_2026, COL_RETURN_2027]
     has_yearly = all(col in df_all_companies.columns for col in yearly_cols)
     if has_yearly:
         print(f"  Per-year return available (2024-2027)")
@@ -395,11 +429,11 @@ def get_baseline_summary(baseline: BaselineData) -> Dict:
 
     summary = {
         'n_dmu': len(df),
-        'total_capex_tsek': float(df['Kapitalkostnad_2024'].sum()),
-        'total_opex_tsek': float(df['OPEXp'].sum()),
-        'total_totex_tsek': float(df['TOTEX'].sum()),
-        'mean_capex_tsek': float(df['Kapitalkostnad_2024'].mean()),
-        'mean_opex_tsek': float(df['OPEXp'].mean()),
+        'total_capex_tsek': float(df[COL_CAPITAL_COST_2024].sum()),
+        'total_opex_tsek': float(df[COL_CONTROLLABLE_AVG].sum()),
+        'total_totex_tsek': float(df[COL_TOTEX].sum()),
+        'mean_capex_tsek': float(df[COL_CAPITAL_COST_2024].mean()),
+        'mean_opex_tsek': float(df[COL_CONTROLLABLE_AVG].mean()),
         'total_customers': float(df['CU'].sum()),
         'total_mw': float(df['MW'].sum()),
         'total_network_km': float(df['NS'].sum()),
@@ -412,11 +446,11 @@ def get_baseline_summary(baseline: BaselineData) -> Dict:
     }
 
     # Add per-year return if available
-    yearly_cols = ['Avkastning_2024', 'Avkastning_2025',
-                   'Avkastning_2026', 'Avkastning_2027']
+    yearly_cols = [COL_RETURN_2024, COL_RETURN_2025,
+                   COL_RETURN_2026, COL_RETURN_2027]
     if all(col in df.columns for col in yearly_cols):
         summary['has_yearly_returns'] = True
-        summary['total_avkastning_period'] = float(df['Avkastning_Period'].sum())
+        summary['total_return_period'] = float(df[COL_RETURN_PERIOD].sum())
     else:
         summary['has_yearly_returns'] = False
 

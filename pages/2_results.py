@@ -35,6 +35,7 @@ from frontend.utils.geo_visualization import (
 )
 
 from frontend.common.styling import COLORS, get_plotly_template
+from config.column_names import COL_REVENUE_FRAME, COL_CAPITAL_COST_PERIOD
 from frontend.results import (
     m1_asset_base_output,
     m2_depreciation_output,
@@ -192,8 +193,8 @@ st.divider()
 
 st.markdown("##### Revenue frame summary")
 
-total_case = case_ir['Intaktsram_Total']
-total_baseline = baseline_ir['Intaktsram_Total']
+total_case = case_ir[COL_REVENUE_FRAME]
+total_baseline = baseline_ir[COL_REVENUE_FRAME]
 delta_abs, delta_pct = calc_delta(total_case, total_baseline)
 
 col1, col2, col3 = st.columns([2, 1, 1])
@@ -209,8 +210,8 @@ with col2:
     st.metric(label="Baseline", value=f"{total_baseline:,.0f} tkr")
 
 with col3:
-    cap_case = case_ir['Kapitalkostnad_Total']
-    cap_baseline = baseline_ir['Kapitalkostnad_Total']
+    cap_case = case_ir[COL_CAPITAL_COST_PERIOD]
+    cap_baseline = baseline_ir[COL_CAPITAL_COST_PERIOD]
     cap_delta, cap_pct = calc_delta(cap_case, cap_baseline)
     st.metric(
         label="30.1 Capital cost",

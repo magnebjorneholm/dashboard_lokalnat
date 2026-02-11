@@ -12,15 +12,16 @@ import streamlit as st
 from typing import Dict, Any, List
 
 from frontend.utils.state_manager import get_config_value
+from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_TOTEX
 
 MODULE_KEY = "addon_benchmarking"
 
 # DEA specification options
-DEA_INPUT_OPTIONS: List[str] = ["CAPEX", "OPEXp", "TOTEX"]
+DEA_INPUT_OPTIONS: List[str] = [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_TOTEX]
 DEA_OUTPUT_OPTIONS: List[str] = ["CU", "MW", "NS", "MWhl", "MWhh"]
 
 # Baseline configuration (Ei regulatory specification)
-BASELINE_INPUTS = ["CAPEX", "OPEXp"]
+BASELINE_INPUTS = [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG]
 BASELINE_OUTPUTS = ["CU", "MW", "NS", "MWhl", "MWhh"]
 BASELINE_RTS = "crs"
 BASELINE_MULTIPLIER = 2.0

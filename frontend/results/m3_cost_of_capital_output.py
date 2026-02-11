@@ -26,6 +26,10 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.asset_categories import ASSET_CATEGORIES, CATEGORY_BY_CODE
+from config.column_names import (
+    COL_NETLOSS_INCENTIVE, COL_LOAD_INCENTIVE, COL_QUALITY_INCENTIVE,
+    COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,
+)
 
 # Time code to label mapping
 TIME_LABELS = {
@@ -515,9 +519,9 @@ def _render_incentive_section(case_ir: pd.Series, baseline_ir: pd.Series) -> Non
     st.markdown("**Incentive Adjustments**")
     
     inc_components = [
-        ("30.2.5", "Network loss adjustment", "Natforlustjustering_Total"),
-        ("30.3.5", "Utilization rate adjustment", "Belastningsjustering_Total"),
-        ("30.4.59", "Quality adjustment", "Kvalitetsjustering_Total"),
+        ("30.2.5", "Network loss adjustment", COL_NETLOSS_INCENTIVE),
+        ("30.3.5", "Utilization rate adjustment", COL_LOAD_INCENTIVE),
+        ("30.4.59", "Quality adjustment", COL_QUALITY_INCENTIVE),
     ]
     
     inc_rows = []
@@ -534,8 +538,8 @@ def _render_incentive_section(case_ir: pd.Series, baseline_ir: pd.Series) -> Non
         })
     
     # Total row
-    total_case = case_ir.get("Incitamentjustering_Total", 0)
-    total_baseline = baseline_ir.get("Incitamentjustering_Total", 0)
+    total_case = case_ir.get(COL_INCENTIVE_TOTAL, 0)
+    total_baseline = baseline_ir.get(COL_INCENTIVE_TOTAL, 0)
     total_delta, _ = _calc_delta(total_case, total_baseline)
     inc_rows.append({
         "ID": "30.5.2",
@@ -547,7 +551,7 @@ def _render_incentive_section(case_ir: pd.Series, baseline_ir: pd.Series) -> Non
     
     st.dataframe(pd.DataFrame(inc_rows), hide_index=True, width='stretch')
     
-    if case_ir.get('Missing_Incentive_Data', False):
+    if case_ir.get(COL_MISSING_INCENTIVE, False):
         st.warning("Incentive data incomplete for this company.")
 
 

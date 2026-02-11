@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 from typing import Optional
 
+from config.column_names import COL_EFF_REQ_ANNUAL
+
 
 # Default parameters from Ei's method for supervision period 2024-2027
 DEFAULT_EFF_REQ_PARAMS = {
@@ -133,7 +135,7 @@ def calculate_eff_req_for_dataframe(
         supervision_period: Length of supervision period in years
 
     Returns:
-        DataFrame with new column 'Effkrav_proc' (annual efficiency requirement)
+        DataFrame with new column 'efficiency_requirement_annual'
     """
     result = df.copy()
 
@@ -152,7 +154,7 @@ def calculate_eff_req_for_dataframe(
         )
 
     # Calculate efficiency requirement for each row
-    result['Effkrav_proc'] = result.apply(
+    result[COL_EFF_REQ_ANNUAL] = result.apply(
         lambda row: calculate_eff_req_from_potential(
             potential=row[potential_col],
             is_outlier=row[outlier_col],

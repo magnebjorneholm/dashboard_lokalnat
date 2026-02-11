@@ -10,6 +10,19 @@ For TOTEX method: CAPEX is reduced separately with its share of the efficiency r
 import pandas as pd
 from typing import Optional
 
+from config.column_names import (
+    COL_CAPITAL_COST_PERIOD, COL_CONTROLLABLE_PERIOD, COL_METHOD_USED,
+    COL_CONTROLLABLE_BEFORE, COL_EFFICIENCY_DEDUCTION,
+    COL_OPEX_BEFORE, COL_OPEX_AFTER, COL_OPEX_EFF_DEDUCTION,
+    COL_CAPEX_BEFORE, COL_CAPEX_AFTER, COL_CAPEX_EFF_DEDUCTION,
+    COL_OPEX_SHARE, COL_CAPEX_SHARE,
+    COL_NON_CONTROLLABLE, COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
+    COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE, COL_LOAD_INCENTIVE,
+    COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,
+    COL_CAPITAL_COST_AFTER_EFF, COL_CAPITAL_COST_IN_RF,
+    COL_CONTROLLABLE_IN_RF, COL_REVENUE_FRAME,
+)
+
 
 def assemble_revenue_frame(
     capex_result: pd.DataFrame,
@@ -39,29 +52,29 @@ def assemble_revenue_frame(
                        + IncentiveAdjustment_Total
 
     Args:
-        capex_result: DataFrame with REId, Kapitalkostnad_Total
-        controllable_result: DataFrame with REId, Paverkbara_Periodsumma, OPEX/CAPEX fields
+        capex_result: DataFrame with REId, capital_cost_period
+        controllable_result: DataFrame with REId, controllable_cost_period, OPEX/CAPEX fields
         sdf_baseline: DataFrame from SDF Excel with non-controllable and other components
         incentive_result: Optional DataFrame with incentive adjustments per REId
 
     Returns:
-        DataFrame with all components and Intaktsram_Total
+        DataFrame with all components and revenue_frame_total
     """
     # Start with CAPEX
-    df = capex_result[['REId', 'Kapitalkostnad_Total']].copy()
+    df = capex_result[['REId', COL_CAPITAL_COST_PERIOD]].copy()
 
     # Merge controllable costs - include all relevant fields
-    controllable_cols = ['REId', 'Paverkbara_Periodsumma', 'Method_used']
+    controllable_cols = ['REId', COL_CONTROLLABLE_PERIOD, COL_METHOD_USED]
 
-    # Legacy efficiency fields
-    for col in ['Paverkbara_Fore_Periodsumma', 'Effektivisering_Total']:
+    # Efficiency fields
+    for col in [COL_CONTROLLABLE_BEFORE, COL_EFFICIENCY_DEDUCTION]:
         if col in controllable_result.columns:
             controllable_cols.append(col)
 
     # Separated OPEX/CAPEX fields
-    for col in ['OPEX_Fore', 'OPEX_Efter', 'OPEX_Effektivisering',
-                'CAPEX_Fore', 'CAPEX_Efter', 'CAPEX_Effektivisering',
-                'OPEX_Andel', 'CAPEX_Andel']:
+    for col in [COL_OPEX_BEFORE, COL_OPEX_AFTER, COL_OPEX_EFF_DEDUCTION,
+                COL_CAPEX_BEFORE, COL_CAPEX_AFTER, COL_CAPEX_EFF_DEDUCTION,
+                COL_OPEX_SHARE, COL_CAPEX_SHARE]:
         if col in controllable_result.columns:
             controllable_cols.append(col)
 
@@ -72,46 +85,25 @@ def assemble_revenue_frame(
     )
 
     # Apply CAPEX efficiency reduction for TOTEX method
-    if 'CAPEX_Effektivisering' in df.columns:
-        df['CAPEX_Effektivisering'] = df['CAPEX_Effektivisering'].fillna(0)
-        df['Kapitalkostnad_Efter_Effektivisering'] = (
-            df['Kapitalkostnad_Total'] - df['CAPEX_Effektivisering']
+    if COL_CAPEX_EFF_DEDUCTION in df.columns:
+        df[COL_CAPEX_EFF_DEDUCTION] = df[COL_CAPEX_EFF_DEDUCTION].fillna(0)
+        df[COL_CAPITAL_COST_AFTER_EFF] = (
+            df[COL_CAPITAL_COST_PERIOD] - df[COL_CAPEX_EFF_DEDUCTION]
         )
     else:
-        df['CAPEX_Effektivisering'] = 0
-        df['Kapitalkostnad_Efter_Effektivisering'] = df['Kapitalkostnad_Total']
+        df[COL_CAPEX_EFF_DEDUCTION] = 0
+        df[COL_CAPITAL_COST_AFTER_EFF] = df[COL_CAPITAL_COST_PERIOD]
 
-    # Merge SDF baseline components
-    sdf_cols = [
-        'REId',
-        'Opåverkbara kostnader',
-        'Kostnader för flexibilitetstjänster',
-        'Avbrottsersättning 12-24 timmar',
-        'Avdrag av kapitalkostnader pga anläggningar med statligt stöd'
-    ]
+    # Merge SDF baseline components (already renamed to English in data_loaders)
+    sdf_component_cols = [COL_NON_CONTROLLABLE, COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION]
 
-    available_cols = ['REId']
-    col_mapping = {
-        'Opåverkbara kostnader': 'Opaverkbara_Kostnader',
-        'Kostnader för flexibilitetstjänster': 'Flexibilitetstjanster',
-        'Avbrottsersättning 12-24 timmar': 'Avbrottsersattning_12_24h',
-        'Avdrag av kapitalkostnader pga anläggningar med statligt stöd': 'Avdrag_Statligt_Stod'
-    }
-
-    for col in sdf_cols[1:]:
-        if col in sdf_baseline.columns:
-            available_cols.append(col)
-
-    sdf_subset = sdf_baseline[available_cols].copy()
-
-    # Rename columns
-    rename_dict = {k: v for k, v in col_mapping.items() if k in sdf_subset.columns}
-    sdf_subset = sdf_subset.rename(columns=rename_dict)
+    available_sdf_cols = ['REId'] + [c for c in sdf_component_cols if c in sdf_baseline.columns]
+    sdf_subset = sdf_baseline[available_sdf_cols].copy()
 
     df = df.merge(sdf_subset, on='REId', how='left')
 
     # Fill NaN with 0 for missing components
-    for col in col_mapping.values():
+    for col in sdf_component_cols:
         if col in df.columns:
             df[col] = df[col].fillna(0)
         else:
@@ -121,11 +113,11 @@ def assemble_revenue_frame(
     if incentive_result is not None and not incentive_result.empty:
         incentive_cols = [
             'REId',
-            'Kvalitetsjustering_Total',
-            'Natforlustjustering_Total',
-            'Belastningsjustering_Total',
-            'Incitamentjustering_Total',
-            'Missing_Incentive_Data'
+            COL_QUALITY_INCENTIVE,
+            COL_NETLOSS_INCENTIVE,
+            COL_LOAD_INCENTIVE,
+            COL_INCENTIVE_TOTAL,
+            COL_MISSING_INCENTIVE
         ]
         available_inc_cols = [c for c in incentive_cols if c in incentive_result.columns]
 
@@ -135,50 +127,50 @@ def assemble_revenue_frame(
             how='left'
         )
 
-        for col in ['Kvalitetsjustering_Total', 'Natforlustjustering_Total',
-                    'Belastningsjustering_Total', 'Incitamentjustering_Total']:
+        for col in [COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
+                    COL_LOAD_INCENTIVE, COL_INCENTIVE_TOTAL]:
             if col in df.columns:
                 df[col] = df[col].fillna(0)
             else:
                 df[col] = 0
 
-        if 'Missing_Incentive_Data' not in df.columns:
-            df['Missing_Incentive_Data'] = False
+        if COL_MISSING_INCENTIVE not in df.columns:
+            df[COL_MISSING_INCENTIVE] = False
     else:
-        df['Kvalitetsjustering_Total'] = 0
-        df['Natforlustjustering_Total'] = 0
-        df['Belastningsjustering_Total'] = 0
-        df['Incitamentjustering_Total'] = 0
-        df['Missing_Incentive_Data'] = True
+        df[COL_QUALITY_INCENTIVE] = 0
+        df[COL_NETLOSS_INCENTIVE] = 0
+        df[COL_LOAD_INCENTIVE] = 0
+        df[COL_INCENTIVE_TOTAL] = 0
+        df[COL_MISSING_INCENTIVE] = True
 
     # Determine which CAPEX value to use based on method
-    df['Kapitalkostnad_I_Intaktsram'] = df.apply(
-        lambda row: row['Kapitalkostnad_Efter_Effektivisering']
-                    if row['Method_used'] == 'TOTEX'
-                    else row['Kapitalkostnad_Total'],
+    df[COL_CAPITAL_COST_IN_RF] = df.apply(
+        lambda row: row[COL_CAPITAL_COST_AFTER_EFF]
+                    if row[COL_METHOD_USED] == 'TOTEX'
+                    else row[COL_CAPITAL_COST_PERIOD],
         axis=1
     )
 
-    # For TOTEX, use OPEX_Efter; for OPEX, use Paverkbara_Periodsumma
-    if 'OPEX_Efter' in df.columns:
-        df['Paverkbara_I_Intaktsram'] = df.apply(
-            lambda row: row.get('OPEX_Efter', row['Paverkbara_Periodsumma'])
-                        if pd.notna(row.get('OPEX_Efter'))
-                        else row['Paverkbara_Periodsumma'],
+    # For TOTEX, use opex_after; for OPEX, use controllable_cost_period
+    if COL_OPEX_AFTER in df.columns:
+        df[COL_CONTROLLABLE_IN_RF] = df.apply(
+            lambda row: row.get(COL_OPEX_AFTER, row[COL_CONTROLLABLE_PERIOD])
+                        if pd.notna(row.get(COL_OPEX_AFTER))
+                        else row[COL_CONTROLLABLE_PERIOD],
             axis=1
         )
     else:
-        df['Paverkbara_I_Intaktsram'] = df['Paverkbara_Periodsumma']
+        df[COL_CONTROLLABLE_IN_RF] = df[COL_CONTROLLABLE_PERIOD]
 
     # Calculate total revenue frame incl. incentives
-    df['Intaktsram_Total'] = (
-        df['Kapitalkostnad_I_Intaktsram']
-        + df['Paverkbara_I_Intaktsram']
-        + df['Opaverkbara_Kostnader']
-        + df['Flexibilitetstjanster']
-        + df['Avbrottsersattning_12_24h']
-        - df['Avdrag_Statligt_Stod']
-        + df['Incitamentjustering_Total']
+    df[COL_REVENUE_FRAME] = (
+        df[COL_CAPITAL_COST_IN_RF]
+        + df[COL_CONTROLLABLE_IN_RF]
+        + df[COL_NON_CONTROLLABLE]
+        + df[COL_FLEXIBILITY]
+        + df[COL_INTERRUPTION]
+        - df[COL_STATE_DEDUCTION]
+        + df[COL_INCENTIVE_TOTAL]
     )
 
     return df
@@ -221,26 +213,26 @@ def create_revenue_frame_breakdown(
     Returns:
         DataFrame with columns: Component, Value (tkr)
     """
-    method = user_revenue_frame.get('Method_used', 'OPEX')
+    method = user_revenue_frame.get(COL_METHOD_USED, 'OPEX')
 
-    capex_value = user_revenue_frame.get('Kapitalkostnad_I_Intaktsram',
-                                          user_revenue_frame.get('Kapitalkostnad_Total', 0))
-    controllable_value = user_revenue_frame.get('Paverkbara_I_Intaktsram',
-                                                 user_revenue_frame.get('Paverkbara_Periodsumma', 0))
+    capex_value = user_revenue_frame.get(COL_CAPITAL_COST_IN_RF,
+                                          user_revenue_frame.get(COL_CAPITAL_COST_PERIOD, 0))
+    controllable_value = user_revenue_frame.get(COL_CONTROLLABLE_IN_RF,
+                                                 user_revenue_frame.get(COL_CONTROLLABLE_PERIOD, 0))
 
     breakdown = [
         ('Capital cost', capex_value),
         ('Controllable costs', controllable_value),
-        ('Non-controllable costs', user_revenue_frame.get('Opaverkbara_Kostnader', 0)),
-        ('Flexibility services', user_revenue_frame.get('Flexibilitetstjanster', 0)),
-        ('Interruption compensation 12-24h', user_revenue_frame.get('Avbrottsersattning_12_24h', 0)),
-        ('State subsidy deduction', -user_revenue_frame.get('Avdrag_Statligt_Stod', 0)),
+        ('Non-controllable costs', user_revenue_frame.get(COL_NON_CONTROLLABLE, 0)),
+        ('Flexibility services', user_revenue_frame.get(COL_FLEXIBILITY, 0)),
+        ('Interruption compensation 12-24h', user_revenue_frame.get(COL_INTERRUPTION, 0)),
+        ('State subsidy deduction', -user_revenue_frame.get(COL_STATE_DEDUCTION, 0)),
     ]
 
     # Show efficiency breakdown for TOTEX
     if method == 'TOTEX':
-        capex_eff = user_revenue_frame.get('CAPEX_Effektivisering', 0)
-        opex_eff = user_revenue_frame.get('OPEX_Effektivisering', 0)
+        capex_eff = user_revenue_frame.get(COL_CAPEX_EFF_DEDUCTION, 0)
+        opex_eff = user_revenue_frame.get(COL_OPEX_EFF_DEDUCTION, 0)
         if capex_eff != 0 or opex_eff != 0:
             breakdown.append(('', ''))
             breakdown.append(('Efficiency (TOTEX):', ''))
@@ -250,15 +242,15 @@ def create_revenue_frame_breakdown(
                 breakdown.append(('  - CAPEX reduction', -capex_eff))
 
     # Add incentive adjustments if present
-    if 'Incitamentjustering_Total' in user_revenue_frame.index:
-        inc_total = user_revenue_frame.get('Incitamentjustering_Total', 0)
+    if COL_INCENTIVE_TOTAL in user_revenue_frame.index:
+        inc_total = user_revenue_frame.get(COL_INCENTIVE_TOTAL, 0)
         if inc_total != 0:
             breakdown.append(('', ''))
             breakdown.append(('Incentive adjustments:', ''))
 
-            qual = user_revenue_frame.get('Kvalitetsjustering_Total', 0)
-            loss = user_revenue_frame.get('Natforlustjustering_Total', 0)
-            util = user_revenue_frame.get('Belastningsjustering_Total', 0)
+            qual = user_revenue_frame.get(COL_QUALITY_INCENTIVE, 0)
+            loss = user_revenue_frame.get(COL_NETLOSS_INCENTIVE, 0)
+            util = user_revenue_frame.get(COL_LOAD_INCENTIVE, 0)
 
             if qual != 0:
                 breakdown.append(('  - Quality incentive', qual))
@@ -270,7 +262,7 @@ def create_revenue_frame_breakdown(
             breakdown.append(('Incentive adjustment total', inc_total))
 
     breakdown.append(('', ''))
-    breakdown.append(('TOTAL REVENUE FRAME', user_revenue_frame.get('Intaktsram_Total', 0)))
+    breakdown.append(('TOTAL REVENUE FRAME', user_revenue_frame.get(COL_REVENUE_FRAME, 0)))
 
     df = pd.DataFrame(breakdown, columns=['Component', 'Value (tkr)'])
 
@@ -291,22 +283,22 @@ def create_detailed_breakdown(
     Returns:
         DataFrame with columns: Component, Value (tkr), Share (%)
     """
-    total = user_revenue_frame.get('Intaktsram_Total', 0)
-    method = user_revenue_frame.get('Method_used', 'OPEX')
+    total = user_revenue_frame.get(COL_REVENUE_FRAME, 0)
+    method = user_revenue_frame.get(COL_METHOD_USED, 'OPEX')
 
     components = []
 
-    capex_value = user_revenue_frame.get('Kapitalkostnad_I_Intaktsram',
-                                          user_revenue_frame.get('Kapitalkostnad_Total', 0))
-    controllable_value = user_revenue_frame.get('Paverkbara_I_Intaktsram',
-                                                 user_revenue_frame.get('Paverkbara_Periodsumma', 0))
+    capex_value = user_revenue_frame.get(COL_CAPITAL_COST_IN_RF,
+                                          user_revenue_frame.get(COL_CAPITAL_COST_PERIOD, 0))
+    controllable_value = user_revenue_frame.get(COL_CONTROLLABLE_IN_RF,
+                                                 user_revenue_frame.get(COL_CONTROLLABLE_PERIOD, 0))
 
     main = [
         ('Capital cost', capex_value),
         ('Controllable costs', controllable_value),
-        ('Non-controllable costs', user_revenue_frame.get('Opaverkbara_Kostnader', 0)),
-        ('Flexibility services', user_revenue_frame.get('Flexibilitetstjanster', 0)),
-        ('Interruption compensation 12-24h', user_revenue_frame.get('Avbrottsersattning_12_24h', 0)),
+        ('Non-controllable costs', user_revenue_frame.get(COL_NON_CONTROLLABLE, 0)),
+        ('Flexibility services', user_revenue_frame.get(COL_FLEXIBILITY, 0)),
+        ('Interruption compensation 12-24h', user_revenue_frame.get(COL_INTERRUPTION, 0)),
     ]
 
     for label, val in main:
@@ -314,18 +306,18 @@ def create_detailed_breakdown(
         components.append((label, val, pct))
 
     # Deduction (negative)
-    deduction = user_revenue_frame.get('Avdrag_Statligt_Stod', 0)
+    deduction = user_revenue_frame.get(COL_STATE_DEDUCTION, 0)
     if deduction != 0:
         pct = (-deduction / total * 100) if total != 0 else 0
         components.append(('State subsidy deduction', -deduction, pct))
 
     # Incentive adjustments
-    inc_total = user_revenue_frame.get('Incitamentjustering_Total', 0)
+    inc_total = user_revenue_frame.get(COL_INCENTIVE_TOTAL, 0)
 
     if show_incentive_details and inc_total != 0:
-        qual = user_revenue_frame.get('Kvalitetsjustering_Total', 0)
-        loss = user_revenue_frame.get('Natforlustjustering_Total', 0)
-        util = user_revenue_frame.get('Belastningsjustering_Total', 0)
+        qual = user_revenue_frame.get(COL_QUALITY_INCENTIVE, 0)
+        loss = user_revenue_frame.get(COL_NETLOSS_INCENTIVE, 0)
+        util = user_revenue_frame.get(COL_LOAD_INCENTIVE, 0)
 
         if qual != 0:
             pct = (qual / total * 100) if total != 0 else 0

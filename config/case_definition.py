@@ -125,7 +125,7 @@ class DeaConfig:
     method: EfficiencyMethod = EfficiencyMethod.BASELINE
     
     # Custom DEA model specification
-    inputs: List[str] = field(default_factory=lambda: ['Kapitalkostnad_2024', 'OPEXp'])
+    inputs: List[str] = field(default_factory=lambda: ['capital_cost_2024', 'controllable_cost_average'])
     outputs: List[str] = field(default_factory=lambda: ['CU', 'MW', 'NS', 'MWhl', 'MWhh'])
     rts: str = "crs"  # "crs" or "vrs"
     orientation: str = "input"  # "input" or "output"

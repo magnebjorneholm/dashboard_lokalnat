@@ -16,14 +16,14 @@ class BaselineStageOutput:
     Output from Baseline stage.
     Converts BaselineData to stage format.
     """
-    df_all_companies: pd.DataFrame  # 148 companies with Kapitalkostnad_2024, OPEXp, volumes
+    df_all_companies: pd.DataFrame  # 148 companies with capital_cost_2024, controllable_cost_average, volumes
     dea_baseline: pd.DataFrame      # Baseline DEA results from Ei
     reconciliation: pd.DataFrame    # REId/id_network mapping (also has DMU)
     wacc: float                     # Baseline WACC (0.0453)
     
     # SDF data for Post-DEA
     sdf_ir: pd.DataFrame            # Sheet "IR 2024-2027"
-    sdf_controllable: pd.DataFrame  # Sheet "Paverkbara" (controllable costs)
+    sdf_controllable: pd.DataFrame  # Sheet "Påverkbara" (controllable costs)
 
 
 @dataclass(frozen=True)
@@ -63,7 +63,7 @@ class DeaStageOutput:
     Output from DEA stage.
     DEA results for all 148 companies.
     """
-    dea_results: pd.DataFrame  # 148 rows: REId, Effektivitet, potential, is_outlier
+    dea_results: pd.DataFrame  # 148 rows: REId, dea_efficiency, potential, is_outlier
     dea_method: str            # "baseline", "baseline_recalculated", "dea"
     dea_executed: bool         # True if new DEA was run
 

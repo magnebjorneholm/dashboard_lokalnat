@@ -18,19 +18,7 @@ No print statements - logging handled by PipelineDebugLogger.
 from config import DeaConfig, EfficiencyMethod
 from pipeline.stages.stage_outputs import PreDeaStageOutput, DeaStageOutput, BaselineStageOutput
 from calculations import run_dea_analysis
-
-# Baseline DEA specification (matches Ei methodology)
-BASELINE_DEA_SPEC = {
-    'inputs': ['CAPEX', 'OPEXp'],
-    'outputs': ['CU', 'MW', 'NS', 'MWhl', 'MWhh'],
-    'rts': 'crs',
-    'orientation': 'input',
-    'outlier_params': {
-        'q_lower': 25.0,
-        'q_upper': 75.0,
-        'multiplier': 2.0
-    }
-}
+from calculations.dea_calculations import BASELINE_DEA_SPEC
 
 
 def stage_dea(
@@ -40,59 +28,59 @@ def stage_dea(
 ) -> DeaStageOutput:
     """
     Stage 3: Run DEA analysis.
-    
+
     Args:
         pre_dea: Output from Pre-DEA stage
         config: DeaConfig with method and parameters
         baseline: BaselineStageOutput (required for baseline method)
-        
+
     Returns:
         DeaStageOutput with:
         - dea_results: 148 rows with efficiency, potential, is_outlier
         - dea_method: Method used
         - dea_executed: True if new DEA was run
-        
+
     Raises:
         ValueError: If invalid method or missing baseline
     """
-    
+
     capex_modified = pre_dea.capex_modified
-    
+
     # =========================================================================
     # SCENARIO 1: Baseline DEA (no CAPEX modification)
     # =========================================================================
     if config.method == EfficiencyMethod.BASELINE and not capex_modified:
-        
+
         if baseline is None:
             raise ValueError("Baseline required for baseline DEA method")
-        
+
         return DeaStageOutput(
             dea_results=baseline.dea_baseline.copy(),
             dea_method="baseline",
             dea_executed=False
         )
-    
+
     # =========================================================================
     # SCENARIO 2: Baseline spec with modified CAPEX (run new DEA)
     # =========================================================================
     elif config.method == EfficiencyMethod.BASELINE and capex_modified:
-        
+
         dea_results = run_dea_analysis(
             df=pre_dea.df_all_companies,
             model_spec=BASELINE_DEA_SPEC
         )
-        
+
         return DeaStageOutput(
             dea_results=dea_results,
             dea_method="baseline_recalculated",
             dea_executed=True
         )
-    
+
     # =========================================================================
     # SCENARIO 3: Custom DEA
     # =========================================================================
     elif config.method == EfficiencyMethod.DEA:
-        
+
         # Extract model specification from config
         model_spec = {
             'inputs': config.inputs,
@@ -105,17 +93,17 @@ def stage_dea(
                 'multiplier': config.multiplier
             }
         }
-        
+
         dea_results = run_dea_analysis(
             df=pre_dea.df_all_companies,
             model_spec=model_spec
         )
-        
+
         return DeaStageOutput(
             dea_results=dea_results,
             dea_method="dea",
             dea_executed=True
         )
-    
+
     else:
         raise ValueError(f"Unknown DEA method: {config.method}")
