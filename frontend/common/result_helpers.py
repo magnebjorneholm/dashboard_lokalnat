@@ -13,19 +13,10 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.styling import CHART_COLORS
-
-# ---------------------------------------------------------------------------
-# Shared constants
-# ---------------------------------------------------------------------------
-
-TIME_LABELS = {
-    229: "2024H1", 230: "2024H2",
-    231: "2025H1", 232: "2025H2",
-    233: "2026H1", 234: "2026H2",
-    235: "2027H1", 236: "2027H2",
-}
-
-TIME_CODES_ORDERED = [229, 230, 231, 232, 233, 234, 235, 236]
+from calculations.time_codes import (
+    TIMECODE_TO_HALFYEAR as TIME_LABELS,
+    PERIOD_2024_2027_CODES as TIME_CODES_ORDERED,
+)
 
 TOLERANCE = 0.01  # tkr
 
@@ -58,6 +49,25 @@ def fmt_percent(value: float, decimals: int = 1, show_sign: bool = False,
     if show_sign and v > 0:
         return f"+{v:.{decimals}f}%"
     return f"{v:.{decimals}f}%"
+
+
+def fmt_msek(value: float) -> str:
+    """Format tkr value as MSEK string (divide by 1000, 1 decimal)."""
+    return f"{value / TKR_TO_MSEK:,.1f} MSEK"
+
+
+def fmt_delta_msek(delta: float, tolerance: float = 0.01) -> "Optional[str]":
+    """Format tkr delta as MSEK string with sign, or None if below tolerance."""
+    if abs(delta) < tolerance:
+        return None
+    return f"{delta / TKR_TO_MSEK:+,.1f} MSEK"
+
+
+def fmt_pct(value: float, decimals: int = 2) -> str:
+    """Format decimal value as percentage string (0.0453 -> '4.53%')."""
+    if pd.isna(value):
+        return "-"
+    return f"{value * 100:.{decimals}f}%"
 
 
 def fmt_number(value: float, decimals: int = 4) -> str:

@@ -35,22 +35,14 @@ from config.case_definition import (
 # BASELINE VALUES
 # =============================================================================
 
-from calculations.wacc_calculations import BASELINE_WACC
+from calculations.wacc_calculations import BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED as _WACC_DERIVED
+from calculations.incentive_parameters import BASELINE_INCENTIVE
 
-BASELINE_INCENTIVE = {
-    "kpi": {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
-    "k_nf": {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44},
-    "sharing_netloss": 0.75,
-    "adj_max_agg": 1/3,
-    "adj_max_cemi4": 0.25,
-    "ait_costs": None,
-    "aif_costs": None,
-}
-
+from calculations.dea_calculations import BASELINE_DEA_SPEC
 from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG
 
-DEA_OUTPUT_OPTIONS = ['CU', 'MW', 'NS', 'MWhl', 'MWhh']
-DEA_INPUT_OPTIONS = [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG]
+DEA_INPUT_OPTIONS = BASELINE_DEA_SPEC['inputs']
+DEA_OUTPUT_OPTIONS = BASELINE_DEA_SPEC['outputs']
 
 PARAM_TO_CONFIG = {
     "3.2.5": "m3_cost_of_capital.wacc_override",
@@ -189,23 +181,13 @@ def _extract_wacc_inputs(m3: Dict[str, Any]) -> tuple:
     Returns:
         Tuple of (wacc_input_method, wacc_capm_inputs, wacc_derived_inputs)
     """
-    # Default baseline CAPM values (from UM Table 6)
-    BASELINE_CAPM = {
-        "debt_ratio": 0.36,
-        "asset_beta": 0.37,
-        "risk_free_rate": 0.0287,
-        "market_risk_premium": 0.0668,
-        "credit_risk_premium": 0.0114,
-        "tax_rate": 0.206,
-        "inflation": 0.0202,
-    }
-    
-    BASELINE_DERIVED = {
-        "cost_of_equity": 0.0645,
-        "cost_of_debt": 0.0401,
-        "debt_ratio": 0.36,
-        "tax_rate": 0.206,
-        "inflation": 0.0202,
+    # Derived method defaults (composed from centralized baseline constants)
+    _DERIVED_DEFAULTS = {
+        "cost_of_equity": _WACC_DERIVED["cost_of_equity_nominal"],
+        "cost_of_debt": _WACC_DERIVED["cost_of_debt_nominal"],
+        "debt_ratio": BASELINE_CAPM["debt_ratio"],
+        "tax_rate": BASELINE_CAPM["tax_rate"],
+        "inflation": BASELINE_CAPM["inflation"],
     }
     
     # No WACC override means baseline
@@ -240,11 +222,11 @@ def _extract_wacc_inputs(m3: Dict[str, Any]) -> tuple:
         wacc_input_method = "derived"
         wacc_capm_inputs = None
         wacc_derived_inputs = {
-            "cost_of_equity": m3.get("cost_of_equity", BASELINE_DERIVED["cost_of_equity"]),
-            "cost_of_debt": m3.get("cost_of_debt", BASELINE_DERIVED["cost_of_debt"]),
-            "debt_ratio": m3.get("debt_ratio_derived", BASELINE_DERIVED["debt_ratio"]),
-            "tax_rate": m3.get("tax_rate_derived", BASELINE_DERIVED["tax_rate"]),
-            "inflation": m3.get("inflation_derived", BASELINE_DERIVED["inflation"]),
+            "cost_of_equity": m3.get("cost_of_equity", _DERIVED_DEFAULTS["cost_of_equity"]),
+            "cost_of_debt": m3.get("cost_of_debt", _DERIVED_DEFAULTS["cost_of_debt"]),
+            "debt_ratio": m3.get("debt_ratio_derived", _DERIVED_DEFAULTS["debt_ratio"]),
+            "tax_rate": m3.get("tax_rate_derived", _DERIVED_DEFAULTS["tax_rate"]),
+            "inflation": m3.get("inflation_derived", _DERIVED_DEFAULTS["inflation"]),
         }
         
     else:
@@ -333,15 +315,16 @@ def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
     """Build DeaConfig from addon_benchmarking."""
     addon = ui_config.get("addon_benchmarking", {})
     
+    _op = BASELINE_DEA_SPEC['outlier_params']
     if addon.get("dea_method") == "custom":
         return DeaConfig(
             method=EfficiencyMethod.DEA,
-            inputs=addon.get("dea_inputs", [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG]),
+            inputs=addon.get("dea_inputs", DEA_INPUT_OPTIONS),
             outputs=addon.get("dea_outputs", DEA_OUTPUT_OPTIONS),
-            rts=addon.get("dea_rts", "crs"),
-            multiplier=addon.get("dea_multiplier", 2.0),
-            q_lower=addon.get("dea_q_lower", 25.0),
-            q_upper=addon.get("dea_q_upper", 75.0),
+            rts=addon.get("dea_rts", BASELINE_DEA_SPEC['rts']),
+            multiplier=addon.get("dea_multiplier", _op['multiplier']),
+            q_lower=addon.get("dea_q_lower", _op['q_lower']),
+            q_upper=addon.get("dea_q_upper", _op['q_upper']),
         )
     else:
         return DeaConfig(method=EfficiencyMethod.BASELINE)

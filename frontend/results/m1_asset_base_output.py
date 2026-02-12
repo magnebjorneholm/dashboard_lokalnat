@@ -31,6 +31,7 @@ from frontend.common.result_helpers import (
     load_baseline_category_data, get_case_category_data,
     ensure_component_cols, aggregate_period, aggregate_halfyears,
     active_categories, halfyear_values, hy_row_values,
+    fmt_msek, fmt_delta_msek,
 )
 
 
@@ -138,21 +139,13 @@ def _render_kpi_hero(
     d_ord = c_ord - b_ord
     d_tail = c_tail - b_tail
 
-    def _fmt_msek(v: float) -> str:
-        return f"{v / 1e3:,.1f} MSEK"
-
-    def _fmt_delta(d: float) -> Optional[str]:
-        if abs(d) < TOLERANCE:
-            return None
-        return f"{d / 1e3:+,.1f} MSEK"
-
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total", _fmt_msek(c_total), _fmt_delta(d_total))
+        st.metric("Total", fmt_msek(c_total), fmt_delta_msek(d_total))
     with col2:
-        st.metric("Ordinarie", _fmt_msek(c_ord), _fmt_delta(d_ord))
+        st.metric("Ordinarie", fmt_msek(c_ord), fmt_delta_msek(d_ord))
     with col3:
-        st.metric("Svans (tail)", _fmt_msek(c_tail), _fmt_delta(d_tail))
+        st.metric("Svans (tail)", fmt_msek(c_tail), fmt_delta_msek(d_tail))
 
 
 

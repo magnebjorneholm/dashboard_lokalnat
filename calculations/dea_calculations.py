@@ -44,15 +44,13 @@ def run_dea_analysis(
     """
     df = df.copy()
 
-    # Extract model specification
+    # Extract model specification (defaults from BASELINE_DEA_SPEC at bottom of file)
     input_cols = model_spec.get('inputs', [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG])
     output_cols = model_spec.get('outputs', [COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH])
     rts = model_spec.get('rts', 'crs')
     orientation = model_spec.get('orientation', 'input')
     outlier_params = model_spec.get('outlier_params', {
-        'q_lower': 25.0,
-        'q_upper': 75.0,
-        'multiplier': 2.0
+        'q_lower': 25.0, 'q_upper': 75.0, 'multiplier': 2.0,
     })
 
     # Validate that all columns exist

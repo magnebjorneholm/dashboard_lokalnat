@@ -27,6 +27,9 @@ YEAR_TO_TIMECODES = {
 # Alla tidskoder för tillsynsperioden 2024-2027
 PERIOD_2024_2027_CODES = list(range(229, 237))  # 229-236 = 8 halvår
 
+# Tillsynsperiodens år
+SUPERVISION_YEARS = [2024, 2025, 2026, 2027]
+
 # Första tidskoden för varje år
 YEAR_TO_FIRST_TIMECODE = {
     2024: 229,

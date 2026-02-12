@@ -33,6 +33,7 @@ from frontend.common.result_helpers import (
     load_baseline_category_data, get_case_category_data,
     aggregate_period, aggregate_halfyears,
     active_categories, halfyear_values, hy_row_values,
+    fmt_msek, fmt_delta_msek, fmt_pct,
 )
 from calculations.wacc_calculations import BASELINE_WACC
 
@@ -59,22 +60,6 @@ def _var_id_return_combined(cat_encode: int) -> str:
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
-
-def _fmt_msek(v: float) -> str:
-    return f"{v / 1e3:,.1f} MSEK"
-
-
-def _fmt_delta_msek(d: float) -> Optional[str]:
-    if abs(d) < TOLERANCE:
-        return None
-    return f"{d / 1e3:+,.1f} MSEK"
-
-
-def _fmt_pct(v: float, decimals: int = 2) -> str:
-    if pd.isna(v):
-        return "-"
-    return f"{v * 100:.{decimals}f}%"
-
 
 # ---------------------------------------------------------------------------
 # Module-local aggregation wrappers
@@ -191,13 +176,13 @@ def _render_return_kpi(
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total", _fmt_msek(c_total), _fmt_delta_msek(c_total - b_total))
+        st.metric("Total", fmt_msek(c_total), fmt_delta_msek(c_total - b_total))
     with col2:
-        st.metric("Ordinarie", _fmt_msek(c_ord), _fmt_delta_msek(c_ord - b_ord))
+        st.metric("Ordinarie", fmt_msek(c_ord), fmt_delta_msek(c_ord - b_ord))
     with col3:
-        st.metric("Tail", _fmt_msek(c_tail), _fmt_delta_msek(c_tail - b_tail))
+        st.metric("Tail", fmt_msek(c_tail), fmt_delta_msek(c_tail - b_tail))
     with col4:
-        st.metric("3.2.5 WACC", _fmt_pct(wacc_case), delta=wacc_delta_str)
+        st.metric("3.2.5 WACC", fmt_pct(wacc_case), delta=wacc_delta_str)
 
 
 # ---------------------------------------------------------------------------

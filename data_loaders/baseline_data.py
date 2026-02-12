@@ -26,6 +26,28 @@ from config.column_names import (
 )
 
 
+def _find_data_file(filename: str, data_path: Optional[str] = None) -> Path:
+    """Search for a data file in standard locations and return the first match.
+
+    Search order: data_path/ (if given), cwd, data/, /mnt/project/.
+    """
+    search_paths = []
+    if data_path:
+        search_paths.append(Path(data_path) / filename)
+    search_paths.extend([
+        Path(filename),
+        Path("data") / filename,
+        Path("/mnt/project") / filename,
+    ])
+    for path in search_paths:
+        if path.exists():
+            return path
+    raise FileNotFoundError(
+        f"Could not find {filename}. "
+        f"Tried: {[str(p) for p in search_paths]}"
+    )
+
+
 @dataclass(frozen=True)
 class BaselineData:
     """
@@ -41,7 +63,7 @@ class BaselineData:
     reconciliation: pd.DataFrame    # Mapping REId <-> id_network (also has DMU for compatibility)
     
     # Parameters
-    wacc: float = 0.0453  # Real WACC before tax
+    wacc: float = 0.0453  # Real WACC before tax (= BASELINE_WACC from wacc_calculations)
 
 
 def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
@@ -58,27 +80,7 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
          'Avkastning_2024', 'Avkastning_2025', 'Avkastning_2026', 'Avkastning_2027',
          'Avkastning_Period']
     """
-    search_paths = []
-    if data_path:
-        search_paths.append(Path(data_path) / "Data_modeller.xlsx")
-
-    search_paths.extend([
-        Path("Data_modeller.xlsx"),
-        Path("data/Data_modeller.xlsx"),
-        Path("/mnt/project/Data_modeller.xlsx")
-    ])
-
-    data_file = None
-    for path in search_paths:
-        if path.exists():
-            data_file = path
-            break
-
-    if data_file is None:
-        raise FileNotFoundError(
-            "Could not find Data_modeller.xlsx. "
-            f"Tried: {[str(p) for p in search_paths]}"
-        )
+    data_file = _find_data_file("Data_modeller.xlsx", data_path)
 
     # Try reading from different sheet names (backwards compatibility)
     df = None
@@ -174,27 +176,7 @@ def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
         - Effkrav_proc: Annual efficiency requirement
         - is_outlier: Boolean flag
     """
-    search_paths = []
-    if data_path:
-        search_paths.append(Path(data_path) / "EIs_DEA.xlsx")
-
-    search_paths.extend([
-        Path("EIs_DEA.xlsx"),
-        Path("data/EIs_DEA.xlsx"),
-        Path("/mnt/project/EIs_DEA.xlsx")
-    ])
-
-    data_file = None
-    for path in search_paths:
-        if path.exists():
-            data_file = path
-            break
-
-    if data_file is None:
-        raise FileNotFoundError(
-            "Could not find EIs_DEA.xlsx. "
-            f"Tried: {[str(p) for p in search_paths]}"
-        )
+    data_file = _find_data_file("EIs_DEA.xlsx", data_path)
 
     try:
         df = pd.read_excel(data_file, sheet_name='Körning', engine='openpyxl')
@@ -248,26 +230,7 @@ def _load_sdf_data(data_path: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     Returns:
         Dict with three DataFrames: 'ir', 'controllable', 'non_controllable'
     """
-    search_paths = []
-    if data_path:
-        search_paths.append(Path(data_path) / "Löpande kostnader från SDF 2024-27.xlsx")
-
-    search_paths.extend([
-        Path("Löpande kostnader från SDF 2024-27.xlsx"),
-        Path("data/Löpande kostnader från SDF 2024-27.xlsx"),
-    ])
-
-    data_file = None
-    for path in search_paths:
-        if path.exists():
-            data_file = path
-            break
-
-    if data_file is None:
-        raise FileNotFoundError(
-            "Could not find SDF file. "
-            f"Tried: {[str(p) for p in search_paths]}"
-        )
+    data_file = _find_data_file("Löpande kostnader från SDF 2024-27.xlsx", data_path)
 
     result = {}
 
@@ -319,27 +282,7 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     Returns:
         DataFrame with mappings
     """
-    search_paths = []
-    if data_path:
-        search_paths.append(Path(data_path) / "reconciliation_id_network_firm_dmu.csv")
-
-    search_paths.extend([
-        Path("reconciliation_id_network_firm_dmu.csv"),
-        Path("data/reconciliation_id_network_firm_dmu.csv"),
-        Path("/mnt/project/reconciliation_id_network_firm_dmu.csv"),
-    ])
-
-    data_file = None
-    for path in search_paths:
-        if path.exists():
-            data_file = path
-            break
-
-    if data_file is None:
-        raise FileNotFoundError(
-            "Could not find reconciliation_id_network_firm_dmu.csv. "
-            f"Tried: {[str(p) for p in search_paths]}"
-        )
+    data_file = _find_data_file("reconciliation_id_network_firm_dmu.csv", data_path)
 
     df = pd.read_csv(data_file)
 
@@ -411,5 +354,5 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
         sdf_controllable=sdf_data['controllable'],
         sdf_non_controllable=sdf_data['non_controllable'],
         reconciliation=reconciliation,
-        wacc=0.0453,
+        wacc=0.0453,  # = BASELINE_WACC from wacc_calculations
     )

@@ -8,7 +8,7 @@ Baserat på Energimarknadsinspektionens metodik för WACC-beräkning
 enligt regulatory framework 2024-2027.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Optional, Tuple
 
 
@@ -143,6 +143,19 @@ def calculate_wacc(inputs: CAPMInputs) -> WACCResult:
         wacc_nominal_pre_tax=wacc_nominal_pre_tax,
         wacc_real_pre_tax=wacc_real_pre_tax,
     )
+
+
+# ---- Baseline values as dicts (single source of truth for all consumers) ----
+BASELINE_CAPM = asdict(CAPMInputs())
+
+_baseline_result = calculate_wacc(CAPMInputs())
+BASELINE_DERIVED = {
+    "equity_beta": _baseline_result.equity_beta,
+    "cost_of_equity_nominal": _baseline_result.cost_of_equity_nominal,
+    "cost_of_debt_nominal": _baseline_result.cost_of_debt_nominal,
+    "wacc_nominal_pre_tax": _baseline_result.wacc_nominal_pre_tax,
+    "wacc_real_pre_tax": _baseline_result.wacc_real_pre_tax,
+}
 
 
 def calculate_wacc_simple(

@@ -21,7 +21,7 @@ from typing import Optional, Tuple
 
 from config.case_definition import PreDeaConfig, CapbaseSource, CapexMethod
 from pipeline.stages.stage_outputs import BaselineStageOutput, PreDeaStageOutput
-from calculations.wacc_calculations import CAPMInputs, WACCResult, calculate_wacc, BASELINE_WACC
+from calculations.wacc_calculations import CAPMInputs, WACCResult, calculate_wacc, BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED
 from calculations.kent_calculations import run_kent_calculations_batch
 from calculations.data_mapping import merge_kent_with_baseline
 from data_loaders.rab_data import load_capbase_a
@@ -131,13 +131,13 @@ def _calculate_wacc_chain(config: PreDeaConfig, baseline_wacc: float) -> dict:
     if wacc_input_method == "capm" and config.wacc_capm_inputs:
         # Calculate full WACC chain from CAPM inputs
         inputs = CAPMInputs(
-            debt_ratio=config.wacc_capm_inputs.get("debt_ratio", 0.36),
-            asset_beta=config.wacc_capm_inputs.get("asset_beta", 0.37),
-            risk_free_rate=config.wacc_capm_inputs.get("risk_free_rate", 0.0287),
-            market_risk_premium=config.wacc_capm_inputs.get("market_risk_premium", 0.0668),
-            credit_risk_premium=config.wacc_capm_inputs.get("credit_risk_premium", 0.0114),
-            tax_rate=config.wacc_capm_inputs.get("tax_rate", 0.206),
-            inflation=config.wacc_capm_inputs.get("inflation", 0.0202),
+            debt_ratio=config.wacc_capm_inputs.get("debt_ratio", BASELINE_CAPM["debt_ratio"]),
+            asset_beta=config.wacc_capm_inputs.get("asset_beta", BASELINE_CAPM["asset_beta"]),
+            risk_free_rate=config.wacc_capm_inputs.get("risk_free_rate", BASELINE_CAPM["risk_free_rate"]),
+            market_risk_premium=config.wacc_capm_inputs.get("market_risk_premium", BASELINE_CAPM["market_risk_premium"]),
+            credit_risk_premium=config.wacc_capm_inputs.get("credit_risk_premium", BASELINE_CAPM["credit_risk_premium"]),
+            tax_rate=config.wacc_capm_inputs.get("tax_rate", BASELINE_CAPM["tax_rate"]),
+            inflation=config.wacc_capm_inputs.get("inflation", BASELINE_CAPM["inflation"]),
         )
         result = calculate_wacc(inputs)
         
@@ -157,11 +157,11 @@ def _calculate_wacc_chain(config: PreDeaConfig, baseline_wacc: float) -> dict:
     elif wacc_input_method == "derived" and config.wacc_derived_inputs:
         # Calculate WACC from derived parameters
         di = config.wacc_derived_inputs
-        cost_of_equity = di.get("cost_of_equity", 0.0645)
-        cost_of_debt = di.get("cost_of_debt", 0.0401)
-        debt_ratio = di.get("debt_ratio", 0.36)
-        tax_rate = di.get("tax_rate", 0.206)
-        inflation = di.get("inflation", 0.0202)
+        cost_of_equity = di.get("cost_of_equity", BASELINE_DERIVED["cost_of_equity_nominal"])
+        cost_of_debt = di.get("cost_of_debt", BASELINE_DERIVED["cost_of_debt_nominal"])
+        debt_ratio = di.get("debt_ratio", BASELINE_CAPM["debt_ratio"])
+        tax_rate = di.get("tax_rate", BASELINE_CAPM["tax_rate"])
+        inflation = di.get("inflation", BASELINE_CAPM["inflation"])
         
         # WACC calculation from derived
         wacc_nominal_after_tax = (

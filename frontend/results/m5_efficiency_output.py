@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
+from frontend.common.result_helpers import fmt_pct as _fmt_pct, fmt_tkr as _fmt_tkr
 from config.column_names import (
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_EFF_REQ_ANNUAL,
     COL_METHOD_USED, COL_OPEX_BEFORE, COL_OPEX_AFTER, COL_OPEX_EFF_DEDUCTION,
@@ -106,21 +107,6 @@ def _get_baseline_trunkering_min():
         BASELINE_PARAMS["realiseringstid"],
         BASELINE_PARAMS["tillsynsperiod"],
     )
-
-
-def _fmt_pct(val, decimals=2):
-    """Format decimal as percentage string."""
-    if val is None or (isinstance(val, float) and np.isnan(val)):
-        return "-"
-    return f"{val * 100:.{decimals}f}%"
-
-
-def _fmt_tkr(val, show_sign=False):
-    """Format value as tkr with optional sign."""
-    if val is None or (isinstance(val, float) and np.isnan(val)):
-        return "-"
-    prefix = "+" if show_sign and val > 0 else ""
-    return f"{prefix}{val:,.0f}"
 
 
 def _tmpl_safe():

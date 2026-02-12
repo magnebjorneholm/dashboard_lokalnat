@@ -26,7 +26,7 @@ TEST_COMPANIES = {
     3035: {"REId": "REL03035", "name": "Stort bolag"},
 }
 
-WACC_BASELINE = 0.0453
+from calculations.wacc_calculations import BASELINE_WACC as WACC_BASELINE
 TOLERANCE_REL = 1e-3  # 0.1% relative tolerance
 
 

@@ -39,26 +39,7 @@ from config.column_names import (
 )
 
 
-# Baseline values for comparison
-BASELINE_CAPM = {
-    "debt_ratio": 0.36,
-    "asset_beta": 0.37,
-    "risk_free_rate": 0.0287,
-    "market_risk_premium": 0.0668,
-    "credit_risk_premium": 0.0114,
-    "tax_rate": 0.206,
-    "inflation": 0.0202,
-}
-
-BASELINE_DERIVED = {
-    "equity_beta": 0.54,
-    "cost_of_equity_nominal": 0.0645,
-    "cost_of_debt_nominal": 0.0401,
-    "wacc_nominal_pre_tax": 0.0664,
-    "wacc_real_pre_tax": 0.0453,
-}
-
-from calculations.wacc_calculations import BASELINE_WACC
+from calculations.wacc_calculations import BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED
 
 
 def _format_percent(value: float, decimals: int = 2) -> str:

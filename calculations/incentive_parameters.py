@@ -86,3 +86,12 @@ SNI_LABELS: Dict[int, str] = {
     5: "Hushall",
     6: "Granspunkt",
 }
+
+# Consolidated baseline incentive parameters (single source of truth)
+BASELINE_INCENTIVE: Dict = {
+    "kpi": KPI,
+    "k_nf": K_NF,
+    "sharing_netloss": SHARING_NETLOSS,
+    "adj_max_agg": ADJ_MAX_AGG,
+    "adj_max_cemi4": ADJ_MAX_CEMI4,
+}

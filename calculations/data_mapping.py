@@ -14,15 +14,9 @@ Merge strategy:
 import pandas as pd
 from typing import Dict, List, Optional, Tuple
 
-TEST_MODE = True  # Flag for test mode (mini-dataset)
+from calculations.time_codes import YEAR_TO_TIMECODES
 
-# Correct half-year mapping
-YEAR_TO_TIMECODES = {
-    2024: [229, 230],  # H1 + H2
-    2025: [231, 232],
-    2026: [233, 234],
-    2027: [235, 236],
-}
+TEST_MODE = True  # Flag for test mode (mini-dataset)
 
 
 def merge_kent_with_baseline(

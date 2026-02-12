@@ -18,6 +18,14 @@ from calculations.wacc_calculations import (
     CAPMInputs,
     calculate_wacc,
     BASELINE_WACC,
+    BASELINE_CAPM as _BASELINE_CAPM_DICT,
+    BASELINE_DERIVED as _BASELINE_DERIVED_WACC,
+)
+from calculations.incentive_parameters import (
+    BASELINE_INCENTIVE as _BASE_INCENTIVE,
+    SNI_LABELS,
+    AIT_COSTS,
+    AIF_COSTS,
 )
 from frontend.common.formatting import format_percent, format_number
 from frontend.utils.state_manager import get_config_value
@@ -25,52 +33,25 @@ from frontend.utils.state_manager import get_config_value
 MODULE_KEY = "m3_cost_of_capital"
 MODULE_KEY_QA = "m3_quality_adjustments"
 
-# Baseline CAPM parameters (from User Manual Table 6)
+# Baseline CAPM parameters (dataclass for attribute access in render)
 BASELINE_CAPM = CAPMInputs()
 
-# Baseline derived parameters (calculated from CAPM baseline)
+# Baseline derived parameters (from centralized source + CAPM inputs needed for display)
 BASELINE_DERIVED = {
-    "cost_of_equity_nominal": 0.0645,   # Re: Rf + beta * MRP
-    "cost_of_debt_nominal": 0.0401,     # Rd: Rf + credit spread
-    "debt_ratio": 0.36,                  # S: debt ratio
-    "tax_rate": 0.206,                   # tau: corporate tax
-    "inflation": 0.0202,                 # pi: CPIF
-    "wacc_nominal_pre_tax": 0.0664,      # WACC nominal
-    "wacc_real_pre_tax": BASELINE_WACC,  # 0.0453
+    **_BASELINE_DERIVED_WACC,
+    "debt_ratio": _BASELINE_CAPM_DICT["debt_ratio"],
+    "tax_rate": _BASELINE_CAPM_DICT["tax_rate"],
+    "inflation": _BASELINE_CAPM_DICT["inflation"],
 }
 
-# Customer types for AIT/AIF (Swedish regulatory terms)
-SNI_LABELS = {
-    1: "Jordbruk",
-    2: "Industri",
-    3: "Handel/tjanster",
-    4: "Offentlig verksamhet",
-    5: "Hushall",
-    6: "Granspunkt",
-}
-
-# Baseline values for incentive parameters
+# Baseline incentive parameters (from centralized source + UI-specific fields)
 BASELINE_INCENTIVE = {
+    **_BASE_INCENTIVE,
     "enable_quality": True,
     "enable_netloss": True,
     "enable_load": True,
-    "adj_max_agg": 1/3,
-    "adj_max_cemi4": 0.25,
-    "sharing_netloss": 0.75,
-    "kpi": {2024: 1.1546, 2025: 1.1546, 2026: 1.1546, 2027: 1.1546},
-    "k_nf": {2024: 753.44, 2025: 753.44, 2026: 753.44, 2027: 753.44},
-    "ait_costs": {
-        "o_1": 34.35, "o_2": 159.96, "o_3": 175.06,
-        "o_4": 96.97, "o_5": 5.84, "o_6": 96.01,
-        "a_1": 14.10, "a_2": 76.00, "a_3": 79.31,
-        "a_4": 43.70, "a_5": 4.98, "a_6": 45.16,
-    },
-    "aif_costs": {
-        "o_1": 9.78, "o_2": 70.75, "o_3": 17.78,
-        "o_4": 7.65, "o_5": 1.95, "o_6": 22.18,
-        "a_1": 1.72, "a_2": 20.71, "a_3": 5.94,
-        "a_4": 0.92, "a_5": 1.85, "a_6": 7.08,
-    },
+    "ait_costs": {f"{ann}_{sni}": v for (ann, sni), v in AIT_COSTS.items()},
+    "aif_costs": {f"{ann}_{sni}": v for (ann, sni), v in AIF_COSTS.items()},
 }
 
 

@@ -12,18 +12,13 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Optional, Tuple
 
-# HalvÃ¥rsmappning till Ã¥r
-YEAR_TO_TIMECODES = {
-    2024: [229, 230],  # H1 + H2
-    2025: [231, 232],
-    2026: [233, 234],
-    2027: [235, 236],
-}
+from calculations.wacc_calculations import BASELINE_WACC
+from calculations.time_codes import YEAR_TO_TIMECODES
 
 
 def run_kent_calculations_batch(
     capbase_data: pd.DataFrame,
-    wacc: float = 0.0453,
+    wacc: float = BASELINE_WACC,
     normvalue_adjustments: Optional[Dict[int, float]] = None,
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -229,7 +224,7 @@ def calculate_depreciation_batch(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def calculate_returns_batch(df: pd.DataFrame, wacc: float = 0.0453) -> pd.DataFrame:
+def calculate_returns_batch(df: pd.DataFrame, wacc: float = BASELINE_WACC) -> pd.DataFrame:
     """
     Steg 7: BerÃ¤kna avkastning fÃ¶r alla komponenter och tidsperioder.
     """
