@@ -15,8 +15,8 @@ from config.case_definition import get_baseline_config
 PIPELINE_EXTRACTION_886 = {
     "user_reid": "REL00886",
     "capex": 421649.2177260368,
-    "opex": 212723.3167140447,
-    "totex": 634372.5344400815,
+    "opex": 237712.94633514906,     # SDF-derived controllable_cost_average
+    "totex": 659362.1640611859,     # SDF-derived CAPEX + OPEXp
     "cu": 100485.0,
     "mw": 428.5,
     "ns": 2623.25,

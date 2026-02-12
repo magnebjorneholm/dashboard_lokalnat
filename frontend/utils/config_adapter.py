@@ -158,20 +158,27 @@ def _build_pre_dea_config(
     
     # === WACC INPUT SPECIFICATION (for M3 output display) ===
     wacc_input_method, wacc_capm_inputs, wacc_derived_inputs = _extract_wacc_inputs(m3)
-    
+
+    # === CONTROLLABLE CATEGORY OVERRIDES (from M4) ===
+    m4 = ui_config.get("m4_operating_exp", {})
+    controllable_category_overrides = m4.get("controllable_category_overrides") or None
+
     return PreDeaConfig(
         # Source (for user's company)
         capbase_source=capbase_source,
         user_capbase_scaled=user_capbase_scaled,
         kent_file_bytes=kent_file_bytes if capbase_source == CapbaseSource.KENT_UPLOAD else None,
         kent_user_id_network=user_id_network if capbase_source == CapbaseSource.KENT_UPLOAD else None,
-        
+
         # Method (for all companies)
         method=capex_method,
         wacc=wacc_override,
         normvalue_adjustments=normvalue_adjustments,
         lifetime_adjustments=lifetime_adjustments,
-        
+
+        # Controllable cost category overrides (user's company)
+        controllable_category_overrides=controllable_category_overrides,
+
         # WACC input specification
         wacc_input_method=wacc_input_method,
         wacc_capm_inputs=wacc_capm_inputs,
@@ -445,24 +452,6 @@ def _convert_incentive_keys(m3q: Dict[str, Any]) -> Dict[str, Any]:
     return converted
 
 
-def calculate_truncation_min_from_outlier_req(
-    outlier_req: float,
-    customer_sharing: float,
-    realization_time: int,
-    supervision_period: int
-) -> float:
-    """
-    Calculate truncation_min that gives same annual requirement as outlier_req.
-
-    This is the INVERSE calculation of the efficiency requirement formula.
-    With baseline parameters (outlier_req=1%) this gives truncation_min ~ 16.24%
-    """
-    total_eff = (1 + outlier_req) ** supervision_period - 1
-    realization_factor = supervision_period / realization_time
-    potential = total_eff / (customer_sharing * realization_factor)
-    return potential
-
-
 def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
     """Build PostDeaConfig from m5_efficiency, m3_quality_adjustments."""
     m5 = ui_config.get("m5_efficiency", {})
@@ -473,20 +462,17 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
     customer_sharing = m5.get("kunddelning") if m5.get("kunddelning") is not None else 0.50
     supervision_period = m5.get("tillsynsperiod") if m5.get("tillsynsperiod") is not None else 4
 
-    truncation_min_explicit = m5.get("trunkering_min")
-    if truncation_min_explicit is not None:
-        truncation_min = truncation_min_explicit
-    else:
-        truncation_min = calculate_truncation_min_from_outlier_req(
-            outlier_req=outlier_req,
-            customer_sharing=customer_sharing,
-            realization_time=realization_time,
-            supervision_period=supervision_period
-        )
+    # truncation_min: only set explicitly if user overrides it in UI;
+    # otherwise leave as None → auto-derived from outlier_req in efficiency_requirement.py
+    truncation_min = m5.get("trunkering_min")  # None unless explicitly set
 
     # controllable_method is set in M5 (5.4.1 Cost base application)
     controllable_method_str = m5.get("paverkbara_method", "OPEX")
     incentive = _build_incentive_config(ui_config)
+
+    # Non-controllable category overrides (from M4)
+    m4 = ui_config.get("m4_operating_exp", {})
+    non_controllable_category_overrides = m4.get("non_controllable_category_overrides") or None
 
     return PostDeaConfig(
         truncation_min=truncation_min,
@@ -496,6 +482,7 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
         realization_time=realization_time,
         supervision_period=supervision_period,
         controllable_method=ControllableMethod(controllable_method_str),
+        non_controllable_category_overrides=non_controllable_category_overrides,
         incentive=incentive
     )
 

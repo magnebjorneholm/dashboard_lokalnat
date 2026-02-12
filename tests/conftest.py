@@ -78,6 +78,24 @@ def sdf_controllable(baseline_data):
 
 
 @pytest.fixture(scope="session")
+def controllable_detail_mini():
+    """Load controllable_a_mini.parquet (3 test companies)."""
+    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "controllable_a_mini.parquet"))
+
+
+@pytest.fixture(scope="session")
+def controllable_meta_mini():
+    """Load controllable_meta_mini.parquet (3 test companies)."""
+    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "controllable_meta_mini.parquet"))
+
+
+@pytest.fixture(scope="session")
+def non_controllable_detail_mini():
+    """Load non_controllable_a_mini.parquet (3 test companies)."""
+    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "non_controllable_a_mini.parquet"))
+
+
+@pytest.fixture(scope="session")
 def kent_results_mini(capbase_mini):
     """Run KENT calculations on mini capbase (3 companies). Cached per session."""
     from calculations.kent_calculations import run_kent_calculations_batch

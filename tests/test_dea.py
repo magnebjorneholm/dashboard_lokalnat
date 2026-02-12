@@ -16,9 +16,10 @@ from calculations.dea_calculations import run_dea_analysis, _run_super_efficienc
 # ============================================================================
 
 DEA_EXPECTED = {
-    "REL00001": {"dea_efficiency": 0.677753399242738, "potential": 0.3222466008},
-    "REL00886": {"dea_efficiency": 0.793547303468252, "potential": 0.2064526965},
-    "REL03035": {"dea_efficiency": 0.980898507616999, "potential": 0.01910149238},
+    # Expected values with SDF-derived controllable_cost_average as DEA input
+    "REL00001": {"dea_efficiency": 0.67793232, "potential": 0.32206768},
+    "REL00886": {"dea_efficiency": 0.77067884, "potential": 0.22932116},
+    "REL03035": {"dea_efficiency": 0.9539705, "potential": 0.04602950},
 }
 
 

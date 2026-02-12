@@ -38,27 +38,29 @@ def stage_pre_dea(
 ) -> PreDeaStageOutput:
     """
     Stage 2: Prepare data for DEA analysis.
-    
-    Two-step process:
+
+    Three-step process:
     1. Get user's capbase_a based on CapbaseSource
     2. Apply calculation method based on CapexMethod
-    
+    3. Apply controllable category overrides (if set)
+
     Args:
         baseline: Output from Baseline stage
         config: PreDeaConfig with source and method
         user_id_network: User's id_network
-        
+
     Returns:
         PreDeaStageOutput with:
         - df_all_companies: 148 rows, potentially modified CAPEX/OPEX
         - capbase_source: Source that was used
         - capex_method: Method that was used
         - capex_modified: True if CAPEX was changed
+        - opex_modified: True if controllable overrides applied
         - wacc_used: WACC that was used
     """
     # STEP 1: Get user's capbase_a
     user_capbase, source_used = _get_user_capbase(config, user_id_network)
-    
+
     # STEP 2: Apply calculation method
     result = _apply_capex_method(
         baseline=baseline,
@@ -67,7 +69,16 @@ def stage_pre_dea(
         user_id_network=user_id_network,
         source_used=source_used
     )
-    
+
+    # STEP 3: Apply controllable category overrides (for user's company only)
+    if config.controllable_category_overrides:
+        result = _apply_controllable_overrides(
+            result=result,
+            baseline=baseline,
+            user_id_network=user_id_network,
+            overrides=config.controllable_category_overrides,
+        )
+
     return result
 
 
@@ -384,4 +395,68 @@ def _method_parameter_change(
         wacc_inputs=wacc_chain["wacc_inputs"],
         wacc_derived=wacc_chain["wacc_derived"],
         df_by_category=df_by_category,
+    )
+
+
+# =============================================================================
+# STEP 3: CONTROLLABLE CATEGORY OVERRIDES
+# =============================================================================
+
+def _apply_controllable_overrides(
+    result: PreDeaStageOutput,
+    baseline: BaselineStageOutput,
+    user_id_network: int,
+    overrides: dict,
+) -> PreDeaStageOutput:
+    """
+    Apply controllable category overrides for the user's company.
+
+    Re-aggregates with overrides for the user only, then replaces the user's
+    controllable_cost_average and TOTEX in df_all_companies.
+    Sets opex_modified=True so DEA re-runs.
+    """
+    from calculations.cost_aggregation import aggregate_controllable
+    from config.column_names import COL_CONTROLLABLE_AVG, COL_TOTEX, COL_CAPITAL_COST_2024
+
+    user_reid = f"REL{user_id_network:05d}"
+
+    # Filter grunddata to user's company
+    user_detail = baseline.controllable_detail[
+        baseline.controllable_detail["REId"] == user_reid
+    ]
+    user_meta = baseline.controllable_meta[
+        baseline.controllable_meta["REId"] == user_reid
+    ]
+
+    if user_detail.empty or user_meta.empty:
+        return result  # No data for user, return unchanged
+
+    # Aggregate with overrides
+    user_agg = aggregate_controllable(user_detail, user_meta, overrides)
+
+    # Compute opexp_equivalent (same formula as baseline_data.py)
+    opexp_eq = (
+        user_agg[COL_CONTROLLABLE_AVG].iloc[0]
+        + user_agg["neo_adjustments_period"].iloc[0] / 4
+    )
+
+    # Replace user's values in df_all_companies
+    df = result.df_all_companies.copy()
+    mask = df["REId"] == user_reid
+    df.loc[mask, COL_CONTROLLABLE_AVG] = opexp_eq
+    df.loc[mask, COL_TOTEX] = opexp_eq + df.loc[mask, COL_CAPITAL_COST_2024].values[0]
+
+    # Return new output with opex_modified=True
+    return PreDeaStageOutput(
+        df_all_companies=df,
+        capbase_source=result.capbase_source,
+        capex_method=result.capex_method,
+        capex_modified=result.capex_modified,
+        opex_modified=True,
+        wacc_used=result.wacc_used,
+        user_id_network=result.user_id_network,
+        wacc_input_method=result.wacc_input_method,
+        wacc_inputs=result.wacc_inputs,
+        wacc_derived=result.wacc_derived,
+        df_by_category=result.df_by_category,
     )

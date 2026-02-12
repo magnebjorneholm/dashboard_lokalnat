@@ -65,7 +65,7 @@ class TestRevenueFrameOPEX:
         ctrl = _make_controllable_result()
         sdf = _make_sdf_baseline()
         inc = _make_incentive_result()
-        result = assemble_revenue_frame(capex, ctrl, sdf, inc)
+        result = assemble_revenue_frame(capex, ctrl, sdf, incentive_result=inc)
 
         row = result[result["REId"] == "REL00001"].iloc[0]
         expected = (

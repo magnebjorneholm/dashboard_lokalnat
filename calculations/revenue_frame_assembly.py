@@ -28,6 +28,7 @@ def assemble_revenue_frame(
     capex_result: pd.DataFrame,
     controllable_result: pd.DataFrame,
     sdf_baseline: pd.DataFrame,
+    non_controllable_result: Optional[pd.DataFrame] = None,
     incentive_result: Optional[pd.DataFrame] = None
 ) -> pd.DataFrame:
     """
@@ -54,7 +55,9 @@ def assemble_revenue_frame(
     Args:
         capex_result: DataFrame with REId, capital_cost_period
         controllable_result: DataFrame with REId, controllable_cost_period, OPEX/CAPEX fields
-        sdf_baseline: DataFrame from SDF Excel with non-controllable and other components
+        sdf_baseline: DataFrame from SDF IR sheet (flexibility, interruption, state deduction)
+        non_controllable_result: Optional DataFrame with REId, non_controllable_cost_period
+            from grunddata aggregation. If None, falls back to sdf_baseline.
         incentive_result: Optional DataFrame with incentive adjustments per REId
 
     Returns:
@@ -94,16 +97,28 @@ def assemble_revenue_frame(
         df[COL_CAPEX_EFF_DEDUCTION] = 0
         df[COL_CAPITAL_COST_AFTER_EFF] = df[COL_CAPITAL_COST_PERIOD]
 
-    # Merge SDF baseline components (already renamed to English in data_loaders)
-    sdf_component_cols = [COL_NON_CONTROLLABLE, COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION]
+    # Merge non-controllable costs: prefer grunddata-derived, fall back to sdf_baseline
+    if non_controllable_result is not None and COL_NON_CONTROLLABLE in non_controllable_result.columns:
+        df = df.merge(
+            non_controllable_result[['REId', COL_NON_CONTROLLABLE]],
+            on='REId', how='left'
+        )
+    elif COL_NON_CONTROLLABLE in sdf_baseline.columns:
+        df = df.merge(
+            sdf_baseline[['REId', COL_NON_CONTROLLABLE]],
+            on='REId', how='left'
+        )
+    else:
+        df[COL_NON_CONTROLLABLE] = 0
 
-    available_sdf_cols = ['REId'] + [c for c in sdf_component_cols if c in sdf_baseline.columns]
+    # Merge remaining SDF IR components (flexibility, interruption, state deduction)
+    other_sdf_cols = [COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION]
+    available_sdf_cols = ['REId'] + [c for c in other_sdf_cols if c in sdf_baseline.columns]
     sdf_subset = sdf_baseline[available_sdf_cols].copy()
-
     df = df.merge(sdf_subset, on='REId', how='left')
 
     # Fill NaN with 0 for missing components
-    for col in sdf_component_cols:
+    for col in [COL_NON_CONTROLLABLE] + other_sdf_cols:
         if col in df.columns:
             df[col] = df[col].fillna(0)
         else:

@@ -144,7 +144,8 @@ def run_pipeline(
         pre_dea=pre_dea_output,
         baseline=baseline_output,
         config=case_config.post_dea,
-        user_reid=user_reid
+        user_reid=user_reid,
+        controllable_category_overrides=case_config.pre_dea.controllable_category_overrides,
     )
     
     if debug:

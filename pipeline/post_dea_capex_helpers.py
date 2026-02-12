@@ -119,8 +119,11 @@ def get_capex_period_sum(
 
 
 def _get_capex_from_sdf(baseline: BaselineStageOutput) -> pd.DataFrame:
-    """Get capital cost period sum from SDF."""
+    """Get capital cost period sum from SDF (local networks only)."""
     sdf = baseline.sdf_ir.copy()
+
+    # Filter to local networks only (REL*), excluding regional (RER*)
+    sdf = sdf[sdf['REId'].str.startswith('REL')]
 
     if COL_CAPITAL_COST_PERIOD not in sdf.columns:
         raise ValueError(f"Column '{COL_CAPITAL_COST_PERIOD}' missing in SDF IR")

@@ -61,7 +61,12 @@ class BaselineData:
     sdf_controllable: pd.DataFrame
     sdf_non_controllable: pd.DataFrame
     reconciliation: pd.DataFrame    # Mapping REId <-> id_network (also has DMU for compatibility)
-    
+
+    # Grunddata (detailed cost data from parquet files)
+    controllable_detail: pd.DataFrame     # From controllable_a.parquet
+    controllable_meta: pd.DataFrame       # From controllable_meta.parquet
+    non_controllable_detail: pd.DataFrame # From non_controllable_a.parquet
+
     # Parameters
     wacc: float = 0.0453  # Real WACC before tax (= BASELINE_WACC from wacc_calculations)
 
@@ -340,10 +345,44 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     reconciliation = _load_reconciliation(data_path)
     print(f"  Loaded reconciliation ({len(reconciliation)} mappings)")
 
-    # 5. Validate that all datasets have the same number of companies
+    # 5. Load grunddata (controllable/non-controllable detail parquets)
+    print("Loading grunddata parquets...")
+    from data_loaders.cost_data import (
+        load_controllable_detail, load_controllable_meta, load_non_controllable_detail
+    )
+    controllable_detail = load_controllable_detail(data_path)
+    controllable_meta = load_controllable_meta(data_path)
+    non_controllable_detail = load_non_controllable_detail(data_path)
+    print(f"  Loaded grunddata (ctrl: {len(controllable_detail)}, meta: {len(controllable_meta)}, "
+          f"nonctrl: {len(non_controllable_detail)} rows)")
+
+    # 6. Replace OPEXp with SDF-derived controllable_cost_average
+    from calculations.cost_aggregation import aggregate_controllable
+    sdf_derived = aggregate_controllable(controllable_detail, controllable_meta)
+    # Compute opexp_equivalent = controllable_cost_average + neo_adjustments/4
+    # This matches how OPEXp was used: as the DEA input (average + annualized neo)
+    sdf_derived["opexp_equivalent"] = (
+        sdf_derived[COL_CONTROLLABLE_AVG]
+        + sdf_derived["neo_adjustments_period"] / 4
+    )
+    # Replace OPEXp-based controllable_cost_average in df_all_companies
+    df_all_companies = df_all_companies.drop(columns=[COL_CONTROLLABLE_AVG], errors="ignore")
+    df_all_companies = df_all_companies.merge(
+        sdf_derived[["REId", "opexp_equivalent"]].rename(
+            columns={"opexp_equivalent": COL_CONTROLLABLE_AVG}
+        ),
+        on="REId",
+        how="left",
+    )
+    # Recalculate TOTEX with SDF-derived value
+    df_all_companies[COL_TOTEX] = (
+        df_all_companies[COL_CONTROLLABLE_AVG] + df_all_companies[COL_CAPITAL_COST_2024]
+    )
+    print(f"  Replaced OPEXp with SDF-derived controllable_cost_average")
+
+    # 7. Validate
     n_companies = len(df_all_companies)
     n_dea = len(dea_results)
-
     if n_companies != n_dea:
         print(f"WARNING: Data_modeller has {n_companies} companies but EIs_DEA has {n_dea}")
 
@@ -354,5 +393,8 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
         sdf_controllable=sdf_data['controllable'],
         sdf_non_controllable=sdf_data['non_controllable'],
         reconciliation=reconciliation,
+        controllable_detail=controllable_detail,
+        controllable_meta=controllable_meta,
+        non_controllable_detail=non_controllable_detail,
         wacc=0.0453,  # = BASELINE_WACC from wacc_calculations
     )

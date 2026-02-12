@@ -25,6 +25,11 @@ class BaselineStageOutput:
     sdf_ir: pd.DataFrame            # Sheet "IR 2024-2027"
     sdf_controllable: pd.DataFrame  # Sheet "Påverkbara" (controllable costs)
 
+    # Grunddata (detailed cost data from parquet files)
+    controllable_detail: pd.DataFrame     # From controllable_a.parquet
+    controllable_meta: pd.DataFrame       # From controllable_meta.parquet
+    non_controllable_detail: pd.DataFrame # From non_controllable_a.parquet
+
 
 @dataclass(frozen=True)
 class PreDeaStageOutput:
@@ -44,6 +49,7 @@ class PreDeaStageOutput:
     capbase_source: str  # "baseline", "var_scaled", "kent_upload"
     capex_method: str    # "baseline", "parameter_change"
     capex_modified: bool
+    opex_modified: bool = False  # True if controllable category overrides applied
     wacc_used: Optional[float] = None
     user_id_network: Optional[int] = None
     

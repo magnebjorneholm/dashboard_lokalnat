@@ -45,11 +45,13 @@ def stage_dea(
     """
 
     capex_modified = pre_dea.capex_modified
+    opex_modified = getattr(pre_dea, 'opex_modified', False)
+    data_modified = capex_modified or opex_modified
 
     # =========================================================================
-    # SCENARIO 1: Baseline DEA (no CAPEX modification)
+    # SCENARIO 1: Baseline DEA (no data modification)
     # =========================================================================
-    if config.method == EfficiencyMethod.BASELINE and not capex_modified:
+    if config.method == EfficiencyMethod.BASELINE and not data_modified:
 
         if baseline is None:
             raise ValueError("Baseline required for baseline DEA method")
@@ -61,9 +63,9 @@ def stage_dea(
         )
 
     # =========================================================================
-    # SCENARIO 2: Baseline spec with modified CAPEX (run new DEA)
+    # SCENARIO 2: Baseline spec with modified data (run new DEA)
     # =========================================================================
-    elif config.method == EfficiencyMethod.BASELINE and capex_modified:
+    elif config.method == EfficiencyMethod.BASELINE and data_modified:
 
         dea_results = run_dea_analysis(
             df=pre_dea.df_all_companies,

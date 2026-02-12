@@ -107,6 +107,20 @@ COL_MISSING_INCENTIVE = "Missing_Incentive_Data"  # already English
 COL_METHOD_USED = "method_used"  # was: Method_used
 
 # =============================================================================
+# Cost detail (grunddata parquet files)
+# =============================================================================
+COL_CTRL_CATEGORY = "category"  # Controllable cost category name
+COL_CTRL_AMOUNT_NOMINAL = "amount_nominal"  # Nominal cost (before index)
+COL_NONCTRL_KENT_CATEGORY = "kent_category"  # Non-controllable KENT category name
+COL_NONCTRL_AMOUNT = "amount"  # Non-controllable cost amount
+
+# Per-year non-controllable (from grunddata aggregation)
+COL_NON_CONTROLLABLE_2024 = "non_controllable_cost_2024"
+COL_NON_CONTROLLABLE_2025 = "non_controllable_cost_2025"
+COL_NON_CONTROLLABLE_2026 = "non_controllable_cost_2026"
+COL_NON_CONTROLLABLE_2027 = "non_controllable_cost_2027"
+
+# =============================================================================
 # Volume variables (kept as-is — well-understood abbreviations)
 # =============================================================================
 COL_CU = "CU"

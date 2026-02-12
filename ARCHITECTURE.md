@@ -110,6 +110,7 @@ dashboard_lokalnat/
 |   |-- revenue_frame_assembly.py         # Revenue frame assembly
 |   |-- efficiency_requirement.py         # Efficiency requirement calculation
 |   |-- controllable_cost_calculations.py # Controllable cost calculations
+|   |-- cost_aggregation.py              # Grunddata aggregation (controllable + non-controllable)
 |   |-- data_mapping.py                   # Asset category mapping
 |   |-- time_codes.py                     # Half-year period coding
 |
@@ -126,14 +127,20 @@ dashboard_lokalnat/
 |   |-- EIs_DEA.xlsx              # Ei's baseline DEA results
 |   |-- [SDF running costs].xlsx  # SDF regulatory submissions (Swedish filename w/ diacritics)
 |   |-- capbase_a.parquet         # Capital base per company/category/time (18 MB)
-|   |-- capbase_a_mini.parquet    # Mini version for testing
+|   |-- capbase_a_mini.parquet    # Mini version for testing (3 companies)
 |   |-- capcost_a.parquet         # Capital costs per category
+|   |-- controllable_a.parquet    # Controllable cost grunddata (detail per category/year)
+|   |-- controllable_a_mini.parquet # Mini version for testing (3 companies)
+|   |-- controllable_meta.parquet # Controllable cost meta (index, neo_adjustment, eff_req_pct)
+|   |-- controllable_meta_mini.parquet # Mini version for testing (3 companies)
+|   |-- non_controllable_a.parquet # Non-controllable cost grunddata (per category/year)
+|   |-- non_controllable_a_mini.parquet # Mini version for testing (3 companies)
 |   |-- reconciliation_id_network_firm_dmu.csv  # ID mapping (REId <-> id_network <-> DMU)
 |   |-- adjustment_final (1).csv  # Adjustment variables
 |   |-- all_adjust_vars.csv       # All adjustable variables
 |   |-- shapefiles/               # Geographic shapefiles (municipality/county)
 |
-|-- tests/                        # pytest test suite (136 tests, ~50s)
+|-- tests/                        # pytest test suite (197 tests, ~65s)
     |-- conftest.py               # Session-scoped fixtures
     |-- test_baseline_replication.py
     |-- test_kent_calculations.py
@@ -141,9 +148,11 @@ dashboard_lokalnat/
     |-- test_dea.py
     |-- test_efficiency_requirement.py
     |-- test_controllable_costs.py
+    |-- test_cost_aggregation.py     # Grunddata aggregation verification
     |-- test_incentive_calculations.py
     |-- test_revenue_frame.py
     |-- test_pipeline_integration.py
+    |-- test_override_cascades.py    # Category override cascade tests
 ```
 
 
@@ -431,6 +440,7 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 - capbase_source, user_capbase_scaled, kent_file_bytes, kent_user_id_network
 - method (CapexMethod), wacc, normvalue_adjustments, lifetime_adjustments
 - wacc_input_method ("capm"/"derived"/"direct"/"baseline"), wacc_capm_inputs
+- controllable_category_overrides -- {category: multiplier} for user's company OPEX
 
 **DeaConfig** (Stage 3):
 - method (EfficiencyMethod), inputs, outputs, rts ("crs"/"vrs")
@@ -444,6 +454,7 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 - truncation_min (0.01), truncation_max (0.30), outlier_req (0.01)
 - customer_sharing (0.50), realization_time (8), supervision_period (4)
 - controllable_method (OPEX/TOTEX), incentive (IncentiveConfig)
+- non_controllable_category_overrides -- {kent_category: multiplier} for user's company
 
 **CaseDefinition** (top-level):
 - name, user_reid, pre_dea (PreDeaConfig), dea (DeaConfig), post_dea (PostDeaConfig)
@@ -466,6 +477,7 @@ All files in `calculations/` are pure functions with no UI dependencies.
 | dea_calculations.py               | DEA via PuLP (input-oriented, CRS)         |
 | efficiency_requirement.py         | DEA potential -> annual efficiency req      |
 | controllable_cost_calculations.py | Controllable costs (OPEX/TOTEX methods)    |
+| cost_aggregation.py               | Grunddata aggregation (controllable + non-controllable) |
 | revenue_frame_assembly.py         | Assemble revenue frame from all components |
 | incentive_calculations.py         | Quality/netloss/load incentive adjustments |
 | incentive_parameters.py           | Baseline KPI, k_nf, AIT/AIF cost constants |
@@ -497,13 +509,15 @@ Swedish column names from files are renamed to English here using rename dicts.
 ### baseline_data.py
 
 `load_baseline_data() -> BaselineData` (frozen dataclass):
-- `df_all_companies` -- 148 rows from Data_modeller.xlsx
+- `df_all_companies` -- 148 rows from Data_modeller.xlsx (OPEXp replaced with SDF-derived values)
 - `dea_results` -- Baseline DEA from EIs_DEA.xlsx
 - `sdf_ir` -- Revenue frame baseline from SDF file
-- `sdf_controllable` -- Controllable costs from SDF file
-- `sdf_non_controllable` -- Non-controllable costs from SDF file
+- `sdf_controllable` -- Controllable costs from SDF file (raw sheet, used for verification)
 - `reconciliation` -- REId <-> id_network mapping
 - `wacc` -- float, default 0.0453
+- `controllable_detail` -- Per-category controllable grunddata (from controllable_a.parquet)
+- `controllable_meta` -- Controllable meta with index/neo (from controllable_meta.parquet)
+- `non_controllable_detail` -- Per-category non-controllable grunddata (from non_controllable_a.parquet)
 
 ### rab_data.py
 
@@ -578,8 +592,12 @@ dependencies like `data_loaders` and `pipeline` for faster initial rendering.
 | data/EIs_DEA.xlsx                             | Excel   | Ei's baseline DEA results                       |
 | data/[SDF running costs].xlsx                 | Excel   | SDF submissions: revenue cap, controllable, etc. |
 | data/capbase_a.parquet                        | Parquet | Capital base per company/category/time (18 MB)  |
-| data/capbase_a_mini.parquet                   | Parquet | Mini version for testing (3 companies)          |
+| data/capbase_a_mini.parquet                   | Parquet | Mini capbase for testing (3 companies)          |
 | data/capcost_a.parquet                        | Parquet | Capital costs per category                      |
+| data/controllable_a.parquet                   | Parquet | Controllable grunddata: REId, category, year, amount |
+| data/controllable_meta.parquet                | Parquet | Controllable meta: index factors, neo_adjustment |
+| data/non_controllable_a.parquet               | Parquet | Non-controllable grunddata: REId, kent_category, year, amount |
+| data/*_mini.parquet                           | Parquet | Mini versions (3 test companies) for unit tests |
 | data/reconciliation_id_network_firm_dmu.csv   | CSV     | ID mapping: REId <-> id_network <-> DMU         |
 | data/adjustment_final (1).csv                 | CSV     | Adjustment variables                            |
 | data/all_adjust_vars.csv                      | CSV     | All adjustable variables (48 cols)              |
@@ -669,15 +687,18 @@ max_dep (max depreciation years).
 
 **Run:** `./venv/Scripts/python.exe -m pytest tests/ -v`
 **Coverage:** `./venv/Scripts/python.exe -m pytest tests/ -v --cov=calculations --cov=pipeline`
-**136 tests**, all green, ~50s total runtime.
+**197 tests**, all green, ~65s total runtime.
 
 **Session-scoped fixtures** (loaded once in `tests/conftest.py`):
 - `baseline_data` -- Full BaselineData (all 148 companies)
 - `capbase_mini` -- Mini capbase (3 companies)
+- `controllable_detail_mini`, `controllable_meta_mini`, `non_controllable_detail_mini` -- Grunddata minis
 - `kent_results_mini` -- KENT calculation output
 - `pipeline_result_886` -- Full pipeline for company 886
 
-**Key test:** `test_baseline_replication.py` replicates facit values with hardcoded
-expected values (no Excel loading). Compares KENT vs DM, eff_req vs EIs_DEA, RF vs SDF.
+**Key tests:**
+- `test_baseline_replication.py` -- Replicates facit values with hardcoded expected values
+- `test_cost_aggregation.py` -- Verifies grunddata aggregation matches SDF sheets
+- `test_override_cascades.py` -- Controllable/non-controllable override cascade through pipeline
 
 **Known:** Company 886 has ~354 tkr rounding difference in capital_cost_2024 (KENT vs DM).

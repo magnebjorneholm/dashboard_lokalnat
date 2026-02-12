@@ -82,7 +82,8 @@ class PipelineDebugLogger:
             print(f"    outlier: q=[{dea.q_lower}, {dea.q_upper}], k={dea.multiplier}")
 
         post = cfg.post_dea
-        print(f"\n  [Post-DEA]  truncation=[{post.truncation_min:.2%}, {post.truncation_max:.2%}]"
+        trunc_min_str = f"{post.truncation_min:.2%}" if post.truncation_min is not None else "auto"
+        print(f"\n  [Post-DEA]  truncation=[{trunc_min_str}, {post.truncation_max:.2%}]"
               f"  customer_sharing={post.customer_sharing:.0%}  realization_time={post.realization_time}yr")
 
         if hasattr(post, 'incentive'):

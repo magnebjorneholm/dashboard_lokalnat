@@ -20,7 +20,8 @@ from pipeline.stages.stage_outputs import (
     PostDeaStageOutput,
 )
 from calculations.efficiency_requirement import calculate_eff_req_for_dataframe
-from calculations.controllable_cost_calculations import calculate_controllable_with_eff_req, get_controllable_from_sdf
+from calculations.controllable_cost_calculations import calculate_controllable_with_eff_req
+from calculations.cost_aggregation import aggregate_controllable, aggregate_non_controllable
 from calculations.revenue_frame_assembly import assemble_revenue_frame, extract_user_revenue_frame
 from calculations.incentive_calculations import calculate_all_incentives
 from data_loaders.incentive_data import (
@@ -43,7 +44,8 @@ def stage_post_dea(
     pre_dea: PreDeaStageOutput,
     baseline: BaselineStageOutput,
     config: PostDeaConfig,
-    user_reid: str
+    user_reid: str,
+    controllable_category_overrides: dict = None,
 ) -> PostDeaStageOutput:
     """
     Stage 5: Calculate efficiency requirements, incentives, adjustable costs, and revenue frame.
@@ -80,11 +82,29 @@ def stage_post_dea(
         supervision_period=config.supervision_period
     )
 
-    # STEP 2: Prepare controllable costs baseline from SDF
-    sdf_controllable = get_controllable_from_sdf(
-        sdf_ir=baseline.sdf_ir,
-        sdf_controllable=baseline.sdf_controllable
+    # STEP 2: Prepare controllable costs baseline from grunddata
+    sdf_controllable = aggregate_controllable(
+        baseline.controllable_detail,
+        baseline.controllable_meta,
     )
+
+    # Apply controllable category overrides for user's company only
+    if controllable_category_overrides:
+        user_detail = baseline.controllable_detail[
+            baseline.controllable_detail["REId"] == user_reid
+        ]
+        user_meta = baseline.controllable_meta[
+            baseline.controllable_meta["REId"] == user_reid
+        ]
+        if not user_detail.empty:
+            user_agg = aggregate_controllable(
+                user_detail, user_meta, controllable_category_overrides
+            )
+            # Replace user's row in the all-company result
+            mask = sdf_controllable["REId"] != user_reid
+            sdf_controllable = pd.concat(
+                [sdf_controllable[mask], user_agg], ignore_index=True
+            )
 
     # STEP 3: Calculate controllable costs with efficiency requirements
     if config.controllable_method == ControllableMethod.TOTEX:
@@ -116,10 +136,28 @@ def stage_post_dea(
         user_incentive_details = get_incentive_detailed_by_reid(all_incentives_full, user_reid)
     
     # STEP 6: Assemble revenue frame
+    non_controllable_result = aggregate_non_controllable(
+        baseline.non_controllable_detail
+    )
+
+    # Apply non-controllable category overrides for user's company only
+    if config.non_controllable_category_overrides:
+        user_nc_detail = baseline.non_controllable_detail[
+            baseline.non_controllable_detail["REId"] == user_reid
+        ]
+        if not user_nc_detail.empty:
+            user_nc_agg = aggregate_non_controllable(
+                user_nc_detail, config.non_controllable_category_overrides
+            )
+            mask = non_controllable_result["REId"] != user_reid
+            non_controllable_result = pd.concat(
+                [non_controllable_result[mask], user_nc_agg], ignore_index=True
+            )
     all_revenue_frames = assemble_revenue_frame(
         capex_result=capex_for_revenue_frame,
         controllable_result=all_controllable,
         sdf_baseline=baseline.sdf_ir,
+        non_controllable_result=non_controllable_result,
         incentive_result=all_incentives
     )
 

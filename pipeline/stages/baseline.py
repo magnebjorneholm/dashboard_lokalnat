@@ -44,5 +44,8 @@ def stage_baseline(baseline: BaselineData) -> BaselineStageOutput:
         reconciliation=baseline.reconciliation.copy(),
         wacc=baseline.wacc,
         sdf_ir=baseline.sdf_ir.copy(),
-        sdf_controllable=baseline.sdf_controllable.copy()
+        sdf_controllable=baseline.sdf_controllable.copy(),
+        controllable_detail=baseline.controllable_detail.copy(),
+        controllable_meta=baseline.controllable_meta.copy(),
+        non_controllable_detail=baseline.non_controllable_detail.copy(),
     )

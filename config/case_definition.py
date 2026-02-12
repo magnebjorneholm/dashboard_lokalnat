@@ -127,6 +127,10 @@ class PreDeaConfig:
     normvalue_adjustments: Optional[Dict[int, float]] = None  # {cat_encode: multiplier}
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None  # {cat_encode: {'ekdep': X, 'maxdep': Y}}
     
+    # === Controllable cost category overrides (for user's company) ===
+    # {category_name: multiplier}, e.g. {"RR73140_personnel": 1.10}
+    controllable_category_overrides: Optional[Dict[str, float]] = None
+
     # === WACC input specification (for M3 output display) ===
     # How WACC was specified: "capm", "derived", "direct", "baseline"
     wacc_input_method: str = "baseline"
@@ -198,7 +202,8 @@ class IncentiveConfig:
 class PostDeaConfig:
     """Configuration for Post-DEA stage."""
     # Efficiency requirements
-    truncation_min: float = 0.01
+    # None = auto-derive from outlier_req (ensures consistent minimum annual req)
+    truncation_min: Optional[float] = None
     truncation_max: float = 0.30
     outlier_req: float = 0.01
     customer_sharing: float = 0.50
@@ -207,7 +212,11 @@ class PostDeaConfig:
 
     # Controllable costs
     controllable_method: ControllableMethod = ControllableMethod.OPEX
-    
+
+    # Non-controllable cost category overrides (for user's company)
+    # {kent_category: multiplier}, e.g. {"grid_subscription": 1.10}
+    non_controllable_category_overrides: Optional[Dict[str, float]] = None
+
     # Incentives
     incentive: IncentiveConfig = field(default_factory=IncentiveConfig)
 
