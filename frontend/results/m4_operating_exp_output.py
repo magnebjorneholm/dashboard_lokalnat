@@ -18,6 +18,7 @@ from config.column_names import (
     COL_CONTROLLABLE_PERIOD, COL_METHOD_USED, COL_NON_CONTROLLABLE,
     COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
 )
+from config.glossary import VID_OPEX_ADJUSTABLE, VID_FLEX_SERVICE, VID_NON_ADJUSTABLE
 from frontend.common.result_helpers import fmt_tkr as _format_tkr, calc_delta as _calc_delta
 
 
@@ -43,7 +44,7 @@ def render(
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(
-            "40.1.1 Controllable costs",
+            f"{VID_OPEX_ADJUSTABLE} Controllable costs",
             f"{pav_case:,.0f} tkr",
             delta=f"{pav_pct:+.1f}%" if pav_pct else None
         )
@@ -63,7 +64,7 @@ def render(
     col1, col2 = st.columns(2)
     with col1:
         st.metric(
-            "40.2.1 Non-controllable costs",
+            f"{VID_NON_ADJUSTABLE} Non-controllable costs",
             f"{opav_case:,.0f} tkr",
             delta=f"{opav_pct:+.1f}%" if opav_pct else None
         )
@@ -75,7 +76,7 @@ def render(
     st.markdown("**Other OPEX components**")
     
     other_components = [
-        ("40.1.2", "Flexibility services", COL_FLEXIBILITY),
+        (VID_FLEX_SERVICE, "Flexibility services", COL_FLEXIBILITY),
         ("-", "Interruption compensation (12-24h)", COL_INTERRUPTION),
         ("-", "State aid deduction", COL_STATE_DEDUCTION),
     ]

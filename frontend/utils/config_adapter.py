@@ -40,13 +40,18 @@ from calculations.incentive_parameters import BASELINE_INCENTIVE
 
 from calculations.dea_calculations import BASELINE_DEA_SPEC
 from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG
+from config.glossary import (
+    PID_GENERAL_SCALING, PID_WACC_REAL, PID_LOSS_SCALING, PID_LOSS_SHARING,
+    PID_MAX_POTENTIAL_CAP, PID_REALIZATION_TIME, PID_CUSTOMER_SHARING,
+    PID_MIN_ANNUAL_REQ,
+)
 
 DEA_INPUT_OPTIONS = BASELINE_DEA_SPEC['inputs']
 DEA_OUTPUT_OPTIONS = BASELINE_DEA_SPEC['outputs']
 
 PARAM_TO_CONFIG = {
-    "3.2.5": "m3_cost_of_capital.wacc_override",
-    "5.2.1": "m5_efficiency.trunkering_max",
+    PID_WACC_REAL: "m3_cost_of_capital.wacc_override",
+    PID_MAX_POTENTIAL_CAP: "m5_efficiency.trunkering_max",
 }
 
 
@@ -502,14 +507,13 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
 def get_baseline_value(param_id: str) -> Any:
     """Get baseline value for a parameter."""
     PARAM_BASELINE = {
-        "3.2.5": BASELINE_WACC,
-        "3.4.2": BASELINE_INCENTIVE["sharing_netloss"],
+        PID_WACC_REAL: BASELINE_WACC,
+        PID_LOSS_SHARING: BASELINE_INCENTIVE["sharing_netloss"],
         "3.6.1": BASELINE_INCENTIVE["adj_max_agg"],
-        "5.2.1": 0.30,
-        "5.2.2": 8,
-        "5.2.3": 0.50,
-        "5.3.1": 0.01,
-        "5.3.2": 0.162416,
+        PID_MAX_POTENTIAL_CAP: 0.30,
+        PID_REALIZATION_TIME: 8,
+        PID_CUSTOMER_SHARING: 0.50,
+        PID_MIN_ANNUAL_REQ: 0.01,
     }
     return PARAM_BASELINE.get(param_id)
 
@@ -523,7 +527,7 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     if m1.get("kent_file_bytes"):
         changed.append("KENT file uploaded")
     if m1.get("general_scaling") and m1.get("general_scaling") != 1.0:
-        changed.append(f"1.1.1 General scaling: {m1['general_scaling']:.2f}")
+        changed.append(f"{PID_GENERAL_SCALING} General scaling: {m1['general_scaling']:.2f}")
     if m1.get("cat_scaling"):
         n = len(m1["cat_scaling"])
         changed.append(f"1.2.X Category scaling ({n} categories)")
@@ -540,16 +544,16 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     # Module 3: Cost of capital (WACC)
     m3 = ui_config.get("m3_cost_of_capital", {})
     if m3.get("wacc_override") is not None:
-        changed.append("3.2.5 WACC")
+        changed.append(f"{PID_WACC_REAL} WACC")
     
     # Module 3: Quality adjustments
     m3q = ui_config.get("m3_quality_adjustments", {})
     if not _is_empty_or_none(m3q.get("kpi")):
         changed.append("3.7.X KPI factors")
     if not _is_empty_or_none(m3q.get("k_nf")):
-        changed.append("3.4.1 Electricity price (K_NF)")
+        changed.append(f"{PID_LOSS_SCALING} Electricity price (K_NF)")
     if m3q.get("sharing_netloss") is not None:
-        changed.append("3.4.2 Network loss sharing")
+        changed.append(f"{PID_LOSS_SHARING} Network loss sharing")
     if m3q.get("adj_max_agg") is not None:
         changed.append("3.6.1 Max aggregate incentive")
     if m3q.get("adj_max_cemi4") is not None:
@@ -564,15 +568,15 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     # Module 5: Efficiency
     m5 = ui_config.get("m5_efficiency", {})
     if m5.get("trunkering_max") is not None:
-        changed.append("5.2.1 Truncation max")
+        changed.append(f"{PID_MAX_POTENTIAL_CAP} Truncation max")
     if m5.get("trunkering_min") is not None:
-        changed.append("5.3.2 Truncation min")
+        changed.append("Truncation min (derived)")
     if m5.get("realiseringstid") is not None:
-        changed.append("5.2.2 Realization time")
+        changed.append(f"{PID_REALIZATION_TIME} Realization time")
     if m5.get("kunddelning") is not None:
-        changed.append("5.2.3 Customer sharing")
+        changed.append(f"{PID_CUSTOMER_SHARING} Customer sharing")
     if m5.get("outlier_krav") is not None:
-        changed.append("5.3.1 Outlier requirement")
+        changed.append(f"{PID_MIN_ANNUAL_REQ} Outlier requirement")
     
     return changed
 

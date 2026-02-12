@@ -29,6 +29,12 @@ from calculations.incentive_parameters import (
 )
 from frontend.common.formatting import format_percent, format_number
 from frontend.utils.state_manager import get_config_value
+from config.glossary import (
+    PID_DEBT_RATIO, PID_ASSET_BETA, PID_RISK_FREE_RATE,
+    PID_MARKET_RISK_PREMIUM, PID_CREDIT_RISK_PREMIUM, PID_TAX_RATE,
+    PID_INFLATION, PID_EQUITY_BETA, PID_COST_OF_EQUITY, PID_COST_OF_DEBT,
+    PID_WACC_REAL,
+)
 
 MODULE_KEY = "m3_cost_of_capital"
 MODULE_KEY_QA = "m3_quality_adjustments"
@@ -278,7 +284,7 @@ def _render_capm_section() -> None:
     
     with col1:
         debt_ratio = st.number_input(
-            "3.1.1 Debt ratio (S)",
+            f"{PID_DEBT_RATIO} Debt ratio (S)",
             value=get_config_value(MODULE_KEY, "debt_ratio", BASELINE_CAPM.debt_ratio),
             min_value=0.0,
             max_value=0.99,
@@ -289,7 +295,7 @@ def _render_capm_section() -> None:
         )
         
         asset_beta = st.number_input(
-            "3.1.2 Asset beta",
+            f"{PID_ASSET_BETA} Asset beta",
             value=get_config_value(MODULE_KEY, "asset_beta", BASELINE_CAPM.asset_beta),
             min_value=0.0,
             max_value=2.0,
@@ -300,7 +306,7 @@ def _render_capm_section() -> None:
         )
         
         risk_free_rate = st.number_input(
-            "3.1.3 Risk-free rate (Rf)",
+            f"{PID_RISK_FREE_RATE} Risk-free rate (Rf)",
             value=get_config_value(MODULE_KEY, "risk_free_rate", BASELINE_CAPM.risk_free_rate),
             min_value=0.0,
             max_value=0.20,
@@ -311,7 +317,7 @@ def _render_capm_section() -> None:
         )
         
         market_risk_premium = st.number_input(
-            "3.1.4 Market risk premium",
+            f"{PID_MARKET_RISK_PREMIUM} Market risk premium",
             value=get_config_value(MODULE_KEY, "market_risk_premium", BASELINE_CAPM.market_risk_premium),
             min_value=0.0,
             max_value=0.20,
@@ -323,7 +329,7 @@ def _render_capm_section() -> None:
     
     with col2:
         credit_risk_premium = st.number_input(
-            "3.1.5 Credit risk premium",
+            f"{PID_CREDIT_RISK_PREMIUM} Credit risk premium",
             value=get_config_value(MODULE_KEY, "credit_risk_premium", BASELINE_CAPM.credit_risk_premium),
             min_value=0.0,
             max_value=0.10,
@@ -334,7 +340,7 @@ def _render_capm_section() -> None:
         )
         
         tax_rate = st.number_input(
-            "3.1.6 Corporate tax rate (tau)",
+            f"{PID_TAX_RATE} Corporate tax rate (tau)",
             value=get_config_value(MODULE_KEY, "tax_rate", BASELINE_CAPM.tax_rate),
             min_value=0.0,
             max_value=0.50,
@@ -345,7 +351,7 @@ def _render_capm_section() -> None:
         )
         
         inflation = st.number_input(
-            "3.1.7 Inflation (pi)",
+            f"{PID_INFLATION} Inflation (pi)",
             value=get_config_value(MODULE_KEY, "inflation", BASELINE_CAPM.inflation),
             min_value=-0.05,
             max_value=0.20,
@@ -377,16 +383,16 @@ def _render_capm_section() -> None:
         col1, col2 = st.columns(2)
         with col1:
             with st.container(border=True):
-                st.metric("3.2.1 Equity beta", format_number(result.equity_beta, 4))
+                st.metric(f"{PID_EQUITY_BETA} Equity beta", format_number(result.equity_beta, 4))
             with st.container(border=True):
-                st.metric("3.2.2 Cost of equity (Re)", format_percent(result.cost_of_equity_nominal))
+                st.metric(f"{PID_COST_OF_EQUITY} Cost of equity (Re)", format_percent(result.cost_of_equity_nominal))
         with col2:
             with st.container(border=True):
-                st.metric("3.2.3 Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
+                st.metric(f"{PID_COST_OF_DEBT} Cost of debt (Rd)", format_percent(result.cost_of_debt_nominal))
 
         # Final WACC
         with st.container(border=True):
-            st.metric("3.2.5 Calculated WACC (real, pre-tax)", format_percent(calculated_wacc))
+            st.metric(f"{PID_WACC_REAL} Calculated WACC (real, pre-tax)", format_percent(calculated_wacc))
         
         _render_apply_row(calculated_wacc, f"{MODULE_KEY}_apply_capm")
             
@@ -403,7 +409,7 @@ def _render_derived_section() -> None:
     
     with col1:
         cost_of_equity = st.number_input(
-            "3.2.1 Cost of equity (Re)",
+            f"{PID_COST_OF_EQUITY} Cost of equity (Re)",
             value=get_config_value(MODULE_KEY, "cost_of_equity", BASELINE_DERIVED["cost_of_equity_nominal"]),
             min_value=0.0,
             max_value=0.30,
@@ -412,9 +418,9 @@ def _render_derived_section() -> None:
             key=f"{MODULE_KEY}_cost_of_equity",
             help="Nominal cost of equity"
         )
-        
+
         cost_of_debt = st.number_input(
-            "3.2.2 Cost of debt (Rd)",
+            f"{PID_COST_OF_DEBT} Cost of debt (Rd)",
             value=get_config_value(MODULE_KEY, "cost_of_debt", BASELINE_DERIVED["cost_of_debt_nominal"]),
             min_value=0.0,
             max_value=0.20,
@@ -423,9 +429,9 @@ def _render_derived_section() -> None:
             key=f"{MODULE_KEY}_cost_of_debt",
             help="Nominal cost of debt"
         )
-        
+
         debt_ratio = st.number_input(
-            "3.2.3 Debt ratio (S)",
+            f"{PID_DEBT_RATIO} Debt ratio (S)",
             value=get_config_value(MODULE_KEY, "debt_ratio_derived", BASELINE_DERIVED["debt_ratio"]),
             min_value=0.0,
             max_value=0.99,
@@ -434,10 +440,10 @@ def _render_derived_section() -> None:
             key=f"{MODULE_KEY}_debt_ratio_derived",
             help="Debt share D/(D+E)"
         )
-    
+
     with col2:
         tax_rate = st.number_input(
-            "3.2.4 Tax rate (tau)",
+            f"{PID_TAX_RATE} Tax rate (tau)",
             value=get_config_value(MODULE_KEY, "tax_rate_derived", BASELINE_DERIVED["tax_rate"]),
             min_value=0.0,
             max_value=0.50,
@@ -446,9 +452,9 @@ def _render_derived_section() -> None:
             key=f"{MODULE_KEY}_tax_rate_derived",
             help="Corporate tax rate"
         )
-        
+
         inflation = st.number_input(
-            "3.2.5 Inflation (pi)",
+            f"{PID_INFLATION} Inflation (pi)",
             value=get_config_value(MODULE_KEY, "inflation_derived", BASELINE_DERIVED["inflation"]),
             min_value=-0.05,
             max_value=0.20,

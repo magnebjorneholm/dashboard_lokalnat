@@ -36,6 +36,12 @@ from frontend.common.result_helpers import (
     fmt_msek, fmt_delta_msek, fmt_pct,
 )
 from calculations.wacc_calculations import BASELINE_WACC
+from config.glossary import (
+    capital_cost_var_id,
+    VID_TOTAL_CAPITAL_COST_ORD,
+    VID_TOTAL_CAPITAL_COST_TAIL,
+    PID_WACC_REAL,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -48,13 +54,12 @@ _ORD, _TAIL, _TOTAL = 'return_ord', 'return_tail', 'return_total'
 
 def _var_id_return(cat_encode: int, component: str = "ord") -> str:
     """30.1.{cat_encode+1}.1 (ord) or 30.1.{cat_encode+1}.2 (tail)"""
-    suffix = "1" if component == "ord" else "2"
-    return f"30.1.{cat_encode + 1}.{suffix}"
+    return capital_cost_var_id(cat_encode, component)
 
 
 def _var_id_return_combined(cat_encode: int) -> str:
     """Combined ID string for table display: '30.1.X.1/.2'"""
-    return f"30.1.{cat_encode + 1}.1/.2"
+    return capital_cost_var_id(cat_encode, "combined")
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +112,8 @@ def _render_return_section(
 ) -> None:
     """Render return on capital by category -- mirrors M1 layout."""
 
-    st.markdown("#### 30.1 Return on Capital")
+    _sec_prefix = VID_TOTAL_CAPITAL_COST_ORD.rsplit(".", 1)[0]   # "30.1"
+    st.markdown(f"#### {_sec_prefix} Return on Capital")
 
     if user_id_network is None:
         st.warning("User company not identified.")
@@ -182,7 +188,7 @@ def _render_return_kpi(
     with col3:
         st.metric("Tail", fmt_msek(c_tail), fmt_delta_msek(c_tail - b_tail))
     with col4:
-        st.metric("3.2.5 WACC", fmt_pct(wacc_case), delta=wacc_delta_str)
+        st.metric(f"{PID_WACC_REAL} WACC", fmt_pct(wacc_case), delta=wacc_delta_str)
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +202,9 @@ def _render_return_category_chart(
 ) -> None:
     """Horizontal stacked bar: Case vs Baseline return per category."""
 
-    st.markdown("#### 30.1.2-30.1.18 Return by Category")
+    _first = capital_cost_var_id(1, "ord").rsplit(".", 1)[0]   # "30.1.2"
+    _last = capital_cost_var_id(17, "ord").rsplit(".", 1)[0]  # "30.1.18"
+    st.markdown(f"#### {_first}-{_last} Return by Category")
 
     if not active_cats:
         st.info("No category data available.")

@@ -35,6 +35,10 @@ from frontend.common.result_helpers import (
     active_categories, halfyear_values, hy_row_values,
     fmt_msek, fmt_delta_msek,
 )
+from config.glossary import (
+    depreciation_var_id, depreciation_components_var_id,
+    VID_TOTAL_DEPRECIATION_ORD, VID_TOTAL_DEPRECIATION_TAIL,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -47,13 +51,12 @@ _ORD, _TAIL, _TOTAL = 'dep_ord', 'dep_tail', 'dep_total'
 
 def _var_id(cat_encode: int) -> str:
     """20.{cat_encode + 1}"""
-    return f"20.{cat_encode + 1}"
+    return depreciation_var_id(cat_encode)
 
 
 def _var_id_components(cat_encode: int) -> str:
-    """20.{cat_encode + 1}.1/20.{cat_encode + 1}.2"""
-    base = cat_encode + 1
-    return f"20.{base}.1/20.{base}.2"
+    """20.{cat_encode + 1}.1; 20.{cat_encode + 1}.2"""
+    return depreciation_components_var_id(cat_encode)
 
 
 def _agg_period(df):
@@ -131,9 +134,11 @@ def _render_kpi_hero(
     case_period: pd.DataFrame,
     bl_period: pd.DataFrame,
 ) -> None:
-    """20.1 Total Depreciation -- three key metrics with delta."""
+    """Total Depreciation -- three key metrics with delta."""
 
-    st.markdown("#### 20.1 Total Depreciation")
+    # Derive parent "20.1" from VID_TOTAL_DEPRECIATION_ORD ("20.1.1")
+    _dep_parent = VID_TOTAL_DEPRECIATION_ORD.rsplit(".", 1)[0]
+    st.markdown(f"#### {_dep_parent} Total Depreciation")
 
     c_ord = case_period['dep_ord'].sum() if not case_period.empty else 0.0
     c_tail = case_period['dep_tail'].sum() if not case_period.empty else 0.0
@@ -149,11 +154,11 @@ def _render_kpi_hero(
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total (20.1)", fmt_msek(c_total), fmt_delta_msek(d_total))
+        st.metric(f"Total ({_dep_parent})", fmt_msek(c_total), fmt_delta_msek(d_total))
     with col2:
-        st.metric("Ordinarie (20.1.1)", fmt_msek(c_ord), fmt_delta_msek(d_ord))
+        st.metric(f"Ordinarie ({VID_TOTAL_DEPRECIATION_ORD})", fmt_msek(c_ord), fmt_delta_msek(d_ord))
     with col3:
-        st.metric("Svans (20.1.2)", fmt_msek(c_tail), fmt_delta_msek(d_tail))
+        st.metric(f"Svans ({VID_TOTAL_DEPRECIATION_TAIL})", fmt_msek(c_tail), fmt_delta_msek(d_tail))
 
 
 # ---------------------------------------------------------------------------

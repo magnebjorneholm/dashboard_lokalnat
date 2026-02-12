@@ -40,6 +40,11 @@ from config.column_names import (
     COL_INCENTIVE_TOTAL, COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
     COL_LOAD_INCENTIVE, COL_MISSING_INCENTIVE,
 )
+from config.glossary import (
+    VID_TOTAL_AFTER_AGG_CAP, VID_INTER_AFTER_CAP,
+    VID_LOSS_AFTER_CAP, VID_UTIL_AFTER_CAP,
+    INCENTIVE_OUTPUT_VAR_IDS,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -187,10 +192,10 @@ def _render_kpi_hero(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
 
     # intaktsram values are in tkr -- convert to kr for uniform _fmt_msek
     components = [
-        ("30.5.2 Total",    COL_INCENTIVE_TOTAL),
-        ("30.4.59 Quality", COL_QUALITY_INCENTIVE),
-        ("30.2.5 Net loss", COL_NETLOSS_INCENTIVE),
-        ("30.3.5 Load",     COL_LOAD_INCENTIVE),
+        (f"{VID_TOTAL_AFTER_AGG_CAP} Total",    COL_INCENTIVE_TOTAL),
+        (f"{VID_INTER_AFTER_CAP} Quality",       COL_QUALITY_INCENTIVE),
+        (f"{VID_LOSS_AFTER_CAP} Net loss",       COL_NETLOSS_INCENTIVE),
+        (f"{VID_UTIL_AFTER_CAP} Load",           COL_LOAD_INCENTIVE),
     ]
 
     cols = st.columns(len(components))

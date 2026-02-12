@@ -14,6 +14,7 @@ from typing import Dict, Any, Optional
 
 from frontend.common.asset_categories import ASSET_CATEGORIES
 from frontend.utils.state_manager import get_config_value
+from config.glossary import lifetime_ordinary_param_id, lifetime_tail_param_id
 
 MODULE_KEY = "m2_depreciation"
 
@@ -33,7 +34,7 @@ def render_lifetimes(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, A
     st.markdown("##### 2.1-2.17 Asset lifetimes")
     st.caption(
         "Modified values override baseline. Changes apply to all companies. "
-        "(Parameters 2.X.1-2.X.2)"
+        f"(Parameters {lifetime_ordinary_param_id(1)}-{lifetime_tail_param_id(17)})"
     )
     
     has_subcat = capbase_data is not None and 'subcat_encode' in capbase_data.columns

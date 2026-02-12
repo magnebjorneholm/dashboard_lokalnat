@@ -17,6 +17,17 @@ Used by:
 from dataclasses import dataclass
 from typing import Tuple, Set, Dict, Any, Optional
 
+from config.glossary import (
+    PID_GENERAL_SCALING, PID_DEBT_RATIO, PID_WACC_REAL,
+    PID_MAX_TOTAL_ADJUSTMENT, PID_LOSS_SCALING, PID_UTIL_SCALING,
+    PID_INTER_COST_SCALING, PID_OPEX_SCALING, PID_FLEX_SCALING,
+    PID_NON_ADJ_SCALING, PID_OUTLIER_THRESHOLD, PID_MAX_POTENTIAL_CAP,
+    PID_MIN_ANNUAL_REQ, PID_COST_BASE,
+    VID_NF_NORM, VID_UG_NORM, VID_CEMI4_NORM,
+    VID_OPEX_ADJUSTABLE, VID_NON_ADJUSTABLE,
+    get_description,
+)
+
 
 @dataclass(frozen=True)
 class ModuleParameter:
@@ -95,15 +106,15 @@ M1_ASSET_BASE = ModuleDefinition(
     title="1. Regulatory asset base valuation",
     description="Asset valuation using norm values or KENT upload",
     parameters=(
-        ModuleParameter("1.1.1", "General scaling factor", 
+        ModuleParameter(PID_GENERAL_SCALING, get_description(PID_GENERAL_SCALING),
                        "Multiplicative factor applied to all asset norm values"),
-        ModuleParameter("1.2.X", "Asset type scaling factors", 
+        ModuleParameter("1.2.X", "Asset type scaling factors",
                        "Category-specific scaling factors (17 categories)"),
     ),
     variables=(
-        ModuleVariable("10.X", "Asset quantities", 
+        ModuleVariable("10.X", "Asset quantities",
                       "Asset quantities by type (17 categories)"),
-        ModuleVariable("KENT", "KENT file upload", 
+        ModuleVariable("KENT", "KENT file upload",
                       "Upload KENT Excel template to override asset data"),
     ),
     sections=(
@@ -158,25 +169,25 @@ M3_COST_OF_CAPITAL = ModuleDefinition(
     title="3. Cost of capital",
     description="WACC and quality/incentive adjustments",
     parameters=(
-        ModuleParameter("3.1", "Base WACC parameters", 
+        ModuleParameter(f"{PID_DEBT_RATIO}-3.1.7", "Base WACC parameters",
                        "Debt ratio, asset beta, risk-free rate, market risk premium, etc."),
-        ModuleParameter("3.2", "Derived WACC", 
+        ModuleParameter(f"3.2.1-{PID_WACC_REAL}", "Derived WACC",
                        "Real WACC before tax (endogenously determined)"),
-        ModuleParameter("3.3", "Overall adjustment cap", 
+        ModuleParameter(PID_MAX_TOTAL_ADJUSTMENT, get_description(PID_MAX_TOTAL_ADJUSTMENT),
                        "Maximum total adjustment as share of WACC"),
-        ModuleParameter("3.4", "Network loss parameters", 
+        ModuleParameter(PID_LOSS_SCALING, "Network loss parameters",
                        "Loss incentive scaling, sharing factor, average cost"),
-        ModuleParameter("3.5", "Utilization rate parameters", 
+        ModuleParameter(PID_UTIL_SCALING, "Utilization rate parameters",
                        "Utilization rate incentive scaling"),
-        ModuleParameter("3.6", "Interruption parameters", 
+        ModuleParameter(PID_INTER_COST_SCALING, "Interruption parameters",
                        "CPI factors, CEMI4 correction, ILE/ILEffekt costs"),
     ),
     variables=(
-        ModuleVariable("30.2", "Network loss adjustment", 
+        ModuleVariable(VID_NF_NORM, "Network loss adjustment",
                       "Norm level, observed level, energy input"),
-        ModuleVariable("30.3", "Utilization rate adjustment", 
+        ModuleVariable(VID_UG_NORM, "Utilization rate adjustment",
                       "Norm level, observed level, upstream network cost"),
-        ModuleVariable("30.4", "Interruption adjustment", 
+        ModuleVariable(VID_CEMI4_NORM, "Interruption adjustment",
                       "CEMI4, AME, AIT, AIF per customer type"),
     ),
     sections=(
@@ -209,17 +220,17 @@ M4_OPERATING_EXP = ModuleDefinition(
     title="4. Operating expenditures",
     description="OPEX scaling and adjustable cost method",
     parameters=(
-        ModuleParameter("4.1.1", "Scaling factor adjustable OPEX", 
+        ModuleParameter(PID_OPEX_SCALING, get_description(PID_OPEX_SCALING),
                        "Applied to OPEX subject to efficiency requirements"),
-        ModuleParameter("4.1.2", "Scaling factor flexibility services", 
+        ModuleParameter(PID_FLEX_SCALING, get_description(PID_FLEX_SCALING),
                        "Applied to flexibility service costs"),
-        ModuleParameter("4.1.3", "Scaling factor non-adjustable OPEX", 
+        ModuleParameter(PID_NON_ADJ_SCALING, get_description(PID_NON_ADJ_SCALING),
                        "Applied to costs outside operator's direct control"),
     ),
     variables=(
-        ModuleVariable("40.1", "Adjustable OPEX", 
+        ModuleVariable(VID_OPEX_ADJUSTABLE, "Adjustable OPEX",
                       "OPEXp and flexibility service cost"),
-        ModuleVariable("40.2", "Non-adjustable OPEX", 
+        ModuleVariable(VID_NON_ADJUSTABLE, "Non-adjustable OPEX",
                       "Total non-adjustable costs (prognosis)"),
     ),
     sections=(
@@ -245,13 +256,13 @@ M5_EFFICIENCY = ModuleDefinition(
     title="5. Efficiency incentive",
     description="DEA efficiency requirements and bounds",
     parameters=(
-        ModuleParameter("5.1", "Outlier identification", 
+        ModuleParameter(PID_OUTLIER_THRESHOLD, "Outlier identification",
                        "Outlier threshold (IQRs above Q3)"),
-        ModuleParameter("5.2", "Efficiency requirement conversion", 
+        ModuleParameter(PID_MAX_POTENTIAL_CAP, "Efficiency requirement conversion",
                        "Maximum potential cap, realization time, customer sharing"),
-        ModuleParameter("5.3", "Efficiency requirement bounds", 
+        ModuleParameter(PID_MIN_ANNUAL_REQ, "Efficiency requirement bounds",
                        "Minimum annual efficiency requirement"),
-        ModuleParameter("5.4", "Cost base application", 
+        ModuleParameter(PID_COST_BASE, "Cost base application",
                        "Apply efficiency requirement on TOTEX or OPEX only"),
     ),
     variables=(),

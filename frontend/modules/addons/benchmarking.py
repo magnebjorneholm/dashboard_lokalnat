@@ -13,6 +13,7 @@ from typing import Dict, Any, List
 
 from frontend.utils.state_manager import get_config_value
 from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_TOTEX
+from config.glossary import PID_OUTLIER_THRESHOLD
 
 MODULE_KEY = "addon_benchmarking"
 
@@ -130,7 +131,7 @@ def render_dea_spec() -> Dict[str, Any]:
     st.divider()
     
     # Outlier identification
-    st.markdown("**5.1.1 Outlier identification**")
+    st.markdown(f"**{PID_OUTLIER_THRESHOLD} Outlier identification**")
     st.latex(FORMULA_OUTLIER_THRESHOLD)
     
     col1, col2 = st.columns(2)
@@ -160,7 +161,7 @@ def render_dea_spec() -> Dict[str, Any]:
     
     # 5.1.1 IQR multiplier
     multiplier = st.number_input(
-        "5.1.1 IQR multiplier",
+        f"{PID_OUTLIER_THRESHOLD} IQR multiplier",
         value=get_config_value(MODULE_KEY, "dea_multiplier", BASELINE_MULTIPLIER),
         min_value=1.0,
         max_value=5.0,

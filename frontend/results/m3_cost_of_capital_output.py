@@ -8,14 +8,14 @@ Displays WACC calculation chain based on input method:
 
 Also displays return on capital by category (30.1.X).
 
-Variable-IDs:
-- 3.1.X: CAPM base parameters
-- 3.2.X: Derived WACC values
+Variable-IDs (from config.glossary):
+- PID_DEBT_RATIO .. PID_INFLATION: CAPM base parameters (3.1.X)
+- PID_EQUITY_BETA .. PID_WACC_REAL: Derived WACC values (3.2.X)
 - 30.1.X: Return on capital by category (ord/tail)
-- 30.2.5: Network loss adjustment
-- 30.3.5: Utilization rate adjustment
-- 30.4.59: Quality adjustment
-- 30.5.2: Total incentive adjustment
+- VID_LOSS_AFTER_CAP: Network loss adjustment (30.2.5)
+- VID_UTIL_AFTER_CAP: Utilization rate adjustment (30.3.5)
+- VID_INTER_AFTER_CAP: Quality adjustment (30.4.59)
+- VID_TOTAL_AFTER_AGG_CAP: Total incentive adjustment (30.5.2)
 """
 
 import streamlit as st
@@ -36,6 +36,15 @@ from frontend.common.result_helpers import (
 from config.column_names import (
     COL_NETLOSS_INCENTIVE, COL_LOAD_INCENTIVE, COL_QUALITY_INCENTIVE,
     COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,
+)
+from config.glossary import (
+    PID_DEBT_RATIO, PID_ASSET_BETA, PID_RISK_FREE_RATE,
+    PID_MARKET_RISK_PREMIUM, PID_CREDIT_RISK_PREMIUM, PID_TAX_RATE,
+    PID_INFLATION, PID_EQUITY_BETA, PID_COST_OF_EQUITY, PID_COST_OF_DEBT,
+    PID_WACC_NOMINAL, PID_WACC_REAL,
+    VID_LOSS_AFTER_CAP, VID_UTIL_AFTER_CAP, VID_INTER_AFTER_CAP,
+    VID_TOTAL_AFTER_AGG_CAP,
+    INCENTIVE_OUTPUT_VAR_IDS,
 )
 
 
@@ -354,13 +363,13 @@ def _render_wacc_section(
         st.markdown("##### 3.1 Base Parameters")
         
         capm_params = [
-            ("3.1.1", "Debt ratio (S)", "debt_ratio", "ratio"),
-            ("3.1.2", "Asset beta", "asset_beta", "ratio"),
-            ("3.1.3", "Risk-free rate (Rf)", "risk_free_rate", "percent"),
-            ("3.1.4", "Market risk premium", "market_risk_premium", "percent"),
-            ("3.1.5", "Credit risk premium", "credit_risk_premium", "percent"),
-            ("3.1.6", "Tax rate (tau)", "tax_rate", "percent"),
-            ("3.1.7", "Inflation (pi)", "inflation", "percent"),
+            (PID_DEBT_RATIO, "Debt ratio (S)", "debt_ratio", "ratio"),
+            (PID_ASSET_BETA, "Asset beta", "asset_beta", "ratio"),
+            (PID_RISK_FREE_RATE, "Risk-free rate (Rf)", "risk_free_rate", "percent"),
+            (PID_MARKET_RISK_PREMIUM, "Market risk premium", "market_risk_premium", "percent"),
+            (PID_CREDIT_RISK_PREMIUM, "Credit risk premium", "credit_risk_premium", "percent"),
+            (PID_TAX_RATE, "Tax rate (tau)", "tax_rate", "percent"),
+            (PID_INFLATION, "Inflation (pi)", "inflation", "percent"),
         ]
         
         capm_rows = []
@@ -394,11 +403,11 @@ def _render_wacc_section(
         st.markdown("##### 3.2 Derived Values")
         
         derived_params = [
-            ("3.2.1", "Equity beta", "equity_beta", "ratio"),
-            ("3.2.2", "Cost of equity (Re)", "cost_of_equity_nominal", "percent"),
-            ("3.2.3", "Cost of debt (Rd)", "cost_of_debt_nominal", "percent"),
-            ("3.2.4", "WACC nominal pre-tax", "wacc_nominal_pre_tax", "percent"),
-            ("3.2.5", "WACC real pre-tax", "wacc_real_pre_tax", "percent"),
+            (PID_EQUITY_BETA, "Equity beta", "equity_beta", "ratio"),
+            (PID_COST_OF_EQUITY, "Cost of equity (Re)", "cost_of_equity_nominal", "percent"),
+            (PID_COST_OF_DEBT, "Cost of debt (Rd)", "cost_of_debt_nominal", "percent"),
+            (PID_WACC_NOMINAL, "WACC nominal pre-tax", "wacc_nominal_pre_tax", "percent"),
+            (PID_WACC_REAL, "WACC real pre-tax", "wacc_real_pre_tax", "percent"),
         ]
         
         derived_rows = []
@@ -432,7 +441,7 @@ def _render_wacc_section(
     
     # === DIRECT or BASELINE: Show only final WACC ===
     elif wacc_input_method in ["direct", "baseline"]:
-        st.markdown("##### 3.2.5 WACC (real, pre-tax)")
+        st.markdown(f"##### {PID_WACC_REAL} WACC (real, pre-tax)")
         
         wacc_delta = wacc_case - BASELINE_WACC
         
@@ -453,9 +462,9 @@ def _render_incentive_section(case_ir: pd.Series, baseline_ir: pd.Series) -> Non
     st.markdown("**Incentive Adjustments**")
     
     inc_components = [
-        ("30.2.5", "Network loss adjustment", COL_NETLOSS_INCENTIVE),
-        ("30.3.5", "Utilization rate adjustment", COL_LOAD_INCENTIVE),
-        ("30.4.59", "Quality adjustment", COL_QUALITY_INCENTIVE),
+        (VID_LOSS_AFTER_CAP, "Network loss adjustment", COL_NETLOSS_INCENTIVE),
+        (VID_UTIL_AFTER_CAP, "Utilization rate adjustment", COL_LOAD_INCENTIVE),
+        (VID_INTER_AFTER_CAP, "Quality adjustment", COL_QUALITY_INCENTIVE),
     ]
     
     inc_rows = []
@@ -476,7 +485,7 @@ def _render_incentive_section(case_ir: pd.Series, baseline_ir: pd.Series) -> Non
     total_baseline = baseline_ir.get(COL_INCENTIVE_TOTAL, 0)
     total_delta, _ = _calc_delta(total_case, total_baseline)
     inc_rows.append({
-        "ID": "30.5.2",
+        "ID": VID_TOTAL_AFTER_AGG_CAP,
         "Component": "Total incentive adjustment",
         "Case (tkr)": _format_tkr(total_case, show_sign=True),
         "Baseline (tkr)": _format_tkr(total_baseline, show_sign=True),
@@ -516,18 +525,8 @@ def _render_peryear_table(
 ) -> None:
     """Render per-year breakdown table for main incentive variables."""
     
-    # Variable-ID mapping for User Manual Table 10
-    var_id_map = {
-        'loss_incentive_a': '30.2.4',
-        'loss_incentive': '30.2.5',
-        'util_incentive_a': '30.3.4',
-        'util_incentive': '30.3.5',
-        'inc_inter': '30.4.57',
-        'inter_incentive_a': '30.4.58',
-        'inter_incentive': '30.4.59',
-        'total_before_agg_cap': '30.5.1',
-        'incentive_total_year': '30.5.2',
-    }
+    # Variable-ID mapping for User Manual Table 10 (from glossary)
+    var_id_map = INCENTIVE_OUTPUT_VAR_IDS
     
     label_map = {
         'loss_incentive_a': 'Network loss (before cap)',

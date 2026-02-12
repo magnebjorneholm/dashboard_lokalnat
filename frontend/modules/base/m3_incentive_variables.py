@@ -15,82 +15,15 @@ from typing import Dict, Any, List, Tuple
 
 from frontend.utils.state_manager import get_user_reid
 from data_loaders.incentive_data import get_user_baseline_variables
+from config.glossary import (
+    CUSTOMER_TYPES_ORDERED as CUSTOMER_TYPES,
+    INCENTIVE_VARIABLE_META as VARIABLE_METADATA,
+    VID_AME as AME_VARIABLE_IDS,
+    VID_AIT as AIT_VARIABLE_IDS,
+    VID_AIF as AIF_VARIABLE_IDS,
+)
 
 MODULE_KEY = "m3_incentive_variables"
-
-# Customer type display order per User Manual Table 9
-CUSTOMER_TYPES: List[Tuple[int, int, str]] = [
-    (1, 5, "Household"),
-    (2, 1, "Agriculture"),
-    (3, 3, "Trade/Services"),
-    (4, 2, "Industry"),
-    (5, 4, "Public sector"),
-    (6, 6, "Boundary points"),
-]
-
-# Variable-ID mapping per User Manual Table 9
-VARIABLE_METADATA = {
-    # 30.2 Network loss adjustment
-    "nf_norm": ("30.2.1", "Network loss norm", "share", "%.4f"),
-    "nf_obs": ("30.2.2", "Network loss observed", "share", "%.4f"),
-    "e_in": ("30.2.3", "Energy input", "MWh", "%.0f"),
-    
-    # 30.3 Utilization rate adjustment
-    "ug_norm": ("30.3.1", "Utilization rate norm", "share", "%.4f"),
-    "ug_obs": ("30.3.2", "Utilization rate observed", "share", "%.4f"),
-    "k_upstream": ("30.3.3", "Cost for upstream network", "kr", "%.0f"),
-    
-    # 30.4 Interruption adjustment - CEMI4
-    "cemi4_norm": ("30.4.1", "CEMI4 norm", "share", "%.4f"),
-    "cemi4_obs": ("30.4.2", "CEMI4 observed", "share", "%.4f"),
-}
-
-# AME Variable-IDs per customer type (UM Table 9: 30.4.3-30.4.8)
-AME_VARIABLE_IDS = {5: "30.4.3", 1: "30.4.4", 3: "30.4.5", 2: "30.4.6", 4: "30.4.7", 6: "30.4.8"}
-
-# AIT Variable-IDs per customer type (UM Table 9: 30.4.9-30.4.32)
-AIT_VARIABLE_IDS = {
-    # Household (SNI 5)
-    (5, 'o', 'norm'): "30.4.9", (5, 'a', 'norm'): "30.4.10",
-    (5, 'o', 'obs'): "30.4.11", (5, 'a', 'obs'): "30.4.12",
-    # Agriculture (SNI 1)
-    (1, 'o', 'norm'): "30.4.13", (1, 'a', 'norm'): "30.4.14",
-    (1, 'o', 'obs'): "30.4.15", (1, 'a', 'obs'): "30.4.16",
-    # Trade/Services (SNI 3)
-    (3, 'o', 'norm'): "30.4.17", (3, 'a', 'norm'): "30.4.18",
-    (3, 'o', 'obs'): "30.4.19", (3, 'a', 'obs'): "30.4.20",
-    # Industry (SNI 2)
-    (2, 'o', 'norm'): "30.4.21", (2, 'a', 'norm'): "30.4.22",
-    (2, 'o', 'obs'): "30.4.23", (2, 'a', 'obs'): "30.4.24",
-    # Public sector (SNI 4)
-    (4, 'o', 'norm'): "30.4.25", (4, 'a', 'norm'): "30.4.26",
-    (4, 'o', 'obs'): "30.4.27", (4, 'a', 'obs'): "30.4.28",
-    # Boundary points (SNI 6)
-    (6, 'o', 'norm'): "30.4.29", (6, 'a', 'norm'): "30.4.30",
-    (6, 'o', 'obs'): "30.4.31", (6, 'a', 'obs'): "30.4.32",
-}
-
-# AIF Variable-IDs per customer type (UM Table 9: 30.4.33-30.4.56)
-AIF_VARIABLE_IDS = {
-    # Household (SNI 5)
-    (5, 'o', 'norm'): "30.4.33", (5, 'a', 'norm'): "30.4.34",
-    (5, 'o', 'obs'): "30.4.35", (5, 'a', 'obs'): "30.4.36",
-    # Agriculture (SNI 1)
-    (1, 'o', 'norm'): "30.4.37", (1, 'a', 'norm'): "30.4.38",
-    (1, 'o', 'obs'): "30.4.39", (1, 'a', 'obs'): "30.4.40",
-    # Trade/Services (SNI 3)
-    (3, 'o', 'norm'): "30.4.41", (3, 'a', 'norm'): "30.4.42",
-    (3, 'o', 'obs'): "30.4.43", (3, 'a', 'obs'): "30.4.44",
-    # Industry (SNI 2)
-    (2, 'o', 'norm'): "30.4.45", (2, 'a', 'norm'): "30.4.46",
-    (2, 'o', 'obs'): "30.4.47", (2, 'a', 'obs'): "30.4.48",
-    # Public sector (SNI 4)
-    (4, 'o', 'norm'): "30.4.49", (4, 'a', 'norm'): "30.4.50",
-    (4, 'o', 'obs'): "30.4.51", (4, 'a', 'obs'): "30.4.52",
-    # Boundary points (SNI 6)
-    (6, 'o', 'norm'): "30.4.53", (6, 'a', 'norm'): "30.4.54",
-    (6, 'o', 'obs'): "30.4.55", (6, 'a', 'obs'): "30.4.56",
-}
 
 
 # =============================================================================

@@ -15,6 +15,10 @@ from typing import Dict, Any
 from frontend.common.parameter_input import parameter_input, parameter_select
 from calculations.efficiency_requirement import get_max_eff_req
 from frontend.utils.state_manager import get_config_value
+from config.glossary import (
+    PID_OUTLIER_THRESHOLD, PID_MAX_POTENTIAL_CAP, PID_REALIZATION_TIME,
+    PID_CUSTOMER_SHARING, PID_MIN_ANNUAL_REQ, PID_COST_BASE,
+)
 
 MODULE_KEY = "m5_efficiency"
 
@@ -44,7 +48,7 @@ def render_efficiency_params() -> Dict[str, Any]:
     config: Dict[str, Any] = {}
     
     st.markdown("##### 5.1 Outlier identification")
-    st.caption("Outlier threshold (5.1.1): configured in Add-on Benchmarking")
+    st.caption(f"Outlier threshold ({PID_OUTLIER_THRESHOLD}): configured in Add-on Benchmarking")
     
     st.divider()
     
@@ -53,7 +57,7 @@ def render_efficiency_params() -> Dict[str, Any]:
     # 5.2.1 Max potential cap (fixed min_val for stability)
     max_pot, max_pot_changed = parameter_input(
         module_key=MODULE_KEY,
-        param_id="5.2.1",
+        param_id=PID_MAX_POTENTIAL_CAP,
         label="Maximum efficiency potential cap",
         baseline=BASELINE_MAX_POTENTIAL,
         value=get_config_value(MODULE_KEY, "trunkering_max", BASELINE_MAX_POTENTIAL),
@@ -70,7 +74,7 @@ def render_efficiency_params() -> Dict[str, Any]:
     # 5.2.2 Realization time
     real_time, real_time_changed = parameter_input(
         module_key=MODULE_KEY,
-        param_id="5.2.2",
+        param_id=PID_REALIZATION_TIME,
         label="Realization time",
         baseline=float(BASELINE_REALIZATION_TIME),
         value=get_config_value(MODULE_KEY, "realiseringstid", float(BASELINE_REALIZATION_TIME)),
@@ -88,7 +92,7 @@ def render_efficiency_params() -> Dict[str, Any]:
     # 5.2.3 Customer sharing factor
     kund_del, kund_del_changed = parameter_input(
         module_key=MODULE_KEY,
-        param_id="5.2.3",
+        param_id=PID_CUSTOMER_SHARING,
         label="Customer sharing factor",
         baseline=BASELINE_CUSTOMER_SHARING,
         value=get_config_value(MODULE_KEY, "kunddelning", BASELINE_CUSTOMER_SHARING),
@@ -109,7 +113,7 @@ def render_efficiency_params() -> Dict[str, Any]:
     # 5.3.1 Minimum requirement (for outliers)
     min_req, min_req_changed = parameter_input(
         module_key=MODULE_KEY,
-        param_id="5.3.1",
+        param_id=PID_MIN_ANNUAL_REQ,
         label="Minimum annual efficiency requirement",
         baseline=BASELINE_MIN_REQUIREMENT,
         value=get_config_value(MODULE_KEY, "outlier_krav", BASELINE_MIN_REQUIREMENT),
@@ -149,7 +153,7 @@ def render_efficiency_params() -> Dict[str, Any]:
     # 5.4.1 Efficiency requirement cost base
     method, method_changed = parameter_select(
         module_key=MODULE_KEY,
-        param_id="5.4.1",
+        param_id=PID_COST_BASE,
         label="Apply efficiency requirement to",
         options=["OPEX", "TOTEX"],
         baseline="OPEX",
@@ -162,11 +166,11 @@ def render_efficiency_params() -> Dict[str, Any]:
 
     # Ensure current widget values are included so they persist when saving/loading cases
     widget_map = {
-        f"{MODULE_KEY}_input_5.2.1": "trunkering_max",
-        f"{MODULE_KEY}_input_5.2.2": "realiseringstid",
-        f"{MODULE_KEY}_input_5.2.3": "kunddelning",
-        f"{MODULE_KEY}_input_5.3.1": "outlier_krav",
-        f"{MODULE_KEY}_select_5.4.1": "paverkbara_method",
+        f"{MODULE_KEY}_input_{PID_MAX_POTENTIAL_CAP}": "trunkering_max",
+        f"{MODULE_KEY}_input_{PID_REALIZATION_TIME}": "realiseringstid",
+        f"{MODULE_KEY}_input_{PID_CUSTOMER_SHARING}": "kunddelning",
+        f"{MODULE_KEY}_input_{PID_MIN_ANNUAL_REQ}": "outlier_krav",
+        f"{MODULE_KEY}_select_{PID_COST_BASE}": "paverkbara_method",
     }
     for wkey, pname in widget_map.items():
         if wkey in st.session_state:

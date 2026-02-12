@@ -21,6 +21,7 @@ from typing import Dict, Any, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
+from config.glossary import asset_value_var_id, VID_TOTAL_ASSET_VALUE
 from frontend.common.asset_categories import (
     ASSET_CATEGORIES, CATEGORY_BY_CODE, get_category_short_name,
 )
@@ -44,8 +45,8 @@ _ORD, _TAIL, _TOTAL = 'nuav_ord', 'nuav_tail', 'nuav_total'
 
 
 def _var_id(cat_encode: int) -> str:
-    """11.{cat_encode + 1}"""
-    return f"11.{cat_encode + 1}"
+    """Variable-ID for asset value by category (delegates to glossary)."""
+    return asset_value_var_id(cat_encode)
 
 
 def _agg_period(df):
@@ -125,7 +126,7 @@ def _render_kpi_hero(
 ) -> None:
     """11.1 Total NUAV -- three key metrics with delta."""
 
-    st.markdown("#### 11.1 Total Asset Value (NUAV)")
+    st.markdown(f"#### {VID_TOTAL_ASSET_VALUE} Total Asset Value (NUAV)")
 
     c_ord = case_period['nuav_ord'].sum() if not case_period.empty else 0.0
     c_tail = case_period['nuav_tail'].sum() if not case_period.empty else 0.0
@@ -161,7 +162,10 @@ def _render_category_chart(
 ) -> None:
     """Horizontal stacked bar: Case vs Baseline NUAV per category."""
 
-    st.markdown("#### 11.2-11.18 Asset Value by Category")
+    st.markdown(
+        f"#### {asset_value_var_id(1)}-{asset_value_var_id(17)} "
+        f"Asset Value by Category"
+    )
 
     if not active_cats:
         st.info("No category data available.")

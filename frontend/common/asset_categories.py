@@ -4,13 +4,49 @@ frontend/common/asset_categories.py
 Asset categories according to Ei methodology (User Manual Tables 1 & 4).
 Used for parameterization of norm values and asset lifetimes.
 
-Parameter-ID structure:
-- Module 1 (1.2.X): Scaling factors
-- Module 2 (2.X.1): Ordinary lifetime (ekdep)
-- Module 2 (2.X.2): Tail lifetime
+Parameter-IDs are sourced from config.glossary (single source of truth).
 """
 
 from typing import Dict, List, NamedTuple
+
+from config.glossary import (
+    ASSET_CATEGORY_NAMES,
+    scaling_param_id,
+    lifetime_ordinary_param_id,
+    lifetime_tail_param_id,
+    PID_GENERAL_SCALING,
+)
+
+
+# Short display names for charts/compact displays (not in glossary)
+_SHORT_NAMES: Dict[int, str] = {
+    1: "Markarbeten, LK",
+    2: "Annan ledning, LK",
+    3: "Annan ledning, OK",
+    4: "Luftledning (annan), LK",
+    5: "It-system",
+    6: "Kabelskåp",
+    7: "Kabel 220kV+, LK",
+    8: "Luftledning 220kV+, LK",
+    9: "Luftledning, OK",
+    10: "Markarbeten 220kV+, LK",
+    11: "Markarbeten, OK",
+    12: "Mätare",
+    13: "Nätstation",
+    14: "Shuntreaktor",
+    15: "Styr/kontroll",
+    16: "Ställverk",
+    17: "Transformator",
+}
+
+# Baseline lifetimes: (ekdep, maxdep) per category
+_LIFETIMES: Dict[int, tuple] = {
+    1: (100, 124), 2: (100, 124), 3: (100, 124), 4: (100, 124),
+    5: (20, 24),   6: (60, 74),   7: (80, 100),  8: (120, 150),
+    9: (80, 100),  10: (80, 100), 11: (100, 124), 12: (20, 24),
+    13: (80, 100), 14: (80, 100), 15: (30, 36),  16: (80, 100),
+    17: (100, 124),
+}
 
 
 class AssetCategory(NamedTuple):
@@ -25,110 +61,19 @@ class AssetCategory(NamedTuple):
     scaling_param_id: str           # Parameter-ID for scaling factor (1.2.X)
 
 
-# All 17 categories per User Manual Tables 1 & 4
+# All 17 categories -- IDs sourced from config.glossary
 ASSET_CATEGORIES: List[AssetCategory] = [
     AssetCategory(
-        1,
-        "Andra markarbeten och byggnader, linjekoncession",
-        "Markarbeten, LK",
-        100, 124, "2.1.1", "2.1.2", "1.2.1"
-    ),
-    AssetCategory(
-        2,
-        "Annan ledning, linjekoncession",
-        "Annan ledning, LK",
-        100, 124, "2.2.1", "2.2.2", "1.2.2"
-    ),
-    AssetCategory(
-        3,
-        "Annan ledning, områdeskoncession",
-        "Annan ledning, OK",
-        100, 124, "2.3.1", "2.3.2", "1.2.3"
-    ),
-    AssetCategory(
-        4,
-        "Annan luftledning, linjekoncession",
-        "Luftledning (annan), LK",
-        100, 124, "2.4.1", "2.4.2", "1.2.4"
-    ),
-    AssetCategory(
-        5,
-        "It-system",
-        "It-system",
-        20, 24, "2.5.1", "2.5.2", "1.2.5"
-    ),
-    AssetCategory(
-        6,
-        "Kabelskåp",
-        "Kabelskåp",
-        60, 74, "2.6.1", "2.6.2", "1.2.6"
-    ),
-    AssetCategory(
-        7,
-        "Ledning med en spänning om 220 kV eller mer, med undantag för luftledning, linjekoncession",
-        "Kabel 220kV+, LK",
-        80, 100, "2.7.1", "2.7.2", "1.2.7"
-    ),
-    AssetCategory(
-        8,
-        "Luftledning med en spänning om 220 kV eller mer, linjekoncession",
-        "Luftledning 220kV+, LK",
-        120, 150, "2.8.1", "2.8.2", "1.2.8"
-    ),
-    AssetCategory(
-        9,
-        "Luftledning, områdeskoncession",
-        "Luftledning, OK",
-        80, 100, "2.9.1", "2.9.2", "1.2.9"
-    ),
-    AssetCategory(
-        10,
-        "Markarbeten och byggnader med anknytning till ett ledningsnät med en spänning om 220 kV eller mer, linjekoncession",
-        "Markarbeten 220kV+, LK",
-        80, 100, "2.10.1", "2.10.2", "1.2.10"
-    ),
-    AssetCategory(
-        11,
-        "Markarbeten och byggnader, områdeskoncession",
-        "Markarbeten, OK",
-        100, 124, "2.11.1", "2.11.2", "1.2.11"
-    ),
-    AssetCategory(
-        12,
-        "Mätare",
-        "Mätare",
-        20, 24, "2.12.1", "2.12.2", "1.2.12"
-    ),
-    AssetCategory(
-        13,
-        "Nätstation",
-        "Nätstation",
-        80, 100, "2.13.1", "2.13.2", "1.2.13"
-    ),
-    AssetCategory(
-        14,
-        "Shuntreaktor",
-        "Shuntreaktor",
-        80, 100, "2.14.1", "2.14.2", "1.2.14"
-    ),
-    AssetCategory(
-        15,
-        "Styr- och kontrollutrustning",
-        "Styr/kontroll",
-        30, 36, "2.15.1", "2.15.2", "1.2.15"
-    ),
-    AssetCategory(
-        16,
-        "Ställverk utan sekundärapparater",
-        "Ställverk",
-        80, 100, "2.16.1", "2.16.2", "1.2.16"
-    ),
-    AssetCategory(
-        17,
-        "Transformator",
-        "Transformator",
-        100, 124, "2.17.1", "2.17.2", "1.2.17"
-    ),
+        ce,
+        ASSET_CATEGORY_NAMES[ce],
+        _SHORT_NAMES[ce],
+        _LIFETIMES[ce][0],
+        _LIFETIMES[ce][1],
+        lifetime_ordinary_param_id(ce),
+        lifetime_tail_param_id(ce),
+        scaling_param_id(ce),
+    )
+    for ce in range(1, 18)
 ]
 
 # Lookup by cat_encode
@@ -147,8 +92,8 @@ BASELINE_SCALING_FACTORS: Dict[int, float] = {
     cat.cat_encode: 1.00 for cat in ASSET_CATEGORIES
 }
 
-# General scaling factor (Parameter-ID 1.1.1)
-GENERAL_SCALING_FACTOR_PARAM_ID = "1.1.1"
+# General scaling factor -- ID from glossary, baseline value here
+GENERAL_SCALING_FACTOR_PARAM_ID = PID_GENERAL_SCALING
 GENERAL_SCALING_FACTOR_BASELINE = 1.00
 
 

@@ -25,6 +25,7 @@ from frontend.common.asset_categories import (
     GENERAL_SCALING_FACTOR_BASELINE,
 )
 from frontend.utils.state_manager import get_config_value
+from config.glossary import PID_GENERAL_SCALING, asset_qty_var_id
 
 MODULE_KEY = "m1_asset_base"
 
@@ -168,7 +169,7 @@ def _render_general_scaling() -> float:
     st.markdown("##### 1.1 General scaling factor")
     st.caption(
         "Applied multiplicatively to all asset norm values. "
-        "Affects all companies uniformly. (Parameter-ID: 1.1.1)"
+        f"Affects all companies uniformly. (Parameter-ID: {PID_GENERAL_SCALING})"
     )
     
     value = st.number_input(
@@ -196,9 +197,10 @@ def _render_general_scaling() -> float:
 def _render_category_scaling() -> Optional[Dict[int, float]]:
     """Render category-level scaling factors (Param 1.2.1-1.2.17)."""
     st.markdown("##### 1.2 Category scaling factors")
+    from config.glossary import scaling_param_id as _sp
     st.caption(
         "Scaling factors per asset category. Affects all companies uniformly. "
-        "(Parameter-IDs: 1.2.1-1.2.17)"
+        f"(Parameter-IDs: {_sp(1)}-{_sp(17)})"
     )
     
     # Build dataframe for editor
@@ -281,7 +283,7 @@ def _render_variables_scaling(
     st.caption(
         "Scale asset quantities per category for your company only. "
         "Only affects ordinarie capital base (tail is unchanged). "
-        "(Variable-IDs: 10.2-10.18)"
+        f"(Variable-IDs: {asset_qty_var_id(1)}-{asset_qty_var_id(17)})"
     )
     
     # Load user's capital base data
@@ -385,9 +387,7 @@ def _get_ordinarie_summary(user_id_network: int) -> pd.DataFrame:
     summary['Category'] = summary['cat_encode'].map(
         lambda x: CATEGORY_BY_CODE[x].name if x in CATEGORY_BY_CODE else f"Unknown ({x})"
     )
-    summary['Var-ID'] = summary['cat_encode'].map(
-        lambda x: f"10.{x + 1}"  # 10.2 for cat_encode=1, etc.
-    )
+    summary['Var-ID'] = summary['cat_encode'].map(asset_qty_var_id)
     summary['NUAV (Mkr)'] = summary['NUAV_total'] / 1_000_000
     
     # Reorder columns

@@ -10,11 +10,11 @@ Three visual blocks:
    adapting to OPEX vs TOTEX method, with baseline reference when delta exists.
 
 Variable-IDs:
-- 5.2.1-5.3.2: Efficiency calculation parameters
+- 5.2.1-5.3.1: Efficiency calculation parameters
 - 50.3.1: Efficiency score
 - 50.3.2: Super-efficiency score
 - 50.3.3: Efficiency potential (raw)
-- 50.3.4: Applied efficiency requirement
+- 50.3.4: Applied efficiency potential (truncated)
 - 50.4.1: OPEX efficiency adjustment
 - 50.4.2: CAPEX efficiency adjustment (TOTEX only)
 - 50.4.3: OPEX after adjustment
@@ -32,6 +32,13 @@ if TYPE_CHECKING:
 
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
 from frontend.common.result_helpers import fmt_pct as _fmt_pct, fmt_tkr as _fmt_tkr
+from config.glossary import (
+    VID_EFFICIENCY_SCORE, VID_SUPER_EFFICIENCY, VID_EFFICIENCY_POTENTIAL,
+    VID_APPLIED_POTENTIAL, VID_OPEX_EFF_ADJUSTMENT, VID_CAPEX_EFF_ADJUSTMENT,
+    VID_OPEX_AFTER_EFF, VID_CAPEX_AFTER_EFF,
+    PID_MAX_POTENTIAL_CAP, PID_REALIZATION_TIME,
+    PID_CUSTOMER_SHARING, PID_MIN_ANNUAL_REQ, PID_TRUNC_MIN,
+)
 from config.column_names import (
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_EFF_REQ_ANNUAL,
     COL_METHOD_USED, COL_OPEX_BEFORE, COL_OPEX_AFTER, COL_OPEX_EFF_DEDUCTION,
@@ -406,7 +413,7 @@ def _render_efficiency_card(case, baseline, params, user_reid):
     with col1:
         delta_eff = (eff_case - eff_baseline) if eff_case and eff_baseline else None
         st.metric(
-            "50.3.1 Efficiency score",
+            f"{VID_EFFICIENCY_SCORE} Efficiency score",
             f"{eff_case:.3f}" if eff_case else "-",
             delta=f"{delta_eff:+.3f}" if delta_eff and abs(delta_eff) > 0.0001 else None,
         )
@@ -416,7 +423,7 @@ def _render_efficiency_card(case, baseline, params, user_reid):
         if pot_tr_case is not None and pot_tr_baseline is not None:
             delta_pot = pot_tr_case - pot_tr_baseline
         st.metric(
-            "Truncated potential",
+            f"{VID_APPLIED_POTENTIAL} Truncated potential",
             _fmt_pct(pot_tr_case, 2) if pot_tr_case is not None else "-",
             delta=f"{delta_pot*100:+.2f} pp" if delta_pot and abs(delta_pot) > 0.0001 else None,
             delta_color="inverse",
@@ -425,7 +432,7 @@ def _render_efficiency_card(case, baseline, params, user_reid):
     with col3:
         delta_ek = (effkrav_case - effkrav_baseline) if effkrav_case and effkrav_baseline else None
         st.metric(
-            "50.3.4 Annual requirement",
+            "Applied annual requirement",
             _fmt_pct(effkrav_case, 2) if effkrav_case else "-",
             delta=f"{delta_ek*100:+.2f} pp" if delta_ek and abs(delta_ek) > 0.0001 else None,
             delta_color="inverse",
@@ -442,22 +449,22 @@ def _render_efficiency_card(case, baseline, params, user_reid):
     # --- 50.3 Efficiency Measures table (including 50.3.3 raw potential) ---
     with st.expander("50.3 Efficiency measures"):
         rows_m = []
-        _add_measure_row(rows_m, "50.3.1", "Efficiency score",
+        _add_measure_row(rows_m, VID_EFFICIENCY_SCORE, "Efficiency score",
                          f"{eff_case:.3f}" if eff_case else "-",
                          f"{eff_baseline:.3f}" if eff_baseline else "-",
                          eff_case, eff_baseline, fmt="score")
 
-        _add_measure_row(rows_m, "50.3.3", "Efficiency potential (raw)",
+        _add_measure_row(rows_m, VID_EFFICIENCY_POTENTIAL, "Efficiency potential (raw)",
                          _fmt_pct(potential_case, 1),
                          _fmt_pct(potential_baseline, 1),
                          potential_case, potential_baseline, fmt="pp1")
 
-        _add_measure_row(rows_m, "-", "Truncated potential",
+        _add_measure_row(rows_m, VID_APPLIED_POTENTIAL, "Truncated potential",
                          _fmt_pct(pot_tr_case, 2),
                          _fmt_pct(pot_tr_baseline, 2),
                          pot_tr_case, pot_tr_baseline, fmt="pp2")
 
-        _add_measure_row(rows_m, "50.3.4", "Applied requirement (annual)",
+        _add_measure_row(rows_m, "-", "Applied annual requirement",
                          _fmt_pct(effkrav_case, 2),
                          _fmt_pct(effkrav_baseline, 2),
                          effkrav_case, effkrav_baseline, fmt="pp2")
@@ -466,7 +473,7 @@ def _render_efficiency_card(case, baseline, params, user_reid):
         super_eff = _get_super_efficiency(case, user_reid)
         if super_eff is not None:
             rows_m.append({
-                "ID": "50.3.2", "Measure": "Super-efficiency score",
+                "ID": VID_SUPER_EFFICIENCY, "Measure": "Super-efficiency score",
                 "Case": f"{super_eff:.3f}", "Baseline": "-", "Delta": "-",
             })
 
@@ -477,15 +484,15 @@ def _render_efficiency_card(case, baseline, params, user_reid):
         p = params
         bp = BASELINE_PARAMS
         rows_p = [
-            ("5.2.1", "Max potential cap", _fmt_pct(p["trunkering_max"]), _fmt_pct(bp["trunkering_max"]),
+            (PID_MAX_POTENTIAL_CAP, "Max potential cap", _fmt_pct(p["trunkering_max"]), _fmt_pct(bp["trunkering_max"]),
              f"{(p['trunkering_max'] - bp['trunkering_max'])*100:+.2f} pp" if abs(p["trunkering_max"] - bp["trunkering_max"]) > 0.0001 else "-"),
-            ("5.2.2", "Realization time", f"{int(p['realiseringstid'])} yr", f"{int(bp['realiseringstid'])} yr",
+            (PID_REALIZATION_TIME, "Realization time", f"{int(p['realiseringstid'])} yr", f"{int(bp['realiseringstid'])} yr",
              f"{int(p['realiseringstid'] - bp['realiseringstid']):+d} yr" if p["realiseringstid"] != bp["realiseringstid"] else "-"),
-            ("5.2.3", "Customer sharing", _fmt_pct(p["kunddelning"]), _fmt_pct(bp["kunddelning"]),
+            (PID_CUSTOMER_SHARING, "Customer sharing", _fmt_pct(p["kunddelning"]), _fmt_pct(bp["kunddelning"]),
              f"{(p['kunddelning'] - bp['kunddelning'])*100:+.2f} pp" if abs(p["kunddelning"] - bp["kunddelning"]) > 0.0001 else "-"),
-            ("5.3.1", "Min annual requirement", _fmt_pct(p["outlier_krav"]), _fmt_pct(bp["outlier_krav"]),
+            (PID_MIN_ANNUAL_REQ, "Min annual requirement", _fmt_pct(p["outlier_krav"]), _fmt_pct(bp["outlier_krav"]),
              f"{(p['outlier_krav'] - bp['outlier_krav'])*100:+.2f} pp" if abs(p["outlier_krav"] - bp["outlier_krav"]) > 0.0001 else "-"),
-            ("5.3.2", "Truncation min (derived)", _fmt_pct(p["trunkering_min"], 2), _fmt_pct(bl_trunkering_min, 2),
+            (PID_TRUNC_MIN, "Truncation min (derived)", _fmt_pct(p["trunkering_min"], 2), _fmt_pct(bl_trunkering_min, 2),
              f"{(p['trunkering_min'] - bl_trunkering_min)*100:+.2f} pp" if abs(p["trunkering_min"] - bl_trunkering_min) > 0.0001 else "-"),
         ]
         df_params = pd.DataFrame(rows_p, columns=["ID", "Parameter", "Case", "Baseline", "Delta"])
@@ -651,14 +658,14 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
     rows = []
 
     _add_cost_row(rows, "-", "OPEX before efficiency adj.", opex_fore, bl_opex_fore)
-    _add_cost_row(rows, "50.4.1", "OPEX efficiency adjustment", -(opex_eff or 0), -(bl_opex_eff or 0), negate_delta=True)
-    _add_cost_row(rows, "50.4.3", "OPEX after efficiency adj.", opex_efter, bl_opex_efter)
+    _add_cost_row(rows, VID_OPEX_EFF_ADJUSTMENT, "OPEX efficiency adjustment", -(opex_eff or 0), -(bl_opex_eff or 0), negate_delta=True)
+    _add_cost_row(rows, VID_OPEX_AFTER_EFF, "OPEX after efficiency adj.", opex_efter, bl_opex_efter)
 
     if method_used == "TOTEX":
         rows.append({"ID": "", "Component": "", "Case (tkr)": "", "Baseline (tkr)": "", "Delta (tkr)": ""})
         _add_cost_row(rows, "-", "CAPEX before efficiency adj.", capex_fore, bl_capex_fore)
-        _add_cost_row(rows, "50.4.2", "CAPEX efficiency adjustment", -(capex_eff or 0), -(bl_capex_eff or 0), negate_delta=True)
-        _add_cost_row(rows, "50.4.4", "CAPEX after efficiency adj.", capex_efter, bl_capex_efter)
+        _add_cost_row(rows, VID_CAPEX_EFF_ADJUSTMENT, "CAPEX efficiency adjustment", -(capex_eff or 0), -(bl_capex_eff or 0), negate_delta=True)
+        _add_cost_row(rows, VID_CAPEX_AFTER_EFF, "CAPEX after efficiency adj.", capex_efter, bl_capex_efter)
 
     with st.expander("Detailed cost breakdown"):
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
