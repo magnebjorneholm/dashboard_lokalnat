@@ -333,7 +333,8 @@ def _method_baseline_with_custom_source(
             user_capbase,
             wacc=wacc_to_use,
             normvalue_adjustments=None,
-            lifetime_adjustments=None
+            lifetime_adjustments=None,
+            return_detailed=False
         )
     except Exception as e:
         # Fallback to baseline on error
@@ -401,7 +402,8 @@ def _method_parameter_change(
             capbase_data,
             wacc=wacc_to_use,
             normvalue_adjustments=config.normvalue_adjustments,
-            lifetime_adjustments=config.lifetime_adjustments
+            lifetime_adjustments=config.lifetime_adjustments,
+            return_detailed=False
         )
     except Exception:
         return _method_baseline_pure(baseline, user_id_network, wacc_chain)

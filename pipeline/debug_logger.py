@@ -73,6 +73,10 @@ class PipelineDebugLogger:
             print(f"    user_capbase_scaled: {pre.user_capbase_scaled.shape}")
         if hasattr(pre, 'kent_file_bytes') and pre.kent_file_bytes:
             print(f"    kent_file: {len(pre.kent_file_bytes):,} bytes")
+        if pre.opex_scaling is not None:
+            print(f"    opex_scaling (4.1.1): {pre.opex_scaling:.4f}")
+        if pre.opex_override is not None:
+            print(f"    opex_override (40.1.1): {pre.opex_override:,.0f} tkr")
 
         dea = cfg.dea
         print(f"\n  [DEA]  method={dea.method}")
@@ -85,6 +89,15 @@ class PipelineDebugLogger:
         trunc_min_str = f"{post.truncation_min:.2%}" if post.truncation_min is not None else "auto"
         print(f"\n  [Post-DEA]  truncation=[{trunc_min_str}, {post.truncation_max:.2%}]"
               f"  customer_sharing={post.customer_sharing:.0%}  realization_time={post.realization_time}yr")
+
+        if post.flex_scaling is not None:
+            print(f"    flex_scaling (4.1.2): {post.flex_scaling:.4f}")
+        if post.non_adj_scaling is not None:
+            print(f"    non_adj_scaling (4.1.3): {post.non_adj_scaling:.4f}")
+        if post.flex_override is not None:
+            print(f"    flex_override (40.1.2): {post.flex_override:,.0f} tkr")
+        if post.non_controllable_override is not None:
+            print(f"    non_controllable_override (40.2.1): {post.non_controllable_override:,.0f} tkr")
 
         if hasattr(post, 'incentive'):
             inc = post.incentive
@@ -132,7 +145,8 @@ class PipelineDebugLogger:
 
         print(f"  Output: {df.shape[0]} rows x {df.shape[1]} cols")
         print(f"  source={output.capbase_source}  method={output.capex_method}"
-              f"  modified={output.capex_modified}  wacc={output.wacc_used}")
+              f"  capex_modified={output.capex_modified}  opex_modified={output.opex_modified}"
+              f"  wacc={output.wacc_used}")
 
         # Track whether CAPEX actually changed
         bl_capex = baseline.df_all_companies[COL_CAPITAL_COST_2024].sum()

@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 
 from calculations.time_codes import YEAR_TO_TIMECODES
 
-TEST_MODE = True  # Flag for test mode (mini-dataset)
+TEST_MODE = False  # Flag for test mode (mini-dataset)
 
 
 def merge_kent_with_baseline(
