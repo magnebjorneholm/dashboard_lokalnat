@@ -31,6 +31,7 @@ from frontend.utils.state_manager import (
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
+from config.column_names import COL_COMPANY_NAME
 
 # Page configuration
 st.set_page_config(
@@ -57,8 +58,8 @@ def get_company_name_lookup() -> dict:
     try:
         from data_loaders.baseline_data import load_baseline_data
         baseline = load_baseline_data()
-        df = baseline.df_all_companies[["REId", "Företag"]].copy()
-        return dict(zip(df["REId"], df["Företag"]))
+        df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
+        return dict(zip(df["REId"], df[COL_COMPANY_NAME]))
     except Exception:
         return {}
 
@@ -259,9 +260,9 @@ def _render_dev_mode_selector():
         try:
             from data_loaders.baseline_data import load_baseline_data
             baseline = load_baseline_data()
-            df = baseline.df_all_companies[["REId", "Företag"]].copy()
-            df["display"] = df["Företag"] + " (" + df["REId"] + ")"
-            return df.sort_values("Företag").to_dict('records')
+            df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
+            df["display"] = df[COL_COMPANY_NAME] + " (" + df["REId"] + ")"
+            return df.sort_values(COL_COMPANY_NAME).to_dict('records')
         except Exception as e:
             st.error(f"Failed to load company list: {e}")
             return [{"REId": "REL00886", "display": "Test Company (REL00886)"}]
@@ -311,9 +312,9 @@ def _render_authenticated_sidebar():
             try:
                 from data_loaders.baseline_data import load_baseline_data
                 baseline = load_baseline_data()
-                df = baseline.df_all_companies[["REId", "Företag"]].copy()
-                df["display"] = df["Företag"] + " (" + df["REId"] + ")"
-                return df.sort_values("Företag").to_dict('records')
+                df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
+                df["display"] = df[COL_COMPANY_NAME] + " (" + df["REId"] + ")"
+                return df.sort_values(COL_COMPANY_NAME).to_dict('records')
             except Exception:
                 return []
         
