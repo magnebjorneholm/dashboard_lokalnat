@@ -127,9 +127,9 @@ class PreDeaConfig:
     normvalue_adjustments: Optional[Dict[int, float]] = None  # {cat_encode: multiplier}
     lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None  # {cat_encode: {'ekdep': X, 'maxdep': Y}}
     
-    # === Controllable cost category overrides (for user's company) ===
-    # {category_name: multiplier}, e.g. {"RR73140_personnel": 1.10}
-    controllable_category_overrides: Optional[Dict[str, float]] = None
+    # === M4 OPEX: parameter scaling (all 148 companies) and variable override (user only) ===
+    opex_scaling: Optional[float] = None    # 4.1.1: None = 1.0 (no scaling)
+    opex_override: Optional[float] = None   # 40.1.1: annual OPEXp in tkr (trumps scaling for user)
 
     # === WACC input specification (for M3 output display) ===
     # How WACC was specified: "capm", "derived", "direct", "baseline"
@@ -213,9 +213,11 @@ class PostDeaConfig:
     # Controllable costs
     controllable_method: ControllableMethod = ControllableMethod.OPEX
 
-    # Non-controllable cost category overrides (for user's company)
-    # {kent_category: multiplier}, e.g. {"grid_subscription": 1.10}
-    non_controllable_category_overrides: Optional[Dict[str, float]] = None
+    # M4 OPEX: parameter scaling (all cos) and variable overrides (user only)
+    flex_scaling: Optional[float] = None              # 4.1.2: None = 1.0
+    non_adj_scaling: Optional[float] = None           # 4.1.3: None = 1.0
+    flex_override: Optional[float] = None             # 40.1.2: period total in tkr
+    non_controllable_override: Optional[float] = None # 40.2.1: period total in tkr
 
     # Incentives
     incentive: IncentiveConfig = field(default_factory=IncentiveConfig)

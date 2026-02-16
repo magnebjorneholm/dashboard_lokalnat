@@ -140,7 +140,7 @@ dashboard_lokalnat/
 |   |-- all_adjust_vars.csv       # All adjustable variables
 |   |-- shapefiles/               # Geographic shapefiles (municipality/county)
 |
-|-- tests/                        # pytest test suite (197 tests, ~65s)
+|-- tests/                        # pytest test suite (205 tests, ~65s)
     |-- conftest.py               # Session-scoped fixtures
     |-- test_baseline_replication.py
     |-- test_kent_calculations.py
@@ -326,7 +326,8 @@ DEFAULT_UI_CONFIG = {
     "m3_cost_of_capital":     {wacc_override},
     "m3_quality_adjustments": {enable_quality/netloss/load, adj_max_*, sharing_*, k_nf},
     "m3_incentive_variables": {nf_norm/obs, ug_norm/obs, cemi4_norm/obs, ...},
-    "m4_operating_exp":       {opex_override},
+    "m4_operating_exp":       {opex_scaling, flex_scaling, non_adj_scaling,
+                                opex_override, flex_override, non_controllable_override},
     "m5_efficiency":          {trunkering_max/min, efficiency_override},
     "addon_benchmarking":     {dea_method, dea_inputs/outputs, dea_rts},
 }
@@ -440,7 +441,8 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 - capbase_source, user_capbase_scaled, kent_file_bytes, kent_user_id_network
 - method (CapexMethod), wacc, normvalue_adjustments, lifetime_adjustments
 - wacc_input_method ("capm"/"derived"/"direct"/"baseline"), wacc_capm_inputs
-- controllable_category_overrides -- {category: multiplier} for user's company OPEX
+- opex_scaling (4.1.1) -- float multiplier for all 148 companies' controllable OPEX
+- opex_override (40.1.1) -- absolute OPEXp in tkr for user's company (trumps scaling)
 
 **DeaConfig** (Stage 3):
 - method (EfficiencyMethod), inputs, outputs, rts ("crs"/"vrs")
@@ -454,7 +456,10 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 - truncation_min (0.01), truncation_max (0.30), outlier_req (0.01)
 - customer_sharing (0.50), realization_time (8), supervision_period (4)
 - controllable_method (OPEX/TOTEX), incentive (IncentiveConfig)
-- non_controllable_category_overrides -- {kent_category: multiplier} for user's company
+- flex_scaling (4.1.2) -- float multiplier for all companies' flexibility costs
+- non_adj_scaling (4.1.3) -- float multiplier for all companies' non-controllable costs
+- flex_override (40.1.2) -- absolute flexibility in tkr for user's company (trumps scaling)
+- non_controllable_override (40.2.1) -- absolute non-controllable in tkr for user (trumps scaling)
 
 **CaseDefinition** (top-level):
 - name, user_reid, pre_dea (PreDeaConfig), dea (DeaConfig), post_dea (PostDeaConfig)
@@ -687,7 +692,7 @@ max_dep (max depreciation years).
 
 **Run:** `./venv/Scripts/python.exe -m pytest tests/ -v`
 **Coverage:** `./venv/Scripts/python.exe -m pytest tests/ -v --cov=calculations --cov=pipeline`
-**197 tests**, all green, ~65s total runtime.
+**205 tests**, all green, ~65s total runtime.
 
 **Session-scoped fixtures** (loaded once in `tests/conftest.py`):
 - `baseline_data` -- Full BaselineData (all 148 companies)
@@ -699,6 +704,6 @@ max_dep (max depreciation years).
 **Key tests:**
 - `test_baseline_replication.py` -- Replicates facit values with hardcoded expected values
 - `test_cost_aggregation.py` -- Verifies grunddata aggregation matches SDF sheets
-- `test_override_cascades.py` -- Controllable/non-controllable override cascade through pipeline
+- `test_override_cascades.py` -- OPEX/flex/non-adj scaling and override cascade through pipeline
 
 **Known:** Company 886 has ~354 tkr rounding difference in capital_cost_2024 (KENT vs DM).

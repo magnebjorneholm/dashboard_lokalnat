@@ -462,9 +462,18 @@ def infer_selected_from_ui_config(ui_config: Dict[str, Any]) -> Set[str]:
     
     # Module 4: Operating expenditures (2 sections)
     m4 = ui_config.get("m4_operating_exp", {})
-    if m4.get("opex_override") is not None:
+    if any([
+        m4.get("opex_scaling") is not None,
+        m4.get("flex_scaling") is not None,
+        m4.get("non_adj_scaling") is not None,
+    ]):
         selected.add("m4.scaling")
-    # TODO: Add m4.opex_vars detection when implemented
+    if any([
+        m4.get("opex_override") is not None,
+        m4.get("flex_override") is not None,
+        m4.get("non_controllable_override") is not None,
+    ]):
+        selected.add("m4.opex_vars")
     
     # Module 5: Efficiency (1 section)
     m5 = ui_config.get("m5_efficiency", {})

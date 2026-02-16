@@ -145,7 +145,8 @@ def run_pipeline(
         baseline=baseline_output,
         config=case_config.post_dea,
         user_reid=user_reid,
-        controllable_category_overrides=case_config.pre_dea.controllable_category_overrides,
+        opex_scaling=case_config.pre_dea.opex_scaling,
+        opex_override=case_config.pre_dea.opex_override,
     )
     
     if debug:

@@ -1,14 +1,18 @@
 """
 tests/test_override_cascades.py
 
-Integration tests for category override cascades through the pipeline.
+Integration tests for M4 parameter/variable override cascades through the pipeline.
 
-Tests two scenarios:
-1. Controllable override → changed DEA → changed eff_req → changed RF
-2. Non-controllable override → changed RF only, unchanged DEA
+Tests:
+1. opex_scaling=1.10 → OPEXp +10% all cos → DEA re-runs → eff_req changes → RF changes
+2. non_adj_scaling=1.10 → non-controllable +10% → RF changes, DEA unchanged
+3. flex_scaling=1.10 → flexibility +10% → RF changes, DEA unchanged
+4. opex_override=X → user's OPEXp replaced → DEA may change
+5. opex_scaling + opex_override → variable trumps for user's company
 """
 
 import pytest
+import pandas as pd
 from pipeline.core import PipelineResult, run_pipeline
 from config.case_definition import (
     CaseDefinition, PreDeaConfig, PostDeaConfig, DeaConfig,
@@ -18,9 +22,10 @@ from config.case_definition import (
 
 USER_REID = "REL00886"
 
-# Override multipliers for testing (10% increase)
-CONTROLLABLE_OVERRIDE = {"RR73140_personnel": 1.10}
-NON_CONTROLLABLE_OVERRIDE = {"grid_subscription": 1.10}
+# Scaling factors for testing
+OPEX_SCALING = 1.10
+NON_ADJ_SCALING = 1.10
+FLEX_SCALING = 1.10
 
 
 # =============================================================================
@@ -28,15 +33,15 @@ NON_CONTROLLABLE_OVERRIDE = {"grid_subscription": 1.10}
 # =============================================================================
 
 @pytest.fixture(scope="session")
-def pipeline_ctrl_override(baseline_data):
-    """Pipeline result with controllable category override (personnel +10%)."""
+def pipeline_opex_scaling(baseline_data):
+    """Pipeline result with opex_scaling=1.10 (4.1.1 — all companies)."""
     config = CaseDefinition(
-        name="Ctrl Override Test",
+        name="OPEX Scaling Test",
         user_reid=USER_REID,
         pre_dea=PreDeaConfig(
             capbase_source=CapbaseSource.BASELINE,
             method=CapexMethod.BASELINE,
-            controllable_category_overrides=CONTROLLABLE_OVERRIDE,
+            opex_scaling=OPEX_SCALING,
         ),
         dea=DeaConfig(method=EfficiencyMethod.BASELINE),
         post_dea=PostDeaConfig(),
@@ -45,10 +50,10 @@ def pipeline_ctrl_override(baseline_data):
 
 
 @pytest.fixture(scope="session")
-def pipeline_nc_override(baseline_data):
-    """Pipeline result with non-controllable category override (grid_subscription +10%)."""
+def pipeline_non_adj_scaling(baseline_data):
+    """Pipeline result with non_adj_scaling=1.10 (4.1.3 — all companies)."""
     config = CaseDefinition(
-        name="NC Override Test",
+        name="Non-Adj Scaling Test",
         user_reid=USER_REID,
         pre_dea=PreDeaConfig(
             capbase_source=CapbaseSource.BASELINE,
@@ -56,158 +61,286 @@ def pipeline_nc_override(baseline_data):
         ),
         dea=DeaConfig(method=EfficiencyMethod.BASELINE),
         post_dea=PostDeaConfig(
-            non_controllable_category_overrides=NON_CONTROLLABLE_OVERRIDE,
+            non_adj_scaling=NON_ADJ_SCALING,
         ),
     )
     return run_pipeline(baseline_data, config, debug=False, validate=True)
 
 
+@pytest.fixture(scope="session")
+def pipeline_flex_scaling(baseline_data):
+    """Pipeline result with flex_scaling=1.10 (4.1.2 — all companies)."""
+    config = CaseDefinition(
+        name="Flex Scaling Test",
+        user_reid=USER_REID,
+        pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.BASELINE,
+            method=CapexMethod.BASELINE,
+        ),
+        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
+        post_dea=PostDeaConfig(
+            flex_scaling=FLEX_SCALING,
+        ),
+    )
+    return run_pipeline(baseline_data, config, debug=False, validate=True)
+
+
+@pytest.fixture(scope="session")
+def pipeline_opex_override(baseline_data):
+    """Pipeline result with opex_override for user's company (40.1.1)."""
+    # Use a significantly different value — baseline is ~219k, use 250k
+    config = CaseDefinition(
+        name="OPEX Override Test",
+        user_reid=USER_REID,
+        pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.BASELINE,
+            method=CapexMethod.BASELINE,
+            opex_override=250000.0,
+        ),
+        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
+        post_dea=PostDeaConfig(),
+    )
+    return run_pipeline(baseline_data, config, debug=False, validate=True)
+
+
+@pytest.fixture(scope="session")
+def pipeline_scaling_plus_override(baseline_data):
+    """Pipeline with both opex_scaling=1.10 and opex_override=250000."""
+    config = CaseDefinition(
+        name="Scaling+Override Test",
+        user_reid=USER_REID,
+        pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.BASELINE,
+            method=CapexMethod.BASELINE,
+            opex_scaling=OPEX_SCALING,
+            opex_override=250000.0,
+        ),
+        dea=DeaConfig(method=EfficiencyMethod.BASELINE),
+        post_dea=PostDeaConfig(),
+    )
+    return run_pipeline(baseline_data, config, debug=False, validate=True)
+
+
 # =============================================================================
-# Test: Controllable override cascade
+# Test 1: opex_scaling cascade (4.1.1)
 # =============================================================================
 
-class TestControllableOverrideCascade:
+class TestOpexScalingCascade:
     """
-    Controllable override flow:
-    Pre-DEA (opex changes) → DEA re-runs → Extraction (new efficiency)
-    → Post-DEA (new eff_req, new RF)
+    4.1.1: Scale adjustable OPEX for all companies.
+    Pre-DEA: COL_CONTROLLABLE_AVG *= 1.10 → TOTEX recalc → DEA re-runs.
+    Post-DEA: sdf_controllable scaled → new eff_req → new RF.
     """
 
-    def test_pipeline_runs_successfully(self, pipeline_ctrl_override):
-        assert isinstance(pipeline_ctrl_override, PipelineResult)
+    def test_pipeline_runs_successfully(self, pipeline_opex_scaling):
+        assert isinstance(pipeline_opex_scaling, PipelineResult)
 
-    def test_opex_increased(self, pipeline_result_886, pipeline_ctrl_override):
-        """Personnel +10% should increase controllable_cost_average."""
+    def test_opex_increased(self, pipeline_result_886, pipeline_opex_scaling):
+        """All companies' OPEXp should increase by ~10%."""
         baseline_opex = pipeline_result_886.extraction.opex
-        override_opex = pipeline_ctrl_override.extraction.opex
-        assert override_opex > baseline_opex
+        scaled_opex = pipeline_opex_scaling.extraction.opex
+        assert scaled_opex > baseline_opex
+        assert scaled_opex == pytest.approx(baseline_opex * OPEX_SCALING, rel=1e-6)
 
-    def test_totex_increased(self, pipeline_result_886, pipeline_ctrl_override):
-        """TOTEX = CAPEX + OPEXp, so increased opex → increased totex."""
+    def test_totex_increased(self, pipeline_result_886, pipeline_opex_scaling):
         baseline_totex = pipeline_result_886.extraction.totex
-        override_totex = pipeline_ctrl_override.extraction.totex
-        assert override_totex > baseline_totex
+        scaled_totex = pipeline_opex_scaling.extraction.totex
+        assert scaled_totex > baseline_totex
 
-    def test_capex_unchanged(self, pipeline_result_886, pipeline_ctrl_override):
-        """CAPEX should not be affected by controllable overrides."""
-        assert pipeline_ctrl_override.extraction.capex == pytest.approx(
+    def test_capex_unchanged(self, pipeline_result_886, pipeline_opex_scaling):
+        assert pipeline_opex_scaling.extraction.capex == pytest.approx(
             pipeline_result_886.extraction.capex, rel=1e-9
         )
 
-    def test_dea_re_executed(self, pipeline_ctrl_override):
-        """DEA must re-run because controllable_cost_average is a DEA input."""
-        assert pipeline_ctrl_override.dea.dea_executed is True
-        assert pipeline_ctrl_override.dea.dea_method == "baseline_recalculated"
+    def test_dea_re_executed(self, pipeline_opex_scaling):
+        assert pipeline_opex_scaling.dea.dea_executed is True
+        assert pipeline_opex_scaling.dea.dea_method == "baseline_recalculated"
 
-    def test_efficiency_changed(self, pipeline_result_886, pipeline_ctrl_override):
-        """New DEA with higher opex → different efficiency score."""
+    def test_efficiency_changed(self, pipeline_result_886, pipeline_opex_scaling):
         baseline_eff = pipeline_result_886.extraction.efficiency
-        override_eff = pipeline_ctrl_override.extraction.efficiency
-        assert override_eff != pytest.approx(baseline_eff, rel=1e-6)
+        scaled_eff = pipeline_opex_scaling.extraction.efficiency
+        assert scaled_eff != pytest.approx(baseline_eff, rel=1e-6)
 
-    def test_eff_req_changed(self, pipeline_result_886, pipeline_ctrl_override):
-        """Different DEA → different efficiency requirement."""
+    def test_eff_req_changed(self, pipeline_result_886, pipeline_opex_scaling):
         baseline_req = pipeline_result_886.post_dea.user_eff_req_pct
-        override_req = pipeline_ctrl_override.post_dea.user_eff_req_pct
-        assert override_req != pytest.approx(baseline_req, rel=1e-6)
+        scaled_req = pipeline_opex_scaling.post_dea.user_eff_req_pct
+        assert scaled_req != pytest.approx(baseline_req, rel=1e-6)
 
-    def test_revenue_frame_changed(self, pipeline_result_886, pipeline_ctrl_override):
-        """Changed controllable costs + changed eff_req → changed revenue frame."""
+    def test_revenue_frame_changed(self, pipeline_result_886, pipeline_opex_scaling):
         baseline_rf = pipeline_result_886.post_dea.user_revenue_frame["revenue_frame_total"]
-        override_rf = pipeline_ctrl_override.post_dea.user_revenue_frame["revenue_frame_total"]
-        assert override_rf != pytest.approx(baseline_rf, rel=1e-6)
+        scaled_rf = pipeline_opex_scaling.post_dea.user_revenue_frame["revenue_frame_total"]
+        assert scaled_rf != pytest.approx(baseline_rf, rel=1e-6)
 
-    def test_other_companies_unchanged(self, pipeline_result_886, pipeline_ctrl_override):
-        """Only user's company should be affected, not the other 147."""
-        import pandas as pd
-
+    def test_all_companies_scaled(self, pipeline_result_886, pipeline_opex_scaling):
+        """All 148 companies' controllable_cost_average should scale by 1.10."""
         baseline_df = pipeline_result_886.pre_dea.df_all_companies
-        override_df = pipeline_ctrl_override.pre_dea.df_all_companies
+        scaled_df = pipeline_opex_scaling.pre_dea.df_all_companies
+        ratio = (
+            scaled_df.set_index("REId")["controllable_cost_average"]
+            / baseline_df.set_index("REId")["controllable_cost_average"]
+        )
+        assert ratio.mean() == pytest.approx(OPEX_SCALING, rel=1e-6)
 
-        # Compare controllable_cost_average for companies other than the user
+    def test_pre_dea_opex_modified_flag(self, pipeline_opex_scaling):
+        assert pipeline_opex_scaling.pre_dea.opex_modified is True
+
+    def test_148_companies_preserved(self, pipeline_opex_scaling):
+        assert len(pipeline_opex_scaling.pre_dea.df_all_companies) == 148
+
+
+# =============================================================================
+# Test 2: non_adj_scaling cascade (4.1.3)
+# =============================================================================
+
+class TestNonAdjScalingCascade:
+    """
+    4.1.3: Scale non-adjustable OPEX for all companies.
+    Only affects RF. DEA and efficiency unchanged.
+    """
+
+    def test_pipeline_runs_successfully(self, pipeline_non_adj_scaling):
+        assert isinstance(pipeline_non_adj_scaling, PipelineResult)
+
+    def test_dea_not_re_executed(self, pipeline_non_adj_scaling):
+        assert pipeline_non_adj_scaling.dea.dea_executed is False
+        assert pipeline_non_adj_scaling.dea.dea_method == "baseline"
+
+    def test_efficiency_unchanged(self, pipeline_result_886, pipeline_non_adj_scaling):
+        assert pipeline_non_adj_scaling.extraction.efficiency == pytest.approx(
+            pipeline_result_886.extraction.efficiency, rel=1e-9
+        )
+
+    def test_opex_unchanged(self, pipeline_result_886, pipeline_non_adj_scaling):
+        assert pipeline_non_adj_scaling.extraction.opex == pytest.approx(
+            pipeline_result_886.extraction.opex, rel=1e-9
+        )
+
+    def test_eff_req_unchanged(self, pipeline_result_886, pipeline_non_adj_scaling):
+        assert pipeline_non_adj_scaling.post_dea.user_eff_req_pct == pytest.approx(
+            pipeline_result_886.post_dea.user_eff_req_pct, rel=1e-9
+        )
+
+    def test_revenue_frame_changed(self, pipeline_result_886, pipeline_non_adj_scaling):
+        baseline_rf = pipeline_result_886.post_dea.user_revenue_frame["revenue_frame_total"]
+        scaled_rf = pipeline_non_adj_scaling.post_dea.user_revenue_frame["revenue_frame_total"]
+        assert scaled_rf != pytest.approx(baseline_rf, rel=1e-6)
+
+    def test_non_controllable_component_changed(self, pipeline_result_886, pipeline_non_adj_scaling):
+        from config.column_names import COL_NON_CONTROLLABLE
+        baseline_nc = pipeline_result_886.post_dea.user_revenue_frame.get(COL_NON_CONTROLLABLE, None)
+        scaled_nc = pipeline_non_adj_scaling.post_dea.user_revenue_frame.get(COL_NON_CONTROLLABLE, None)
+        if baseline_nc is not None and scaled_nc is not None:
+            assert scaled_nc != pytest.approx(baseline_nc, rel=1e-6)
+
+    def test_148_companies_preserved(self, pipeline_non_adj_scaling):
+        assert len(pipeline_non_adj_scaling.pre_dea.df_all_companies) == 148
+
+
+# =============================================================================
+# Test 3: flex_scaling cascade (4.1.2)
+# =============================================================================
+
+class TestFlexScalingCascade:
+    """
+    4.1.2: Scale flexibility services for all companies.
+    Only affects RF. DEA and efficiency unchanged.
+    """
+
+    def test_pipeline_runs_successfully(self, pipeline_flex_scaling):
+        assert isinstance(pipeline_flex_scaling, PipelineResult)
+
+    def test_dea_not_re_executed(self, pipeline_flex_scaling):
+        assert pipeline_flex_scaling.dea.dea_executed is False
+
+    def test_efficiency_unchanged(self, pipeline_result_886, pipeline_flex_scaling):
+        assert pipeline_flex_scaling.extraction.efficiency == pytest.approx(
+            pipeline_result_886.extraction.efficiency, rel=1e-9
+        )
+
+    def test_revenue_frames_changed_for_companies_with_flex(self, pipeline_result_886, pipeline_flex_scaling):
+        """Companies with non-zero flexibility should see changed RF.
+        Company 886 has 0 flexibility, so check all_revenue_frames instead."""
+        baseline_all = pipeline_result_886.post_dea.all_revenue_frames
+        scaled_all = pipeline_flex_scaling.post_dea.all_revenue_frames
+        diff = (
+            scaled_all.set_index("REId")["revenue_frame_total"]
+            - baseline_all.set_index("REId")["revenue_frame_total"]
+        )
+        # At least 30 companies (out of 34 with non-zero flex) should differ
+        assert (diff.abs() > 1.0).sum() >= 30
+
+
+# =============================================================================
+# Test 4: opex_override (40.1.1) — user's company only
+# =============================================================================
+
+class TestOpexOverride:
+    """
+    40.1.1: Override user's OPEXp with absolute value.
+    Only user's company changes. DEA re-runs (opex_modified).
+    """
+
+    def test_pipeline_runs_successfully(self, pipeline_opex_override):
+        assert isinstance(pipeline_opex_override, PipelineResult)
+
+    def test_user_opex_overridden(self, pipeline_opex_override):
+        assert pipeline_opex_override.extraction.opex == pytest.approx(250000.0, rel=1e-6)
+
+    def test_dea_re_executed(self, pipeline_opex_override):
+        assert pipeline_opex_override.dea.dea_executed is True
+
+    def test_other_companies_unchanged(self, pipeline_result_886, pipeline_opex_override):
+        baseline_df = pipeline_result_886.pre_dea.df_all_companies
+        override_df = pipeline_opex_override.pre_dea.df_all_companies
         others_baseline = baseline_df[baseline_df["REId"] != USER_REID]["controllable_cost_average"]
         others_override = override_df[override_df["REId"] != USER_REID]["controllable_cost_average"]
-
         pd.testing.assert_series_equal(
             others_baseline.reset_index(drop=True),
             others_override.reset_index(drop=True),
         )
 
-    def test_148_companies_preserved(self, pipeline_ctrl_override):
-        """All 148 companies should be present."""
-        assert len(pipeline_ctrl_override.pre_dea.df_all_companies) == 148
-        assert len(pipeline_ctrl_override.dea.dea_results) == 148
+    def test_pre_dea_opex_modified_flag(self, pipeline_opex_override):
+        assert pipeline_opex_override.pre_dea.opex_modified is True
 
-    def test_pre_dea_opex_modified_flag(self, pipeline_ctrl_override):
-        """The opex_modified flag should be set."""
-        assert pipeline_ctrl_override.pre_dea.opex_modified is True
-
-
-# =============================================================================
-# Test: Non-controllable override cascade
-# =============================================================================
-
-class TestNonControllableOverrideCascade:
-    """
-    Non-controllable override flow:
-    Only Post-DEA affected (revenue frame). DEA is unchanged.
-    """
-
-    def test_pipeline_runs_successfully(self, pipeline_nc_override):
-        assert isinstance(pipeline_nc_override, PipelineResult)
-
-    def test_dea_not_re_executed(self, pipeline_nc_override):
-        """Non-controllable overrides don't affect DEA inputs."""
-        assert pipeline_nc_override.dea.dea_executed is False
-        assert pipeline_nc_override.dea.dea_method == "baseline"
-
-    def test_efficiency_unchanged(self, pipeline_result_886, pipeline_nc_override):
-        """DEA not re-run → same efficiency as baseline."""
-        assert pipeline_nc_override.extraction.efficiency == pytest.approx(
-            pipeline_result_886.extraction.efficiency, rel=1e-9
-        )
-
-    def test_opex_unchanged(self, pipeline_result_886, pipeline_nc_override):
-        """Controllable costs not modified → same opex."""
-        assert pipeline_nc_override.extraction.opex == pytest.approx(
-            pipeline_result_886.extraction.opex, rel=1e-9
-        )
-
-    def test_eff_req_unchanged(self, pipeline_result_886, pipeline_nc_override):
-        """Same DEA → same efficiency requirement."""
-        assert pipeline_nc_override.post_dea.user_eff_req_pct == pytest.approx(
-            pipeline_result_886.post_dea.user_eff_req_pct, rel=1e-9
-        )
-
-    def test_revenue_frame_changed(self, pipeline_result_886, pipeline_nc_override):
-        """Non-controllable override → changed revenue frame total."""
+    def test_revenue_frame_changed(self, pipeline_result_886, pipeline_opex_override):
         baseline_rf = pipeline_result_886.post_dea.user_revenue_frame["revenue_frame_total"]
-        override_rf = pipeline_nc_override.post_dea.user_revenue_frame["revenue_frame_total"]
+        override_rf = pipeline_opex_override.post_dea.user_revenue_frame["revenue_frame_total"]
         assert override_rf != pytest.approx(baseline_rf, rel=1e-6)
 
-    def test_non_controllable_component_changed(self, pipeline_result_886, pipeline_nc_override):
-        """The non-controllable component should differ from baseline."""
-        from config.column_names import COL_NON_CONTROLLABLE
 
-        baseline_nc = pipeline_result_886.post_dea.user_revenue_frame.get(COL_NON_CONTROLLABLE, None)
-        override_nc = pipeline_nc_override.post_dea.user_revenue_frame.get(COL_NON_CONTROLLABLE, None)
+# =============================================================================
+# Test 5: opex_scaling + opex_override — variable trumps for user
+# =============================================================================
 
-        if baseline_nc is not None and override_nc is not None:
-            assert override_nc != pytest.approx(baseline_nc, rel=1e-6)
+class TestScalingPlusOverride:
+    """
+    Both opex_scaling=1.10 and opex_override=250000.
+    For user: override value trumps (250000, not 219k*1.10).
+    For others: scaling applied (all get *1.10).
+    """
 
-    def test_controllable_component_unchanged(self, pipeline_result_886, pipeline_nc_override):
-        """The controllable component should be identical to baseline."""
-        from config.column_names import COL_CONTROLLABLE_PERIOD
+    def test_pipeline_runs_successfully(self, pipeline_scaling_plus_override):
+        assert isinstance(pipeline_scaling_plus_override, PipelineResult)
 
-        baseline_ctrl = pipeline_result_886.post_dea.user_revenue_frame.get(COL_CONTROLLABLE_PERIOD, None)
-        override_ctrl = pipeline_nc_override.post_dea.user_revenue_frame.get(COL_CONTROLLABLE_PERIOD, None)
+    def test_user_gets_override_value(self, pipeline_scaling_plus_override):
+        """User's opex should be the override, not baseline*scaling."""
+        assert pipeline_scaling_plus_override.extraction.opex == pytest.approx(
+            250000.0, rel=1e-6
+        )
 
-        if baseline_ctrl is not None and override_ctrl is not None:
-            assert override_ctrl == pytest.approx(baseline_ctrl, rel=1e-9)
+    def test_others_get_scaling(self, pipeline_result_886, pipeline_scaling_plus_override):
+        """Other companies should have opex * 1.10."""
+        baseline_df = pipeline_result_886.pre_dea.df_all_companies
+        combo_df = pipeline_scaling_plus_override.pre_dea.df_all_companies
 
-    def test_148_companies_preserved(self, pipeline_nc_override):
-        assert len(pipeline_nc_override.pre_dea.df_all_companies) == 148
+        others_bl = baseline_df[baseline_df["REId"] != USER_REID].set_index("REId")["controllable_cost_average"]
+        others_co = combo_df[combo_df["REId"] != USER_REID].set_index("REId")["controllable_cost_average"]
 
-    def test_pre_dea_opex_modified_flag_false(self, pipeline_nc_override):
-        """No controllable override → opex_modified should be False."""
-        assert pipeline_nc_override.pre_dea.opex_modified is False
+        ratio = others_co / others_bl
+        assert ratio.mean() == pytest.approx(OPEX_SCALING, rel=1e-6)
+
+    def test_user_same_as_override_only(self, pipeline_opex_override, pipeline_scaling_plus_override):
+        """User's extraction.opex should match the override-only scenario."""
+        assert pipeline_scaling_plus_override.extraction.opex == pytest.approx(
+            pipeline_opex_override.extraction.opex, rel=1e-6
+        )

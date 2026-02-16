@@ -19,6 +19,13 @@ from pipeline.stages.stage_outputs import (
     BaselineStageOutput,
     PostDeaStageOutput,
 )
+from config.column_names import (
+    COL_CONTROLLABLE_AVG, COL_NEO_ADJUSTMENTS,
+    COL_NON_CONTROLLABLE,
+    COL_NON_CONTROLLABLE_2024, COL_NON_CONTROLLABLE_2025,
+    COL_NON_CONTROLLABLE_2026, COL_NON_CONTROLLABLE_2027,
+    COL_FLEXIBILITY,
+)
 from calculations.efficiency_requirement import calculate_eff_req_for_dataframe
 from calculations.controllable_cost_calculations import calculate_controllable_with_eff_req
 from calculations.cost_aggregation import aggregate_controllable, aggregate_non_controllable
@@ -45,7 +52,8 @@ def stage_post_dea(
     baseline: BaselineStageOutput,
     config: PostDeaConfig,
     user_reid: str,
-    controllable_category_overrides: dict = None,
+    opex_scaling: float = None,
+    opex_override: float = None,
 ) -> PostDeaStageOutput:
     """
     Stage 5: Calculate efficiency requirements, incentives, adjustable costs, and revenue frame.
@@ -88,23 +96,16 @@ def stage_post_dea(
         baseline.controllable_meta,
     )
 
-    # Apply controllable category overrides for user's company only
-    if controllable_category_overrides:
-        user_detail = baseline.controllable_detail[
-            baseline.controllable_detail["REId"] == user_reid
-        ]
-        user_meta = baseline.controllable_meta[
-            baseline.controllable_meta["REId"] == user_reid
-        ]
-        if not user_detail.empty:
-            user_agg = aggregate_controllable(
-                user_detail, user_meta, controllable_category_overrides
-            )
-            # Replace user's row in the all-company result
-            mask = sdf_controllable["REId"] != user_reid
-            sdf_controllable = pd.concat(
-                [sdf_controllable[mask], user_agg], ignore_index=True
-            )
+    # Apply opex parameter scaling (4.1.1 — all companies)
+    if opex_scaling is not None:
+        sdf_controllable[COL_CONTROLLABLE_AVG] *= opex_scaling
+        sdf_controllable[COL_NEO_ADJUSTMENTS] *= opex_scaling
+
+    # Apply opex variable override (40.1.1 — user's company, trumps scaling)
+    if opex_override is not None:
+        mask = sdf_controllable["REId"] == user_reid
+        sdf_controllable.loc[mask, COL_CONTROLLABLE_AVG] = opex_override
+        sdf_controllable.loc[mask, COL_NEO_ADJUSTMENTS] = 0
 
     # STEP 3: Calculate controllable costs with efficiency requirements
     if config.controllable_method == ControllableMethod.TOTEX:
@@ -140,23 +141,35 @@ def stage_post_dea(
         baseline.non_controllable_detail
     )
 
-    # Apply non-controllable category overrides for user's company only
-    if config.non_controllable_category_overrides:
-        user_nc_detail = baseline.non_controllable_detail[
-            baseline.non_controllable_detail["REId"] == user_reid
-        ]
-        if not user_nc_detail.empty:
-            user_nc_agg = aggregate_non_controllable(
-                user_nc_detail, config.non_controllable_category_overrides
-            )
-            mask = non_controllable_result["REId"] != user_reid
-            non_controllable_result = pd.concat(
-                [non_controllable_result[mask], user_nc_agg], ignore_index=True
-            )
+    # Apply non-adjustable scaling (4.1.3 — all companies)
+    if config.non_adj_scaling is not None:
+        nc_cols = [c for c in [
+            COL_NON_CONTROLLABLE, COL_NON_CONTROLLABLE_2024,
+            COL_NON_CONTROLLABLE_2025, COL_NON_CONTROLLABLE_2026,
+            COL_NON_CONTROLLABLE_2027,
+        ] if c in non_controllable_result.columns]
+        for col in nc_cols:
+            non_controllable_result[col] *= config.non_adj_scaling
+
+    # Apply non-controllable variable override (40.2.1 — user's company)
+    if config.non_controllable_override is not None:
+        mask = non_controllable_result["REId"] == user_reid
+        non_controllable_result.loc[mask, COL_NON_CONTROLLABLE] = (
+            config.non_controllable_override
+        )
+
+    # Apply flexibility scaling (4.1.2) and override (40.1.2)
+    sdf_for_assembly = baseline.sdf_ir.copy()
+    if config.flex_scaling is not None:
+        sdf_for_assembly[COL_FLEXIBILITY] *= config.flex_scaling
+    if config.flex_override is not None:
+        mask = sdf_for_assembly["REId"] == user_reid
+        sdf_for_assembly.loc[mask, COL_FLEXIBILITY] = config.flex_override
+
     all_revenue_frames = assemble_revenue_frame(
         capex_result=capex_for_revenue_frame,
         controllable_result=all_controllable,
-        sdf_baseline=baseline.sdf_ir,
+        sdf_baseline=sdf_for_assembly,
         non_controllable_result=non_controllable_result,
         incentive_result=all_incentives
     )

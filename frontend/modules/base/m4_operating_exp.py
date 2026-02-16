@@ -1,207 +1,208 @@
 """
 Module 4: Operating Expenditures
 
-Handles controllable and non-controllable cost category overrides.
-Parameter-IDs: 4.1.X (controllable categories), 4.2.X (non-controllable categories)
-Variable-IDs: 40.X
+Parameters (all 148 companies):
+- 4.1.1 Scaling factor adjustable OPEX
+- 4.1.2 Scaling factor flexibility services
+- 4.1.3 Scaling factor non-adjustable OPEX
+
+Variables (user's company only):
+- 40.1.1 Adjusted OPEX (OPEXp)
+- 40.1.2 Flexibility service cost
+- 40.2.1 Total non-adjustable costs
 
 Section-based rendering:
-- render_scaling() -> 4.1 Controllable + 4.2 Non-controllable category scaling
-- render_opex_vars() -> 40.X OPEX variables (reserved for future)
+- render_scaling()   -> 4.1.1-4.1.3 parameter scaling
+- render_opex_vars() -> 40.1.1, 40.1.2, 40.2.1 variable overrides
 """
 
 import streamlit as st
-import pandas as pd
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
+from frontend.common.parameter_input import parameter_input
 from frontend.utils.state_manager import get_config_value
+from config.glossary import (
+    PID_OPEX_SCALING, PID_FLEX_SCALING, PID_NON_ADJ_SCALING,
+    VID_OPEX_ADJUSTABLE, VID_FLEX_SERVICE, VID_NON_ADJUSTABLE,
+    get_description,
+)
 
 MODULE_KEY = "m4_operating_exp"
-
-# Controllable cost categories (from controllable_a.parquet)
-CONTROLLABLE_CATEGORIES = [
-    ("4.1.1", "RR7320_power_purchase", "Power purchase (RR7320)"),
-    ("4.1.2", "RR73120_materials", "Materials (RR73120)"),
-    ("4.1.3", "RR73130_external_services", "External services (RR73130)"),
-    ("4.1.4", "RR73140_personnel", "Personnel costs (RR73140)"),
-    ("4.1.5", "RR73180_other_operating", "Other operating (RR73180)"),
-    ("4.1.6", "RR71_adjustments", "RR71 adjustments"),
-    ("4.1.7", "KENT_deductions", "KENT/TN deductions"),
-    ("4.1.8", "capital_cost_outside_base", "Capital cost outside base"),
-    ("4.1.9", "neo_adjustments_per_year", "Neo adjustments (per year)"),
-]
-
-# Non-controllable cost categories (from non_controllable_a.parquet)
-NON_CONTROLLABLE_CATEGORIES = [
-    ("4.2.1", "network_loss_purchased", "Network loss - purchased"),
-    ("4.2.2", "network_loss_own_production", "Network loss - own production"),
-    ("4.2.3", "grid_subscription", "Grid subscription"),
-    ("4.2.4", "grid_connection", "Grid connection"),
-    ("4.2.5", "feed_in_compensation", "Feed-in compensation"),
-    ("4.2.6", "regulatory_fees", "Regulatory fees"),
-    ("4.2.7", "capacity_reserve", "Capacity reserve"),
-]
 
 
 def render_scaling() -> Dict[str, Any]:
     """
-    Render M4 scaling section: controllable and non-controllable category overrides.
+    Render M4 scaling section: 3 parameter inputs (4.1.1-4.1.3).
 
     Returns:
-        Dict with controllable_category_overrides and non_controllable_category_overrides
+        Dict with opex_scaling, flex_scaling, non_adj_scaling (only non-default)
     """
     config: Dict[str, Any] = {}
 
-    # === 4.1 Controllable cost categories ===
-    ctrl_overrides = _render_controllable_scaling()
-    if ctrl_overrides:
-        config["controllable_category_overrides"] = ctrl_overrides
+    st.markdown("##### 4.1 OPEX scaling factors")
+    st.caption(
+        "Scale operating expenditure components for all 148 companies. "
+        "Adjustable OPEX (4.1.1) affects DEA input and triggers re-run. "
+        "Flexibility (4.1.2) and non-adjustable (4.1.3) affect revenue frame only."
+    )
 
-    st.markdown("---")
+    # 4.1.1 Scaling factor adjustable OPEX
+    val, changed = parameter_input(
+        module_key=MODULE_KEY,
+        param_id=PID_OPEX_SCALING,
+        label=get_description(PID_OPEX_SCALING),
+        baseline=1.0,
+        value=get_config_value(MODULE_KEY, "opex_scaling", 1.0),
+        min_val=0.50,
+        max_val=2.00,
+        step=0.01,
+        format_str="%.2f",
+        help_text="Multiplicative scaling for adjustable OPEX (OPEXp). Affects DEA.",
+    )
+    if changed:
+        config["opex_scaling"] = val
 
-    # === 4.2 Non-controllable cost categories ===
-    nonctrl_overrides = _render_non_controllable_scaling()
-    if nonctrl_overrides:
-        config["non_controllable_category_overrides"] = nonctrl_overrides
+    # 4.1.2 Scaling factor flexibility services
+    val, changed = parameter_input(
+        module_key=MODULE_KEY,
+        param_id=PID_FLEX_SCALING,
+        label=get_description(PID_FLEX_SCALING),
+        baseline=1.0,
+        value=get_config_value(MODULE_KEY, "flex_scaling", 1.0),
+        min_val=0.50,
+        max_val=2.00,
+        step=0.01,
+        format_str="%.2f",
+        help_text="Multiplicative scaling for flexibility service costs. RF only.",
+    )
+    if changed:
+        config["flex_scaling"] = val
+
+    # 4.1.3 Scaling factor non-adjustable OPEX
+    val, changed = parameter_input(
+        module_key=MODULE_KEY,
+        param_id=PID_NON_ADJ_SCALING,
+        label=get_description(PID_NON_ADJ_SCALING),
+        baseline=1.0,
+        value=get_config_value(MODULE_KEY, "non_adj_scaling", 1.0),
+        min_val=0.50,
+        max_val=2.00,
+        step=0.01,
+        format_str="%.2f",
+        help_text="Multiplicative scaling for non-adjustable costs. RF only.",
+    )
+    if changed:
+        config["non_adj_scaling"] = val
 
     return config
 
 
 def render_opex_vars() -> Dict[str, Any]:
     """
-    Render M4 variables section: 40.X OPEX variables.
+    Render M4 variables section: 40.1.1, 40.1.2, 40.2.1.
+
+    Loads user's baseline values and presents number_input for overrides.
 
     Returns:
-        Dict with OPEX variable overrides
+        Dict with opex_override, flex_override, non_controllable_override (only overridden)
     """
     config: Dict[str, Any] = {}
 
-    st.markdown("##### 40.X OPEX variables")
-    st.info(
-        "OPEX variables (40.X) - planned for future release:\n"
-        "- 40.1.1 Adjusted OPEX (OPEXp)\n"
-        "- 40.1.2 Flexibility service cost\n"
-        "- 40.2.1 Total non-adjustable costs (prognosis)"
+    st.markdown("##### 40.X OPEX variables (company-specific)")
+    st.caption(
+        "Override OPEX values for your company. "
+        "Variable overrides trump parameter scaling for your company. "
+        "Values in tkr."
     )
+
+    baselines = _load_user_baselines()
+
+    # 40.1.1 Adjusted OPEX (OPEXp)
+    bl_opex = baselines.get("opex", 0.0)
+    current_opex = get_config_value(MODULE_KEY, "opex_override", None)
+    val = st.number_input(
+        f"{VID_OPEX_ADJUSTABLE} — {get_description(VID_OPEX_ADJUSTABLE)} (baseline: {bl_opex:,.0f} tkr)",
+        value=current_opex if current_opex is not None else bl_opex,
+        min_value=0.0,
+        step=1000.0,
+        format="%.0f",
+        key=f"{MODULE_KEY}_var_opex",
+        help="Annual OPEXp in tkr. Trumps 4.1.1 scaling for your company.",
+    )
+    if abs(val - bl_opex) > 0.5:
+        config["opex_override"] = val
+        st.caption(f":orange[Modified] {VID_OPEX_ADJUSTABLE}: {val:,.0f} tkr (baseline {bl_opex:,.0f})")
+
+    # 40.1.2 Flexibility service cost
+    bl_flex = baselines.get("flex", 0.0)
+    current_flex = get_config_value(MODULE_KEY, "flex_override", None)
+    val = st.number_input(
+        f"{VID_FLEX_SERVICE} — {get_description(VID_FLEX_SERVICE)} (baseline: {bl_flex:,.0f} tkr)",
+        value=current_flex if current_flex is not None else bl_flex,
+        min_value=0.0,
+        step=1000.0,
+        format="%.0f",
+        key=f"{MODULE_KEY}_var_flex",
+        help="Period total for flexibility services in tkr. Trumps 4.1.2 scaling.",
+    )
+    if abs(val - bl_flex) > 0.5:
+        config["flex_override"] = val
+        st.caption(f":orange[Modified] {VID_FLEX_SERVICE}: {val:,.0f} tkr (baseline {bl_flex:,.0f})")
+
+    # 40.2.1 Total non-adjustable costs
+    bl_nc = baselines.get("non_controllable", 0.0)
+    current_nc = get_config_value(MODULE_KEY, "non_controllable_override", None)
+    val = st.number_input(
+        f"{VID_NON_ADJUSTABLE} — {get_description(VID_NON_ADJUSTABLE)} (baseline: {bl_nc:,.0f} tkr)",
+        value=current_nc if current_nc is not None else bl_nc,
+        min_value=0.0,
+        step=1000.0,
+        format="%.0f",
+        key=f"{MODULE_KEY}_var_nc",
+        help="Period total for non-adjustable costs in tkr. Trumps 4.1.3 scaling.",
+    )
+    if abs(val - bl_nc) > 0.5:
+        config["non_controllable_override"] = val
+        st.caption(f":orange[Modified] {VID_NON_ADJUSTABLE}: {val:,.0f} tkr (baseline {bl_nc:,.0f})")
 
     return config
 
 
 # =============================================================================
-# CONTROLLABLE CATEGORIES
+# BASELINE LOADER (cached)
 # =============================================================================
 
-def _render_controllable_scaling() -> Optional[Dict[str, float]]:
-    """Render controllable cost category scaling (Param 4.1.1-4.1.9)."""
-    st.markdown("##### 4.1 Controllable cost categories")
-    st.caption(
-        "Scale controllable cost categories for your company. "
-        "Affects DEA input (controllable_cost_average) and revenue frame. "
-        "(Parameter-IDs: 4.1.1-4.1.9)"
-    )
+@st.cache_data(ttl=3600)
+def _load_user_baselines_cached(user_reid: str) -> Dict[str, float]:
+    """Load baseline OPEX values for user's company."""
+    from config.column_names import COL_CONTROLLABLE_AVG, COL_NON_CONTROLLABLE, COL_FLEXIBILITY
+    from data_loaders.baseline_data import load_baseline_data
+    from calculations.cost_aggregation import aggregate_controllable, aggregate_non_controllable
 
-    # Build dataframe for editor
-    data = []
-    ctrl_conf = get_config_value(MODULE_KEY, "controllable_category_overrides", None)
-    for param_id, cat_key, label in CONTROLLABLE_CATEGORIES:
-        initial = 1.0
-        if isinstance(ctrl_conf, dict):
-            initial = float(ctrl_conf.get(cat_key, 1.0))
-        data.append({
-            "Param-ID": param_id,
-            "Category": label,
-            "Scaling": initial,
-            "_cat_key": cat_key,
-        })
+    baseline = load_baseline_data()
 
-    df = pd.DataFrame(data)
+    # OPEXp from df_all_companies (already = SDF-derived medelvärde + neo/4)
+    row = baseline.df_all_companies[baseline.df_all_companies["REId"] == user_reid]
+    opex = float(row[COL_CONTROLLABLE_AVG].iloc[0]) if not row.empty else 0.0
 
-    edited_df = st.data_editor(
-        df[["Param-ID", "Category", "Scaling"]],
-        width="stretch",
-        hide_index=True,
-        num_rows="fixed",
-        disabled=["Param-ID", "Category"],
-        column_config={
-            "Param-ID": st.column_config.TextColumn("Param-ID", width="small"),
-            "Category": st.column_config.TextColumn("Category", width="large"),
-            "Scaling": st.column_config.NumberColumn(
-                "Scaling", min_value=0.5, max_value=2.0, step=0.01, format="%.2f"
-            ),
-        },
-        key="m4_ctrl_cat_editor",
-    )
+    # Flexibility from sdf_ir
+    ir_row = baseline.sdf_ir[baseline.sdf_ir["REId"] == user_reid]
+    flex = float(ir_row[COL_FLEXIBILITY].iloc[0]) if not ir_row.empty else 0.0
 
-    # Extract overrides (only where scaling != 1.0)
-    adjustments: Dict[str, float] = {}
-    for i, row in edited_df.iterrows():
-        scaling = float(row["Scaling"])
-        if abs(scaling - 1.0) > 1e-9:
-            cat_key = df.iloc[i]["_cat_key"]
-            adjustments[cat_key] = scaling
+    # Non-controllable from aggregation
+    nc_result = aggregate_non_controllable(baseline.non_controllable_detail)
+    nc_row = nc_result[nc_result["REId"] == user_reid]
+    nc = float(nc_row[COL_NON_CONTROLLABLE].iloc[0]) if not nc_row.empty else 0.0
 
-    if adjustments:
-        st.caption(
-            f":orange[Modified] - {len(adjustments)} controllable category scaling(s)"
-        )
-
-    return adjustments if adjustments else None
+    return {"opex": opex, "flex": flex, "non_controllable": nc}
 
 
-# =============================================================================
-# NON-CONTROLLABLE CATEGORIES
-# =============================================================================
-
-def _render_non_controllable_scaling() -> Optional[Dict[str, float]]:
-    """Render non-controllable cost category scaling (Param 4.2.1-4.2.7)."""
-    st.markdown("##### 4.2 Non-controllable cost categories")
-    st.caption(
-        "Scale non-controllable (KENT) cost categories for your company. "
-        "Only affects revenue frame (not DEA). "
-        "(Parameter-IDs: 4.2.1-4.2.7)"
-    )
-
-    data = []
-    nonctrl_conf = get_config_value(MODULE_KEY, "non_controllable_category_overrides", None)
-    for param_id, cat_key, label in NON_CONTROLLABLE_CATEGORIES:
-        initial = 1.0
-        if isinstance(nonctrl_conf, dict):
-            initial = float(nonctrl_conf.get(cat_key, 1.0))
-        data.append({
-            "Param-ID": param_id,
-            "Category": label,
-            "Scaling": initial,
-            "_cat_key": cat_key,
-        })
-
-    df = pd.DataFrame(data)
-
-    edited_df = st.data_editor(
-        df[["Param-ID", "Category", "Scaling"]],
-        width="stretch",
-        hide_index=True,
-        num_rows="fixed",
-        disabled=["Param-ID", "Category"],
-        column_config={
-            "Param-ID": st.column_config.TextColumn("Param-ID", width="small"),
-            "Category": st.column_config.TextColumn("Category", width="large"),
-            "Scaling": st.column_config.NumberColumn(
-                "Scaling", min_value=0.5, max_value=2.0, step=0.01, format="%.2f"
-            ),
-        },
-        key="m4_nonctrl_cat_editor",
-    )
-
-    adjustments: Dict[str, float] = {}
-    for i, row in edited_df.iterrows():
-        scaling = float(row["Scaling"])
-        if abs(scaling - 1.0) > 1e-9:
-            cat_key = df.iloc[i]["_cat_key"]
-            adjustments[cat_key] = scaling
-
-    if adjustments:
-        st.caption(
-            f":orange[Modified] - {len(adjustments)} non-controllable category scaling(s)"
-        )
-
-    return adjustments if adjustments else None
+def _load_user_baselines() -> Dict[str, float]:
+    """Get baseline values for current user (from session state)."""
+    user_reid = st.session_state.get("user_reid", "")
+    if not user_reid:
+        return {"opex": 0.0, "flex": 0.0, "non_controllable": 0.0}
+    try:
+        return _load_user_baselines_cached(user_reid)
+    except Exception:
+        return {"opex": 0.0, "flex": 0.0, "non_controllable": 0.0}

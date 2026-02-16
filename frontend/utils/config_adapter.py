@@ -44,6 +44,8 @@ from config.glossary import (
     PID_GENERAL_SCALING, PID_WACC_REAL, PID_LOSS_SCALING, PID_LOSS_SHARING,
     PID_MAX_POTENTIAL_CAP, PID_REALIZATION_TIME, PID_CUSTOMER_SHARING,
     PID_MIN_ANNUAL_REQ,
+    PID_OPEX_SCALING, PID_FLEX_SCALING, PID_NON_ADJ_SCALING,
+    VID_OPEX_ADJUSTABLE, VID_FLEX_SERVICE, VID_NON_ADJUSTABLE,
 )
 
 DEA_INPUT_OPTIONS = BASELINE_DEA_SPEC['inputs']
@@ -159,9 +161,10 @@ def _build_pre_dea_config(
     # === WACC INPUT SPECIFICATION (for M3 output display) ===
     wacc_input_method, wacc_capm_inputs, wacc_derived_inputs = _extract_wacc_inputs(m3)
 
-    # === CONTROLLABLE CATEGORY OVERRIDES (from M4) ===
+    # === M4 OPEX: Pre-DEA parameters (from M4) ===
     m4 = ui_config.get("m4_operating_exp", {})
-    controllable_category_overrides = m4.get("controllable_category_overrides") or None
+    opex_scaling = m4.get("opex_scaling") or None
+    opex_override = m4.get("opex_override") or None
 
     return PreDeaConfig(
         # Source (for user's company)
@@ -176,8 +179,9 @@ def _build_pre_dea_config(
         normvalue_adjustments=normvalue_adjustments,
         lifetime_adjustments=lifetime_adjustments,
 
-        # Controllable cost category overrides (user's company)
-        controllable_category_overrides=controllable_category_overrides,
+        # M4 OPEX scaling/override
+        opex_scaling=opex_scaling,
+        opex_override=opex_override,
 
         # WACC input specification
         wacc_input_method=wacc_input_method,
@@ -470,9 +474,12 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
     controllable_method_str = m5.get("paverkbara_method", "OPEX")
     incentive = _build_incentive_config(ui_config)
 
-    # Non-controllable category overrides (from M4)
+    # M4 OPEX: Post-DEA parameters (from M4)
     m4 = ui_config.get("m4_operating_exp", {})
-    non_controllable_category_overrides = m4.get("non_controllable_category_overrides") or None
+    flex_scaling = m4.get("flex_scaling") or None
+    non_adj_scaling = m4.get("non_adj_scaling") or None
+    flex_override = m4.get("flex_override") or None
+    non_controllable_override = m4.get("non_controllable_override") or None
 
     return PostDeaConfig(
         truncation_min=truncation_min,
@@ -482,7 +489,10 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
         realization_time=realization_time,
         supervision_period=supervision_period,
         controllable_method=ControllableMethod(controllable_method_str),
-        non_controllable_category_overrides=non_controllable_category_overrides,
+        flex_scaling=flex_scaling,
+        non_adj_scaling=non_adj_scaling,
+        flex_override=flex_override,
+        non_controllable_override=non_controllable_override,
         incentive=incentive
     )
 
@@ -552,6 +562,21 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     if not m3q.get("enable_load", True):
         changed.append("3.6.3 Load incentive OFF")
     
+    # Module 4: Operating expenditures
+    m4 = ui_config.get("m4_operating_exp", {})
+    if m4.get("opex_scaling") is not None:
+        changed.append(f"{PID_OPEX_SCALING} Adjustable OPEX scaling: {m4['opex_scaling']:.2f}")
+    if m4.get("flex_scaling") is not None:
+        changed.append(f"{PID_FLEX_SCALING} Flexibility scaling: {m4['flex_scaling']:.2f}")
+    if m4.get("non_adj_scaling") is not None:
+        changed.append(f"{PID_NON_ADJ_SCALING} Non-adjustable scaling: {m4['non_adj_scaling']:.2f}")
+    if m4.get("opex_override") is not None:
+        changed.append(f"{VID_OPEX_ADJUSTABLE} OPEXp override")
+    if m4.get("flex_override") is not None:
+        changed.append(f"{VID_FLEX_SERVICE} Flexibility override")
+    if m4.get("non_controllable_override") is not None:
+        changed.append(f"{VID_NON_ADJUSTABLE} Non-adjustable override")
+
     # Module 5: Efficiency
     m5 = ui_config.get("m5_efficiency", {})
     if m5.get("trunkering_max") is not None:

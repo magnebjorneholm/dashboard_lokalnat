@@ -42,7 +42,7 @@ def stage_pre_dea(
     Three-step process:
     1. Get user's capbase_a based on CapbaseSource
     2. Apply calculation method based on CapexMethod
-    3. Apply controllable category overrides (if set)
+    3. Apply OPEX scaling (4.1.1) and override (40.1.1)
 
     Args:
         baseline: Output from Baseline stage
@@ -55,9 +55,11 @@ def stage_pre_dea(
         - capbase_source: Source that was used
         - capex_method: Method that was used
         - capex_modified: True if CAPEX was changed
-        - opex_modified: True if controllable overrides applied
+        - opex_modified: True if OPEX scaling/override applied
         - wacc_used: WACC that was used
     """
+    from config.column_names import COL_CONTROLLABLE_AVG, COL_TOTEX, COL_CAPITAL_COST_2024
+
     # STEP 1: Get user's capbase_a
     user_capbase, source_used = _get_user_capbase(config, user_id_network)
 
@@ -70,13 +72,39 @@ def stage_pre_dea(
         source_used=source_used
     )
 
-    # STEP 3: Apply controllable category overrides (for user's company only)
-    if config.controllable_category_overrides:
-        result = _apply_controllable_overrides(
-            result=result,
-            baseline=baseline,
-            user_id_network=user_id_network,
-            overrides=config.controllable_category_overrides,
+    # STEP 3: Apply OPEX parameter scaling (4.1.1) and variable override (40.1.1)
+    opex_modified = False
+    if config.opex_scaling is not None or config.opex_override is not None:
+        df = result.df_all_companies.copy()
+
+        # 4.1.1 — Scale adjustable OPEX for all 148 companies
+        if config.opex_scaling is not None:
+            df[COL_CONTROLLABLE_AVG] *= config.opex_scaling
+            df[COL_TOTEX] = df[COL_CONTROLLABLE_AVG] + df[COL_CAPITAL_COST_2024]
+            opex_modified = True
+
+        # 40.1.1 — Override user's OPEXp (trumps scaling for that company)
+        if config.opex_override is not None:
+            user_reid = f"REL{user_id_network:05d}"
+            mask = df["REId"] == user_reid
+            df.loc[mask, COL_CONTROLLABLE_AVG] = config.opex_override
+            df.loc[mask, COL_TOTEX] = (
+                config.opex_override + df.loc[mask, COL_CAPITAL_COST_2024].values[0]
+            )
+            opex_modified = True
+
+        result = PreDeaStageOutput(
+            df_all_companies=df,
+            capbase_source=result.capbase_source,
+            capex_method=result.capex_method,
+            capex_modified=result.capex_modified,
+            opex_modified=opex_modified,
+            wacc_used=result.wacc_used,
+            user_id_network=result.user_id_network,
+            wacc_input_method=result.wacc_input_method,
+            wacc_inputs=result.wacc_inputs,
+            wacc_derived=result.wacc_derived,
+            df_by_category=result.df_by_category,
         )
 
     return result
@@ -398,65 +426,3 @@ def _method_parameter_change(
     )
 
 
-# =============================================================================
-# STEP 3: CONTROLLABLE CATEGORY OVERRIDES
-# =============================================================================
-
-def _apply_controllable_overrides(
-    result: PreDeaStageOutput,
-    baseline: BaselineStageOutput,
-    user_id_network: int,
-    overrides: dict,
-) -> PreDeaStageOutput:
-    """
-    Apply controllable category overrides for the user's company.
-
-    Re-aggregates with overrides for the user only, then replaces the user's
-    controllable_cost_average and TOTEX in df_all_companies.
-    Sets opex_modified=True so DEA re-runs.
-    """
-    from calculations.cost_aggregation import aggregate_controllable
-    from config.column_names import COL_CONTROLLABLE_AVG, COL_TOTEX, COL_CAPITAL_COST_2024
-
-    user_reid = f"REL{user_id_network:05d}"
-
-    # Filter grunddata to user's company
-    user_detail = baseline.controllable_detail[
-        baseline.controllable_detail["REId"] == user_reid
-    ]
-    user_meta = baseline.controllable_meta[
-        baseline.controllable_meta["REId"] == user_reid
-    ]
-
-    if user_detail.empty or user_meta.empty:
-        return result  # No data for user, return unchanged
-
-    # Aggregate with overrides
-    user_agg = aggregate_controllable(user_detail, user_meta, overrides)
-
-    # Compute opexp_equivalent (same formula as baseline_data.py)
-    opexp_eq = (
-        user_agg[COL_CONTROLLABLE_AVG].iloc[0]
-        + user_agg["neo_adjustments_period"].iloc[0] / 4
-    )
-
-    # Replace user's values in df_all_companies
-    df = result.df_all_companies.copy()
-    mask = df["REId"] == user_reid
-    df.loc[mask, COL_CONTROLLABLE_AVG] = opexp_eq
-    df.loc[mask, COL_TOTEX] = opexp_eq + df.loc[mask, COL_CAPITAL_COST_2024].values[0]
-
-    # Return new output with opex_modified=True
-    return PreDeaStageOutput(
-        df_all_companies=df,
-        capbase_source=result.capbase_source,
-        capex_method=result.capex_method,
-        capex_modified=result.capex_modified,
-        opex_modified=True,
-        wacc_used=result.wacc_used,
-        user_id_network=result.user_id_network,
-        wacc_input_method=result.wacc_input_method,
-        wacc_inputs=result.wacc_inputs,
-        wacc_derived=result.wacc_derived,
-        df_by_category=result.df_by_category,
-    )

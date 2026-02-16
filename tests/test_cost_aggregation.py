@@ -148,63 +148,6 @@ class TestNonControllableMatchesSdfIr:
         assert diff.max() < 0.01
 
 
-# ---------------------------------------------------------------------------
-# Override tests
-# ---------------------------------------------------------------------------
-
-class TestIdentityOverrides:
-    """All overrides = 1.0 should give same result as no overrides."""
-
-    def test_controllable_identity(self, ctrl_detail, ctrl_meta):
-        categories = ctrl_detail["category"].unique().tolist()
-        overrides = {cat: 1.0 for cat in categories}
-        result_with = aggregate_controllable(ctrl_detail, ctrl_meta, category_overrides=overrides)
-        result_without = aggregate_controllable(ctrl_detail, ctrl_meta)
-        diff = abs(result_with[COL_CONTROLLABLE_AVG] - result_without[COL_CONTROLLABLE_AVG])
-        assert diff.max() < 0.01
-
-    def test_non_controllable_identity(self, nonctrl_detail):
-        categories = nonctrl_detail["kent_category"].unique().tolist()
-        overrides = {cat: 1.0 for cat in categories}
-        result_with = aggregate_non_controllable(nonctrl_detail, category_overrides=overrides)
-        result_without = aggregate_non_controllable(nonctrl_detail)
-        diff = abs(result_with[COL_NON_CONTROLLABLE] - result_without[COL_NON_CONTROLLABLE])
-        assert diff.max() < 0.01
-
-
-class TestCategoryOverrideScalesCorrectly:
-    """Scaling a single category by 1.10x should change the total by the expected amount."""
-
-    def test_personnel_110x(self, ctrl_detail, ctrl_meta):
-        baseline = aggregate_controllable(ctrl_detail, ctrl_meta)
-        scaled = aggregate_controllable(
-            ctrl_detail, ctrl_meta,
-            category_overrides={"RR73140_personnel": 1.10}
-        )
-        # All companies should have >= baseline (personnel is positive cost)
-        diff = scaled[COL_CONTROLLABLE_AVG] - baseline[COL_CONTROLLABLE_AVG]
-        # Companies with non-zero personnel should see an increase
-        has_personnel = ctrl_detail[ctrl_detail["category"] == "RR73140_personnel"]
-        companies_with_personnel = has_personnel[has_personnel["amount_nominal"].abs() > 0]["REId"].unique()
-        for reid in companies_with_personnel[:3]:
-            d = diff[scaled["REId"] == reid].iloc[0]
-            assert d > 0, f"{reid}: expected positive diff but got {d:.2f}"
-
-    def test_nonctrl_grid_sub_110x(self, nonctrl_detail):
-        baseline = aggregate_non_controllable(nonctrl_detail)
-        scaled = aggregate_non_controllable(
-            nonctrl_detail,
-            category_overrides={"grid_subscription": 1.10}
-        )
-        # Grid subscription is mostly negative (cost) but 1 company has positive (credit).
-        # Scaling by 1.10x should change every company's total (no zero-diff).
-        diff = scaled[COL_NON_CONTROLLABLE] - baseline[COL_NON_CONTROLLABLE]
-        # Most companies (with negative grid sub) should see an increase
-        assert (diff.abs() > 0.01).sum() == 148, "All companies should be affected"
-        # Majority should have positive diff (increased costs)
-        assert (diff > 0).sum() >= 145, "Most companies should see increased total"
-
-
 class TestSdfDerivedVsOpexp:
     """
     Document the relationship between SDF-derived controllable and DM OPEXp.

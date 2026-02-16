@@ -10,7 +10,6 @@ Non-controllable: detail → per-company period total + per-year breakdown
 
 import pandas as pd
 import numpy as np
-from typing import Optional, Dict
 
 from config.column_names import (
     COL_CONTROLLABLE_AVG, COL_NEO_ADJUSTMENTS,
@@ -26,37 +25,26 @@ INDEX_COLS = {2018: "index_2018", 2019: "index_2019", 2020: "index_2020", 2021: 
 def aggregate_controllable(
     detail: pd.DataFrame,
     meta: pd.DataFrame,
-    category_overrides: Optional[Dict[str, float]] = None,
 ) -> pd.DataFrame:
     """
     Aggregate per-category detail to per-company controllable_cost_average.
 
     Steps:
-    1. Apply category overrides (multiplicative scaling) if provided
-    2. Sum categories per company per year → nominal yearly total
-    3. Multiply by index factor per year → 2022-level yearly total
-    4. Average the 4 yearly totals → controllable_cost_average
-    5. Attach neo_adjustments from meta
+    1. Sum categories per company per year → nominal yearly total
+    2. Multiply by index factor per year → 2022-level yearly total
+    3. Average the 4 yearly totals → controllable_cost_average
+    4. Attach neo_adjustments from meta
 
     Args:
         detail: From controllable_a.parquet (REId, category, year, amount_nominal)
         meta: From controllable_meta.parquet (REId, index_2018..2021, neo_adjustment, eff_req_pct)
-        category_overrides: Optional {category_name: multiplier} for scaling
 
     Returns:
         DataFrame with REId, controllable_cost_average, neo_adjustments_period
-        (Same output shape as current get_controllable_from_sdf())
     """
     df = detail.copy()
 
-    # Step 1: Apply category overrides
-    if category_overrides:
-        for cat_name, multiplier in category_overrides.items():
-            mask = df["category"] == cat_name
-            if mask.any():
-                df.loc[mask, "amount_nominal"] = df.loc[mask, "amount_nominal"] * multiplier
-
-    # Step 2: Sum categories per company per year
+    # Step 1: Sum categories per company per year
     yearly_sums = df.groupby(["REId", "year"])["amount_nominal"].sum().reset_index()
     yearly_sums.columns = ["REId", "year", "nominal_total"]
 
@@ -89,27 +77,18 @@ def aggregate_controllable(
 
 def aggregate_non_controllable(
     detail: pd.DataFrame,
-    category_overrides: Optional[Dict[str, float]] = None,
 ) -> pd.DataFrame:
     """
     Aggregate per-category non-controllable detail to per-company totals.
 
     Args:
         detail: From non_controllable_a.parquet (REId, kent_category, year, amount)
-        category_overrides: Optional {kent_category: multiplier} for scaling
 
     Returns:
         DataFrame with REId, non_controllable_cost_period,
         non_controllable_cost_2024..2027
     """
     df = detail.copy()
-
-    # Apply category overrides
-    if category_overrides:
-        for cat_name, multiplier in category_overrides.items():
-            mask = df["kent_category"] == cat_name
-            if mask.any():
-                df.loc[mask, "amount"] = df.loc[mask, "amount"] * multiplier
 
     # Sum per company per year
     yearly_sums = df.groupby(["REId", "year"])["amount"].sum().reset_index()
