@@ -166,15 +166,17 @@ def _render_distributions(case, baseline, params):
 
     st.markdown("**Efficiency Distribution**")
 
-    # Zone explanation caption (point 2)
+    # Zone explanation caption
     cap_pct = params["trunkering_max"] * 100
     floor_pct = params["trunkering_min"] * 100
+    outlier_krav_pct = params["outlier_krav"] * 100
     st.caption(
         f"Left chart: distribution of DEA efficiency scores for all 148 companies. "
         f"Companies with potential above {cap_pct:.0f}% (efficiency below {1 - params['trunkering_max']:.2f}) "
         f"are capped at {cap_pct:.0f}%. "
         f"Companies with potential below {floor_pct:.1f}% (efficiency above {1 - params['trunkering_min']:.3f}) "
-        f"are floored at {floor_pct:.1f}%. "
+        f"are floored at {floor_pct:.1f}% "
+        f"(derived from the minimum annual requirement of {outlier_krav_pct:.1f}%/yr). "
         f"Right chart: resulting annual efficiency requirements after truncation and realization."
     )
 
@@ -224,7 +226,7 @@ def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params):
         fillcolor=ZONE_CAP,
         line=dict(color=ZONE_CAP_BORDER, width=1, dash="dot"),
         annotation_text=f"Cap ({params['trunkering_max']*100:.0f}%)",
-        annotation_position="top left",
+        annotation_position="top right",
         annotation_font_size=10,
         annotation_font_color=COLORS["warning"],
     )
@@ -239,8 +241,8 @@ def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params):
         x0=eff_floor, x1=max(eff_scores.max() * 1.02, 1.05),
         fillcolor=ZONE_FLOOR,
         line=dict(color=ZONE_FLOOR_BORDER, width=1, dash="dot"),
-        annotation_text=f"Floor ({params['outlier_krav']*100:.1f}%/yr)",
-        annotation_position="top right",
+        annotation_text=f"Floor ({params['trunkering_min']*100:.1f}%)",
+        annotation_position="top left",
         annotation_font_size=10,
         annotation_font_color=COLORS["success"],
     )
