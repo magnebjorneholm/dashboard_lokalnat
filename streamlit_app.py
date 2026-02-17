@@ -31,6 +31,7 @@ from frontend.utils.state_manager import (
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
+from auth.cookie_session import get_auth_cookie, delete_auth_cookie
 from config.column_names import COL_COMPANY_NAME
 
 # Page configuration
@@ -95,7 +96,7 @@ def get_company_display(reid: str) -> str:
 def check_auth() -> bool:
     """
     Check if user is authorized to access the app.
-    
+
     Returns True if:
     - Dev mode is enabled (skip_auth = true in secrets)
     - User is logged in via Firebase
@@ -103,6 +104,53 @@ def check_auth() -> bool:
     if is_dev_mode():
         return True
     return is_authenticated()
+
+
+def try_restore_auth_from_cookie() -> bool:
+    """Attempt to restore auth session from browser cookie.
+
+    Reads Firebase refresh token from cookie, exchanges it for a new
+    ID token, verifies claims, and restores session state.
+
+    Returns True if auth was successfully restored.
+    """
+    if is_dev_mode() or is_authenticated():
+        return True
+
+    refresh_token = get_auth_cookie()
+    if not refresh_token:
+        return False
+
+    try:
+        auth_manager = initialize_firebase_auth()
+
+        # Exchange refresh token for a new ID token
+        refreshed = auth_manager.auth.refresh(refresh_token)
+        id_token = refreshed["idToken"]
+
+        # Verify token and get claims via admin SDK
+        claims = auth_manager.get_user_claims(id_token)
+        if not claims:
+            delete_auth_cookie()
+            return False
+
+        # Restore session state
+        st.session_state["auth_user"] = refreshed
+        st.session_state["auth_token"] = id_token
+        st.session_state["auth_email"] = claims.get("email")
+        st.session_state["auth_uid"] = claims.get("uid")
+        st.session_state["auth_role"] = claims.get("role", "company")
+        st.session_state["auth_reid"] = claims.get("reid")
+
+        # Auto-set user_reid for company users
+        if claims.get("role") == "company" and claims.get("reid"):
+            set_user_reid(claims["reid"])
+
+        return True
+
+    except Exception:
+        delete_auth_cookie()
+        return False
 
 
 # =============================================================================
@@ -359,6 +407,7 @@ def _render_authenticated_sidebar():
     
     # Logout button
     if st.button("Logout", width='stretch'):
+        delete_auth_cookie()
         auth_manager = initialize_firebase_auth()
         auth_manager.sign_out()
         st.session_state["user_reid"] = None
@@ -394,9 +443,12 @@ results = st.Page(
 # MAIN
 # =============================================================================
 
+# Restore auth from cookie if session was lost (page refresh)
+try_restore_auth_from_cookie()
+
 if check_auth():
     render_sidebar()
-    
+
     pg = st.navigation([case_definition, case_config, results])
     pg.run()
 

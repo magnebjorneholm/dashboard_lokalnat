@@ -136,6 +136,7 @@ dashboard_lokalnat/
 |-- auth/
 |   |-- firebase_auth.py          # Firebase auth: login, registration, claims, dev mode
 |   |-- firebase_firestore.py     # Firestore client (singleton)
+|   |-- cookie_session.py         # Cookie-based session persistence (refresh token)
 |
 |-- data/                         # Data files (external/regulatory sources, DO NOT RENAME)
 |   |-- Data_modeller.xlsx        # Main data: 148 companies, CAPEX/OPEX/volumes/returns
@@ -451,10 +452,34 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 | Dev mode  | skip_auth=true in secrets| Free selection (dropdown)                |
 
 **Flow:**
-1. `streamlit_app.py` -> `check_auth()` -> dev mode OR Firebase
+1. `streamlit_app.py` -> `try_restore_auth_from_cookie()` -> `check_auth()` -> dev mode OR Firebase
 2. Login via `pages/login.py` (email/password)
 3. Custom claims: `{REId: "REL00886", role: "company"}`
 4. Session state: `auth_email`, `auth_role`, `auth_reid`, `auth_uid`, `auth_token`
+
+### Session Persistence (cookie_session.py)
+
+Authentication survives page refreshes via a browser cookie storing the Firebase refresh token.
+
+**Files:** `auth/cookie_session.py` (helpers), `streamlit_app.py` (restore), `pages/login.py` (save)
+
+**Flow on login:**
+1. Firebase `sign_in` → returns `refreshToken`
+2. `set_auth_cookie(refreshToken)` → JavaScript sets cookie (`regumetrica_auth`, 30-day expiry)
+
+**Flow on page refresh:**
+1. `st.session_state` is wiped (new websocket)
+2. `try_restore_auth_from_cookie()` reads cookie via `st.context.cookies`
+3. Exchanges refresh token for new ID token via `auth.refresh()`
+4. Verifies claims via admin SDK → restores session state
+5. User stays logged in on the same page
+
+**Flow on logout:**
+1. `delete_auth_cookie()` → expires the cookie
+2. `auth_manager.sign_out()` → clears session state
+
+**Note:** Only auth state is persisted. UI config (`ui_config`, `selected_modules`, results) resets to
+baseline on refresh. Users should save their case to Firestore to preserve work across sessions.
 
 
 ## 12. Config Dataclasses (config/case_definition.py)

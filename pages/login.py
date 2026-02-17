@@ -20,12 +20,7 @@ from auth.firebase_auth import (
     is_user_logged_in,
     is_dev_mode,
 )
-
-st.set_page_config(
-    page_title="Regumetrica - Login",
-    page_icon="⚡",
-    layout="centered",
-)
+from auth.cookie_session import set_auth_cookie
 
 
 # =============================================================================
@@ -204,23 +199,26 @@ def render_login_form(auth_manager) -> None:
                 st.session_state['pending_verification_token'] = user.get('idToken')
                 return
             
+            # Save refresh token in cookie for session persistence
+            set_auth_cookie(user.get('refreshToken', ''))
+
             # Get user claims
             claims = auth_manager.get_user_claims(user['idToken'])
-            
+
             # Store in session state
             st.session_state['auth_user'] = user
             st.session_state['auth_token'] = user.get('idToken')
             st.session_state['auth_email'] = email
             st.session_state['auth_uid'] = user.get('localId')
-            
+
             if claims:
                 st.session_state['auth_role'] = claims.get('role', 'company')
                 st.session_state['auth_reid'] = claims.get('reid')
-                
+
                 # Auto-set user_reid for company users
                 if claims.get('role') == 'company' and claims.get('reid'):
                     set_user_reid(claims.get('reid'))
-            
+
             st.success("Login successful!")
             st.rerun()
         else:
@@ -392,6 +390,8 @@ def main():
                 st.switch_page("pages/0_case_definition.py")
         with col2:
             if st.button("Logout", width='stretch'):
+                from auth.cookie_session import delete_auth_cookie
+                delete_auth_cookie()
                 auth_manager = initialize_firebase_auth()
                 auth_manager.sign_out()
                 st.rerun()
