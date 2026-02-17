@@ -8,6 +8,7 @@ Mappar numerisk reid till REId-format (REL00001, etc.).
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, List
+import streamlit as st
 
 
 # Alla variabelkolumner som kan overridas
@@ -36,6 +37,7 @@ VARIABLE_COLUMNS: List[str] = [
 ]
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_incentive_data(filepath: Optional[str] = None) -> pd.DataFrame:
     """
     Laddar incitamentdata och fÃ¶rbereder den fÃ¶r berÃ¤kning.

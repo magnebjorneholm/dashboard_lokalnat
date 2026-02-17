@@ -4,7 +4,32 @@
       "Bash(dir:*)",
       "Bash(git commit:*)",
       "Bash(python -c:*)",
-      "Bash(c:\\\\Users\\\\IFNguest\\\\dashboard_lokalnat\\\\venv\\\\Scripts\\\\python.exe:*)"
+      "Bash(c:\\\\Users\\\\IFNguest\\\\dashboard_lokalnat\\\\venv\\\\Scripts\\\\python.exe:*)",
+      "Bash(./venv/Scripts/python.exe -m pytest:*)",
+      "Bash(./venv/Scripts/python:*)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(copy:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(powershell.exe -Command \"Test-Path ''C:\\\\Users\\\\IFNguest\\\\dashboard_lokalnat\\\\ARCHITECTURE.md''\")",
+      "Bash(git add:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(for mod in controllable_cost_calculations data_mapping dea_calculations efficiency_requirement incentive_calculations incentive_parameters kent_calculations kent_capbase_prep revenue_frame_assembly time_codes wacc_calculations)",
+      "Bash(do echo \"=== $mod ===\")",
+      "Bash(done)",
+      "Bash(for mod in case_storage config_adapter diagram_data diagram_utils export_button export_excel firebase_firestore geo_data geo_visualization state_manager)",
+      "Bash(do echo -n \"$mod: \")",
+      "Bash(.venvScriptspython.exe -m pytest tests/ -v --tb=short)",
+      "Bash(powershell.exe -Command \"cd ''c:\\\\Users\\\\IFNguest\\\\dashboard_lokalnat''; & ''.\\\\venv\\\\Scripts\\\\python.exe'' run_dea_totex.py\")",
+      "Bash(.\\\\venv\\\\Scripts\\\\python.exe:*)",
+      "Bash(.\\\\venv\\\\Scripts\\\\python.exe -m pytest:*)",
+      "Bash(./venv/Scripts/pip.exe list:*)",
+      "Bash(./venv/Scripts/pip.exe install:*)",
+      "Bash(c:\\\\Users\\\\IFNguest\\\\dashboard_lokalnat\\\\venv\\\\Scripts\\\\python.exe -m pytest:*)",
+      "WebFetch(domain:)",
+      "Bash(powershell -Command:*)",
+      "WebFetch(domain:pystoned.readthedocs.io)",
+      "Bash(git mv:*)"
     ]
   }
 }

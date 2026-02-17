@@ -53,6 +53,19 @@ init_session_state()
 # =============================================================================
 
 @st.cache_data(ttl=3600)
+def _get_company_list() -> list:
+    """Retrieve list of all company REIds with display names."""
+    try:
+        from data_loaders.baseline_data import load_baseline_data
+        baseline = load_baseline_data()
+        df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
+        df["display"] = df[COL_COMPANY_NAME] + " (" + df["REId"] + ")"
+        return df.sort_values(COL_COMPANY_NAME).to_dict('records')
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=3600)
 def get_company_name_lookup() -> dict:
     """Build REId -> Company name lookup from baseline data."""
     try:
@@ -111,16 +124,22 @@ def _run_calculation() -> None:
         try:
             st.write("Loading baseline data...")
             from data_loaders.baseline_data import load_baseline_data
-            baseline_data = load_baseline_data()
-            
-            st.write("Retrieving baseline...")
-            from config.case_definition import get_baseline_config
             from pipeline.core import run_pipeline
-            
-            baseline_config = get_baseline_config(user_reid)
-            baseline_result = run_pipeline(baseline_data, baseline_config)
-            st.session_state["baseline_result"] = baseline_result
-            
+            baseline_data = load_baseline_data()
+
+            # Reuse cached baseline if same company
+            cached_reid = st.session_state.get("_baseline_reid")
+            if cached_reid == user_reid and st.session_state.get("baseline_result") is not None:
+                st.write("Using cached baseline...")
+                baseline_result = st.session_state["baseline_result"]
+            else:
+                st.write("Computing baseline...")
+                from config.case_definition import get_baseline_config
+                baseline_config = get_baseline_config(user_reid)
+                baseline_result = run_pipeline(baseline_data, baseline_config)
+                st.session_state["baseline_result"] = baseline_result
+                st.session_state["_baseline_reid"] = user_reid
+
             st.write("Building case...")
             filtered_config = get_filtered_ui_config()
             case_definition = build_case_definition(
@@ -254,20 +273,9 @@ def render_sidebar():
 
 def _render_dev_mode_selector():
     """Render company selector for dev mode."""
-    @st.cache_data(ttl=3600)
-    def get_company_list():
-        """Retrieve list of all company REIds with names."""
-        try:
-            from data_loaders.baseline_data import load_baseline_data
-            baseline = load_baseline_data()
-            df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
-            df["display"] = df[COL_COMPANY_NAME] + " (" + df["REId"] + ")"
-            return df.sort_values(COL_COMPANY_NAME).to_dict('records')
-        except Exception as e:
-            st.error(f"Failed to load company list: {e}")
-            return [{"REId": "REL00886", "display": "Test Company (REL00886)"}]
-    
-    companies = get_company_list()
+    companies = _get_company_list()
+    if not companies:
+        companies = [{"REId": "REL00886", "display": "Test Company (REL00886)"}]
     
     options = [c["display"] for c in companies]
     reid_lookup = {c["display"]: c["REId"] for c in companies}
@@ -307,18 +315,7 @@ def _render_authenticated_sidebar():
         st.caption("Regulator access")
         st.divider()
         
-        @st.cache_data(ttl=3600)
-        def get_company_list():
-            try:
-                from data_loaders.baseline_data import load_baseline_data
-                baseline = load_baseline_data()
-                df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
-                df["display"] = df[COL_COMPANY_NAME] + " (" + df["REId"] + ")"
-                return df.sort_values(COL_COMPANY_NAME).to_dict('records')
-            except Exception:
-                return []
-        
-        companies = get_company_list()
+        companies = _get_company_list()
         
         if companies:
             options = [c["display"] for c in companies]

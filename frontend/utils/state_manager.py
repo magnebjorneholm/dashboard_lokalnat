@@ -126,7 +126,8 @@ def init_session_state() -> None:
         # Company selection - user_reid is the ONLY authoritative key
         "user_reid": None,
         # NOTE: user_id_network is NOT stored - derived on-demand via get_user_id_network()
-        
+        "_baseline_reid": None,  # tracks which company's baseline pipeline result is cached
+
         # Module configuration
         "ui_config": copy.deepcopy(DEFAULT_UI_CONFIG),
         

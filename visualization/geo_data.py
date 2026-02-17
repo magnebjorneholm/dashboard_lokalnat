@@ -11,6 +11,7 @@ import pandas as pd
 from pathlib import Path
 from shapely.ops import unary_union
 from typing import Tuple, Optional, List, TYPE_CHECKING
+import streamlit as st
 
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
@@ -23,6 +24,7 @@ from config.column_names import (
 EXPECTED_CRS = 3006  # SWEREF99 TM
 
 
+@st.cache_resource(ttl=3600)
 def load_shapefile(shapefile_path: str | Path) -> gpd.GeoDataFrame:
     """
     Load and prepare shapefile for DEA visualization.

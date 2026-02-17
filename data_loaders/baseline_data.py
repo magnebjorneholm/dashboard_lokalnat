@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import pandas as pd
 from typing import Dict, Optional
 from pathlib import Path
+import streamlit as st
 
 from config.column_names import (
     COL_REID, COL_DMU, COL_COMPANY_NAME,
@@ -298,6 +299,7 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=3600, show_spinner="Loading baseline data...")
 def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     """
     Main function to load all baseline data.
