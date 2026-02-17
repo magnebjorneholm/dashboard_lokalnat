@@ -13,7 +13,7 @@ import streamlit as st
 from typing import Dict, Any
 
 from frontend.common.parameter_input import parameter_input, parameter_select
-from calculations.efficiency_requirement import get_max_eff_req
+from calculations.efficiency.efficiency_requirement import get_max_eff_req
 from frontend.utils.state_manager import get_config_value
 from config.glossary import (
     PID_OUTLIER_THRESHOLD, PID_MAX_POTENTIAL_CAP, PID_REALIZATION_TIME,

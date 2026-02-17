@@ -19,7 +19,7 @@ from config.column_names import (
     COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
 )
 from config.glossary import VID_OPEX_ADJUSTABLE, VID_FLEX_SERVICE, VID_NON_ADJUSTABLE
-from frontend.common.result_helpers import fmt_tkr as _format_tkr, calc_delta as _calc_delta
+from pipeline.result_helpers import fmt_tkr as _format_tkr, calc_delta as _calc_delta
 
 
 def render(

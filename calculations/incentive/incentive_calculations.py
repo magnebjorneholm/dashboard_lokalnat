@@ -15,7 +15,7 @@ import numpy as np
 from typing import Dict, Tuple, Optional
 
 # Importera baseline-värden (används som defaults)
-from .incentive_parameters import (
+from config.incentive_parameters import (
     KPI as BASELINE_KPI,
     K_NF as BASELINE_K_NF,
     ADJ_MAX_AGG as BASELINE_ADJ_MAX_AGG,

@@ -19,7 +19,7 @@ import streamlit as st
 import pandas as pd
 from typing import Dict, Any, Optional
 
-from frontend.common.asset_categories import (
+from config.asset_categories import (
     ASSET_CATEGORIES,
     CATEGORY_BY_CODE,
     GENERAL_SCALING_FACTOR_BASELINE,

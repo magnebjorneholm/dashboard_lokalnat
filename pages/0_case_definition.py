@@ -30,7 +30,7 @@ from frontend.utils.state_manager import (
     restore_main_config,
     is_snapshot_calculation,
 )
-from frontend.common.module_registry import (
+from config.module_registry import (
     ALL_MODULES,
     BASE_MODULES,
     ADDON_MODULES,

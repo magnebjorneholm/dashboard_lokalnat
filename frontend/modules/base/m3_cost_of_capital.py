@@ -14,20 +14,20 @@ import streamlit as st
 import pandas as pd
 from typing import Dict, Any
 
-from calculations.wacc_calculations import (
+from calculations.capex.wacc_calculations import (
     CAPMInputs,
     calculate_wacc,
     BASELINE_WACC,
     BASELINE_CAPM as _BASELINE_CAPM_DICT,
     BASELINE_DERIVED as _BASELINE_DERIVED_WACC,
 )
-from calculations.incentive_parameters import (
+from config.incentive_parameters import (
     BASELINE_INCENTIVE as _BASE_INCENTIVE,
     SNI_LABELS,
     AIT_COSTS,
     AIF_COSTS,
 )
-from frontend.common.formatting import format_percent, format_number
+from config.formatting import format_percent, format_number
 from frontend.utils.state_manager import get_config_value
 from config.glossary import (
     PID_DEBT_RATIO, PID_ASSET_BETA, PID_RISK_FREE_RATE,

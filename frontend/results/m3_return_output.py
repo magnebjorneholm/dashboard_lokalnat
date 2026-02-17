@@ -23,11 +23,11 @@ from typing import Dict, Any, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
-from frontend.common.asset_categories import (
+from config.asset_categories import (
     ASSET_CATEGORIES, CATEGORY_BY_CODE, get_category_short_name,
 )
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
-from frontend.common.result_helpers import (
+from pipeline.result_helpers import (
     TIME_LABELS, TIME_CODES_ORDERED, TOLERANCE,
     CLR_CASE_ORD, CLR_CASE_TAIL, CLR_BL_ORD, CLR_BL_TAIL,
     load_baseline_category_data, get_case_category_data,
@@ -35,7 +35,7 @@ from frontend.common.result_helpers import (
     active_categories, halfyear_values, hy_row_values,
     fmt_msek, fmt_delta_msek, fmt_pct,
 )
-from calculations.wacc_calculations import BASELINE_WACC
+from calculations.capex.wacc_calculations import BASELINE_WACC
 from config.glossary import (
     capital_cost_var_id,
     VID_TOTAL_CAPITAL_COST_ORD,

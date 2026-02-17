@@ -11,7 +11,7 @@ from typing import Optional, List
 import streamlit as st
 
 # Ã…teranvÃ¤nd befintlig flagga frÃ¥n data_mapping
-from calculations.data_mapping import TEST_MODE
+from calculations.capex.data_mapping import TEST_MODE
 
 # Paths
 CAPBASE_MINI_PATH = "data/capbase_a_mini.parquet"

@@ -28,7 +28,7 @@ from config.column_names import (
     COL_DEPRECIATION_PERIOD, COL_RETURN_PERIOD,
     COL_CAPITAL_COST_PERIOD,
 )
-from calculations.wacc_calculations import BASELINE_WACC
+from calculations.capex.wacc_calculations import BASELINE_WACC
 
 
 def prepare_diagram_data(

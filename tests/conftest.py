@@ -26,7 +26,7 @@ TEST_COMPANIES = {
     3035: {"REId": "REL03035", "name": "Stort bolag"},
 }
 
-from calculations.wacc_calculations import BASELINE_WACC as WACC_BASELINE
+from calculations.capex.wacc_calculations import BASELINE_WACC as WACC_BASELINE
 TOLERANCE_REL = 1e-3  # 0.1% relative tolerance
 
 
@@ -98,7 +98,7 @@ def non_controllable_detail_mini():
 @pytest.fixture(scope="session")
 def kent_results_mini(capbase_mini):
     """Run KENT calculations on mini capbase (3 companies). Cached per session."""
-    from calculations.kent_calculations import run_kent_calculations_batch
+    from calculations.capex.kent_calculations import run_kent_calculations_batch
     df_detailed, df_network, df_category = run_kent_calculations_batch(
         capbase_mini, wacc=WACC_BASELINE
     )
@@ -108,7 +108,7 @@ def kent_results_mini(capbase_mini):
 @pytest.fixture(scope="session")
 def sdf_baseline_ctrl(baseline_data):
     """Controllable cost baseline from SDF sheets."""
-    from calculations.controllable_cost_calculations import get_controllable_from_sdf
+    from calculations.opex.controllable_cost_calculations import get_controllable_from_sdf
     return get_controllable_from_sdf(baseline_data.sdf_ir, baseline_data.sdf_controllable)
 
 

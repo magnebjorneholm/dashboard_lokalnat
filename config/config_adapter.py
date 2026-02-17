@@ -35,10 +35,10 @@ from config.case_definition import (
 # BASELINE VALUES
 # =============================================================================
 
-from calculations.wacc_calculations import BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED as _WACC_DERIVED
-from calculations.incentive_parameters import BASELINE_INCENTIVE
+from calculations.capex.wacc_calculations import BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED as _WACC_DERIVED
+from config.incentive_parameters import BASELINE_INCENTIVE
 
-from calculations.dea_calculations import BASELINE_DEA_SPEC
+from calculations.frontier.dea_calculations import BASELINE_DEA_SPEC
 from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG
 from config.glossary import (
     PID_GENERAL_SCALING, PID_WACC_REAL, PID_LOSS_SCALING, PID_LOSS_SHARING,
@@ -269,7 +269,7 @@ def _combine_scaling_factors(
     Returns:
         Dict[cat_encode, combined_factor] or None if no changes
     """
-    from frontend.common.asset_categories import ASSET_CATEGORIES
+    from config.asset_categories import ASSET_CATEGORIES
     
     has_general = general_scaling is not None and general_scaling != 1.0
     has_cat = cat_scaling is not None and len(cat_scaling) > 0

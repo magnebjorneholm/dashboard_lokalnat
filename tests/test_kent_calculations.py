@@ -159,7 +159,7 @@ class TestKentConsistency:
 
 class TestKentWACCSensitivity:
     def test_higher_wacc_increases_returns(self, capbase_mini):
-        from calculations.kent_calculations import run_kent_calculations_batch
+        from calculations.capex.kent_calculations import run_kent_calculations_batch
 
         _, net_low, _ = run_kent_calculations_batch(capbase_mini, wacc=0.03)
         _, net_high, _ = run_kent_calculations_batch(capbase_mini, wacc=0.06)
@@ -172,7 +172,7 @@ class TestKentWACCSensitivity:
 
 class TestKentNormvalueAdjustment:
     def test_normvalue_scaling(self, capbase_mini):
-        from calculations.kent_calculations import run_kent_calculations_batch
+        from calculations.capex.kent_calculations import run_kent_calculations_batch
 
         _, net_base, _ = run_kent_calculations_batch(capbase_mini, wacc=WACC_BASELINE)
         # Scale all categories by 1.1

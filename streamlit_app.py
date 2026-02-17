@@ -99,7 +99,7 @@ def check_auth() -> bool:
 def _run_calculation() -> None:
     """Run the revenue frame calculation pipeline."""
     from frontend.utils.state_manager import get_filtered_ui_config
-    from frontend.utils.config_adapter import build_case_definition
+    from config.config_adapter import build_case_definition
     
     user_reid = get_user_reid()
     

@@ -94,7 +94,7 @@ def format_delta_html(
         HTML string with color coding
     """
     try:
-        from frontend.common.styling import COLORS
+        from config.colors import COLORS
         color = COLORS["success"] if value >= 0 else COLORS["error"]
     except ImportError:
         color = "#059669" if value >= 0 else "#DC2626"
@@ -125,7 +125,7 @@ def format_delta_percent_html(
         HTML string with color coding
     """
     try:
-        from frontend.common.styling import COLORS
+        from config.colors import COLORS
         color = COLORS["success"] if value >= 0 else COLORS["error"]
     except ImportError:
         color = "#059669" if value >= 0 else "#DC2626"

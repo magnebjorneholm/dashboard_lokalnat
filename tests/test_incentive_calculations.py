@@ -7,7 +7,7 @@ Tests for incentive calculations (quality, network loss, load).
 import pytest
 import numpy as np
 import pandas as pd
-from calculations.incentive_calculations import (
+from calculations.incentive.incentive_calculations import (
     calculate_all_incentives,
     calculate_interruption_incentives,
     calculate_netloss_incentive,
@@ -15,7 +15,7 @@ from calculations.incentive_calculations import (
     apply_caps,
     aggregate_period_totals,
 )
-from calculations.incentive_parameters import (
+from config.incentive_parameters import (
     KPI, K_NF, ADJ_MAX_AGG, ADJ_MAX_CEMI4, SHARING_NETLOSS,
     AIT_COSTS, AIF_COSTS, MISSING_DATA_IDS,
 )

@@ -8,7 +8,7 @@ Includes synthetic unit tests and full 148-company baseline replication.
 import pytest
 import numpy as np
 import pandas as pd
-from calculations.dea_calculations import run_dea_analysis, _run_super_efficiency_dea
+from calculations.frontier.dea_calculations import run_dea_analysis, _run_super_efficiency_dea
 
 
 # ============================================================================

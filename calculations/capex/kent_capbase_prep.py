@@ -16,7 +16,7 @@ import numpy as np
 from typing import Dict, Optional, Any
 import warnings
 
-from frontend.common.asset_categories import BASELINE_LIFETIMES
+from config.asset_categories import BASELINE_LIFETIMES
 
 
 def read_kent_excel(file_obj) -> Dict[str, pd.DataFrame]:

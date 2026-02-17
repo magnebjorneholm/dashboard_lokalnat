@@ -8,7 +8,7 @@ Pure math module — no data dependencies.
 import pytest
 import numpy as np
 import pandas as pd
-from calculations.efficiency_requirement import (
+from calculations.efficiency.efficiency_requirement import (
     calculate_eff_req_from_potential,
     calculate_eff_req_for_dataframe,
     calculate_truncation_min_from_outlier_req,

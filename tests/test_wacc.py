@@ -6,7 +6,7 @@ Pure math module — no data dependencies.
 """
 
 import pytest
-from calculations.wacc_calculations import (
+from calculations.capex.wacc_calculations import (
     calculate_wacc,
     calculate_wacc_simple,
     CAPMInputs,

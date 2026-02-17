@@ -177,7 +177,7 @@ def _load_user_baselines_cached(user_reid: str) -> Dict[str, float]:
     """Load baseline OPEX values for user's company."""
     from config.column_names import COL_CONTROLLABLE_AVG, COL_NON_CONTROLLABLE, COL_FLEXIBILITY
     from data_loaders.baseline_data import load_baseline_data
-    from calculations.cost_aggregation import aggregate_controllable, aggregate_non_controllable
+    from calculations.opex.cost_aggregation import aggregate_controllable, aggregate_non_controllable
 
     baseline = load_baseline_data()
 

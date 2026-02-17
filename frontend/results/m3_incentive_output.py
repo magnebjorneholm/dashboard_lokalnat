@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
-from frontend.common.result_helpers import TOLERANCE
+from pipeline.result_helpers import TOLERANCE
 from config.column_names import (
     COL_INCENTIVE_TOTAL, COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
     COL_LOAD_INCENTIVE, COL_MISSING_INCENTIVE,

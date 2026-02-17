@@ -7,7 +7,7 @@ Tests for controllable cost calculations (OPEX/TOTEX methods).
 import pytest
 import numpy as np
 import pandas as pd
-from calculations.controllable_cost_calculations import (
+from calculations.opex.controllable_cost_calculations import (
     calculate_controllable_with_eff_req,
     get_controllable_from_sdf,
     _calculate_controllable_single_company,
@@ -119,7 +119,7 @@ class TestGetControllableFromSDF:
 
 class TestControllableWithEffReq:
     def test_opex_method_integration(self, dea_baseline, sdf_baseline_ctrl, sdf_ir):
-        from calculations.efficiency_requirement import calculate_eff_req_for_dataframe
+        from calculations.efficiency.efficiency_requirement import calculate_eff_req_for_dataframe
 
         eff_req = calculate_eff_req_for_dataframe(
             dea_baseline[["REId", "potential", "is_outlier"]].copy()

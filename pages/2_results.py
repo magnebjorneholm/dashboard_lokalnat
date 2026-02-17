@@ -25,17 +25,17 @@ from frontend.utils.state_manager import (
     MAX_SNAPSHOTS,
 )
 from frontend.utils.export_button import render_export_button
-from frontend.utils.diagram_data import prepare_diagram_data
-from frontend.utils.diagram_utils import create_interactive_diagram_html
-from frontend.utils.geo_data import prepare_map_data_from_pipeline
-from frontend.utils.geo_visualization import (
-    create_efficiency_map, 
+from visualization.diagram_data import prepare_diagram_data
+from visualization.diagram_utils import create_interactive_diagram_html
+from visualization.geo_data import prepare_map_data_from_pipeline
+from visualization.geo_visualization import (
+    create_efficiency_map,
     get_available_value_columns,
     get_column_label
 )
 
 from frontend.common.styling import COLORS, get_plotly_template
-from frontend.common.result_helpers import (
+from pipeline.result_helpers import (
     fmt_tkr as format_tkr,
     fmt_percent as format_percent,
     calc_delta,

@@ -42,13 +42,22 @@ dashboard_lokalnat/
 |   |-- 1_case_config.py          # Step 2: Configure parameters (tabs M1-M7)
 |   |-- 2_results.py              # Step 3: Display results, snapshots, export
 |
-|-- frontend/
-|   |-- common/                   # Shared UI components & data
-|   |   |-- module_registry.py    # Module definitions (M1-M7), sections, selection logic
+|-- config/                       # Constants, metadata, domain configuration (no Streamlit)
+|   |-- case_definition.py        # Dataclasses: CaseDefinition, PreDeaConfig, DeaConfig, etc.
+|   |-- column_names.py           # COL_* constants, rename dicts (single source of truth)
+|   |-- glossary.py               # Parameter-IDs (PID_*), Variable-IDs (VID_*), glossary
+|   |-- module_registry.py        # Module definitions (M1-M7), sections, selection logic
+|   |-- asset_categories.py       # 17 asset categories (codes, names, lifetimes)
+|   |-- colors.py                 # COLORS, CHART_COLORS, get_plotly_template()
+|   |-- formatting.py             # Formatting: tkr, percent, delta (European conventions)
+|   |-- time_codes.py             # Half-year timecodes (229=2024H1, etc.)
+|   |-- incentive_parameters.py   # KPI, K_NF, AIT/AIF costs, caps, SNI labels
+|   |-- config_adapter.py         # UI config -> CaseDefinition (only bridge frontend->backend)
+|
+|-- frontend/                     # Streamlit-dependent UI code ONLY
+|   |-- common/                   # Shared Streamlit components
 |   |   |-- parameter_input.py    # Reusable input component with baseline comparison
-|   |   |-- asset_categories.py   # 17 asset categories (codes, names, lifetimes)
-|   |   |-- styling.py            # Colors, fonts (Inter, IBM Plex Mono), CSS
-|   |   |-- formatting.py         # Formatting: tkr, percent, delta
+|   |   |-- styling.py            # CSS injection, font loading (re-exports from config.colors)
 |   |
 |   |-- modules/                  # Input renderers per module
 |   |   |-- base/
@@ -71,27 +80,17 @@ dashboard_lokalnat/
 |   |   |-- m5_efficiency_output.py       # Efficiency requirements
 |   |   |-- m7_benchmarking_output.py     # DEA results, rankings
 |   |
-|   |-- utils/                    # Frontend utilities
+|   |-- utils/                    # Streamlit-dependent frontend utilities
 |       |-- state_manager.py      # Session state: init, get/set, snapshots
-|       |-- config_adapter.py     # UI config -> CaseDefinition (only bridge frontend->backend)
 |       |-- case_storage.py       # Save/load cases (Firestore/local JSON)
-|       |-- firebase_firestore.py # Firestore client (singleton)
 |       |-- export_button.py      # Export button component
-|       |-- export_excel.py       # Excel generation
-|       |-- diagram_data.py       # Waterfall diagram data
-|       |-- diagram_utils.py      # SVG/HTML diagrams
-|       |-- geo_data.py           # Geodata preparation
-|       |-- geo_visualization.py  # Map visualization
-|
-|-- config/
-|   |-- case_definition.py        # Dataclasses: CaseDefinition, PreDeaConfig, DeaConfig, etc.
-|   |                              # Enums: CapbaseSource, CapexMethod, EfficiencyMethod
-|   |-- column_names.py           # COL_* constants, rename dicts (single source of truth)
 |
 |-- pipeline/
 |   |-- core.py                   # run_pipeline(): orchestrates 5 stages -> PipelineResult
 |   |-- debug_logger.py           # Structured logging per stage
 |   |-- post_dea_capex_helpers.py # Helper functions for post-DEA
+|   |-- result_helpers.py         # Shared formatting/aggregation for result output modules
+|   |-- export_excel.py           # Excel generation from PipelineResult
 |   |-- stages/
 |       |-- stage_outputs.py      # Frozen dataclasses per stage
 |       |-- baseline.py           # Stage 1: Convert BaselineData
@@ -101,26 +100,42 @@ dashboard_lokalnat/
 |       |-- post_dea.py           # Stage 5: Efficiency requirement + revenue cap
 |
 |-- calculations/                 # Pure calculation logic (no UI dependencies)
-|   |-- wacc_calculations.py              # CAPM -> WACC
-|   |-- kent_calculations.py              # KENT processing (steps 5-8)
-|   |-- kent_capbase_prep.py              # KENT steps 1-4, capbase_a format
-|   |-- dea_calculations.py               # DEA via PuLP
-|   |-- incentive_calculations.py         # Quality/loss/load adjustments
-|   |-- incentive_parameters.py           # KPI factors, k_nf constants
-|   |-- revenue_frame_assembly.py         # Revenue frame assembly
-|   |-- efficiency_requirement.py         # Efficiency requirement calculation
-|   |-- controllable_cost_calculations.py # Controllable cost calculations
-|   |-- cost_aggregation.py              # Grunddata aggregation (controllable + non-controllable)
-|   |-- data_mapping.py                   # Asset category mapping
-|   |-- time_codes.py                     # Half-year period coding
+|   |-- capex/                    # M1+M2+M3: Capital base, depreciation, WACC
+|   |   |-- kent_calculations.py          # KENT steps 5-8, capital cost
+|   |   |-- kent_capbase_prep.py          # KENT steps 1-4, capbase_a format
+|   |   |-- wacc_calculations.py          # CAPM -> WACC
+|   |   |-- data_mapping.py               # KENT-baseline merge, id_network mapping
+|   |
+|   |-- opex/                     # M4: Operating expenditure
+|   |   |-- controllable_cost_calculations.py # Controllable costs (OPEX/TOTEX methods)
+|   |   |-- cost_aggregation.py              # Grunddata aggregation (controllable + non-controllable)
+|   |
+|   |-- frontier/                 # M7: DEA / frontier estimation
+|   |   |-- dea_calculations.py              # DEA via PuLP
+|   |
+|   |-- incentive/                # M3 incentive: Quality/loss/load adjustments
+|   |   |-- incentive_calculations.py        # Interruption, netloss, utilization
+|   |
+|   |-- efficiency/               # M5: Efficiency requirement
+|   |   |-- efficiency_requirement.py        # DEA potential -> annual requirement
+|   |
+|   |-- revenue_frame_assembly.py            # Cross-cutting: final revenue frame assembly
+|
+|-- visualization/                # Streamlit-free visualization (Plotly, HTML, geodata)
+|   |-- diagram_data.py           # Revenue frame decomposition data
+|   |-- diagram_utils.py          # Interactive HTML/CSS diagram generation
+|   |-- geo_data.py               # Shapefile loading, geodata preparation
+|   |-- geo_visualization.py      # Choropleth map visualization (Plotly)
 |
 |-- data_loaders/                 # Data loading (cached with @st.cache_data)
 |   |-- baseline_data.py          # BaselineData: Data_modeller.xlsx (148 companies)
+|   |-- cost_data.py              # Grunddata parquet loaders (used by baseline_data)
 |   |-- rab_data.py               # RAB data (capbase_a.parquet, capcost_a.parquet)
 |   |-- incentive_data.py         # Incentive parameters
 |
 |-- auth/
 |   |-- firebase_auth.py          # Firebase auth: login, registration, claims, dev mode
+|   |-- firebase_firestore.py     # Firestore client (singleton)
 |
 |-- data/                         # Data files (external/regulatory sources, DO NOT RENAME)
 |   |-- Data_modeller.xlsx        # Main data: 148 companies, CAPEX/OPEX/volumes/returns
@@ -140,7 +155,7 @@ dashboard_lokalnat/
 |   |-- all_adjust_vars.csv       # All adjustable variables
 |   |-- shapefiles/               # Geographic shapefiles (municipality/county)
 |
-|-- tests/                        # pytest test suite (205 tests, ~65s)
+|-- tests/                        # pytest test suite (205 tests, ~85s)
     |-- conftest.py               # Session-scoped fixtures
     |-- test_baseline_replication.py
     |-- test_kent_calculations.py
@@ -169,36 +184,43 @@ Layer 1: PAGES (top)
         |
         | imports
         v
-Layer 2: FRONTEND
+Layer 2: FRONTEND (Streamlit-dependent only)
     Left side: FRONTEND UTILS
-        state_manager.py, config_adapter.py,
-        case_storage.py, export_*.py, diagram_*.py, geo_*.py
+        state_manager.py, case_storage.py, export_button.py
     Right side: FRONTEND COMMON + MODULES
-        module_registry.py, parameter_input.py, asset_categories.py,
-        styling.py, formatting.py,
+        parameter_input.py, styling.py,
         m1_asset_base.py .. m5_efficiency.py, benchmarking.py
         |
         | imports
         v
-Layer 3: CONFIG
-    case_definition.py (CaseDefinition, enums)
-    column_names.py (COL_* constants)
+Layer 2b: VISUALIZATION (Streamlit-free)
+    diagram_data.py, diagram_utils.py, geo_data.py, geo_visualization.py
+        |
+        | imports
+        v
+Layer 3: CONFIG (constants, metadata, domain configuration)
+    case_definition.py, column_names.py, glossary.py,
+    module_registry.py, asset_categories.py, colors.py, formatting.py,
+    time_codes.py, incentive_parameters.py, config_adapter.py
         |
         | imports
         v
 Layer 4: PIPELINE
     core.py -> stages/baseline -> pre_dea -> dea -> extraction -> post_dea
-    stage_outputs.py (frozen dataclasses)
+    stage_outputs.py, result_helpers.py, export_excel.py
         |
         | imports
         v
 Layer 5: CALCULATIONS + DATA LOADERS (bottom)
     Left side: CALCULATIONS
-        wacc, kent, dea, incentive,
-        revenue_frame_assembly, efficiency_requirement,
-        controllable_cost
+        capex/ (kent, wacc, data_mapping)
+        opex/ (controllable, cost_aggregation)
+        frontier/ (dea)
+        incentive/ (incentive_calculations)
+        efficiency/ (efficiency_requirement)
+        revenue_frame_assembly.py
     Right side: DATA LOADERS
-        baseline_data.py, rab_data.py, incentive_data.py
+        baseline_data.py, cost_data.py, rab_data.py, incentive_data.py
         |
         | imports
         v
@@ -233,7 +255,7 @@ pages/login.py    --auth-->    pages/0_case_definition.py  (Define)
 
 ## 6. Module Architecture (M1-M7)
 
-Modules are defined centrally in `frontend/common/module_registry.py`.
+Modules are defined centrally in `config/module_registry.py`.
 Each module has sections for fine-grained control.
 
 | Module        | Purpose                     | Input file                  | Output file                   | Config key               |
@@ -474,20 +496,18 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 
 All files in `calculations/` are pure functions with no UI dependencies.
 
-| File                              | Purpose                                    |
-|-----------------------------------|--------------------------------------------|
-| kent_calculations.py              | KENT steps 5-8: capital cost calculation   |
-| kent_capbase_prep.py              | KENT steps 1-4: capbase_a conversion       |
-| wacc_calculations.py              | CAPM -> WACC (baseline: 4.53%)             |
-| dea_calculations.py               | DEA via PuLP (input-oriented, CRS)         |
-| efficiency_requirement.py         | DEA potential -> annual efficiency req      |
-| controllable_cost_calculations.py | Controllable costs (OPEX/TOTEX methods)    |
-| cost_aggregation.py               | Grunddata aggregation (controllable + non-controllable) |
-| revenue_frame_assembly.py         | Assemble revenue frame from all components |
-| incentive_calculations.py         | Quality/netloss/load incentive adjustments |
-| incentive_parameters.py           | Baseline KPI, k_nf, AIT/AIF cost constants |
-| data_mapping.py                   | KENT-baseline merge, id_network mapping    |
-| time_codes.py                     | Half-year timecodes (229=2024H1, etc.)     |
+| File                                        | Purpose                                    |
+|---------------------------------------------|--------------------------------------------|
+| capex/kent_calculations.py                  | KENT steps 5-8: capital cost calculation   |
+| capex/kent_capbase_prep.py                  | KENT steps 1-4: capbase_a conversion       |
+| capex/wacc_calculations.py                  | CAPM -> WACC (baseline: 4.53%)             |
+| capex/data_mapping.py                       | KENT-baseline merge, id_network mapping    |
+| opex/controllable_cost_calculations.py      | Controllable costs (OPEX/TOTEX methods)    |
+| opex/cost_aggregation.py                    | Grunddata aggregation (controllable + non-controllable) |
+| frontier/dea_calculations.py                | DEA via PuLP (input-oriented, CRS)         |
+| incentive/incentive_calculations.py         | Quality/netloss/load incentive adjustments |
+| efficiency/efficiency_requirement.py        | DEA potential -> annual efficiency req      |
+| revenue_frame_assembly.py                   | Assemble revenue frame from all components |
 
 ### Key Calculation Details
 
@@ -524,6 +544,13 @@ Swedish column names from files are renamed to English here using rename dicts.
 - `controllable_meta` -- Controllable meta with index/neo (from controllable_meta.parquet)
 - `non_controllable_detail` -- Per-category non-controllable grunddata (from non_controllable_a.parquet)
 
+### cost_data.py
+
+Grunddata parquet loaders (used internally by `baseline_data.py`):
+- `load_controllable_detail()` -> controllable_a.parquet (company x category x year)
+- `load_controllable_meta()` -> controllable_meta.parquet (one row per company)
+- `load_non_controllable_detail()` -> non_controllable_a.parquet (company x kent_category x year)
+
 ### rab_data.py
 
 - `load_capbase_a()` -> capbase_a.parquet (full or mini in test mode)
@@ -551,7 +578,7 @@ streamlit_app.py
     |-- frontend.common.styling           (apply_styling)
     |-- auth.firebase_auth                (is_dev_mode, initialize_firebase_auth)
     |-- [lazy] data_loaders.baseline_data (load_baseline_data)
-    |-- [lazy] frontend.utils.config_adapter (build_case_definition)
+    |-- [lazy] config.config_adapter      (build_case_definition)
     |-- [lazy] pipeline.core              (run_pipeline)
     |-- [lazy] frontend.utils.case_storage (save_case)
 
@@ -562,11 +589,12 @@ pages/1_case_config.py
 
 pages/2_results.py
     |-- frontend.results.m1-m7_output    (render functions)
-    |-- frontend.utils.diagram_data, diagram_utils
-    |-- frontend.utils.geo_visualization
+    |-- visualization.diagram_data, diagram_utils
+    |-- visualization.geo_data, geo_visualization
     |-- frontend.utils.export_button
+    |-- pipeline.result_helpers          (formatting/aggregation helpers)
 
-frontend.utils.config_adapter
+config.config_adapter
     |-- config.case_definition           (CaseDefinition, enums)
 
 pipeline.core
@@ -576,13 +604,18 @@ pipeline.core
     |-- pipeline.debug_logger
 
 pipeline.stages.*
-    |-- calculations.*                   (wacc, kent, dea, incentive, etc.)
+    |-- calculations.capex.*             (kent, wacc, data_mapping)
+    |-- calculations.opex.*              (controllable, cost_aggregation)
+    |-- calculations.frontier.*          (dea)
+    |-- calculations.incentive.*         (incentive_calculations)
+    |-- calculations.efficiency.*        (efficiency_requirement)
+    |-- calculations.revenue_frame_assembly
 
-frontend.common.module_registry
+config.module_registry
     |-- (no external dependencies, defines dataclasses)
 
 frontend.utils.state_manager
-    |-- frontend.common.module_registry  (parse/build selection keys)
+    |-- config.module_registry           (parse/build selection keys)
 ```
 
 **Lazy imports:** `streamlit_app.py` uses lazy imports (inside functions) for heavy
@@ -674,7 +707,7 @@ def render(case: PipelineResult, baseline: PipelineResult, ui_config: dict):
 
 ### Asset Categories
 
-17 asset categories (cat_encode 1-17) defined in `frontend/common/asset_categories.py`.
+17 asset categories (cat_encode 1-17) defined in `config/asset_categories.py`.
 Each has: cat_encode, name_sv, name_en, ek_dep (economic depreciation years),
 max_dep (max depreciation years).
 

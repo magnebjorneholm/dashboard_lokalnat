@@ -12,8 +12,8 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
-from frontend.common.styling import CHART_COLORS
-from calculations.time_codes import (
+from config.colors import CHART_COLORS
+from config.time_codes import (
     TIMECODE_TO_HALFYEAR as TIME_LABELS,
     PERIOD_2024_2027_CODES as TIME_CODES_ORDERED,
 )

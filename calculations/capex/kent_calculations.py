@@ -15,8 +15,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Optional, Tuple
 
-from calculations.wacc_calculations import BASELINE_WACC
-from calculations.time_codes import YEAR_TO_TIMECODES
+from calculations.capex.wacc_calculations import BASELINE_WACC
+from config.time_codes import YEAR_TO_TIMECODES
 
 
 def run_kent_calculations_batch(

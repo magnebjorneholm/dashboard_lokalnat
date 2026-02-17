@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from frontend.common.module_registry import (
+from config.module_registry import (
     ALL_MODULES,
     build_selection_key,
 )
@@ -36,7 +36,7 @@ from frontend.utils.state_manager import _clear_config_widget_keys
 
 # Firestore imports
 try:
-    from frontend.utils.firebase_firestore import get_firestore_client, is_firestore_available
+    from auth.firebase_firestore import get_firestore_client, is_firestore_available
     from google.cloud.firestore_v1 import FieldFilter
     FIRESTORE_AVAILABLE = True
 except ImportError:

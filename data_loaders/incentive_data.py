@@ -124,7 +124,7 @@ def get_incentive_summary_by_reid(
         - incentive_adjustment_total (tkr)
         - Missing_Incentive_Data (bool)
     """
-    from calculations.incentive_parameters import MISSING_DATA_IDS
+    from config.incentive_parameters import MISSING_DATA_IDS
     from config.column_names import (
         COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
         COL_LOAD_INCENTIVE, COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,

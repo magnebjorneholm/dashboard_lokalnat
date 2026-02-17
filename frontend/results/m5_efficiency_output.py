@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
-from frontend.common.result_helpers import fmt_pct as _fmt_pct, fmt_tkr as _fmt_tkr
+from pipeline.result_helpers import fmt_pct as _fmt_pct, fmt_tkr as _fmt_tkr
 from config.glossary import (
     VID_EFFICIENCY_SCORE, VID_SUPER_EFFICIENCY, VID_EFFICIENCY_POTENTIAL,
     VID_APPLIED_POTENTIAL, VID_OPEX_EFF_ADJUSTMENT, VID_CAPEX_EFF_ADJUSTMENT,

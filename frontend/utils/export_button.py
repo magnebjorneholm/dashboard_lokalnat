@@ -5,7 +5,7 @@ Export-knapp komponent fÃ¶r resultatvyn.
 """
 
 import streamlit as st
-from .export_excel import create_case_export, get_export_filename
+from pipeline.export_excel import create_case_export, get_export_filename
 
 
 def render_export_button(

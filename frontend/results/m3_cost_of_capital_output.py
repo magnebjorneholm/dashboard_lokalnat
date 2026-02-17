@@ -25,8 +25,8 @@ from typing import Dict, Any, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
-from frontend.common.asset_categories import ASSET_CATEGORIES, CATEGORY_BY_CODE
-from frontend.common.result_helpers import (
+from config.asset_categories import ASSET_CATEGORIES, CATEGORY_BY_CODE
+from pipeline.result_helpers import (
     TIME_LABELS, TOLERANCE,
     load_baseline_category_data, get_case_category_data,
     fmt_tkr as _format_tkr,
@@ -48,7 +48,7 @@ from config.glossary import (
 )
 
 
-from calculations.wacc_calculations import BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED
+from calculations.capex.wacc_calculations import BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED
 
 
 def _format_percent(value: float, decimals: int = 2) -> str:

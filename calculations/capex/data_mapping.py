@@ -14,7 +14,7 @@ Merge strategy:
 import pandas as pd
 from typing import Dict, List, Optional, Tuple
 
-from calculations.time_codes import YEAR_TO_TIMECODES
+from config.time_codes import YEAR_TO_TIMECODES
 
 TEST_MODE = False  # Flag for test mode (mini-dataset)
 

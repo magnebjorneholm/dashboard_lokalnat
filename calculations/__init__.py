@@ -3,9 +3,16 @@ calculations module
 
 CAPEX calculations, DEA analysis, efficiency requirements, controllable costs,
 and revenue frame assembly for Regumetrica pipeline.
+
+Subpackages:
+  capex/      — KENT, WACC, data mapping (M1/M2/M3)
+  opex/       — Controllable costs, grunddata aggregation (M4)
+  frontier/   — DEA analysis (M7)
+  incentive/  — Quality/loss/load adjustments (M3 incentive)
+  efficiency/ — Efficiency requirement (M5)
 """
 
-from .kent_capbase_prep import (
+from .capex.kent_capbase_prep import (
     read_kent_excel,
     process_kent_components,
     build_capbase_a_from_kent,
@@ -15,7 +22,7 @@ from .kent_capbase_prep import (
     halvar_to_time_code,
     CATEGORY_MAPPING,
 )
-from .kent_calculations import (
+from .capex.kent_calculations import (
     calculate_ages_and_nuav_batch,
     calculate_depreciation_batch,
     calculate_returns_batch,
@@ -23,20 +30,19 @@ from .kent_calculations import (
     calculate_capex_outputs,
     run_kent_calculations_batch
 )
-from .data_mapping import (
+from .capex.data_mapping import (
     merge_kent_with_baseline,
-    
 )
-from .dea_calculations import (
+from .frontier.dea_calculations import (
     run_dea_analysis,
     BASELINE_DEA_SPEC
 )
-from .efficiency_requirement import (
+from .efficiency.efficiency_requirement import (
     calculate_eff_req_from_potential,
     calculate_eff_req_for_dataframe,
     DEFAULT_EFF_REQ_PARAMS
 )
-from .controllable_cost_calculations import (
+from .opex.controllable_cost_calculations import (
     calculate_controllable_with_eff_req,
     get_controllable_from_sdf,
     DEFAULT_CONTROLLABLE_METHOD
@@ -46,13 +52,13 @@ from .revenue_frame_assembly import (
     extract_user_revenue_frame,
     create_revenue_frame_breakdown
 )
-from .wacc_calculations import (
+from .capex.wacc_calculations import (
     CAPMInputs,
     calculate_wacc,
     BASELINE_WACC,
 )
-# Time code constants & helpers
-from .time_codes import (
+# Time code constants & helpers (now in config/)
+from config.time_codes import (
     HALFYEAR_TO_TIMECODE,
     TIMECODE_TO_HALFYEAR,
     YEAR_TO_TIMECODES,
@@ -64,11 +70,10 @@ from .time_codes import (
     year_to_timecodes,
 )
 
-from .incentive_parameters import MISSING_DATA_IDS
-from .incentive_calculations import calculate_all_incentives
+from config.incentive_parameters import MISSING_DATA_IDS
+from .incentive.incentive_calculations import calculate_all_incentives
 
 __all__ = [
-    
     # KENT calculations
     'calculate_ages_and_nuav_batch',
     'calculate_depreciation_batch',
@@ -76,15 +81,14 @@ __all__ = [
     'aggregate_to_network_level',
     'calculate_capex_outputs',
     'run_kent_calculations_batch',
-    
+
     # Data mapping
     'merge_kent_with_baseline',
-    
-    
+
     # DEA analysis
     'run_dea_analysis',
     'BASELINE_DEA_SPEC',
-    
+
     # Efficiency requirements
     'calculate_eff_req_from_potential',
     'calculate_eff_req_for_dataframe',
@@ -104,9 +108,7 @@ __all__ = [
     'CAPMInputs',
     'calculate_wacc',
     'BASELINE_WACC',
-]
 
-__all__ += [
     # Kent capbase prep
     'read_kent_excel',
     'process_kent_components',
@@ -117,7 +119,7 @@ __all__ += [
     'halvar_to_time_code',
     'CATEGORY_MAPPING',
 
-    # Time codes
+    # Time codes (re-exported from config)
     'HALFYEAR_TO_TIMECODE',
     'TIMECODE_TO_HALFYEAR',
     'YEAR_TO_TIMECODES',
@@ -128,7 +130,7 @@ __all__ += [
     'timecode_to_label',
     'year_to_timecodes',
 
-    #incentive calculations
+    # Incentive calculations
     'MISSING_DATA_IDS',
     'calculate_all_incentives',
 ]

@@ -21,9 +21,9 @@ from typing import Optional, Tuple
 
 from config.case_definition import PreDeaConfig, CapbaseSource, CapexMethod
 from pipeline.stages.stage_outputs import BaselineStageOutput, PreDeaStageOutput
-from calculations.wacc_calculations import CAPMInputs, WACCResult, calculate_wacc, BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED
-from calculations.kent_calculations import run_kent_calculations_batch
-from calculations.data_mapping import merge_kent_with_baseline
+from calculations.capex.wacc_calculations import CAPMInputs, WACCResult, calculate_wacc, BASELINE_WACC, BASELINE_CAPM, BASELINE_DERIVED
+from calculations.capex.kent_calculations import run_kent_calculations_batch
+from calculations.capex.data_mapping import merge_kent_with_baseline
 from data_loaders.rab_data import load_capbase_a
 
 
@@ -139,7 +139,7 @@ def _get_user_capbase(
             raise ValueError("KENT_UPLOAD source requires kent_file_bytes")
         
         # Convert KENT Excel to capbase_a format (steps 1-4)
-        from calculations.kent_capbase_prep import convert_kent_to_capbase
+        from calculations.capex.kent_capbase_prep import convert_kent_to_capbase
         
         kent_capbase = convert_kent_to_capbase(
             BytesIO(config.kent_file_bytes),

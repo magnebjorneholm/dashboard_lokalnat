@@ -357,7 +357,7 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
           f"nonctrl: {len(non_controllable_detail)} rows)")
 
     # 6. Replace OPEXp with SDF-derived controllable_cost_average
-    from calculations.cost_aggregation import aggregate_controllable
+    from calculations.opex.cost_aggregation import aggregate_controllable
     sdf_derived = aggregate_controllable(controllable_detail, controllable_meta)
     # Compute opexp_equivalent = controllable_cost_average + neo_adjustments/4
     # This matches how OPEXp was used: as the DEA input (average + annualized neo)

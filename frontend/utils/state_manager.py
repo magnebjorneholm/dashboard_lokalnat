@@ -10,7 +10,7 @@ import copy
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Set
 
-from frontend.common.module_registry import (
+from config.module_registry import (
     ALL_MODULES,
     parse_selection_key,
     build_selection_key,

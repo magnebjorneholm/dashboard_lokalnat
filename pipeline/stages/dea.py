@@ -18,7 +18,7 @@ No print statements - logging handled by PipelineDebugLogger.
 from config import DeaConfig, EfficiencyMethod
 from pipeline.stages.stage_outputs import PreDeaStageOutput, DeaStageOutput, BaselineStageOutput
 from calculations import run_dea_analysis
-from calculations.dea_calculations import BASELINE_DEA_SPEC
+from calculations.frontier.dea_calculations import BASELINE_DEA_SPEC
 
 
 def stage_dea(

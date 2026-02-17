@@ -26,11 +26,11 @@ from config.column_names import (
     COL_NON_CONTROLLABLE_2026, COL_NON_CONTROLLABLE_2027,
     COL_FLEXIBILITY,
 )
-from calculations.efficiency_requirement import calculate_eff_req_for_dataframe
-from calculations.controllable_cost_calculations import calculate_controllable_with_eff_req
-from calculations.cost_aggregation import aggregate_controllable, aggregate_non_controllable
+from calculations.efficiency.efficiency_requirement import calculate_eff_req_for_dataframe
+from calculations.opex.controllable_cost_calculations import calculate_controllable_with_eff_req
+from calculations.opex.cost_aggregation import aggregate_controllable, aggregate_non_controllable
 from calculations.revenue_frame_assembly import assemble_revenue_frame, extract_user_revenue_frame
-from calculations.incentive_calculations import calculate_all_incentives
+from calculations.incentive.incentive_calculations import calculate_all_incentives
 from data_loaders.incentive_data import (
     load_incentive_data,
     prepare_incentive_input,

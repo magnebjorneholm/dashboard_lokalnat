@@ -12,7 +12,7 @@ import streamlit as st
 import pandas as pd
 from typing import Dict, Any, Optional
 
-from frontend.common.asset_categories import ASSET_CATEGORIES
+from config.asset_categories import ASSET_CATEGORIES
 from frontend.utils.state_manager import get_config_value
 from config.glossary import lifetime_ordinary_param_id, lifetime_tail_param_id
 

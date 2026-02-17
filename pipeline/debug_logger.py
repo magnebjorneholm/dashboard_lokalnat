@@ -18,7 +18,7 @@ from config.column_names import (
     COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
     COL_LOAD_INCENTIVE, COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE,
 )
-from calculations.wacc_calculations import BASELINE_WACC
+from calculations.capex.wacc_calculations import BASELINE_WACC
 
 EXPECTED_COMPANY_COUNT = 148
 

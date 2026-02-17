@@ -361,7 +361,7 @@ class TestEfficiencyReqReplication:
     """Replicate efficiency_requirement_annual from EIs_DEA potential column."""
 
     def test_all_148_companies_match(self, dea_baseline):
-        from calculations.efficiency_requirement import calculate_eff_req_for_dataframe
+        from calculations.efficiency.efficiency_requirement import calculate_eff_req_for_dataframe
 
         dea_calc = calculate_eff_req_for_dataframe(
             dea_baseline[["REId", "potential", "is_outlier"]].copy()
@@ -383,7 +383,7 @@ class TestEfficiencyReqReplication:
 
     @pytest.mark.parametrize("reid", ["REL00001", "REL00886", "REL03035"])
     def test_specific_company(self, dea_baseline, reid):
-        from calculations.efficiency_requirement import calculate_eff_req_for_dataframe
+        from calculations.efficiency.efficiency_requirement import calculate_eff_req_for_dataframe
 
         row = dea_baseline[dea_baseline["REId"] == reid].iloc[0]
         expected = EFF_REQ_EIS_EXPECTED[reid]["efficiency_requirement_annual"]

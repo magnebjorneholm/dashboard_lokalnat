@@ -8,8 +8,8 @@ Values are always displayed and compared against baseline to determine changes.
 import streamlit as st
 from typing import Tuple, Optional
 
-from frontend.common.formatting import format_percent, format_number
-from frontend.common.styling import COLORS
+from config.formatting import format_percent, format_number
+from config.colors import COLORS
 
 
 def parameter_input(

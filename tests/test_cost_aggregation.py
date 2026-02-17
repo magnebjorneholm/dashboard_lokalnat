@@ -8,7 +8,7 @@ import pytest
 import pandas as pd
 import numpy as np
 
-from calculations.cost_aggregation import aggregate_controllable, aggregate_non_controllable
+from calculations.opex.cost_aggregation import aggregate_controllable, aggregate_non_controllable
 from config.column_names import (
     COL_CONTROLLABLE_AVG, COL_NEO_ADJUSTMENTS,
     COL_NON_CONTROLLABLE,

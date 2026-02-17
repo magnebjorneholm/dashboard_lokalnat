@@ -22,11 +22,11 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from config.glossary import asset_value_var_id, VID_TOTAL_ASSET_VALUE
-from frontend.common.asset_categories import (
+from config.asset_categories import (
     ASSET_CATEGORIES, CATEGORY_BY_CODE, get_category_short_name,
 )
 from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
-from frontend.common.result_helpers import (
+from pipeline.result_helpers import (
     TIME_LABELS, TIME_CODES_ORDERED, TOLERANCE,
     CLR_CASE_ORD, CLR_CASE_TAIL, CLR_BL_ORD, CLR_BL_TAIL,
     load_baseline_category_data, get_case_category_data,
