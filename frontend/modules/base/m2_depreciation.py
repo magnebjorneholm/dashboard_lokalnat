@@ -56,8 +56,8 @@ def render_lifetimes(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, A
         adjustments, level_used, validation_error = _render_cat_editor()
     
     if validation_error:
-        st.error(validation_error)
-    elif adjustments:
+        st.warning(validation_error)
+    if adjustments:
         config["lifetime_adjustments"] = adjustments
         config["lifetime_level"] = level_used
         st.caption(f":orange[Modified] - {len(adjustments)} lifetime adjustment(s)")
@@ -114,7 +114,7 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str, Opti
             'Ordinary lifetime': st.column_config.NumberColumn(
                 'Ordinary lifetime',
                 min_value=4,
-                max_value=120,
+                max_value=150,
                 step=1,
                 format="%d yrs",
                 width="small"
@@ -130,7 +130,7 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str, Opti
         },
         key=f"{MODULE_KEY}_cat_editor"
     )
-    
+
     return _extract_lifetime_changes(edited_df, original_display, baseline_df)
 
 
@@ -194,7 +194,7 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
             'Ordinary lifetime': st.column_config.NumberColumn(
                 'Ordinary lifetime',
                 min_value=4,
-                max_value=120,
+                max_value=150,
                 step=1,
                 format="%d yrs",
                 width="small"
@@ -210,7 +210,7 @@ def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int
         },
         key=f"{MODULE_KEY}_subcat_editor"
     )
-    
+
     return _extract_lifetime_changes_subcat(edited_df, original_display, agg_df)
 
 
@@ -225,39 +225,41 @@ def _extract_lifetime_changes(
 ) -> tuple[Optional[Dict[int, Dict[str, int]]], str, Optional[str]]:
     """Extract lifetime adjustments for category level."""
     adjustments = {}
-    validation_errors = []
-    
+    clamped_messages = []
+
     for idx, edited_row in edited_df.iterrows():
         original_row = original_df.iloc[idx]
         baseline_row = baseline_df.iloc[idx]
         code = int(baseline_row['_cat_encode'])
-        
-        if pd.isna(edited_row['Ordinary lifetime']):
-            cat_name = baseline_row['Category']
-            validation_errors.append(f"Ordinary lifetime cannot be empty ({cat_name})")
+        cat_name = baseline_row['Category']
+
+        if pd.isna(edited_row['Ordinary lifetime']) or pd.isna(edited_row['Tail period']):
             continue
-            
-        if pd.isna(edited_row['Tail period']):
-            cat_name = baseline_row['Category']
-            validation_errors.append(f"Tail period cannot be empty ({cat_name})")
-            continue
-        
+
         new_ekdep = int(edited_row['Ordinary lifetime'])
         new_tail = int(edited_row['Tail period'])
-        
+
+        if new_tail > new_ekdep:
+            clamped_messages.append(
+                f"{cat_name}: tail ({new_tail} yrs) exceeds ordinary lifetime ({new_ekdep} yrs)"
+                f", clamped to {new_ekdep} yrs in calculations"
+            )
+            new_tail = new_ekdep
+
         baseline_ekdep = int(baseline_row['_baseline_ekdep'])
         baseline_tail = int(baseline_row['_baseline_tail'])
-        
+
         if new_ekdep != baseline_ekdep or new_tail != baseline_tail:
             adjustments[code] = {
                 'ekdep': new_ekdep,
                 'maxdep': new_ekdep + new_tail
             }
-    
-    if validation_errors:
-        return None, 'cat', validation_errors[0]
-    
-    return adjustments if adjustments else None, 'cat', None
+
+    if clamped_messages:
+        info_msg = ". ".join(clamped_messages) + ". Adjust corresponding values above to resolve."
+    else:
+        info_msg = None
+    return adjustments if adjustments else None, 'cat', info_msg
 
 
 def _extract_lifetime_changes_subcat(
@@ -267,36 +269,38 @@ def _extract_lifetime_changes_subcat(
 ) -> tuple[Optional[Dict[int, Dict[str, int]]], str, Optional[str]]:
     """Extract lifetime adjustments for subcategory level."""
     adjustments = {}
-    validation_errors = []
-    
+    clamped_messages = []
+
     for idx, edited_row in edited_df.iterrows():
         original_row = original_df.iloc[idx]
         baseline_row = baseline_df.iloc[idx]
         code = int(baseline_row['_code'])
-        
-        if pd.isna(edited_row['Ordinary lifetime']):
-            subcat_name = baseline_row['Subcategory']
-            validation_errors.append(f"Ordinary lifetime cannot be empty ({subcat_name})")
+        subcat_name = baseline_row['Subcategory']
+
+        if pd.isna(edited_row['Ordinary lifetime']) or pd.isna(edited_row['Tail period']):
             continue
-            
-        if pd.isna(edited_row['Tail period']):
-            subcat_name = baseline_row['Subcategory']
-            validation_errors.append(f"Tail period cannot be empty ({subcat_name})")
-            continue
-        
+
         new_ekdep = int(edited_row['Ordinary lifetime'])
         new_tail = int(edited_row['Tail period'])
-        
+
+        if new_tail > new_ekdep:
+            clamped_messages.append(
+                f"{subcat_name}: tail ({new_tail} yrs) exceeds ordinary lifetime ({new_ekdep} yrs) "
+                f"— clamped to {new_ekdep} yrs in calculations"
+            )
+            new_tail = new_ekdep
+
         baseline_ekdep = int(baseline_row['_baseline_ekdep'])
         baseline_tail = int(baseline_row['_baseline_tail'])
-        
+
         if new_ekdep != baseline_ekdep or new_tail != baseline_tail:
             adjustments[code] = {
                 'ekdep': new_ekdep,
                 'maxdep': new_ekdep + new_tail
             }
-    
-    if validation_errors:
-        return None, 'subcat', validation_errors[0]
-    
-    return adjustments if adjustments else None, 'subcat', None
+
+    if clamped_messages:
+        info_msg = ". ".join(clamped_messages) + ". Adjust the values above to resolve."
+    else:
+        info_msg = None
+    return adjustments if adjustments else None, 'subcat', info_msg

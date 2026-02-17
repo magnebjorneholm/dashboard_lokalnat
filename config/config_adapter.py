@@ -163,8 +163,8 @@ def _build_pre_dea_config(
 
     # === M4 OPEX: Pre-DEA parameters (from M4) ===
     m4 = ui_config.get("m4_operating_exp", {})
-    opex_scaling = m4.get("opex_scaling") or None
-    opex_override = m4.get("opex_override") or None
+    opex_scaling = m4.get("opex_scaling")
+    opex_override = m4.get("opex_override")
 
     return PreDeaConfig(
         # Source (for user's company)
@@ -476,10 +476,10 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
 
     # M4 OPEX: Post-DEA parameters (from M4)
     m4 = ui_config.get("m4_operating_exp", {})
-    flex_scaling = m4.get("flex_scaling") or None
-    non_adj_scaling = m4.get("non_adj_scaling") or None
-    flex_override = m4.get("flex_override") or None
-    non_controllable_override = m4.get("non_controllable_override") or None
+    flex_scaling = m4.get("flex_scaling")
+    non_adj_scaling = m4.get("non_adj_scaling")
+    flex_override = m4.get("flex_override")
+    non_controllable_override = m4.get("non_controllable_override")
 
     return PostDeaConfig(
         truncation_min=truncation_min,

@@ -152,6 +152,7 @@ def _render_netloss_variables(config: Dict[str, Any], baseline: Dict[str, float]
     """Render 30.2 Network loss adjustment variables."""
     for var_name in ["nf_norm", "nf_obs", "e_in"]:
         meta = VARIABLE_METADATA[var_name]
+        max_val = 1.0 if "share" in meta[2] else None
         _render_variable_input(
             config, baseline,
             var_name=var_name,
@@ -160,6 +161,7 @@ def _render_netloss_variables(config: Dict[str, Any], baseline: Dict[str, float]
             unit=meta[2],
             format_str=meta[3],
             min_value=0.0,
+            max_value=max_val,
         )
 
 

@@ -545,8 +545,8 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
         width='stretch',
         hide_index=False,
         column_config={
-            "Unannounced": st.column_config.NumberColumn(format="%.2f"),
-            "Announced": st.column_config.NumberColumn(format="%.2f"),
+            "Unannounced": st.column_config.NumberColumn(format="%.2f", min_value=0.0),
+            "Announced": st.column_config.NumberColumn(format="%.2f", min_value=0.0),
         }
     )
     ait_costs = _dataframe_to_cost_dict(edited_ait, "ait")
@@ -569,8 +569,8 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
         width='stretch',
         hide_index=False,
         column_config={
-            "Unannounced": st.column_config.NumberColumn(format="%.2f"),
-            "Announced": st.column_config.NumberColumn(format="%.2f"),
+            "Unannounced": st.column_config.NumberColumn(format="%.2f", min_value=0.0),
+            "Announced": st.column_config.NumberColumn(format="%.2f", min_value=0.0),
         }
     )
     aif_costs = _dataframe_to_cost_dict(edited_aif, "aif")
@@ -613,7 +613,7 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
             width='stretch',
             hide_index=False,
             column_config={
-                "Price (SEK/MWh)": st.column_config.NumberColumn(format="%.2f"),
+                "Price (SEK/MWh)": st.column_config.NumberColumn(format="%.2f", min_value=0.0),
             }
         )
         k_nf_dict = _dataframe_to_yearly_dict(edited_k_nf, "Price (SEK/MWh)")
@@ -662,7 +662,7 @@ def _render_kpi_section(config: Dict[str, Any]) -> None:
         width='stretch',
         hide_index=False,
         column_config={
-            "KPI factor": st.column_config.NumberColumn(format="%.4f"),
+            "KPI factor": st.column_config.NumberColumn(format="%.4f", min_value=0.01),
         }
     )
     kpi_dict = _dataframe_to_yearly_dict(edited_kpi, "KPI factor")
