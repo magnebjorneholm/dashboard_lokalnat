@@ -333,9 +333,9 @@ Results shown with case-vs-baseline comparison (orange = modified)
 | case_id                | str/None        | UUID if saved, None if new                       |
 | case_name              | str             | Case name                                        |
 | case_notes             | str             | Notes                                            |
-| main_ui_config         | Dict            | Snapshot: frozen config after first calculation  |
-| main_selected_modules  | Set             | Snapshot: frozen selections                      |
-| main_case_result       | PipelineResult  | Snapshot: main result                            |
+| main_ui_config         | Dict            | Reference config (set at first calc OR case load)|
+| main_selected_modules  | Set             | Reference selections                             |
+| main_case_result       | PipelineResult  | Main result (None until computed with ref config)|
 | result_snapshots       | List[Dict]      | Max 5 saved snapshots per session                |
 | auth_*                 | various         | Firebase auth state (email, role, reid, uid)     |
 
@@ -359,9 +359,18 @@ DEFAULT_UI_CONFIG = {
 
 ### Snapshot System
 
-1. First calculation -> saved as `main_*`
-2. Subsequent calculations -> marked as `_is_snapshot_candidate`
-3. User can save as snapshot (max 5) or promote snapshot to main
+1. First calculation (or case load) -> `main_ui_config` + `main_selected_modules` set
+2. `main_case_result` set only when computed with unchanged reference config
+3. Subsequent calculations -> marked as `_is_snapshot_candidate`
+4. User can save as snapshot (max 5) or promote snapshot to main
+5. Navigate to Define/Configure after snapshot -> `restore_main_config()` resets to reference
+
+### data_editor Widget Caching
+
+Source DataFrames are cached in `st.session_state["{key}_source"]` so `data_editor`
+input is constant between reruns (prevents widget reset on rerun feedback loop).
+Rebuilt when widget key is lost (page navigation) or `_clear_config_widget_keys()` fires
+(case load, reset, restore, promote).
 
 
 ## 9. Pipeline Architecture
