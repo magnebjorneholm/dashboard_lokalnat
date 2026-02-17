@@ -71,31 +71,37 @@ def render_lifetimes(capbase_data: Optional[pd.DataFrame] = None) -> Dict[str, A
 
 def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str, Optional[str]]:
     """Render editor for category-level adjustments."""
-    data = []
-    lifetime_adj = get_config_value(MODULE_KEY, "lifetime_adjustments", None)
-    for cat in ASSET_CATEGORIES:
-        tail_period = cat.maxdep - cat.ekdep
-        initial_ekdep = cat.ekdep
-        initial_tail = tail_period
-        if isinstance(lifetime_adj, dict) and cat.cat_encode in lifetime_adj:
-            adj = lifetime_adj[cat.cat_encode]
-            # stored as {'ekdep': val, 'maxdep': val}
-            initial_ekdep = int(adj.get('ekdep', initial_ekdep))
-            initial_tail = int(adj.get('maxdep', initial_ekdep + initial_tail)) - initial_ekdep
-        data.append({
-            'Param-ID': f"{cat.param_id_ekdep} / {cat.param_id_maxdep}",
-            'Category': cat.name,
-            'Ordinary lifetime': initial_ekdep,
-            'Tail period': initial_tail,
-            '_cat_encode': cat.cat_encode,
-            '_baseline_ekdep': cat.ekdep,
-            '_baseline_tail': tail_period,
-        })
-    
-    baseline_df = pd.DataFrame(data)
+    editor_key = f"{MODULE_KEY}_cat_editor"
+    source_key = f"{editor_key}_source"
+
+    if source_key not in st.session_state or editor_key not in st.session_state:
+        lifetime_adj = get_config_value(MODULE_KEY, "lifetime_adjustments", None)
+        data = []
+        for cat in ASSET_CATEGORIES:
+            tail_period = cat.maxdep - cat.ekdep
+            initial_ekdep = cat.ekdep
+            initial_tail = tail_period
+            if isinstance(lifetime_adj, dict) and cat.cat_encode in lifetime_adj:
+                adj = lifetime_adj[cat.cat_encode]
+                initial_ekdep = int(adj.get('ekdep', initial_ekdep))
+                initial_tail = int(adj.get('maxdep', initial_ekdep + initial_tail)) - initial_ekdep
+            data.append({
+                'Param-ID': f"{cat.param_id_ekdep} / {cat.param_id_maxdep}",
+                'Category': cat.name,
+                'Ordinary lifetime': initial_ekdep,
+                'Tail period': initial_tail,
+                '_cat_encode': cat.cat_encode,
+                '_baseline_ekdep': cat.ekdep,
+                '_baseline_tail': tail_period,
+            })
+        baseline_df = pd.DataFrame(data)
+        st.session_state[source_key] = baseline_df
+    else:
+        baseline_df = st.session_state[source_key]
+
     display_df = baseline_df[['Param-ID', 'Category', 'Ordinary lifetime', 'Tail period']].copy()
     original_display = display_df.copy()
-    
+
     edited_df = st.data_editor(
         display_df,
         width='stretch',
@@ -130,46 +136,53 @@ def _render_cat_editor() -> tuple[Optional[Dict[int, Dict[str, int]]], str, Opti
 
 def _render_subcat_editor(capbase_data: pd.DataFrame) -> tuple[Optional[Dict[int, Dict[str, int]]], str, Optional[str]]:
     """Render editor for subcategory-level adjustments."""
-    agg_df = capbase_data.groupby(['subcat_encode', 'subcat']).agg({
-        'ekdep': 'first',
-        'maxdep': 'first'
-    }).reset_index()
-    
-    agg_df['tail_period'] = agg_df['maxdep'] - agg_df['ekdep']
-    
-    agg_df = agg_df.rename(columns={
-        'subcat_encode': '_code',
-        'subcat': 'Subcategory',
-        'ekdep': 'Ordinary lifetime',
-        'tail_period': 'Tail period',
-    })
-    
-    # Prefill from ui_config if present
-    lifetime_adj = get_config_value(MODULE_KEY, "lifetime_adjustments", None)
-    def _initial_subcat_ekdep(row):
-        code = int(row['_code'])
-        if isinstance(lifetime_adj, dict) and code in lifetime_adj:
-            return int(lifetime_adj[code].get('ekdep', row['Ordinary lifetime']))
-        return int(row['Ordinary lifetime'])
+    editor_key = f"{MODULE_KEY}_subcat_editor"
+    source_key = f"{editor_key}_source"
 
-    def _initial_subcat_tail(row):
-        code = int(row['_code'])
-        if isinstance(lifetime_adj, dict) and code in lifetime_adj:
-            adj = lifetime_adj[code]
-            maxdep = int(adj.get('maxdep', row['Ordinary lifetime'] + row['tail_period']))
-            return maxdep - int(adj.get('ekdep', row['Ordinary lifetime']))
-        return int(row['tail_period'])
+    if source_key not in st.session_state or editor_key not in st.session_state:
+        agg_df = capbase_data.groupby(['subcat_encode', 'subcat']).agg({
+            'ekdep': 'first',
+            'maxdep': 'first'
+        }).reset_index()
 
-    agg_df['_baseline_ekdep'] = agg_df['Ordinary lifetime']
-    agg_df['_baseline_tail'] = agg_df['Tail period']
-    agg_df['Ordinary lifetime'] = agg_df.apply(_initial_subcat_ekdep, axis=1)
-    agg_df['Tail period'] = agg_df.apply(_initial_subcat_tail, axis=1)
-    
-    agg_df = agg_df.sort_values('_code').reset_index(drop=True)
-    
+        agg_df['tail_period'] = agg_df['maxdep'] - agg_df['ekdep']
+
+        agg_df = agg_df.rename(columns={
+            'subcat_encode': '_code',
+            'subcat': 'Subcategory',
+            'ekdep': 'Ordinary lifetime',
+            'tail_period': 'Tail period',
+        })
+
+        # Prefill from ui_config if present
+        lifetime_adj = get_config_value(MODULE_KEY, "lifetime_adjustments", None)
+        def _initial_subcat_ekdep(row):
+            code = int(row['_code'])
+            if isinstance(lifetime_adj, dict) and code in lifetime_adj:
+                return int(lifetime_adj[code].get('ekdep', row['Ordinary lifetime']))
+            return int(row['Ordinary lifetime'])
+
+        def _initial_subcat_tail(row):
+            code = int(row['_code'])
+            if isinstance(lifetime_adj, dict) and code in lifetime_adj:
+                adj = lifetime_adj[code]
+                maxdep = int(adj.get('maxdep', row['Ordinary lifetime'] + row['Tail period']))
+                return maxdep - int(adj.get('ekdep', row['Ordinary lifetime']))
+            return int(row['Tail period'])
+
+        agg_df['_baseline_ekdep'] = agg_df['Ordinary lifetime']
+        agg_df['_baseline_tail'] = agg_df['Tail period']
+        agg_df['Ordinary lifetime'] = agg_df.apply(_initial_subcat_ekdep, axis=1)
+        agg_df['Tail period'] = agg_df.apply(_initial_subcat_tail, axis=1)
+
+        agg_df = agg_df.sort_values('_code').reset_index(drop=True)
+        st.session_state[source_key] = agg_df
+    else:
+        agg_df = st.session_state[source_key]
+
     display_df = agg_df[['Subcategory', 'Ordinary lifetime', 'Tail period']].copy()
     original_display = display_df.copy()
-    
+
     edited_df = st.data_editor(
         display_df,
         width='stretch',

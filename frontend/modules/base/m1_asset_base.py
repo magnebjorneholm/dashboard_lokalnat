@@ -203,22 +203,30 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
         f"(Parameter-IDs: {_sp(1)}-{_sp(17)})"
     )
     
-    # Build dataframe for editor
-    data = []
-    cat_scaling_conf = get_config_value(MODULE_KEY, "cat_scaling", None)
-    for cat in ASSET_CATEGORIES:
-        initial_scaling = 1.0
-        if isinstance(cat_scaling_conf, dict):
-            initial_scaling = float(cat_scaling_conf.get(cat.cat_encode, 1.0))
-        data.append({
-            'Param-ID': cat.scaling_param_id,
-            'Category': cat.name,
-            'Scaling': initial_scaling,
-            '_cat_encode': cat.cat_encode,  # Hidden, for extraction only
-        })
-    
-    df = pd.DataFrame(data)
-    
+    # Build source DataFrame once (with pre-fill from ui_config), then cache it.
+    # Constant input to data_editor prevents widget resets between reruns.
+    # _clear_config_widget_keys() deletes the cache key on case load/reset/restore.
+    editor_key = f"{MODULE_KEY}_cat_scaling"
+    source_key = f"{editor_key}_source"
+
+    if source_key not in st.session_state or editor_key not in st.session_state:
+        cat_scaling_conf = get_config_value(MODULE_KEY, "cat_scaling", None)
+        data = []
+        for cat in ASSET_CATEGORIES:
+            initial_scaling = 1.0
+            if isinstance(cat_scaling_conf, dict):
+                initial_scaling = float(cat_scaling_conf.get(cat.cat_encode, 1.0))
+            data.append({
+                'Param-ID': cat.scaling_param_id,
+                'Category': cat.name,
+                'Scaling': initial_scaling,
+                '_cat_encode': cat.cat_encode,
+            })
+        df = pd.DataFrame(data)
+        st.session_state[source_key] = df
+    else:
+        df = st.session_state[source_key]
+
     edited_df = st.data_editor(
         df[['Param-ID', 'Category', 'Scaling']],
         width='stretch',
@@ -297,18 +305,24 @@ def _render_variables_scaling(
         st.warning("No capital base data found for this company.")
         return None
     
-    # Add scaling column (prefill from ui_config if present)
-    var_scaling_conf = get_config_value(MODULE_KEY, "var_scaling", None)
-    def _initial_var_scaling(cat_encode):
-        if isinstance(var_scaling_conf, dict):
-            return float(var_scaling_conf.get(cat_encode, 1.0))
-        return 1.0
+    # Build source DataFrame once, cache it for stable data_editor input.
+    editor_key = f"{MODULE_KEY}_var_scaling"
+    source_key = f"{editor_key}_source"
 
-    summary_df['Scaling'] = summary_df['cat_encode'].map(_initial_var_scaling)
-    
+    if source_key not in st.session_state or editor_key not in st.session_state:
+        var_scaling_conf = get_config_value(MODULE_KEY, "var_scaling", None)
+        def _initial_var_scaling(cat_encode):
+            if isinstance(var_scaling_conf, dict):
+                return float(var_scaling_conf.get(cat_encode, 1.0))
+            return 1.0
+        summary_df['Scaling'] = summary_df['cat_encode'].map(_initial_var_scaling)
+        st.session_state[source_key] = summary_df.copy()
+    else:
+        summary_df = st.session_state[source_key]
+
     # Reorder: Var-ID first, hide cat_encode
     display_cols = ['Var-ID', 'Category', 'Components', 'NUAV (Mkr)', 'Scaling']
-    
+
     edited_df = st.data_editor(
         summary_df[display_cols],
         width='stretch',

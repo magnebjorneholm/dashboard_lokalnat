@@ -534,7 +534,11 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     
     # AIT costs
     st.markdown("###### AIT costs (SEK/kWh)")
-    ait_df = _create_cost_dataframe("ait")
+    ait_source_key = f"{MODULE_KEY_QA}_ait_editor_source"
+    ait_editor_key = f"{MODULE_KEY_QA}_ait_editor"
+    if ait_source_key not in st.session_state or ait_editor_key not in st.session_state:
+        st.session_state[ait_source_key] = _create_cost_dataframe("ait")
+    ait_df = st.session_state[ait_source_key]
     edited_ait = st.data_editor(
         ait_df,
         key=f"{MODULE_KEY_QA}_ait_editor",
@@ -554,7 +558,11 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     
     # AIF costs
     st.markdown("###### AIF costs (SEK/kW)")
-    aif_df = _create_cost_dataframe("aif")
+    aif_source_key = f"{MODULE_KEY_QA}_aif_editor_source"
+    aif_editor_key = f"{MODULE_KEY_QA}_aif_editor"
+    if aif_source_key not in st.session_state or aif_editor_key not in st.session_state:
+        st.session_state[aif_source_key] = _create_cost_dataframe("aif")
+    aif_df = st.session_state[aif_source_key]
     edited_aif = st.data_editor(
         aif_df,
         key=f"{MODULE_KEY_QA}_aif_editor",
@@ -594,7 +602,11 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
     
     with col2:
         st.markdown("**Electricity price (K_NF) per year**")
-        k_nf_df = _create_yearly_dataframe("k_nf", "Price (SEK/MWh)")
+        k_nf_source_key = f"{MODULE_KEY_QA}_k_nf_editor_source"
+        k_nf_editor_key = f"{MODULE_KEY_QA}_k_nf_editor"
+        if k_nf_source_key not in st.session_state or k_nf_editor_key not in st.session_state:
+            st.session_state[k_nf_source_key] = _create_yearly_dataframe("k_nf", "Price (SEK/MWh)")
+        k_nf_df = st.session_state[k_nf_source_key]
         edited_k_nf = st.data_editor(
             k_nf_df,
             key=f"{MODULE_KEY_QA}_k_nf_editor",
@@ -639,7 +651,11 @@ def _render_kpi_section(config: Dict[str, Any]) -> None:
     """Render 3.7 KPI factors."""
     st.markdown("KPI factors for indexation to 2022 prices.")
     
-    kpi_df = _create_yearly_dataframe("kpi", "KPI factor")
+    kpi_source_key = f"{MODULE_KEY_QA}_kpi_editor_source"
+    kpi_editor_key = f"{MODULE_KEY_QA}_kpi_editor"
+    if kpi_source_key not in st.session_state or kpi_editor_key not in st.session_state:
+        st.session_state[kpi_source_key] = _create_yearly_dataframe("kpi", "KPI factor")
+    kpi_df = st.session_state[kpi_source_key]
     edited_kpi = st.data_editor(
         kpi_df,
         key=f"{MODULE_KEY_QA}_kpi_editor",
@@ -712,3 +728,5 @@ def _dataframe_to_yearly_dict(df: pd.DataFrame, column_name: str) -> Dict[int, f
     for year in df.index:
         result[int(year)] = float(df.loc[year, column_name])
     return result
+
+

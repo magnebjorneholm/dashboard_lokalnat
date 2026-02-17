@@ -160,6 +160,19 @@ def _run_calculation() -> None:
                     selected_modules=get_selected_modules(),
                     case_result=case_result,
                 )
+            elif st.session_state.get("main_case_result") is None:
+                # Loaded case, first computation since load.
+                # Check if user changed anything from the loaded reference.
+                main_ui = st.session_state.get("main_ui_config", {})
+                current_ui = st.session_state.get("ui_config", {})
+                main_modules = st.session_state.get("main_selected_modules", set())
+                current_modules = get_selected_modules()
+                if current_ui == main_ui and current_modules == main_modules:
+                    # Unchanged → this IS the main result
+                    st.session_state["main_case_result"] = case_result
+                else:
+                    # Config changed from loaded reference → snapshot candidate
+                    mark_as_snapshot_candidate()
             else:
                 # Subsequent calculation -- this is a snapshot candidate
                 mark_as_snapshot_candidate()

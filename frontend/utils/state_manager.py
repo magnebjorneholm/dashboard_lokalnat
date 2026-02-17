@@ -465,14 +465,17 @@ def is_regulator() -> bool:
 # =============================================================================
 
 def has_main_config() -> bool:
-    """Check if a main configuration has been established (first calculation done).
+    """Check if a main configuration reference exists.
 
-    Uses main_case_result as the gate rather than main_ui_config because
-    apply_case_to_session sets main_ui_config at load time (before any
-    calculation).  Checking main_case_result ensures restore_main_config
-    only triggers after the first actual pipeline run.
+    Returns True when either:
+    - A case was loaded (apply_case_to_session sets main_ui_config), OR
+    - A first calculation was done (set_main_config sets both keys)
+
+    The restore guard ``has_main_config() and is_snapshot_calculation()``
+    prevents spurious restores: after loading a case (before any
+    computation) _is_snapshot_candidate is False, so restore won't fire.
     """
-    return st.session_state.get("main_case_result") is not None
+    return st.session_state.get("main_ui_config") is not None
 
 
 def set_main_config(
@@ -518,7 +521,17 @@ def restore_main_config() -> None:
     st.session_state["selected_modules"] = set(
         st.session_state["main_selected_modules"]
     )
-    st.session_state["case_result"] = st.session_state["main_case_result"]
+
+    main_result = st.session_state.get("main_case_result")
+    if main_result is not None:
+        st.session_state["case_result"] = main_result
+    else:
+        # Loaded case without a matching main computation yet.
+        # Clear calculation state so Results page shows "please compute".
+        st.session_state["case_result"] = None
+        st.session_state["baseline_result"] = None
+        st.session_state["calculation_done"] = False
+
     st.session_state["_is_snapshot_candidate"] = False
     
     _clear_selection_widget_keys()
@@ -604,7 +617,10 @@ def promote_snapshot(index: int) -> None:
     # Mark case as unsaved (Firebase version is now outdated)
     st.session_state["case_saved"] = False
     st.session_state["_is_snapshot_candidate"] = False
-    
+
+    # Clear widget keys so editors reinitialize from promoted config
+    _clear_config_widget_keys()
+
     # Remove promoted snapshot from list
     snapshots.pop(index)
     st.session_state["result_snapshots"] = snapshots
