@@ -80,7 +80,12 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         # 30.4 AIT/AIF stored dynamically
     },
     "m4_operating_exp": {
-        "opex_override": None,  # Dict[year, float] or None
+        "opex_scaling": None,                  # float multiplier (Param 4.1.1)
+        "flex_scaling": None,                  # float multiplier (Param 4.1.2)
+        "non_adj_scaling": None,               # float multiplier (Param 4.1.3)
+        "opex_override": None,                 # float in tkr (Var 40.1.1)
+        "flex_override": None,                 # float in tkr (Var 40.1.2)
+        "non_controllable_override": None,     # float in tkr (Var 40.2.1)
     },
     "m5_efficiency": {
         "trunkering_max": None,  # None = baseline (1.0)
@@ -260,11 +265,31 @@ def get_user_reid() -> Optional[str]:
 def set_user_reid(reid: str) -> None:
     """
     Set selected company's REId.
-    
+
     This is the ONLY function that should set user_reid.
     id_network is derived on-demand, not stored.
+
+    If the company changes, clears calculation results and snapshots
+    to prevent stale data from appearing for the wrong company.
+    ui_config and selected_modules are NOT reset so that regulators
+    can apply the same configuration across companies.
     """
+    previous = st.session_state.get("user_reid")
     st.session_state["user_reid"] = reid
+
+    if previous is not None and previous != reid:
+        # Company changed -- clear stale results
+        st.session_state["case_result"] = None
+        st.session_state["baseline_result"] = None
+        st.session_state["calculation_done"] = False
+        st.session_state["_baseline_reid"] = None
+
+        # Reset snapshot system (snapshots are company-specific)
+        st.session_state["main_ui_config"] = None
+        st.session_state["main_selected_modules"] = None
+        st.session_state["main_case_result"] = None
+        st.session_state["result_snapshots"] = []
+        st.session_state["_is_snapshot_candidate"] = False
 
 
 def get_user_id_network() -> Optional[int]:

@@ -85,11 +85,23 @@ def _calc_trunkering_min(outlier_krav, kunddelning, realiseringstid, tillsynsper
 
 
 def _get_params(m5_config):
-    """Extract efficiency parameters, falling back to baseline defaults."""
-    trunkering_max = m5_config.get("trunkering_max") or BASELINE_PARAMS["trunkering_max"]
-    realiseringstid = m5_config.get("realiseringstid") or BASELINE_PARAMS["realiseringstid"]
-    kunddelning = m5_config.get("kunddelning") or BASELINE_PARAMS["kunddelning"]
-    outlier_krav = m5_config.get("outlier_krav") or BASELINE_PARAMS["outlier_krav"]
+    """Extract efficiency parameters, falling back to baseline defaults.
+
+    Uses ``is None`` checks instead of ``or`` so that explicit zero values
+    are respected (``or`` treats 0 / 0.0 as falsy).
+    """
+    trunkering_max = m5_config.get("trunkering_max")
+    if trunkering_max is None:
+        trunkering_max = BASELINE_PARAMS["trunkering_max"]
+    realiseringstid = m5_config.get("realiseringstid")
+    if realiseringstid is None:
+        realiseringstid = BASELINE_PARAMS["realiseringstid"]
+    kunddelning = m5_config.get("kunddelning")
+    if kunddelning is None:
+        kunddelning = BASELINE_PARAMS["kunddelning"]
+    outlier_krav = m5_config.get("outlier_krav")
+    if outlier_krav is None:
+        outlier_krav = BASELINE_PARAMS["outlier_krav"]
     tillsynsperiod = BASELINE_PARAMS["tillsynsperiod"]
 
     trunkering_min = _calc_trunkering_min(

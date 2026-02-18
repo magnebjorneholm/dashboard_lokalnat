@@ -426,17 +426,31 @@ def _has_m3_changes() -> bool:
     )
 
 def _has_m4_changes() -> bool:
-    return False  # No OPEX parameters implemented yet
+    m4 = ui_config.get("m4_operating_exp", {})
+    return (
+        m4.get("opex_scaling") is not None
+        or m4.get("flex_scaling") is not None
+        or m4.get("non_adj_scaling") is not None
+        or m4.get("opex_override") is not None
+        or m4.get("flex_override") is not None
+        or m4.get("non_controllable_override") is not None
+    )
 
 def _has_m5_changes() -> bool:
     m5 = ui_config.get("m5_efficiency", {})
+    # Compare against baseline values (not just is not None) because
+    # the M5 widget_map always writes current widget values to config
+    trunkering_max = m5.get("trunkering_max")
+    realiseringstid = m5.get("realiseringstid")
+    kunddelning = m5.get("kunddelning")
+    outlier_krav = m5.get("outlier_krav")
+    paverkbara_method = m5.get("paverkbara_method")
     return (
-        m5.get("trunkering_max") is not None or
-        m5.get("realiseringstid") is not None or
-        m5.get("kunddelning") is not None or
-        m5.get("outlier_krav") is not None or
-        m5.get("trunkering_min") is not None or
-        m5.get("paverkbara_method") is not None
+        (trunkering_max is not None and abs(trunkering_max - 0.30) > 1e-9)
+        or (realiseringstid is not None and realiseringstid != 8)
+        or (kunddelning is not None and abs(kunddelning - 0.50) > 1e-9)
+        or (outlier_krav is not None and abs(outlier_krav - 0.01) > 1e-9)
+        or (paverkbara_method is not None and paverkbara_method != "OPEX")
     )
 
 has_changes = {
