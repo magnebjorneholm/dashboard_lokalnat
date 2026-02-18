@@ -95,6 +95,14 @@ def prepare_diagram_data(
     capex_modified = case_result.pre_dea.capex_modified
     effkrav_modified = _is_effkrav_modified(case_result, baseline_result, user_reid)
 
+    # OPEX modification flags (compare case vs baseline values, tolerance 1 tkr)
+    _TOL = 1.0
+    paverkbara_modified = abs(paverkbara_fore_value - paverkbara_fore_baseline) > _TOL
+    ej_paverkbara_modified = abs(ej_paverkbara_value - ej_paverkbara_baseline) > _TOL
+    flex_modified = abs(flex_case - flex_baseline) > _TOL
+    avbrott_modified = abs(avbrott_case - avbrott_baseline) > _TOL
+    avdrag_modified = abs(avdrag_case - avdrag_baseline) > _TOL
+
     # --- Method-dependent calculations ---
 
     if method == 'TOTEX':
@@ -157,13 +165,13 @@ def prepare_diagram_data(
         'paverkbara': {
             'value': paverkbara_fore_value,
             'baseline': paverkbara_fore_baseline,
-            'is_directly_modified': False,
+            'is_directly_modified': paverkbara_modified,
             'source': 'Revenue frame (opex_before)'
         },
         'ej_paverkbara': {
             'value': ej_paverkbara_value,
             'baseline': ej_paverkbara_baseline,
-            'is_directly_modified': False,
+            'is_directly_modified': ej_paverkbara_modified,
             'source': 'SDF'
         },
         'kapitalbas': {
@@ -193,13 +201,13 @@ def prepare_diagram_data(
         'kvalitet': {
             'value': kvalitet_value,
             'baseline': kvalitet_baseline,
-            'is_directly_modified': False,
+            'is_directly_modified': abs(kvalitet_value - kvalitet_baseline) > _TOL,
             'source': 'Incentive calculation'
         },
         'lopande': {
             'value': lopande_value,
             'baseline': lopande_baseline,
-            'is_directly_modified': False,
+            'is_directly_modified': paverkbara_modified or ej_paverkbara_modified or effkrav_modified,
             'source': 'Calculated'
         },
         'kapitalkostnader': {
@@ -211,31 +219,31 @@ def prepare_diagram_data(
         'other_adjustments': {
             'value': other_adj['value'],
             'baseline': other_adj['baseline'],
-            'is_directly_modified': False,
+            'is_directly_modified': flex_modified or avbrott_modified or avdrag_modified,
             'source': 'Flexibility + Interruption - State aid'
         },
         'flexibilitetstjanster': {
             'value': flex_case,
             'baseline': flex_baseline,
-            'is_directly_modified': False,
+            'is_directly_modified': flex_modified,
             'source': 'SDF'
         },
         'avbrottsersattning': {
             'value': avbrott_case,
             'baseline': avbrott_baseline,
-            'is_directly_modified': False,
+            'is_directly_modified': avbrott_modified,
             'source': 'SDF'
         },
         'avdrag_statligt_stod': {
             'value': avdrag_case,
             'baseline': avdrag_baseline,
-            'is_directly_modified': False,
+            'is_directly_modified': avdrag_modified,
             'source': 'SDF'
         },
         'intaktsram': {
             'value': intaktsram_value,
             'baseline': intaktsram_baseline,
-            'is_directly_modified': False,
+            'is_directly_modified': abs(intaktsram_value - intaktsram_baseline) > _TOL,
             'source': 'Total'
         }
     }

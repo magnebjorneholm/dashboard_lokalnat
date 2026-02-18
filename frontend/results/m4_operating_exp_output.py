@@ -15,7 +15,9 @@ if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
 from config.column_names import (
-    COL_CONTROLLABLE_PERIOD, COL_METHOD_USED, COL_NON_CONTROLLABLE,
+    COL_CONTROLLABLE_PERIOD, COL_CONTROLLABLE_BEFORE,
+    COL_OPEX_BEFORE, COL_EFFICIENCY_DEDUCTION,
+    COL_METHOD_USED, COL_NON_CONTROLLABLE,
     COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
 )
 from config.glossary import VID_OPEX_ADJUSTABLE, VID_FLEX_SERVICE, VID_NON_ADJUSTABLE
@@ -32,26 +34,41 @@ def render(
     case_ir = case.post_dea.user_revenue_frame
     baseline_ir = baseline.post_dea.user_revenue_frame
 
-    # Controllable costs
+    # Controllable costs (before efficiency deduction = the user's input OPEXp)
     st.markdown("**40.1 Controllable costs**")
-    
-    pav_case = case_ir.get(COL_CONTROLLABLE_PERIOD, 0)
-    pav_baseline = baseline_ir.get(COL_CONTROLLABLE_PERIOD, 0)
-    _, pav_pct = _calc_delta(pav_case, pav_baseline)
-    
+
+    # 40.1.1: Show before-efficiency value (matches diagram's "Controllable costs" box)
+    pav_before_case = float(case_ir.get(COL_OPEX_BEFORE, case_ir.get(COL_CONTROLLABLE_BEFORE, 0)))
+    pav_before_baseline = float(baseline_ir.get(COL_OPEX_BEFORE, baseline_ir.get(COL_CONTROLLABLE_BEFORE, 0)))
+    _, pav_pct = _calc_delta(pav_before_case, pav_before_baseline)
+
+    # After efficiency (for reference)
+    pav_after_case = float(case_ir.get(COL_CONTROLLABLE_PERIOD, 0))
+    pav_after_baseline = float(baseline_ir.get(COL_CONTROLLABLE_PERIOD, 0))
+
+    # Efficiency deduction
+    eff_deduction_case = float(case_ir.get(COL_EFFICIENCY_DEDUCTION, 0))
+
     method_used = case_ir.get(COL_METHOD_USED, 'OPEX')
-    
+
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(
             f"{VID_OPEX_ADJUSTABLE} Controllable costs",
-            f"{pav_case:,.0f} tkr",
+            f"{pav_before_case:,.0f} tkr",
             delta=f"{pav_pct:+.1f}%" if pav_pct else None
         )
     with col2:
-        st.metric("Baseline", f"{pav_baseline:,.0f} tkr")
+        st.metric("Baseline", f"{pav_before_baseline:,.0f} tkr")
     with col3:
         st.metric("Method", method_used)
+
+    # Show after-efficiency breakdown
+    if eff_deduction_case > 0:
+        st.caption(
+            f"After efficiency deduction: {pav_after_case:,.0f} tkr "
+            f"(deduction: -{eff_deduction_case:,.0f} tkr)"
+        )
     
     # Non-controllable costs
     st.markdown("")
