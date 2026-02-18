@@ -1,13 +1,18 @@
 """
 M5 Efficiency Incentive - Output Display
 
-Three visual blocks:
+Four visual blocks:
 1. Efficiency Distribution -- Two Plotly histograms side-by-side:
    (a) Efficiency scores with truncation zone overlay and company markers.
    (b) Annual efficiency requirements distribution with company marker.
-2. Company Efficiency Card -- KPI metrics + full 50.3 measures table + parameters.
-3. Cost Impact -- Plotly waterfall showing cost base -> efficiency deduction -> net,
-   adapting to OPEX vs TOTEX method, with baseline reference when delta exists.
+2. Company Efficiency Summary -- KPI hero row (4 metrics: score, rank,
+   truncated potential, annual requirement) + super-efficiency badge +
+   percentile bar + 50.3 measures table + parameters.
+3. Frontier Scatter Plot -- 148 companies on TOTEX vs CU plane with
+   efficient frontier line and user company highlighted.
+4. Cost Impact -- Plotly waterfall showing cost base -> efficiency deduction
+   -> net, adapting to OPEX vs TOTEX method, with baseline reference when
+   delta exists.  Summary metric above the chart, detail table directly visible.
 
 Variable-IDs:
 - 5.2.1-5.3.1: Efficiency calculation parameters
@@ -25,7 +30,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
@@ -45,6 +50,8 @@ from config.column_names import (
     COL_CAPEX_BEFORE, COL_CAPEX_AFTER, COL_CAPEX_EFF_DEDUCTION,
     COL_CONTROLLABLE_BEFORE, COL_CONTROLLABLE_PERIOD, COL_EFFICIENCY_DEDUCTION,
     COL_OPEX_SHARE, COL_CAPEX_SHARE,
+    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_CU, COL_COMPANY_NAME,
+    COL_IS_OUTLIER, COL_REID,
 )
 
 
@@ -71,6 +78,13 @@ ZONE_FLOOR_BORDER = "rgba(5, 150, 105, 0.25)"
 WF_BASE = "#3B82F6"        # Blue-500: cost bases (positive absolute/relative)
 WF_DEDUCTION = "#DC2626"   # Red-600: efficiency deductions
 WF_TOTAL = "#1E3A5F"       # Dark navy: net totals
+
+# Scatter plot colors
+SC_NORMAL = "#94A3B8"      # Slate-400: normal companies
+SC_EFFICIENT = "#059669"   # Emerald: efficient companies
+SC_OUTLIER = "#EA580C"     # Orange: outliers
+SC_USER = "#2563EB"        # Primary blue: user's company
+SC_FRONTIER = "rgba(5, 150, 105, 0.4)"  # Frontier line
 
 
 # ============================================================================
@@ -137,6 +151,15 @@ def _tmpl_safe():
     )
 
 
+def _ordinal(n: int) -> str:
+    """Convert integer to ordinal string: 1 -> '1st', 2 -> '2nd', etc."""
+    if 11 <= (n % 100) <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 # ============================================================================
 # MAIN RENDER
 # ============================================================================
@@ -160,12 +183,17 @@ def render(
 
     st.divider()
 
-    # --- Block 2: Company efficiency card ---
-    _render_efficiency_card(case, baseline, params, user_reid)
+    # --- Block 2: Company efficiency summary (enhanced) ---
+    _render_efficiency_summary(case, baseline, params, user_reid)
 
     st.divider()
 
-    # --- Block 3: Cost impact ---
+    # --- Block 3: Frontier scatter plot ---
+    _render_frontier_scatter(case, baseline, user_reid)
+
+    st.divider()
+
+    # --- Block 4: Cost impact ---
     _render_cost_waterfall(case_ir, baseline_ir, m5_config)
 
 
@@ -400,11 +428,39 @@ def _render_effkrav_histogram(effkrav_all, effkrav_case, effkrav_baseline):
 
 
 # ============================================================================
-# BLOCK 2 -- COMPANY EFFICIENCY CARD
+# BLOCK 2 -- COMPANY EFFICIENCY SUMMARY (ENHANCED)
 # ============================================================================
 
-def _render_efficiency_card(case, baseline, params, user_reid):
-    """KPI metrics + full 50.3 measures table + parameter reference."""
+def _compute_rank(dea_results: pd.DataFrame, user_reid: str) -> Tuple[Optional[int], int]:
+    """Compute user's rank among all companies by efficiency score (1 = best).
+
+    Returns (rank, total). rank is None if user not found.
+    """
+    if dea_results is None or dea_results.empty:
+        return None, 0
+    df = dea_results[[COL_REID, COL_DEA_EFFICIENCY]].dropna(subset=[COL_DEA_EFFICIENCY])
+    df = df.sort_values(COL_DEA_EFFICIENCY, ascending=False).reset_index(drop=True)
+    total = len(df)
+    matches = df.index[df[COL_REID] == user_reid]
+    if len(matches) == 0:
+        return None, total
+    rank = int(matches[0]) + 1  # 0-indexed -> 1-indexed
+    return rank, total
+
+
+def _compute_percentile(all_efficiencies: np.ndarray, user_efficiency: float) -> float:
+    """Compute percentile position (0-100) for user's efficiency score.
+
+    Percentile = fraction of scores <= user_score * 100.
+    Higher is better (100th percentile = best).
+    """
+    if len(all_efficiencies) == 0 or user_efficiency is None:
+        return 0.0
+    return float(np.sum(all_efficiencies <= user_efficiency) / len(all_efficiencies) * 100)
+
+
+def _render_efficiency_summary(case, baseline, params, user_reid):
+    """Enhanced KPI hero row + super-eff badge + percentile bar + tables."""
 
     st.markdown("**Company Efficiency**")
 
@@ -421,8 +477,12 @@ def _render_efficiency_card(case, baseline, params, user_reid):
     pot_tr_case = np.clip(potential_case, params["trunkering_min"], params["trunkering_max"]) if potential_case is not None else None
     pot_tr_baseline = np.clip(potential_baseline, bl_trunkering_min, BASELINE_PARAMS["trunkering_max"]) if potential_baseline is not None else None
 
-    # --- Top row: 3 KPI metrics ---
-    col1, col2, col3 = st.columns(3)
+    # Rank computation
+    case_rank, case_total = _compute_rank(case.dea.dea_results, user_reid)
+    bl_rank, _ = _compute_rank(baseline.dea.dea_results, user_reid)
+
+    # --- Top row: 4 KPI metrics ---
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         delta_eff = (eff_case - eff_baseline) if eff_case and eff_baseline else None
@@ -433,6 +493,19 @@ def _render_efficiency_card(case, baseline, params, user_reid):
         )
 
     with col2:
+        rank_str = f"{_ordinal(case_rank)} / {case_total}" if case_rank else "-"
+        delta_rank = None
+        if case_rank and bl_rank:
+            rank_diff = bl_rank - case_rank  # positive = improved (moved up)
+            if rank_diff != 0:
+                delta_rank = f"{rank_diff:+d} ranks"
+        st.metric(
+            "Rank",
+            rank_str,
+            delta=delta_rank,
+        )
+
+    with col3:
         delta_pot = None
         if pot_tr_case is not None and pot_tr_baseline is not None:
             delta_pot = pot_tr_case - pot_tr_baseline
@@ -443,7 +516,7 @@ def _render_efficiency_card(case, baseline, params, user_reid):
             delta_color="inverse",
         )
 
-    with col3:
+    with col4:
         delta_ek = (effkrav_case - effkrav_baseline) if effkrav_case and effkrav_baseline else None
         st.metric(
             "Applied annual requirement",
@@ -452,7 +525,15 @@ def _render_efficiency_card(case, baseline, params, user_reid):
             delta_color="inverse",
         )
 
-    # Outlier warning
+    # --- Super-efficiency badge (prominent, outside expander) ---
+    super_eff = _get_super_efficiency(case, user_reid)
+    if super_eff is not None:
+        st.success(
+            f"**{VID_SUPER_EFFICIENCY} Super-efficiency: {super_eff:.3f}** -- "
+            f"This company is on or beyond the efficient frontier."
+        )
+
+    # --- Outlier warning ---
     if is_outlier:
         st.warning(
             f"This company is classified as an outlier. "
@@ -484,11 +565,21 @@ def _render_efficiency_card(case, baseline, params, user_reid):
                          effkrav_case, effkrav_baseline, fmt="pp2")
 
         # Super-efficiency (if > 1.0)
-        super_eff = _get_super_efficiency(case, user_reid)
         if super_eff is not None:
             rows_m.append({
                 "ID": VID_SUPER_EFFICIENCY, "Measure": "Super-efficiency score",
                 "Case": f"{super_eff:.3f}", "Baseline": "-", "Delta": "-",
+            })
+
+        # Rank
+        if case_rank:
+            bl_rank_str = f"{_ordinal(bl_rank)} / {case_total}" if bl_rank else "-"
+            rank_delta_str = f"{bl_rank - case_rank:+d}" if (case_rank and bl_rank and bl_rank != case_rank) else "-"
+            rows_m.append({
+                "ID": "-", "Measure": "Rank (efficiency score)",
+                "Case": f"{_ordinal(case_rank)} / {case_total}",
+                "Baseline": bl_rank_str,
+                "Delta": rank_delta_str,
             })
 
         st.dataframe(pd.DataFrame(rows_m), hide_index=True, width="stretch")
@@ -533,7 +624,7 @@ def _get_super_efficiency(case, user_reid):
     if not user_reid or not hasattr(case.dea, "dea_results") or case.dea.dea_results is None:
         return None
     dea_df = case.dea.dea_results
-    user_row = dea_df[dea_df["REId"] == user_reid]
+    user_row = dea_df[dea_df[COL_REID] == user_reid]
     if user_row.empty or COL_DEA_SUPER_EFF not in user_row.columns:
         return None
     val = user_row[COL_DEA_SUPER_EFF].iloc[0]
@@ -543,7 +634,186 @@ def _get_super_efficiency(case, user_reid):
 
 
 # ============================================================================
-# BLOCK 3 -- COST IMPACT (WATERFALL)
+# BLOCK 3 -- FRONTIER SCATTER PLOT
+# ============================================================================
+
+def _render_frontier_scatter(case, baseline, user_reid):
+    """Scatter plot: 148 companies on TOTEX vs CU plane with frontier line."""
+
+    st.markdown("**Frontier Position**")
+    st.caption(
+        "Each dot represents one of 148 companies plotted by subscriptions (CU) vs "
+        "first-year total cost (CAPEX + controllable OPEX). The frontier line connects "
+        "efficient companies (efficiency = 1.0), forming the DEA reference envelope."
+    )
+
+    # --- Merge pre_dea company data with DEA results ---
+    df_companies = case.pre_dea.df_all_companies.copy()
+    dea_results = case.dea.dea_results.copy()
+
+    # Ensure we have the needed columns
+    if COL_CU not in df_companies.columns or COL_CAPITAL_COST_2024 not in df_companies.columns:
+        st.info("Insufficient data for frontier scatter plot.")
+        return
+
+    # Compute TOTEX (first year) = capital_cost_2024 + controllable_cost_average
+    if COL_CONTROLLABLE_AVG in df_companies.columns:
+        df_companies["_totex_first"] = (
+            df_companies[COL_CAPITAL_COST_2024].fillna(0)
+            + df_companies[COL_CONTROLLABLE_AVG].fillna(0)
+        )
+    else:
+        df_companies["_totex_first"] = df_companies[COL_CAPITAL_COST_2024].fillna(0)
+
+    # Merge with DEA results to get efficiency and outlier status
+    merge_cols = [COL_REID]
+    dea_cols = [COL_REID, COL_DEA_EFFICIENCY]
+    if COL_IS_OUTLIER in dea_results.columns:
+        dea_cols.append(COL_IS_OUTLIER)
+    if COL_DEA_SUPER_EFF in dea_results.columns:
+        dea_cols.append(COL_DEA_SUPER_EFF)
+
+    df = df_companies.merge(dea_results[dea_cols], on=COL_REID, how="left")
+
+    # Company name for hover
+    has_name = COL_COMPANY_NAME in df.columns
+
+    # --- Classify companies ---
+    df["_is_user"] = df[COL_REID] == user_reid
+    df["_is_efficient"] = df[COL_DEA_EFFICIENCY].fillna(0) >= 1.0
+    df["_is_outlier"] = df[COL_IS_OUTLIER].fillna(False) if COL_IS_OUTLIER in df.columns else False
+
+    # --- Build figure ---
+    layout_kwargs, template = _tmpl_safe()
+    fig = go.Figure()
+
+    # Filter groups
+    df_normal = df[~df["_is_user"] & ~df["_is_efficient"] & ~df["_is_outlier"]]
+    df_outlier = df[~df["_is_user"] & df["_is_outlier"] & ~df["_is_efficient"]]
+    df_efficient = df[~df["_is_user"] & df["_is_efficient"]]
+    df_user = df[df["_is_user"]]
+
+    def _hover_text(row):
+        parts = []
+        if has_name and pd.notna(row.get(COL_COMPANY_NAME)):
+            parts.append(f"{row[COL_COMPANY_NAME]}")
+        parts.append(f"CU: {row[COL_CU]:,.0f}")
+        parts.append(f"TOTEX: {row['_totex_first']:,.0f} tkr")
+        if pd.notna(row.get(COL_DEA_EFFICIENCY)):
+            parts.append(f"Efficiency: {row[COL_DEA_EFFICIENCY]:.3f}")
+        return "<br>".join(parts)
+
+    # Normal companies
+    if not df_normal.empty:
+        fig.add_trace(go.Scatter(
+            x=df_normal[COL_CU],
+            y=df_normal["_totex_first"],
+            mode="markers",
+            marker=dict(color=SC_NORMAL, size=6, opacity=0.6),
+            hovertext=df_normal.apply(_hover_text, axis=1),
+            hoverinfo="text",
+            name="Other companies",
+            showlegend=True,
+        ))
+
+    # Outliers
+    if not df_outlier.empty:
+        fig.add_trace(go.Scatter(
+            x=df_outlier[COL_CU],
+            y=df_outlier["_totex_first"],
+            mode="markers",
+            marker=dict(color=SC_OUTLIER, size=7, opacity=0.8, symbol="diamond"),
+            hovertext=df_outlier.apply(_hover_text, axis=1),
+            hoverinfo="text",
+            name="Outliers",
+            showlegend=True,
+        ))
+
+    # Efficient companies
+    if not df_efficient.empty:
+        fig.add_trace(go.Scatter(
+            x=df_efficient[COL_CU],
+            y=df_efficient["_totex_first"],
+            mode="markers",
+            marker=dict(color=SC_EFFICIENT, size=8, opacity=0.85, symbol="circle"),
+            hovertext=df_efficient.apply(_hover_text, axis=1),
+            hoverinfo="text",
+            name="Efficient (score = 1.0)",
+            showlegend=True,
+        ))
+
+    # Frontier line: connect efficient DMUs sorted by CU
+    frontier_df = df[df["_is_efficient"] & ~df["_is_user"]].sort_values(COL_CU)
+    # Include user if efficient
+    if not df_user.empty and df_user["_is_efficient"].iloc[0]:
+        frontier_df = pd.concat([frontier_df, df_user]).sort_values(COL_CU)
+
+    if len(frontier_df) >= 2:
+        # Add origin point (0,0) for visual completeness
+        frontier_x = [0] + frontier_df[COL_CU].tolist()
+        frontier_y = [0] + frontier_df["_totex_first"].tolist()
+        fig.add_trace(go.Scatter(
+            x=frontier_x,
+            y=frontier_y,
+            mode="lines",
+            line=dict(color=SC_FRONTIER, width=2, dash="dot"),
+            name="Frontier",
+            showlegend=True,
+            hoverinfo="skip",
+        ))
+
+    # User company (large, on top)
+    if not df_user.empty:
+        user_row = df_user.iloc[0]
+        fig.add_trace(go.Scatter(
+            x=[user_row[COL_CU]],
+            y=[user_row["_totex_first"]],
+            mode="markers+text",
+            marker=dict(color=SC_USER, size=14, line=dict(color="white", width=2)),
+            text=["Your company"],
+            textposition="top center",
+            textfont=dict(size=11, color=SC_USER, family="Inter, sans-serif"),
+            hovertext=[_hover_text(user_row)],
+            hoverinfo="text",
+            name="Your company",
+            showlegend=True,
+        ))
+
+    fig.update_layout(
+        **layout_kwargs,
+        template=template,
+        height=450,
+        margin=dict(t=40, b=60, l=60, r=20),
+        xaxis_title="Subscriptions (CU)",
+        yaxis_title="First-year total cost (tkr)",
+        xaxis=dict(
+            showgrid=True,
+            gridcolor=COLORS["bg_subtle"],
+            linecolor=COLORS["bg_muted"],
+            rangemode="tozero",
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor=COLORS["bg_subtle"],
+            linecolor=COLORS["bg_muted"],
+            rangemode="tozero",
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.18,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=11),
+        ),
+    )
+
+    st.plotly_chart(fig, width='stretch', key="m5_frontier_scatter",
+                    config={"displayModeBar": False})
+
+
+# ============================================================================
+# BLOCK 4 -- COST IMPACT (WATERFALL)
 # ============================================================================
 
 def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
@@ -590,6 +860,19 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
             st.caption("Cost base: TOTEX")
     else:
         st.caption("Cost base: OPEX")
+
+    # --- Summary metric (moved above waterfall for prominence) ---
+    total_eff_case = (opex_eff or 0) + (capex_eff or 0)
+    total_eff_baseline = (bl_opex_eff or 0) + (bl_capex_eff or 0)
+
+    if total_eff_case != 0 or total_eff_baseline != 0:
+        delta = total_eff_case - total_eff_baseline
+        st.metric(
+            "Total efficiency adjustment (period)",
+            f"-{total_eff_case:,.0f} tkr",
+            delta=f"{-delta:,.0f} tkr" if abs(delta) > 0.5 else None,
+            delta_color="inverse",
+        )
 
     # --- Build waterfall ---
     layout_kwargs, template = _tmpl_safe()
@@ -668,7 +951,7 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
 
     st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
 
-    # --- Comparison table below waterfall ---
+    # --- Comparison table below waterfall (directly visible, not in expander) ---
     rows = []
 
     _add_cost_row(rows, "-", "OPEX before efficiency adj.", opex_fore, bl_opex_fore)
@@ -681,21 +964,7 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
         _add_cost_row(rows, VID_CAPEX_EFF_ADJUSTMENT, "CAPEX efficiency adjustment", -(capex_eff or 0), -(bl_capex_eff or 0), negate_delta=True)
         _add_cost_row(rows, VID_CAPEX_AFTER_EFF, "CAPEX after efficiency adj.", capex_efter, bl_capex_efter)
 
-    with st.expander("Detailed cost breakdown"):
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-
-    # Summary metric
-    total_eff_case = (opex_eff or 0) + (capex_eff or 0)
-    total_eff_baseline = (bl_opex_eff or 0) + (bl_capex_eff or 0)
-
-    if total_eff_case != 0 or total_eff_baseline != 0:
-        delta = total_eff_case - total_eff_baseline
-        st.metric(
-            "Total efficiency adjustment (period)",
-            f"-{total_eff_case:,.0f} tkr",
-            delta=f"{-delta:,.0f} tkr" if abs(delta) > 0.5 else None,
-            delta_color="inverse",
-        )
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
 
 def _add_cost_row(rows, var_id, label, case_val, bl_val, negate_delta=False):
