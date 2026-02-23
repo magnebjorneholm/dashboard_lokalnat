@@ -40,7 +40,7 @@ dashboard_lokalnat/
 |   |-- login.py                  # Authentication (Firebase)
 |   |-- 0_case_definition.py      # Step 1: Select modules/sections, name case
 |   |-- 1_case_config.py          # Step 2: Configure parameters (tabs M1-M7)
-|   |-- 2_results.py              # Step 3: Display results, snapshots, export
+|   |-- 2_results.py              # Step 3: Display results, stale warning, export
 |
 |-- config/                       # Constants, metadata, domain configuration (no Streamlit)
 |   |-- case_definition.py        # Dataclasses: CaseDefinition, PreDeaConfig, DeaConfig, etc.
@@ -81,7 +81,7 @@ dashboard_lokalnat/
 |   |   |-- m7_benchmarking_output.py     # DEA results, rankings
 |   |
 |   |-- utils/                    # Streamlit-dependent frontend utilities
-|       |-- state_manager.py      # Session state: init, get/set, snapshots
+|       |-- state_manager.py      # Session state: init, get/set, config references
 |       |-- case_storage.py       # Save/load cases (Firestore/local JSON)
 |       |-- export_button.py      # Export button component
 |
@@ -251,7 +251,7 @@ pages/login.py    --auth-->    pages/0_case_definition.py  (Define)
 - Applies styling
 - Initializes session state
 - Auth guard: `check_auth()` -> shows login OR app navigation
-- Sidebar: Company selector + "Compute Revenue Frame" + "Save case"
+- Sidebar: Company selector + case name/notes + Compute + Save/Update + Revert
 
 
 ## 6. Module Architecture (M1-M7)
@@ -323,22 +323,22 @@ Results shown with case-vs-baseline comparison (orange = modified)
 
 ### Core Session Variables
 
-| Key                    | Type            | Description                                      |
-|------------------------|-----------------|--------------------------------------------------|
-| user_reid              | str             | Selected company's REId (sole authoritative ID)  |
-| ui_config              | Dict[str, Dict] | Module configurations (8 top-level keys)        |
-| selected_modules       | Set[str]        | Selected modules/sections                        |
-| baseline_result        | PipelineResult  | Baseline calculation                             |
-| case_result            | PipelineResult  | User's case calculation                          |
-| calculation_done       | bool            | Flag: calculation completed                      |
-| case_id                | str/None        | UUID if saved, None if new                       |
-| case_name              | str             | Case name                                        |
-| case_notes             | str             | Notes                                            |
-| main_ui_config         | Dict            | Reference config (set at first calc OR case load)|
-| main_selected_modules  | Set             | Reference selections                             |
-| main_case_result       | PipelineResult  | Main result (None until computed with ref config)|
-| result_snapshots       | List[Dict]      | Max 5 saved snapshots per session                |
-| auth_*                 | various         | Firebase auth state (email, role, reid, uid)     |
+| Key                      | Type            | Description                                      |
+|--------------------------|-----------------|--------------------------------------------------|
+| user_reid                | str             | Selected company's REId (sole authoritative ID)  |
+| ui_config                | Dict[str, Dict] | Module configurations (8 top-level keys)        |
+| selected_modules         | Set[str]        | Selected modules/sections                        |
+| baseline_result          | PipelineResult  | Baseline calculation                             |
+| case_result              | PipelineResult  | User's case calculation                          |
+| calculation_done         | bool            | Flag: calculation completed                      |
+| case_id                  | str/None        | UUID if saved, None if new                       |
+| case_name                | str             | Case name (edited via sidebar)                   |
+| case_notes               | str             | Notes (edited via sidebar)                       |
+| computed_ui_config       | Dict/None       | Frozen config from last pipeline run             |
+| computed_selected_modules| Set/None        | Frozen modules from last pipeline run            |
+| saved_ui_config          | Dict/None       | Frozen config as last persisted to DB            |
+| saved_selected_modules   | Set/None        | Frozen modules as last persisted to DB           |
+| auth_*                   | various         | Firebase auth state (email, role, reid, uid)     |
 
 ### ui_config Structure (8 module keys)
 
@@ -358,20 +358,30 @@ DEFAULT_UI_CONFIG = {
 
 **Pattern:** All values = `None` means "use baseline". Non-None = user adjustment.
 
-### Snapshot System
+### Config Reference System (Change Detection)
 
-1. First calculation (or case load) -> `main_ui_config` + `main_selected_modules` set
-2. `main_case_result` set only when computed with unchanged reference config
-3. Subsequent calculations -> marked as `_is_snapshot_candidate`
-4. User can save as snapshot (max 5) or promote snapshot to main
-5. Navigate to Define/Configure after snapshot -> `restore_main_config()` resets to reference
+Three levels of config exist for tracking changes:
+1. **Working state** (`ui_config`, `selected_modules`) — live, editable
+2. **Computed reference** (`computed_ui_config`, `computed_selected_modules`) — frozen at last pipeline run
+3. **Saved reference** (`saved_ui_config`, `saved_selected_modules`) — frozen at last DB save/load
+
+- `has_unsaved_changes()`: computed differs from saved (shows "Unsaved changes" indicator)
+- `has_config_changed_since_compute()`: working differs from computed (shows stale results warning)
+
+### Case Management (Sidebar)
+
+- **Name/notes**: Edited exclusively in sidebar via `on_change` callbacks
+- **Active display**: Case name shown as bold header, notes as caption (always source of truth)
+- **Buttons**: Compute | Update saved case (if `case_id`) | Save as new case | Revert/Reset
+- **Save as new case**: Creates new case (`force_new=True`), enabling "fork" workflow
+- **Load case**: Define page. Clears sidebar widget keys so inputs reinitialize on rerun
 
 ### data_editor Widget Caching
 
 Source DataFrames are cached in `st.session_state["{key}_source"]` so `data_editor`
 input is constant between reruns (prevents widget reset on rerun feedback loop).
 Rebuilt when widget key is lost (page navigation) or `_clear_config_widget_keys()` fires
-(case load, reset, restore, promote).
+(case load, reset, revert).
 
 
 ## 9. Pipeline Architecture
