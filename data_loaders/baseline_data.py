@@ -86,7 +86,7 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
          'Avkastning_2024', 'Avkastning_2025', 'Avkastning_2026', 'Avkastning_2027',
          'Avkastning_Period']
     """
-    data_file = _find_data_file("Data_modeller.xlsx", data_path)
+    data_file = _find_data_file("ei/Data_modeller.xlsx", data_path)
 
     # Try reading from different sheet names (backwards compatibility)
     df = None
@@ -182,7 +182,7 @@ def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
         - Effkrav_proc: Annual efficiency requirement
         - is_outlier: Boolean flag
     """
-    data_file = _find_data_file("EIs_DEA.xlsx", data_path)
+    data_file = _find_data_file("ei/EIs_DEA.xlsx", data_path)
 
     try:
         df = pd.read_excel(data_file, sheet_name='Körning', engine='openpyxl')
@@ -236,7 +236,7 @@ def _load_sdf_data(data_path: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     Returns:
         Dict with three DataFrames: 'ir', 'controllable', 'non_controllable'
     """
-    data_file = _find_data_file("Löpande kostnader från SDF 2024-27.xlsx", data_path)
+    data_file = _find_data_file("ei/Löpande kostnader från SDF 2024-27.xlsx", data_path)
 
     result = {}
 
@@ -288,7 +288,7 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     Returns:
         DataFrame with mappings
     """
-    data_file = _find_data_file("reconciliation_id_network_firm_dmu.csv", data_path)
+    data_file = _find_data_file("reference/reconciliation_id_network_firm_dmu.csv", data_path)
 
     df = pd.read_csv(data_file)
 

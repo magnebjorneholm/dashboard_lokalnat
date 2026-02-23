@@ -11,9 +11,9 @@ from typing import Optional
 import streamlit as st
 
 # Paths
-CONTROLLABLE_DETAIL_PATH = "data/controllable_a.parquet"
-CONTROLLABLE_META_PATH = "data/controllable_meta.parquet"
-NON_CONTROLLABLE_DETAIL_PATH = "data/non_controllable_a.parquet"
+CONTROLLABLE_DETAIL_PATH = "data/opex/controllable_a.parquet"
+CONTROLLABLE_META_PATH = "data/opex/controllable_meta.parquet"
+NON_CONTROLLABLE_DETAIL_PATH = "data/opex/non_controllable_a.parquet"
 
 
 def _find_parquet(filename: str, data_path: Optional[str] = None) -> Path:

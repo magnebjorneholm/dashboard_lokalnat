@@ -126,7 +126,7 @@ def _render_return_section(
     if baseline_cat is None or baseline_cat.empty:
         st.info(
             "Baseline category data not available. "
-            "Ensure capcost_a.parquet is in the data/ directory."
+            "Ensure capcost_a.parquet is in the data/rab_and_capex/ directory."
         )
         return
 

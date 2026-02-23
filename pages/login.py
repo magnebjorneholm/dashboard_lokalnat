@@ -121,7 +121,7 @@ def load_company_list() -> List[Tuple[str, str, str]]:
     # Search paths for Data_modeller.xlsx
     search_paths = [
         Path("Data_modeller.xlsx"),
-        Path("data/Data_modeller.xlsx"),
+        Path("data/ei/Data_modeller.xlsx"),
         Path("/mnt/project/Data_modeller.xlsx"),
     ]
     

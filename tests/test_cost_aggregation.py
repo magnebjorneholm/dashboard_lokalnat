@@ -23,17 +23,17 @@ from config.column_names import (
 
 @pytest.fixture(scope="session")
 def ctrl_detail():
-    return pd.read_parquet("data/controllable_a.parquet")
+    return pd.read_parquet("data/opex/controllable_a.parquet")
 
 
 @pytest.fixture(scope="session")
 def ctrl_meta():
-    return pd.read_parquet("data/controllable_meta.parquet")
+    return pd.read_parquet("data/opex/controllable_meta.parquet")
 
 
 @pytest.fixture(scope="session")
 def nonctrl_detail():
-    return pd.read_parquet("data/non_controllable_a.parquet")
+    return pd.read_parquet("data/opex/non_controllable_a.parquet")
 
 
 @pytest.fixture(scope="session")
@@ -50,7 +50,7 @@ def nonctrl_aggregated(nonctrl_detail):
 def sdf_ir():
     """Load SDF IR sheet for cross-verification."""
     from pathlib import Path
-    sdf_file = Path("data/Löpande kostnader från SDF 2024-27.xlsx")
+    sdf_file = Path("data/ei/Löpande kostnader från SDF 2024-27.xlsx")
     df = pd.read_excel(sdf_file, sheet_name="IR 2024-2027", engine="openpyxl")
     reid_col = "REid" if "REid" in df.columns else "REId"
     df = df.rename(columns={reid_col: "REId"})
@@ -62,7 +62,7 @@ def sdf_ir():
 def sdf_controllable_sheet():
     """Load SDF Påverkbara sheet for Medelvärde verification."""
     from pathlib import Path
-    sdf_file = Path("data/Löpande kostnader från SDF 2024-27.xlsx")
+    sdf_file = Path("data/ei/Löpande kostnader från SDF 2024-27.xlsx")
     df_raw = pd.read_excel(sdf_file, sheet_name="Påverkbara", engine="openpyxl", header=None)
     data = df_raw.iloc[2:].copy().reset_index(drop=True)
     data = data[data.iloc[:, 1] == "L"].reset_index(drop=True)

@@ -44,13 +44,13 @@ def baseline_data():
 @pytest.fixture(scope="session")
 def capbase_mini():
     """Load capbase_a_mini.parquet (3 test companies)."""
-    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "capbase_a_mini.parquet"))
+    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "test", "capbase_a_mini.parquet"))
 
 
 @pytest.fixture(scope="session")
 def capcost_a():
     """Load capcost_a.parquet (pre-aggregated capital costs by category)."""
-    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "capcost_a.parquet"))
+    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "rab_and_capex", "capcost_a.parquet"))
 
 
 @pytest.fixture(scope="session")
@@ -80,19 +80,19 @@ def sdf_controllable(baseline_data):
 @pytest.fixture(scope="session")
 def controllable_detail_mini():
     """Load controllable_a_mini.parquet (3 test companies)."""
-    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "controllable_a_mini.parquet"))
+    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "test", "controllable_a_mini.parquet"))
 
 
 @pytest.fixture(scope="session")
 def controllable_meta_mini():
     """Load controllable_meta_mini.parquet (3 test companies)."""
-    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "controllable_meta_mini.parquet"))
+    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "test", "controllable_meta_mini.parquet"))
 
 
 @pytest.fixture(scope="session")
 def non_controllable_detail_mini():
     """Load non_controllable_a_mini.parquet (3 test companies)."""
-    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "non_controllable_a_mini.parquet"))
+    return pd.read_parquet(os.path.join(PROJECT_ROOT, "data", "test", "non_controllable_a_mini.parquet"))
 
 
 @pytest.fixture(scope="session")

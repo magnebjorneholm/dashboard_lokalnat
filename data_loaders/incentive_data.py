@@ -53,9 +53,8 @@ def load_incentive_data(filepath: Optional[str] = None) -> pd.DataFrame:
         # Default sÃ¶kvÃ¤g relativt till projektrot
         # Prova flera mÃ¶jliga platser
         possible_paths = [
-            Path(__file__).parent / "data" / "all_adjust_vars.csv",
-            Path(__file__).parent.parent / "data" / "all_adjust_vars.csv",
-            Path("data") / "all_adjust_vars.csv",
+            Path(__file__).parent.parent / "data" / "adjustments" / "all_adjust_vars.csv",
+            Path("data") / "adjustments" / "all_adjust_vars.csv",
         ]
         for path in possible_paths:
             if path.exists():

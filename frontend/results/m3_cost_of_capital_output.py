@@ -243,7 +243,7 @@ def _render_return_by_category(case: "PipelineResult", user_id_network: Optional
     if baseline_cat is None or baseline_cat.empty:
         st.info(
             "Baseline category data not available. "
-            "Ensure capcost_a.parquet is in the data/ directory."
+            "Ensure capcost_a.parquet is in the data/rab_and_capex/ directory."
         )
         return
     

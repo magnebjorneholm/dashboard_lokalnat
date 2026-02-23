@@ -14,9 +14,9 @@ import streamlit as st
 from calculations.capex.data_mapping import TEST_MODE
 
 # Paths
-CAPBASE_MINI_PATH = "data/capbase_a_mini.parquet"
-CAPBASE_FULL_PATH = "data/capbase_a.parquet"
-CAPCOST_PATH = "data/capcost_a.parquet"
+CAPBASE_MINI_PATH = "data/test/capbase_a_mini.parquet"
+CAPBASE_FULL_PATH = "data/rab_and_capex/capbase_a.parquet"
+CAPCOST_PATH = "data/rab_and_capex/capcost_a.parquet"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
@@ -45,13 +45,13 @@ def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
         search_paths = [
             CAPBASE_MINI_PATH,           #
             "capbase_a_mini.parquet",
-            "data/capbase_a_mini.parquet",
+            "data/test/capbase_a_mini.parquet",
             ]
     else:
         search_paths = [
                 CAPBASE_FULL_PATH,
-                "capbase_a.parquet", 
-                "data/capbase_a.parquet",
+                "capbase_a.parquet",
+                "data/rab_and_capex/capbase_a.parquet",
             ]
     
     for path_str in search_paths:
@@ -139,7 +139,7 @@ def load_capcost_a(data_path: Optional[str] = None) -> pd.DataFrame:
     search_paths = [
         CAPCOST_PATH,
         "capcost_a.parquet",
-        "data/capcost_a.parquet",
+        "data/rab_and_capex/capcost_a.parquet",
     ]
     
     for path_str in search_paths:
