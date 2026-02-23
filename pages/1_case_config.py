@@ -120,6 +120,14 @@ with tabs[0]:
         if is_section_selected("m1", "kent"):
             if is_section_selected("m1", "scaling") or is_section_selected("m1", "quantities"):
                 st.divider()
+            # Warn if case originally had KENT file that wasn't restored
+            m1_cfg = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
+            if m1_cfg.get("kent_file_name") and not m1_cfg.get("kent_file_bytes"):
+                st.warning(
+                    f"This case originally used a KENT file "
+                    f"(**{m1_cfg['kent_file_name']}**) which was not saved. "
+                    f"Re-upload the file below to restore KENT-based calculations."
+                )
             kent_config = m1_asset_base.render_kent(user_id_network=user_id_network)
             current_config = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
             current_config.update(kent_config)

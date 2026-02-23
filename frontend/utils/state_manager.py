@@ -512,6 +512,25 @@ def has_saved_reference() -> bool:
     return st.session_state.get("saved_ui_config") is not None
 
 
+def _configs_equal(a: Any, b: Any, tol: float = 1e-9) -> bool:
+    """Deep comparison of config values with float tolerance."""
+    if type(a) != type(b):
+        return False
+    if isinstance(a, dict):
+        if a.keys() != b.keys():
+            return False
+        return all(_configs_equal(a[k], b[k], tol) for k in a)
+    if isinstance(a, float):
+        return abs(a - b) < tol
+    if isinstance(a, (list, tuple)):
+        if len(a) != len(b):
+            return False
+        return all(_configs_equal(x, y, tol) for x, y in zip(a, b))
+    if isinstance(a, set):
+        return a == b
+    return a == b
+
+
 def has_unsaved_changes() -> bool:
     """True if a computation exists that differs from the saved reference.
 
@@ -527,7 +546,7 @@ def has_unsaved_changes() -> bool:
     saved_modules = st.session_state.get("saved_selected_modules", set())
     if saved_ui is None:
         return True
-    return computed_ui != saved_ui or computed_modules != saved_modules
+    return not _configs_equal(computed_ui, saved_ui) or computed_modules != saved_modules
 
 
 def has_config_changed_since_compute() -> bool:
@@ -542,7 +561,7 @@ def has_config_changed_since_compute() -> bool:
     computed_modules = st.session_state.get("computed_selected_modules", set())
     current_ui = st.session_state.get("ui_config", {})
     current_modules = get_selected_modules()
-    return current_ui != computed_ui or current_modules != computed_modules
+    return not _configs_equal(current_ui, computed_ui) or current_modules != computed_modules
 
 
 def revert_to_saved() -> None:

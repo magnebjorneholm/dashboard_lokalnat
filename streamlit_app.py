@@ -30,6 +30,7 @@ from frontend.utils.state_manager import (
     set_saved_reference,
     has_saved_reference,
     has_unsaved_changes,
+    has_config_changed_since_compute,
     revert_to_saved,
 )
 from frontend.common.styling import apply_styling
@@ -276,13 +277,62 @@ def _do_save_case(force_new: bool = False) -> bool:
 
 
 def _on_sidebar_name_change():
-    """Callback: sync sidebar name input to session state."""
-    set_case_name(st.session_state["sidebar_case_name"])
+    """Callback: sync sidebar name input to session state and auto-persist."""
+    new_name = st.session_state["sidebar_case_name"]
+    set_case_name(new_name)
+    # Auto-persist for saved cases
+    case_id = get_case_id()
+    if case_id:
+        from frontend.utils.case_storage import update_case_metadata
+        try:
+            update_case_metadata(get_user_reid(), case_id, new_name, get_case_notes())
+        except Exception:
+            pass  # Best-effort, full save still available
 
 
 def _on_sidebar_notes_change():
-    """Callback: sync sidebar notes input to session state."""
-    set_case_notes(st.session_state["sidebar_case_notes"])
+    """Callback: sync sidebar notes input to session state and auto-persist."""
+    new_notes = st.session_state["sidebar_case_notes"]
+    set_case_notes(new_notes)
+    case_id = get_case_id()
+    if case_id:
+        from frontend.utils.case_storage import update_case_metadata
+        try:
+            update_case_metadata(get_user_reid(), case_id, get_case_name() or "Untitled Case", new_notes)
+        except Exception:
+            pass
+
+
+@st.dialog("Update saved case")
+def _confirm_update_case():
+    """Confirmation dialog before overwriting an existing case."""
+    case_name = get_case_name() or "Untitled Case"
+    st.write(f"Overwrite saved case **{case_name}** with the last computed configuration?")
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("Update", type="primary", width='stretch', key="dialog_update"):
+            if _do_save_case():
+                st.toast("Case updated successfully")
+            st.rerun()
+    with col_no:
+        if st.button("Cancel", width='stretch', key="dialog_update_cancel"):
+            st.rerun()
+
+
+@st.dialog("Save as new case")
+def _confirm_save_as_new():
+    """Confirmation dialog before creating a new case."""
+    case_name = get_case_name() or "Untitled Case"
+    st.write(f"Save current configuration as a new case: **{case_name}**?")
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("Save", type="primary", width='stretch', key="dialog_save"):
+            if _do_save_case(force_new=True):
+                st.toast("Saved as new case")
+            st.rerun()
+    with col_no:
+        if st.button("Cancel", width='stretch', key="dialog_cancel"):
+            st.rerun()
 
 
 def _render_sidebar_actions():
@@ -322,17 +372,15 @@ def _render_sidebar_actions():
     if st.button("Compute Revenue Frame", type="primary", width='stretch'):
         _run_calculation()
 
-    # --- Update saved case (only for existing cases) ---
+    # --- Update saved case (only for existing cases, with confirmation) ---
     case_id = get_case_id()
     if case_id:
-        if st.button("Update saved case", width='stretch'):
-            if _do_save_case():
-                st.toast("Case updated successfully")
+        if st.button("Update saved case (last run)", width='stretch'):
+            _confirm_update_case()
 
-    # --- Save as new case (always available) ---
-    if st.button("Save as new case", width='stretch'):
-        if _do_save_case(force_new=True):
-            st.toast("Saved as new case")
+    # --- Save as new case (always available, with confirmation) ---
+    if st.button("Save as new case (last run)", width='stretch'):
+        _confirm_save_as_new()
 
     # --- Revert button ---
     revert_label = "Revert to saved" if has_saved_reference() else "Reset to defaults"
@@ -341,7 +389,9 @@ def _render_sidebar_actions():
         st.toast("Configuration reverted")
         st.rerun()
 
-    # --- Unsaved changes indicator ---
+    # --- Status indicators ---
+    if has_config_changed_since_compute():
+        st.caption("Config changed since last run — save will use the last computed configuration.")
     if has_unsaved_changes():
         st.caption("Unsaved changes")
 
