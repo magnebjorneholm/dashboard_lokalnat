@@ -3,8 +3,6 @@ Case Definition Page.
 
 Entry point for configuring a regulatory case.
 Allows users to:
-- Name their case
-- Add notes
 - Select which modules and sections to configure
 - Load previously saved cases
 """
@@ -16,19 +14,9 @@ from frontend.utils.state_manager import (
     init_session_state,
     reset_case,
     get_user_reid,
-    get_case_name,
-    set_case_name,
-    get_case_notes,
-    set_case_notes,
     get_selected_modules,
     set_selected_modules,
-    get_default_case_name,
     set_saved_cases_count,
-    get_case_id,
-    is_case_saved,
-    has_main_config,
-    restore_main_config,
-    is_snapshot_calculation,
 )
 from config.module_registry import (
     ALL_MODULES,
@@ -47,12 +35,6 @@ from frontend.utils.case_storage import (
 
 # Initialize state
 init_session_state()
-
-# Restore main config if navigating back from a snapshot calculation
-# Only triggers when case_result differs from main (i.e. a snapshot calc was run)
-# Does NOT trigger on normal reruns, allowing the user to edit freely
-if has_main_config() and is_snapshot_calculation():
-    restore_main_config()
 
 # Show pending toast messages (must be after init, before page content)
 if st.session_state.get("_toast_message"):
@@ -132,50 +114,6 @@ if saved_cases:
                     st.rerun()
 else:
     st.caption("No saved cases yet. Cases can be saved after running a calculation.")
-
-
-st.divider()
-
-
-# =============================================================================
-# CASE METADATA
-# =============================================================================
-
-st.markdown("##### Case identification")
-
-# Show if editing existing case
-current_case_id = get_case_id()
-if current_case_id and is_case_saved():
-    st.caption(f"Editing saved case (ID: {current_case_id[:8]}...)")
-
-col1, col2 = st.columns([1, 2])
-
-with col1:
-    # Case name
-    current_name = get_case_name() or get_default_case_name()
-    case_name = st.text_input(
-        "Case name",
-        value=current_name,
-        placeholder="e.g., WACC sensitivity analysis",
-        key="case_name_input",
-        help="Give your case a descriptive name"
-    )
-    if case_name != get_case_name():
-        set_case_name(case_name)
-
-with col2:
-    # Case notes
-    current_notes = get_case_notes()
-    case_notes = st.text_area(
-        "Notes (optional)",
-        value=current_notes,
-        placeholder="Add detailed notes about this case...",
-        key="case_notes_input",
-        height=80,
-        help="Document assumptions or purpose of this analysis"
-    )
-    if case_notes != get_case_notes():
-        set_case_notes(case_notes)
 
 
 st.divider()

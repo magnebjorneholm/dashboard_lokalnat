@@ -8,7 +8,7 @@ Handles authentication guard and navigation.
 import streamlit as st
 
 from frontend.utils.state_manager import (
-    init_session_state, 
+    init_session_state,
     set_user_reid,
     is_authenticated,
     get_auth_role,
@@ -18,16 +18,19 @@ from frontend.utils.state_manager import (
     get_user_reid,
     get_case_id,
     get_case_name,
+    set_case_name,
     get_case_notes,
+    set_case_notes,
     get_selected_modules,
     mark_case_saved,
     set_case_id,
     increment_saved_cases_count,
-    has_main_config,
-    set_main_config,
-    get_snapshots,
-    mark_as_snapshot_candidate,
-    MAX_SNAPSHOTS,
+    set_computed_config,
+    get_computed_config,
+    set_saved_reference,
+    has_saved_reference,
+    has_unsaved_changes,
+    revert_to_saved,
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
@@ -200,31 +203,13 @@ def _run_calculation() -> None:
             st.session_state["case_result"] = case_result
             
             st.session_state["calculation_done"] = True
-            
-            # Snapshot system: first calculation becomes main, subsequent are candidates
-            if not has_main_config():
-                set_main_config(
-                    ui_config=st.session_state.get("ui_config", {}),
-                    selected_modules=get_selected_modules(),
-                    case_result=case_result,
-                )
-            elif st.session_state.get("main_case_result") is None:
-                # Loaded case, first computation since load.
-                # Check if user changed anything from the loaded reference.
-                main_ui = st.session_state.get("main_ui_config", {})
-                current_ui = st.session_state.get("ui_config", {})
-                main_modules = st.session_state.get("main_selected_modules", set())
-                current_modules = get_selected_modules()
-                if current_ui == main_ui and current_modules == main_modules:
-                    # Unchanged → this IS the main result
-                    st.session_state["main_case_result"] = case_result
-                else:
-                    # Config changed from loaded reference → snapshot candidate
-                    mark_as_snapshot_candidate()
-            else:
-                # Subsequent calculation -- this is a snapshot candidate
-                mark_as_snapshot_candidate()
-            
+
+            # Store which config produced this result
+            set_computed_config(
+                ui_config=st.session_state.get("ui_config", {}),
+                selected_modules=get_selected_modules(),
+            )
+
             status.update(label="Calculation complete", state="complete")
             
         except ValueError as e:
@@ -241,23 +226,28 @@ def _run_calculation() -> None:
     st.switch_page("pages/2_results.py")
 
 
-def _do_save_case() -> bool:
-    """Save the current case to storage. Uses main config if available."""
+def _do_save_case(force_new: bool = False) -> bool:
+    """Save the current case to storage. Uses computed config if available.
+
+    Args:
+        force_new: If True, always create a new case (ignore existing case_id).
+    """
     from frontend.utils.case_storage import save_case
-    
+
     user_reid = get_user_reid()
     case_name = get_case_name() or "Untitled Case"
     case_notes = get_case_notes()
-    case_id = get_case_id()
-    
-    # Use main config if established, otherwise fall back to working state
-    if has_main_config():
-        ui_config = st.session_state["main_ui_config"]
-        selected_modules = st.session_state["main_selected_modules"]
+    case_id = None if force_new else get_case_id()
+
+    # Prefer computed config (last pipeline run); fall back to working state
+    computed_ui, computed_modules = get_computed_config()
+    if computed_ui is not None:
+        ui_config = computed_ui
+        selected_modules = computed_modules
     else:
         ui_config = st.session_state.get("ui_config", {})
         selected_modules = get_selected_modules()
-    
+
     try:
         saved = save_case(
             user_reid=user_reid,
@@ -267,15 +257,16 @@ def _do_save_case() -> bool:
             selected_modules=selected_modules,
             case_id=case_id,
         )
-        
+
         set_case_id(saved.id)
         mark_case_saved()
-        
+        set_saved_reference(ui_config, selected_modules)
+
         if case_id is None:
             increment_saved_cases_count()
-        
+
         return True
-        
+
     except ValueError as e:
         st.error(str(e))
         return False
@@ -284,27 +275,75 @@ def _do_save_case() -> bool:
         return False
 
 
+def _on_sidebar_name_change():
+    """Callback: sync sidebar name input to session state."""
+    set_case_name(st.session_state["sidebar_case_name"])
+
+
+def _on_sidebar_notes_change():
+    """Callback: sync sidebar notes input to session state."""
+    set_case_notes(st.session_state["sidebar_case_notes"])
+
+
 def _render_sidebar_actions():
-    """Render Compute and Save buttons in sidebar."""
+    """Render case management controls in sidebar."""
     st.divider()
-    
-    # Compute button
+
+    # --- Active case identity (always shows source of truth) ---
+    # Callbacks fire before script body, so values are already up-to-date here
+    case_name = get_case_name()
+    case_notes = get_case_notes()
+    if case_name:
+        st.markdown(f"**{case_name}**")
+        if case_notes:
+            st.caption(case_notes)
+    else:
+        st.caption("No case name")
+
+    # --- Edit name / notes (on_change callbacks update immediately) ---
+    st.text_input(
+        "Case name",
+        placeholder="Enter case name",
+        key="sidebar_case_name",
+        label_visibility="collapsed",
+        on_change=_on_sidebar_name_change,
+    )
+    st.text_input(
+        "Notes",
+        placeholder="Notes (optional)",
+        key="sidebar_case_notes",
+        label_visibility="collapsed",
+        on_change=_on_sidebar_notes_change,
+    )
+
+    st.divider()
+
+    # --- Compute button ---
     if st.button("Compute Revenue Frame", type="primary", width='stretch'):
         _run_calculation()
-    
-    # Save/Update button
+
+    # --- Update saved case (only for existing cases) ---
     case_id = get_case_id()
-    save_label = "Update saved case" if case_id else "Save case"
-    
-    if st.button(save_label, width='stretch'):
-        if _do_save_case():
-            action = "updated" if case_id else "saved"
-            st.toast(f"Case {action} successfully")
-    
-    # Snapshot count indicator
-    snapshots = get_snapshots()
-    if snapshots:
-        st.caption(f"Snapshots: {len(snapshots)}/{MAX_SNAPSHOTS}")
+    if case_id:
+        if st.button("Update saved case", width='stretch'):
+            if _do_save_case():
+                st.toast("Case updated successfully")
+
+    # --- Save as new case (always available) ---
+    if st.button("Save as new case", width='stretch'):
+        if _do_save_case(force_new=True):
+            st.toast("Saved as new case")
+
+    # --- Revert button ---
+    revert_label = "Revert to saved" if has_saved_reference() else "Reset to defaults"
+    if st.button(revert_label, width='stretch'):
+        revert_to_saved()
+        st.toast("Configuration reverted")
+        st.rerun()
+
+    # --- Unsaved changes indicator ---
+    if has_unsaved_changes():
+        st.caption("Unsaved changes")
 
 
 # =============================================================================

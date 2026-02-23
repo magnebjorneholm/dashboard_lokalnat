@@ -11,18 +11,13 @@ import streamlit.components.v1 as components
 import plotly.graph_objects as go
 
 from frontend.utils.state_manager import (
-    init_session_state, 
+    init_session_state,
     get_user_reid,
     get_case_name,
     get_case_notes,
     get_filtered_ui_config,
-    is_snapshot_calculation,
-    has_main_config,
-    get_snapshots,
-    add_snapshot,
-    remove_snapshot,
-    promote_snapshot,
-    MAX_SNAPSHOTS,
+    has_unsaved_changes,
+    has_config_changed_since_compute,
 )
 from frontend.utils.export_button import render_export_button
 from visualization.diagram_data import prepare_diagram_data
@@ -102,6 +97,13 @@ if user_reid is None:
 if not st.session_state.get("calculation_done"):
     st.info("Use the **Compute Revenue Frame** button in the sidebar to run the calculation.")
     st.stop()
+
+# Warn if config changed since last computation
+if has_config_changed_since_compute():
+    st.warning(
+        "Configuration changed since last computation — results may be outdated. "
+        "Click **Compute Revenue Frame** in the sidebar to update."
+    )
 
 # From here on, calculation has been performed
 baseline = st.session_state.get("baseline_result")
@@ -284,101 +286,9 @@ st.plotly_chart(fig_wf, key="revenue_frame_waterfall", width='stretch')
 st.divider()
 
 
-# =============================================================================
-# SECTION B2: SNAPSHOT MANAGEMENT
-# =============================================================================
+if has_unsaved_changes():
+    st.caption("This result has not been saved yet. Use **Save case** / **Update saved case** in the sidebar.")
 
-_is_snapshot = is_snapshot_calculation()
-_snapshots = get_snapshots()
-
-# Status indicator
-if _is_snapshot:
-    st.info(
-        "Viewing: **Unsaved snapshot result.** "
-        "Save it below, or go back to Configure to discard and return to main."
-    )
-elif _snapshots:
-    st.caption("Viewing: Main result")
-
-# Save Snapshot form (only for snapshot-candidate calculations)
-if _is_snapshot:
-    st.markdown("##### Save as snapshot")
-    
-    col_name, col_desc, col_btn = st.columns([2, 3, 1])
-    
-    with col_name:
-        _snap_name = st.text_input(
-            "Snapshot name",
-            placeholder="e.g., WACC 5%",
-            key="snapshot_name_input",
-            label_visibility="collapsed",
-        )
-    
-    with col_desc:
-        _snap_desc = st.text_input(
-            "Description (optional)",
-            placeholder="Description (optional)",
-            key="snapshot_desc_input",
-            label_visibility="collapsed",
-        )
-    
-    with col_btn:
-        if st.button("Save Snapshot", type="primary", width='stretch'):
-            if not _snap_name or not _snap_name.strip():
-                st.warning("Enter a name for the snapshot.")
-            elif len(_snapshots) >= MAX_SNAPSHOTS:
-                st.warning(f"Maximum {MAX_SNAPSHOTS} snapshots reached. Delete one first.")
-            else:
-                success = add_snapshot(
-                    name=_snap_name.strip(),
-                    description=_snap_desc.strip() if _snap_desc else "",
-                    ui_config=st.session_state.get("ui_config", {}),
-                    selected_modules=st.session_state.get("selected_modules", set()),
-                    case_result=case,
-                )
-                if success:
-                    st.toast(f"Snapshot saved: {_snap_name.strip()}")
-                    st.rerun()
-
-# Snapshot list (only when snapshots exist)
-if _snapshots:
-    with st.expander(f"Saved snapshots ({len(_snapshots)}/{MAX_SNAPSHOTS})", expanded=False):
-        for _idx, _snap in enumerate(_snapshots):
-            with st.container(border=True):
-                _col_info, _col_promote, _col_delete = st.columns([4, 1, 1])
-                
-                with _col_info:
-                    st.markdown(f"**{_snap['name']}**")
-                    _desc_parts = []
-                    if _snap.get("description"):
-                        _desc_parts.append(_snap["description"])
-                    _desc_parts.append(_snap["timestamp"][:16].replace("T", " "))
-                    st.caption(" -- ".join(_desc_parts))
-                
-                with _col_promote:
-                    if st.button(
-                        "Promote to Main",
-                        key=f"promote_snap_{_idx}",
-                        width='stretch',
-                    ):
-                        _promoted_name = _snap["name"]
-                        promote_snapshot(_idx)
-                        st.toast(f"Promoted: {_promoted_name} is now the main result")
-                        st.rerun()
-                
-                with _col_delete:
-                    if st.button(
-                        "Delete",
-                        key=f"delete_snap_{_idx}",
-                        width='stretch',
-                    ):
-                        _deleted_name = _snap["name"]
-                        remove_snapshot(_idx)
-                        st.toast(f"Deleted snapshot: {_deleted_name}")
-                        st.rerun()
-
-if _is_snapshot or _snapshots:
-    st.divider()
 
 
 # =============================================================================

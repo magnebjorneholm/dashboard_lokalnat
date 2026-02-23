@@ -7,8 +7,7 @@ Supports section-level selection for modules with multiple configuration areas.
 
 import streamlit as st
 import copy
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, Optional, Set
 
 from config.module_registry import (
     ALL_MODULES,
@@ -17,10 +16,6 @@ from config.module_registry import (
     get_ui_config_keys_for_selection,
     get_module,
 )
-
-# Maximum number of result snapshots per session
-MAX_SNAPSHOTS = 5
-
 
 # Explicit default structure for all modules
 DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
@@ -148,14 +143,15 @@ def init_session_state() -> None:
         "selected_modules": set(),    # Now contains "m1", "m3.wacc", etc.
         "saved_cases_count": 0,       # For default naming "Case N"
         "case_saved": False,          # True after successful save
-        
-        # Snapshot system: main config backup + snapshot list
-        "main_ui_config": None,       # Frozen copy of ui_config at last save/load/promote
-        "main_selected_modules": None,  # Frozen copy of selected_modules
-        "main_case_result": None,     # The main calculation result (PipelineResult)
-        "result_snapshots": [],       # List of snapshot dicts (session-only, max MAX_SNAPSHOTS)
-        "_is_snapshot_candidate": False,  # Explicit flag: True after calc when main already exists
-        
+
+        # Computed reference: config/modules used in last pipeline run
+        "computed_ui_config": None,
+        "computed_selected_modules": None,
+
+        # Saved reference: config/modules as last persisted to DB (save or load)
+        "saved_ui_config": None,
+        "saved_selected_modules": None,
+
         # Authentication
         "auth_user": None,            # Firebase user object
         "auth_token": None,           # Firebase ID token
@@ -182,13 +178,12 @@ def reset_case() -> None:
     st.session_state["case_notes"] = ""
     st.session_state["selected_modules"] = set()
     st.session_state["case_saved"] = False
-    
-    # Reset snapshot system
-    st.session_state["main_ui_config"] = None
-    st.session_state["main_selected_modules"] = None
-    st.session_state["main_case_result"] = None
-    st.session_state["result_snapshots"] = []
-    st.session_state["_is_snapshot_candidate"] = False
+
+    # Reset computed and saved references
+    st.session_state["computed_ui_config"] = None
+    st.session_state["computed_selected_modules"] = None
+    st.session_state["saved_ui_config"] = None
+    st.session_state["saved_selected_modules"] = None
     
     # Clear module/section checkbox widget keys
     _clear_selection_widget_keys()
@@ -269,7 +264,7 @@ def set_user_reid(reid: str) -> None:
     This is the ONLY function that should set user_reid.
     id_network is derived on-demand, not stored.
 
-    If the company changes, clears calculation results and snapshots
+    If the company changes, clears calculation results
     to prevent stale data from appearing for the wrong company.
     ui_config and selected_modules are NOT reset so that regulators
     can apply the same configuration across companies.
@@ -284,12 +279,9 @@ def set_user_reid(reid: str) -> None:
         st.session_state["calculation_done"] = False
         st.session_state["_baseline_reid"] = None
 
-        # Reset snapshot system (snapshots are company-specific)
-        st.session_state["main_ui_config"] = None
-        st.session_state["main_selected_modules"] = None
-        st.session_state["main_case_result"] = None
-        st.session_state["result_snapshots"] = []
-        st.session_state["_is_snapshot_candidate"] = False
+        # Clear computed reference (results are company-specific)
+        st.session_state["computed_ui_config"] = None
+        st.session_state["computed_selected_modules"] = None
 
 
 def get_user_id_network() -> Optional[int]:
@@ -486,187 +478,94 @@ def is_regulator() -> bool:
 
 
 # =============================================================================
-# SNAPSHOT SYSTEM
+# COMPUTED & SAVED REFERENCE
 # =============================================================================
 
-def has_main_config() -> bool:
-    """Check if a main configuration reference exists.
-
-    Returns True when either:
-    - A case was loaded (apply_case_to_session sets main_ui_config), OR
-    - A first calculation was done (set_main_config sets both keys)
-
-    The restore guard ``has_main_config() and is_snapshot_calculation()``
-    prevents spurious restores: after loading a case (before any
-    computation) _is_snapshot_candidate is False, so restore won't fire.
-    """
-    return st.session_state.get("main_ui_config") is not None
-
-
-def set_main_config(
+def set_computed_config(
     ui_config: Dict[str, Any],
     selected_modules: Set[str],
-    case_result: Any
 ) -> None:
-    """
-    Freeze current config as the main config.
-    Called after first calculation or after promote.
-    
-    Args:
-        ui_config: The ui_config dict used for this calculation
-        selected_modules: The selected modules at calculation time
-        case_result: The PipelineResult from this calculation
-    """
-    st.session_state["main_ui_config"] = copy.deepcopy(ui_config)
-    st.session_state["main_selected_modules"] = set(selected_modules)
-    st.session_state["main_case_result"] = case_result
-    st.session_state["_is_snapshot_candidate"] = False
+    """Store a frozen copy of the config used in the last pipeline run."""
+    st.session_state["computed_ui_config"] = copy.deepcopy(ui_config)
+    st.session_state["computed_selected_modules"] = set(selected_modules)
 
 
-def restore_main_config() -> None:
-    """
-    Restore ui_config, selected_modules and case_result from main config.
-    
-    Called when user navigates to Define or Configure pages after a
-    snapshot-candidate calculation, to ensure they start from the
-    committed main configuration rather than the experimental state.
-    
-    Also restores case_result so that is_snapshot_calculation() returns
-    False after restore, preventing re-triggering on subsequent reruns.
-    
-    Clears widget keys so Streamlit reinitializes from restored config.
-    No-op if main config doesn't exist yet.
-    """
-    if not has_main_config():
-        return
-    
-    st.session_state["ui_config"] = copy.deepcopy(
-        st.session_state["main_ui_config"]
-    )
-    st.session_state["selected_modules"] = set(
-        st.session_state["main_selected_modules"]
+def get_computed_config():
+    """Return (computed_ui_config, computed_selected_modules) or (None, None)."""
+    return (
+        st.session_state.get("computed_ui_config"),
+        st.session_state.get("computed_selected_modules"),
     )
 
-    main_result = st.session_state.get("main_case_result")
-    if main_result is not None:
-        st.session_state["case_result"] = main_result
+
+def set_saved_reference(
+    ui_config: Dict[str, Any],
+    selected_modules: Set[str],
+) -> None:
+    """Store a frozen copy of the config as it exists in the database."""
+    st.session_state["saved_ui_config"] = copy.deepcopy(ui_config)
+    st.session_state["saved_selected_modules"] = set(selected_modules)
+
+
+def has_saved_reference() -> bool:
+    """True if a saved config reference exists (case was saved or loaded)."""
+    return st.session_state.get("saved_ui_config") is not None
+
+
+def has_unsaved_changes() -> bool:
+    """True if a computation exists that differs from the saved reference.
+
+    Returns False when no computation has been done yet (nothing to save).
+    Returns True when computed config exists but no saved reference exists,
+    or when computed config differs from the saved reference.
+    """
+    computed_ui = st.session_state.get("computed_ui_config")
+    if computed_ui is None:
+        return False
+    computed_modules = st.session_state.get("computed_selected_modules", set())
+    saved_ui = st.session_state.get("saved_ui_config")
+    saved_modules = st.session_state.get("saved_selected_modules", set())
+    if saved_ui is None:
+        return True
+    return computed_ui != saved_ui or computed_modules != saved_modules
+
+
+def has_config_changed_since_compute() -> bool:
+    """True if working config differs from what was last computed.
+
+    Used to warn users that results may be outdated after editing config.
+    Returns False when no computation has been done yet.
+    """
+    computed_ui = st.session_state.get("computed_ui_config")
+    if computed_ui is None:
+        return False
+    computed_modules = st.session_state.get("computed_selected_modules", set())
+    current_ui = st.session_state.get("ui_config", {})
+    current_modules = get_selected_modules()
+    return current_ui != computed_ui or current_modules != computed_modules
+
+
+def revert_to_saved() -> None:
+    """Revert working state to the saved reference (or defaults for new cases).
+
+    Clears computation results and widget keys so editors reinitialize.
+    """
+    saved_ui = st.session_state.get("saved_ui_config")
+    saved_modules = st.session_state.get("saved_selected_modules")
+
+    if saved_ui is not None:
+        st.session_state["ui_config"] = copy.deepcopy(saved_ui)
+        st.session_state["selected_modules"] = set(saved_modules)
     else:
-        # Loaded case without a matching main computation yet.
-        # Clear calculation state so Results page shows "please compute".
-        st.session_state["case_result"] = None
-        st.session_state["baseline_result"] = None
-        st.session_state["calculation_done"] = False
+        # No saved case — revert to baseline defaults
+        st.session_state["ui_config"] = copy.deepcopy(DEFAULT_UI_CONFIG)
+        st.session_state["selected_modules"] = set()
 
-    st.session_state["_is_snapshot_candidate"] = False
-    
+    # Clear computation state
+    st.session_state["case_result"] = None
+    st.session_state["calculation_done"] = False
+    st.session_state["computed_ui_config"] = None
+    st.session_state["computed_selected_modules"] = None
+
     _clear_selection_widget_keys()
     _clear_config_widget_keys()
-
-
-def get_snapshots() -> List[Dict[str, Any]]:
-    """Get current snapshot list."""
-    return st.session_state.get("result_snapshots", [])
-
-
-def add_snapshot(
-    name: str,
-    description: str,
-    ui_config: Dict[str, Any],
-    selected_modules: Set[str],
-    case_result: Any
-) -> bool:
-    """
-    Add a result snapshot.
-    
-    Args:
-        name: User-provided snapshot name
-        description: User-provided description (can be empty)
-        ui_config: Deep copy of ui_config at calculation time
-        selected_modules: Copy of selected_modules at calculation time
-        case_result: The PipelineResult to snapshot
-    
-    Returns:
-        True if added, False if at max capacity
-    """
-    snapshots = st.session_state.get("result_snapshots", [])
-    
-    if len(snapshots) >= MAX_SNAPSHOTS:
-        return False
-    
-    snapshot = {
-        "name": name,
-        "description": description,
-        "ui_config": copy.deepcopy(ui_config),
-        "selected_modules": set(selected_modules),
-        "case_result": case_result,
-        "timestamp": datetime.now().isoformat(),
-    }
-    
-    snapshots.append(snapshot)
-    st.session_state["result_snapshots"] = snapshots
-    return True
-
-
-def remove_snapshot(index: int) -> None:
-    """Remove snapshot by index."""
-    snapshots = st.session_state.get("result_snapshots", [])
-    if 0 <= index < len(snapshots):
-        snapshots.pop(index)
-        st.session_state["result_snapshots"] = snapshots
-
-
-def promote_snapshot(index: int) -> None:
-    """
-    Promote a snapshot to become the new main config.
-    
-    Copies the snapshot's config/modules/result to main_* keys and
-    to the working ui_config/selected_modules. Removes the snapshot
-    from the list and marks case as unsaved (Firebase is now outdated).
-    """
-    snapshots = st.session_state.get("result_snapshots", [])
-    if not (0 <= index < len(snapshots)):
-        return
-    
-    snapshot = snapshots[index]
-    
-    # Update main config
-    st.session_state["main_ui_config"] = copy.deepcopy(snapshot["ui_config"])
-    st.session_state["main_selected_modules"] = set(snapshot["selected_modules"])
-    st.session_state["main_case_result"] = snapshot["case_result"]
-    
-    # Update working state
-    st.session_state["ui_config"] = copy.deepcopy(snapshot["ui_config"])
-    st.session_state["selected_modules"] = set(snapshot["selected_modules"])
-    st.session_state["case_result"] = snapshot["case_result"]
-    
-    # Mark case as unsaved (Firebase version is now outdated)
-    st.session_state["case_saved"] = False
-    st.session_state["_is_snapshot_candidate"] = False
-
-    # Clear widget keys so editors reinitialize from promoted config
-    _clear_config_widget_keys()
-
-    # Remove promoted snapshot from list
-    snapshots.pop(index)
-    st.session_state["result_snapshots"] = snapshots
-
-
-def is_snapshot_calculation() -> bool:
-    """
-    Check if current case_result is a snapshot candidate (not the main result).
-    
-    Uses an explicit boolean flag rather than object identity, because
-    Streamlit may serialize/deserialize session_state objects across
-    page switches, making identity checks unreliable.
-    """
-    return st.session_state.get("_is_snapshot_candidate", False)
-
-
-def mark_as_snapshot_candidate() -> None:
-    """
-    Mark the current calculation as a snapshot candidate.
-    
-    Called in _run_calculation when a main config already exists,
-    meaning this is a subsequent (non-main) calculation.
-    """
-    st.session_state["_is_snapshot_candidate"] = True

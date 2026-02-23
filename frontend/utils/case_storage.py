@@ -575,6 +575,10 @@ def apply_case_to_session(
     session_state["case_id"] = case.id
     session_state["case_name"] = case.name
     session_state["case_notes"] = case.notes
+
+    # Clear sidebar widget keys so they reinitialize with loaded values on rerun
+    for key in ("sidebar_case_name", "sidebar_case_notes"):
+        session_state.pop(key, None)
     session_state["selected_modules"] = selected_set
     session_state["case_saved"] = True
     
@@ -582,13 +586,60 @@ def apply_case_to_session(
     session_state["calculation_done"] = False
     session_state["case_result"] = None
     session_state["baseline_result"] = None
-    
-    # Initialize snapshot system: set main config from loaded case, clear snapshots
-    session_state["main_ui_config"] = copy.deepcopy(deserialized_config)
-    session_state["main_selected_modules"] = set(selected_set)
-    session_state["main_case_result"] = None  # Must recalculate
-    session_state["result_snapshots"] = []
-    session_state["_is_snapshot_candidate"] = False
+
+    # Set saved reference (loaded config = what's in the DB)
+    session_state["saved_ui_config"] = copy.deepcopy(deserialized_config)
+    session_state["saved_selected_modules"] = set(selected_set)
+
+    # Clear computed reference (must recalculate)
+    session_state["computed_ui_config"] = None
+    session_state["computed_selected_modules"] = None
+
+
+def update_case_metadata(
+    user_reid: str,
+    case_id: str,
+    name: str,
+    notes: str,
+) -> bool:
+    """Update only name and notes for an existing case (not config).
+
+    Returns True on success, raises on failure.
+    """
+    if _use_firestore():
+        return _firestore_update_metadata(user_reid, case_id, name, notes)
+    else:
+        return _local_update_metadata(user_reid, case_id, name, notes)
+
+
+def _firestore_update_metadata(
+    user_reid: str, case_id: str, name: str, notes: str
+) -> bool:
+    db = get_firestore_client()
+    doc_ref = db.collection(COLLECTION_NAME).document(case_id)
+    doc = doc_ref.get()
+    if not doc.exists or doc.to_dict().get("user_reid") != user_reid:
+        return False
+    doc_ref.update({"name": name, "notes": notes, "updated_at": datetime.now()})
+    return True
+
+
+def _local_update_metadata(
+    user_reid: str, case_id: str, name: str, notes: str
+) -> bool:
+    file_path = _local_get_user_dir(user_reid) / f"{case_id}.json"
+    if not file_path.exists():
+        return False
+    with open(file_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if data.get("user_reid") != user_reid:
+        return False
+    data["name"] = name
+    data["notes"] = notes
+    data["updated_at"] = datetime.now().isoformat()
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    return True
 
 
 def get_case_display_info(case: SavedCase) -> Dict[str, Any]:

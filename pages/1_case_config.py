@@ -16,9 +16,6 @@ from frontend.utils.state_manager import (
     get_selected_modules,
     is_section_selected,
     is_module_selected,
-    has_main_config,
-    restore_main_config,
-    is_snapshot_calculation,
 )
 
 from frontend.modules.base import (
@@ -32,12 +29,6 @@ from frontend.modules.base import (
 from frontend.modules.addons import benchmarking
 
 init_session_state()
-
-# Restore main config if navigating back from a snapshot calculation
-# Only triggers when case_result differs from main (i.e. a snapshot calc was run)
-# Does NOT trigger on normal reruns, allowing the user to edit freely
-if has_main_config() and is_snapshot_calculation():
-    restore_main_config()
 
 
 # =============================================================================
