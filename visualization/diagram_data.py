@@ -248,7 +248,9 @@ def prepare_diagram_data(
         }
     }
 
-    # TOTEX-specific: separated efficiency components
+    # Always provide separated OPEX/CAPEX efficiency components.
+    # In OPEX mode: OPEX eff = full deduction, CAPEX eff = 0.
+    # In TOTEX mode: Both are non-zero based on allocation shares.
     if method == 'TOTEX':
         result['opex_effektivisering'] = {
             'value': opex_eff_value,
@@ -261,6 +263,19 @@ def prepare_diagram_data(
             'baseline': capex_eff_baseline,
             'is_directly_modified': effkrav_modified,
             'source': 'TOTEX CAPEX share'
+        }
+    else:
+        result['opex_effektivisering'] = {
+            'value': effektivisering_value,
+            'baseline': effektivisering_baseline,
+            'is_directly_modified': effkrav_modified,
+            'source': 'OPEX efficiency deduction'
+        }
+        result['capex_effektivisering'] = {
+            'value': 0.0,
+            'baseline': 0.0,
+            'is_directly_modified': False,
+            'source': 'N/A (OPEX method)'
         }
 
     return result

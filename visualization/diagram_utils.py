@@ -367,8 +367,8 @@ def _create_opex_html(data: Dict[str, dict]) -> str:
     
     boxes = "\n".join([
         "<!-- ROW 1 -->",
-        _box_html('paverkbara', 'Controllable costs', paverkbara, col1, y1, w_small),
-        _box_html('ej_paverkbara', 'Non-controllable<br>costs', ej_paverkbara, col2, y1, w_small),
+        _box_html('paverkbara', 'Controllable OPEX', paverkbara, col1, y1, w_small),
+        _box_html('ej_paverkbara', 'Non-controllable<br>OPEX', ej_paverkbara, col2, y1, w_small),
         _box_html('kapitalbas', 'Capital base', kapitalbas, col3, y1, w_large),
         
         "<!-- ROW 2 -->",
@@ -477,8 +477,8 @@ def _create_totex_html(data: Dict[str, dict]) -> str:
     
     boxes = "\n".join([
         "<!-- ROW 1 -->",
-        _box_html('paverkbara', 'Controllable costs', paverkbara, col1, y1, w_small),
-        _box_html('ej_paverkbara', 'Non-controllable<br>costs', ej_paverkbara, col2, y1, w_small),
+        _box_html('paverkbara', 'Controllable OPEX', paverkbara, col1, y1, w_small),
+        _box_html('ej_paverkbara', 'Non-controllable<br>OPEX', ej_paverkbara, col2, y1, w_small),
         _box_html('kapitalbas', 'Capital base', kapitalbas, col3, y1, w_large),
         
         "<!-- ROW 2: OPEX eff, Dep, Return -->",

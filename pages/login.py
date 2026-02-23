@@ -329,7 +329,8 @@ def render_registration_form(auth_manager) -> None:
         if success:
             st.success(
                 "Account created! Please check your email to verify your account, "
-                "then return here to log in."
+                "then return here to log in. "
+                "If you don't see the email, check your junk/spam folder."
             )
         else:
             st.error(error or "Registration failed")
@@ -338,7 +339,8 @@ def render_registration_form(auth_manager) -> None:
 def render_verification_pending(auth_manager) -> None:
     """Render pending email verification notice"""
     st.warning("Your email is not yet verified.")
-    st.info("Please check your inbox and click the verification link.")
+    st.info("Please check your inbox and click the verification link. "
+            "If you don't see the email, check your junk/spam folder.")
     
     col1, col2 = st.columns([1, 1])
     

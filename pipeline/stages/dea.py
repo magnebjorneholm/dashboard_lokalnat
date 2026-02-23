@@ -8,9 +8,10 @@ Supports 2 methods:
 1. baseline - Use Ei's baseline DEA results
 2. dea - Run new DEA model with custom inputs/outputs
 
-NOTE: If CAPEX modified in Pre-DEA, new DEA always runs for methodological
-consistency, even if user selected "baseline". This is because baseline-DEA
-was calculated with original CAPEX and is not valid for modified data.
+DEA always uses baseline (historical) OPEX/CAPEX/TOTEX values. User changes
+to cost levels via pre_dea (scaling, overrides, WACC changes) do NOT affect
+DEA inputs — they only affect the revenue frame in post_dea. The rationale
+is that DEA inputs are based on historical data that has already occurred.
 
 No print statements - logging handled by PipelineDebugLogger.
 """
@@ -29,10 +30,14 @@ def stage_dea(
     """
     Stage 3: Run DEA analysis.
 
+    DEA always uses baseline cost data (OPEX/CAPEX/TOTEX), regardless of
+    user modifications in pre_dea. Only the model specification (inputs,
+    outputs, RTS, outlier params) can be changed by the user.
+
     Args:
-        pre_dea: Output from Pre-DEA stage
+        pre_dea: Output from Pre-DEA stage (used for metadata only)
         config: DeaConfig with method and parameters
-        baseline: BaselineStageOutput (required for baseline method)
+        baseline: BaselineStageOutput (required — provides baseline cost data)
 
     Returns:
         DeaStageOutput with:
@@ -44,17 +49,13 @@ def stage_dea(
         ValueError: If invalid method or missing baseline
     """
 
-    capex_modified = pre_dea.capex_modified
-    opex_modified = getattr(pre_dea, 'opex_modified', False)
-    data_modified = capex_modified or opex_modified
+    if baseline is None:
+        raise ValueError("Baseline required for DEA stage")
 
     # =========================================================================
-    # SCENARIO 1: Baseline DEA (no data modification)
+    # SCENARIO 1: Baseline DEA — return Ei's published results
     # =========================================================================
-    if config.method == EfficiencyMethod.BASELINE and not data_modified:
-
-        if baseline is None:
-            raise ValueError("Baseline required for baseline DEA method")
+    if config.method == EfficiencyMethod.BASELINE:
 
         return DeaStageOutput(
             dea_results=baseline.dea_baseline.copy(),
@@ -63,23 +64,7 @@ def stage_dea(
         )
 
     # =========================================================================
-    # SCENARIO 2: Baseline spec with modified data (run new DEA)
-    # =========================================================================
-    elif config.method == EfficiencyMethod.BASELINE and data_modified:
-
-        dea_results = run_dea_analysis(
-            df=pre_dea.df_all_companies,
-            model_spec=BASELINE_DEA_SPEC
-        )
-
-        return DeaStageOutput(
-            dea_results=dea_results,
-            dea_method="baseline_recalculated",
-            dea_executed=True
-        )
-
-    # =========================================================================
-    # SCENARIO 3: Custom DEA
+    # SCENARIO 2: Custom DEA — run with baseline cost data
     # =========================================================================
     elif config.method == EfficiencyMethod.DEA:
 
@@ -96,8 +81,9 @@ def stage_dea(
             }
         }
 
+        # Always use baseline data for DEA (historical values)
         dea_results = run_dea_analysis(
-            df=pre_dea.df_all_companies,
+            df=baseline.df_all_companies,
             model_spec=model_spec
         )
 

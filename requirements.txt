@@ -19,6 +19,7 @@ plotly
 geopandas
 libpysal
 shapely
+scipy
 
 # Annat
 pyyaml

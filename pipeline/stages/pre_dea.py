@@ -73,20 +73,23 @@ def stage_pre_dea(
     )
 
     # STEP 3: Apply OPEX parameter scaling (4.1.1) and variable override (40.1.1)
+    # Scaling only affects the user's company (not all 148).
     opex_modified = False
     if config.opex_scaling is not None or config.opex_override is not None:
         df = result.df_all_companies.copy()
+        user_reid = f"REL{user_id_network:05d}"
+        mask = df["REId"] == user_reid
 
-        # 4.1.1 — Scale adjustable OPEX for all 148 companies
+        # 4.1.1 — Scale adjustable OPEX for user's company only
         if config.opex_scaling is not None:
-            df[COL_CONTROLLABLE_AVG] *= config.opex_scaling
-            df[COL_TOTEX] = df[COL_CONTROLLABLE_AVG] + df[COL_CAPITAL_COST_2024]
+            df.loc[mask, COL_CONTROLLABLE_AVG] *= config.opex_scaling
+            df.loc[mask, COL_TOTEX] = (
+                df.loc[mask, COL_CONTROLLABLE_AVG] + df.loc[mask, COL_CAPITAL_COST_2024]
+            )
             opex_modified = True
 
         # 40.1.1 — Override user's OPEXp (trumps scaling for that company)
         if config.opex_override is not None:
-            user_reid = f"REL{user_id_network:05d}"
-            mask = df["REId"] == user_reid
             df.loc[mask, COL_CONTROLLABLE_AVG] = config.opex_override
             df.loc[mask, COL_TOTEX] = (
                 config.opex_override + df.loc[mask, COL_CAPITAL_COST_2024].values[0]

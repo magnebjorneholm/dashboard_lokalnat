@@ -267,13 +267,13 @@ def _render_kpi_hero(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
         )
     with col2:
         st.metric(
-            f"{VID_OPEX_ADJUSTABLE} Controllable",
+            f"{VID_OPEX_ADJUSTABLE} Controllable OPEX",
             _fmt_msek(c_opex_before),
             delta=_fmt_delta_msek(c_opex_before - b_opex_before),
         )
     with col3:
         st.metric(
-            f"{VID_NON_ADJUSTABLE} Non-controllable",
+            f"{VID_NON_ADJUSTABLE} Non-controllable OPEX",
             _fmt_msek(c_nonctrl),
             delta=_fmt_delta_msek(c_nonctrl - b_nonctrl),
         )
@@ -319,7 +319,7 @@ def _render_opex_waterfall(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
         labels = [
             "OPEX base", "OPEX eff. adj.",
             "CAPEX base", "CAPEX eff. adj.",
-            "Non-controllable", "Flexibility",
+            "Non-controllable OPEX", "Flexibility",
             "Interruption", "State deduction",
             "Total OPEX in Revenue Frame",
         ]
@@ -346,8 +346,8 @@ def _render_opex_waterfall(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
             )
     else:
         labels = [
-            "Controllable (before eff.)", "Efficiency deduction",
-            "Non-controllable", "Flexibility",
+            "Controllable OPEX (before eff.)", "Efficiency deduction",
+            "Non-controllable OPEX", "Flexibility",
             "Interruption", "State deduction",
             "Total OPEX in Revenue Frame",
         ]
@@ -459,7 +459,7 @@ def _render_controllable_categories(
 ) -> None:
     """Horizontal bar chart + table for controllable cost categories from grunddata."""
 
-    st.markdown("**Controllable Cost Decomposition**")
+    st.markdown("**Controllable Operating Expenditures Decomposition**")
 
     cat_df = _get_controllable_categories(detail, meta, user_reid)
     if cat_df is None or cat_df.empty:
@@ -537,7 +537,7 @@ def _render_noncontrollable_categories(
 ) -> None:
     """Horizontal bar chart + table for non-controllable KENT categories."""
 
-    st.markdown("**Non-Controllable Cost Decomposition**")
+    st.markdown("**Non-Controllable Operating Expenditures Decomposition**")
 
     cat_df = _get_noncontrollable_categories(detail, user_reid)
     if cat_df is None or cat_df.empty:

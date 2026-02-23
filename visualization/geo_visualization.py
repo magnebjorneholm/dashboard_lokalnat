@@ -3,13 +3,15 @@ frontend/utils/geo_visualization.py
 
 Map visualizations for DEA efficiency analysis.
 Uses MapLibre renderer (Plotly 5.24+).
-Nordic Blue color scheme matching Regumetrica graphical profile.
+Green-red color scheme: green = high efficiency, red = low efficiency.
+Percentile-based gradient for better visual differentiation.
 """
 
 import geopandas as gpd
 import plotly.graph_objects as go
 from typing import Optional, List
 import json
+import numpy as np
 import pandas as pd
 
 from config.column_names import (
@@ -105,19 +107,39 @@ def create_efficiency_map(
     fig = go.Figure()
 
     geojson = json.loads(gdf_plot.to_json())
-    z_values = gdf_plot[value_column].fillna(-1).values
 
+    # Use percentile-based mapping for better visual differentiation
     valid_values = gdf_plot[gdf_plot[value_column].notna()][value_column]
-    zmin = valid_values.min() if not valid_values.empty else 0
-    zmax = valid_values.max() if not valid_values.empty else 1
+    if not valid_values.empty:
+        # Convert raw values to percentile ranks (0-100)
+        from scipy.stats import rankdata
+        ranks = rankdata(valid_values.values, method='average')
+        percentiles = (ranks - 1) / max(len(ranks) - 1, 1) * 100
 
+        # Map percentiles back to all rows (NaN stays as -1)
+        pct_col = f"_percentile_{value_column}"
+        gdf_plot[pct_col] = np.nan
+        gdf_plot.loc[valid_values.index, pct_col] = percentiles
+        z_values = gdf_plot[pct_col].fillna(-1).values
+        zmin = 0
+        zmax = 100
+    else:
+        z_values = gdf_plot[value_column].fillna(-1).values
+        zmin = 0
+        zmax = 100
+
+    # Green-red colorscale: red = low efficiency, green = high efficiency
     colorscale = [
-        [0, "#CBD5E1"],
-        [0.001, "#1E3A5F"],
-        [0.3, "#2563EB"],
-        [0.6, "#3B82F6"],
-        [1, "#93C5FD"]
+        [0, "#CBD5E1"],     # Gray for missing data
+        [0.001, "#DC2626"], # Red (lowest percentile)
+        [0.25, "#F97316"],  # Orange
+        [0.5, "#EAB308"],   # Yellow (median)
+        [0.75, "#22C55E"],  # Light green
+        [1, "#15803D"]      # Dark green (highest percentile)
     ]
+
+    # Determine colorbar title based on column
+    label = COLUMN_LABELS.get(value_column, value_column)
 
     fig.add_trace(go.Choroplethmap(
         geojson=geojson,
@@ -132,7 +154,19 @@ def create_efficiency_map(
         ),
         text=gdf_plot["hover_text"],
         hovertemplate="%{text}<extra></extra>",
-        showscale=False
+        showscale=True,
+        colorbar=dict(
+            title=dict(text=f"{label}<br>(percentile)", font=dict(size=11)),
+            tickvals=[0, 25, 50, 75, 100],
+            ticktext=["0th", "25th", "50th", "75th", "100th"],
+            len=0.6,
+            thickness=12,
+            x=1.0,
+            xpad=4,
+            bgcolor="rgba(255,255,255,0.8)",
+            borderwidth=0,
+            tickfont=dict(size=10),
+        ),
     ))
 
     if user_geoms is not None and not user_geoms.empty:

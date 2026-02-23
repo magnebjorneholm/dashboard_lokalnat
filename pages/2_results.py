@@ -132,7 +132,7 @@ with col_diagram:
     components.html(html_content, height=560, scrolling=False)
 
 with col_map:
-    st.markdown("##### Geographic efficiency")
+    st.markdown("##### Geographic comparison")
     
     try:
         gdf, user_geoms = prepare_map_data_from_pipeline(
@@ -210,28 +210,20 @@ method = dd.get('method', 'OPEX')
 # --- Waterfall chart: Revenue frame decomposition ---
 # Components: (label, diagram_key, negate, measure)
 # measure: "relative" for additive steps, "total" for subtotals/final
-if method == 'TOTEX' and 'opex_effektivisering' in dd:
-    wf_components = [
-        ("40.1.1 Controllable costs",     "paverkbara",            False, "relative"),
-        ("40.2.1 Non-controllable costs",  "ej_paverkbara",         False, "relative"),
-        ("50.4.1 OPEX efficiency adj.",    "opex_effektivisering",  True,  "relative"),
-        ("50.4.2 CAPEX efficiency adj.",   "capex_effektivisering", True,  "relative"),
-    ]
-else:
-    wf_components = [
-        ("40.1.1 Controllable costs",     "paverkbara",       False, "relative"),
-        ("40.2.1 Non-controllable costs",  "ej_paverkbara",    False, "relative"),
-        ("50.4.1 Efficiency adj.",         "effektivisering",  True,  "relative"),
-    ]
-
-wf_components += [
-    ("20.1 Depreciation",                 "avskrivningar",         False, "relative"),
-    ("30.1 Return (WACC)",                "avkastning",            False, "relative"),
-    ("30.5.2 Incentive adjustment",       "kvalitet",              False, "relative"),
-    ("40.1.2 Flexibility services",       "flexibilitetstjanster", False, "relative"),
-    ("Interruption compensation",         "avbrottsersattning",    False, "relative"),
-    ("State aid deduction",               "avdrag_statligt_stod",  True,  "relative"),
-    ("Total Revenue Frame",               "intaktsram",            False, "total"),
+# Always split OPEX/CAPEX efficiency adjustments (CAPEX = 0 in OPEX mode).
+# All three adjustments grouped together after Return (WACC).
+wf_components = [
+    ("40.1.1 Controllable OPEX",              "paverkbara",            False, "relative"),
+    ("40.2.1 Non-controllable OPEX",          "ej_paverkbara",         False, "relative"),
+    ("20.1 Depreciation",                     "avskrivningar",         False, "relative"),
+    ("30.1 Return (WACC)",                    "avkastning",            False, "relative"),
+    ("50.4.1 Efficiency OPEX adjustment",     "opex_effektivisering",  True,  "relative"),
+    ("50.4.2 Efficiency CAPEX adjustment",    "capex_effektivisering", True,  "relative"),
+    ("30.5.2 Return incentive adjustment",    "kvalitet",              False, "relative"),
+    ("40.1.2 Flexibility services",           "flexibilitetstjanster", False, "relative"),
+    ("Interruption compensation",             "avbrottsersattning",    False, "relative"),
+    ("State aid deduction",                   "avdrag_statligt_stod",  True,  "relative"),
+    ("Total Revenue Frame",                   "intaktsram",            False, "total"),
 ]
 
 wf_labels = []

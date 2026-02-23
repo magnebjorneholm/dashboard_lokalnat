@@ -383,7 +383,7 @@ Rebuilt when widget key is lost (page navigation) or `_clear_config_widget_keys(
 |-------|----------------------|--------------------------|-------------------------|------------------------------------------|
 | 1     | stage_baseline()     | BaselineData             | BaselineStageOutput     | Converts raw data to stage format        |
 | 2     | stage_pre_dea()      | Stage 1 + PreDeaConfig   | PreDeaStageOutput       | CAPEX calculation (KENT 1-8), WACC       |
-| 3     | stage_dea()          | Stage 2 + DeaConfig      | DeaStageOutput          | DEA efficiency analysis (148 companies)  |
+| 3     | stage_dea()          | Stage 1 + DeaConfig      | DeaStageOutput          | DEA efficiency (always baseline data)    |
 | 4     | stage_extraction()   | Stage 2+3 + REId         | ExtractionStageOutput   | Extracts data for user's company         |
 | 5     | stage_post_dea()     | Stage 1-4 + PostDeaConfig| PostDeaStageOutput      | Eff. req + incentives + revenue cap      |
 
@@ -497,7 +497,7 @@ baseline on refresh. Users should save their case to Firestore to preserve work 
 - capbase_source, user_capbase_scaled, kent_file_bytes, kent_user_id_network
 - method (CapexMethod), wacc, normvalue_adjustments, lifetime_adjustments
 - wacc_input_method ("capm"/"derived"/"direct"/"baseline"), wacc_capm_inputs
-- opex_scaling (4.1.1) -- float multiplier for all 148 companies' controllable OPEX
+- opex_scaling (4.1.1) -- float multiplier for user's company controllable OPEX only
 - opex_override (40.1.1) -- absolute OPEXp in tkr for user's company (trumps scaling)
 
 **DeaConfig** (Stage 3):
@@ -550,6 +550,8 @@ Uses half-year timecodes: 229=2024H1, 230=2024H2, 231=2025H1, ..., 236=2027H2.
 
 **DEA:** Input-oriented CRS. Default inputs: [capital_cost_2024, controllable_cost_average].
 Default outputs: [CU, MW, NS, MWhl, MWhh]. Outlier detection via IQR method.
+DEA always uses baseline (historical) cost data — user changes to OPEX/CAPEX/WACC
+do NOT affect DEA inputs. Only the model specification (inputs, outputs, RTS) can be changed.
 
 **Efficiency requirement:** Converts DEA potential via truncation, customer sharing (50%),
 realization time (8 years), supervision period (4 years).

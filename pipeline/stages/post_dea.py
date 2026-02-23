@@ -96,10 +96,11 @@ def stage_post_dea(
         baseline.controllable_meta,
     )
 
-    # Apply opex parameter scaling (4.1.1 — all companies)
+    # Apply opex parameter scaling (4.1.1 — user's company only)
     if opex_scaling is not None:
-        sdf_controllable[COL_CONTROLLABLE_AVG] *= opex_scaling
-        sdf_controllable[COL_NEO_ADJUSTMENTS] *= opex_scaling
+        mask = sdf_controllable["REId"] == user_reid
+        sdf_controllable.loc[mask, COL_CONTROLLABLE_AVG] *= opex_scaling
+        sdf_controllable.loc[mask, COL_NEO_ADJUSTMENTS] *= opex_scaling
 
     # Apply opex variable override (40.1.1 — user's company, trumps scaling)
     if opex_override is not None:

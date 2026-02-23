@@ -40,14 +40,18 @@ def render_scaling() -> Dict[str, Any]:
     config: Dict[str, Any] = {}
 
     st.markdown("##### 4.1 OPEX scaling factors")
+
+    # Load user's baseline OPEX for reference display
+    baselines = _load_user_baselines()
+    bl_opex = baselines.get("opex", 0.0)
+
     st.caption(
-        "Scale operating expenditure components for all 148 companies. "
-        "Adjustable OPEX (4.1.1) affects DEA input and triggers re-run. "
+        "Scale operating expenditure components for your company. "
         "Flexibility (4.1.2) and non-adjustable (4.1.3) affect revenue frame only."
     )
 
     # 4.1.1 Scaling factor adjustable OPEX
-    val, changed = parameter_input(
+    opex_scaling_val, changed = parameter_input(
         module_key=MODULE_KEY,
         param_id=PID_OPEX_SCALING,
         label=get_description(PID_OPEX_SCALING),
@@ -57,10 +61,17 @@ def render_scaling() -> Dict[str, Any]:
         max_val=2.00,
         step=0.01,
         format_str="%.2f",
-        help_text="Multiplicative scaling for adjustable OPEX (OPEXp). Affects DEA.",
+        help_text="Multiplicative scaling for your company's adjustable OPEX (OPEXp).",
     )
     if changed:
-        config["opex_scaling"] = val
+        config["opex_scaling"] = opex_scaling_val
+
+    # Show actual OPEX value for user's company
+    effective_opex = bl_opex * (opex_scaling_val if opex_scaling_val else 1.0)
+    st.caption(
+        f"Your baseline OPEX: **{bl_opex:,.0f} tkr** → "
+        f"Scaled: **{effective_opex:,.0f} tkr** (×{opex_scaling_val:.2f})"
+    )
 
     # 4.1.2 Scaling factor flexibility services
     val, changed = parameter_input(
