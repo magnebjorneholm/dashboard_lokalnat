@@ -142,9 +142,9 @@ def _get_user_capbase(
             raise ValueError("KENT_UPLOAD source requires kent_file_bytes")
         
         # Convert KENT Excel to capbase_a format (steps 1-4)
-        from calculations.capex.kent_capbase_prep import convert_kent_to_capbase
-        
-        kent_capbase = convert_kent_to_capbase(
+        from calculations.capex.kent_capbase_prep import build_capbase_a_from_kent
+
+        kent_capbase = build_capbase_a_from_kent(
             BytesIO(config.kent_file_bytes),
             config.kent_user_id_network or user_id_network
         )

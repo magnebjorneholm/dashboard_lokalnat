@@ -234,8 +234,8 @@ def year_to_time_code(year) -> Optional[int]:
     if pd.isna(year):
         return None
     try:
-        year = int(float(year))
-        return (year - 1910) * 2 + 1
+        year_f = float(year)
+        return int((year_f - 1910) * 2 + 1)
     except (ValueError, TypeError):
         return None
 
