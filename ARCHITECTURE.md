@@ -27,6 +27,73 @@ against a baseline.
 | Deploy         | Render.com, DevContainer (Python 3.11 Bullseye)   |
 
 
+## Getting Started
+
+### Prerequisites
+
+- **Python 3.11** (check with `python --version`)
+- **Git**
+- **Docker Desktop** (only if using Dev Container)
+
+### Option A: Local setup (recommended)
+
+```bash
+# 1. Clone the repo
+git clone <repo-url>
+cd dashboard_lokalnat
+
+# 2. Create virtual environment
+python -m venv venv
+
+# 3. Activate it
+# Windows (PowerShell):
+./venv/Scripts/Activate.ps1
+# Windows (CMD):
+venv\Scripts\activate.bat
+# Linux/Mac:
+source venv/bin/activate
+
+# 4. Install dependencies
+pip install -r requirements.txt
+
+# 5. Set up secrets (see below)
+
+# 6. Run the app
+streamlit run streamlit_app.py
+
+# 7. Run tests
+python -m pytest tests/ -v
+```
+
+### Option B: Dev Container
+
+1. Install **Docker Desktop** and the VS Code extension **Dev Containers**
+2. Open the repo folder in VS Code
+3. Click "Reopen in Container" (or Ctrl+Shift+P → "Dev Containers: Reopen in Container")
+4. Wait for the container to build and install dependencies
+5. Set up secrets (see below)
+6. The app starts automatically on port 8501
+
+### Firebase Secrets
+
+The app requires Firebase credentials in `.streamlit/secrets.toml` (gitignored).
+Copy the template and fill in real values:
+
+```bash
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+```
+
+For local development **without Firebase**, use dev mode instead:
+
+```toml
+# .streamlit/secrets.toml
+[dev]
+skip_auth = true
+```
+
+This bypasses authentication and lets you use the app freely.
+
+
 ## 3. Directory Structure
 
 ```
