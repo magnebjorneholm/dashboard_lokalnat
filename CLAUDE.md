@@ -43,6 +43,47 @@ one branch on the other.
 - `calculations/` is pure logic — no UI or Streamlit imports allowed.
 - Dependencies flow strictly downward (see ARCHITECTURE.md layer diagram).
 
+## Visual identity — "Nordic Energy"
+
+Clean Scandinavian finance dashboard. Communicates precision, regulatory authority,
+and energy-sector competence. Light backgrounds, cool blue tones, generous whitespace,
+tabular numbers.
+
+### Color palette (config/colors.py)
+
+| Token            | Hex       | Usage                                    |
+|------------------|-----------|------------------------------------------|
+| primary          | #2563EB   | Buttons, links, active states, headers   |
+| bg_page          | #F8FAFC   | Page background                          |
+| bg_subtle        | #F1F5F9   | Sidebar, secondary panels                |
+| bg_muted         | #E2E8F0   | Borders, dividers, disabled states       |
+| text_primary     | #0F172A   | Headings, body text                      |
+| text_secondary   | #475569   | Labels, captions                         |
+| text_muted       | #64748B   | Hints, placeholders                      |
+| success          | #059669   | Positive delta, confirmation             |
+| warning          | #D97706   | "Modified" badge, stale indicator        |
+| error            | #DC2626   | Negative delta, validation errors        |
+
+Chart palette (7 colors, colorblind-safe):
+`#2563EB` `#0891B2` `#7C3AED` `#059669` `#EA580C` `#DC2626` `#64748B`
+
+### Typography
+
+- Body: Inter (400/500/600/700)
+- Data/code: IBM Plex Mono (400/500)
+- Financial data uses tabular figures (`font-feature-settings: 'tnum'`)
+- Number format: European — space as thousands separator, comma as decimal
+  - `1 234 567 tkr`, `4,53%`, `+1 234 tkr`
+
+### Design rules
+
+- Modified values: amber warning badge — never change the value's own color
+- Positive delta: green + arrow up. Negative: red + arrow down. Zero: no arrow
+- Case vs baseline always shown side by side
+- Charts: plotly_white base, transparent backgrounds, Inter font
+- Tables: hide index, stretch width, monospace in grid cells
+- Never add custom padding/margin hacks — use framework defaults
+
 ## Update ARCHITECTURE.md
 
 Only update `ARCHITECTURE.md` when changes are confirmed and ready to commit. Commit and ARCHITECTURE.md update go hand in hand.
