@@ -9,16 +9,6 @@ Entrypoint: `streamlit_app.py` (Streamlit, Python 3.11).
 
 Read `ARCHITECTURE.md` at the start of every conversation for full project context.
 
-## Branches — IMPORTANT
-
-This repo has two active branches. **Always confirm which branch we're on before starting work.**
-
-- **`main`** — Production Streamlit app. Bug fixes, new features, maintenance.
-- **`react_migration`** — React (Next.js) + FastAPI migration. See `migration_plan.md` on that branch.
-
-At the start of every session, check the current branch with `git branch --show-current` and
-ask the user which branch they want to work on if unclear. Never make changes intended for
-one branch on the other.
 
 ## Language
 
@@ -83,6 +73,22 @@ Chart palette (7 colors, colorblind-safe):
 - Charts: plotly_white base, transparent backgrounds, Inter font
 - Tables: hide index, stretch width, monospace in grid cells
 - Never add custom padding/margin hacks — use framework defaults
+
+### Frontend craft
+
+When building or modifying UI, think before coding:
+- **Audience first:** Regulators and energy companies expect precision and predictability.
+  Every visual choice should reinforce professional trust — never surprise, never decorate.
+- **Intentional defaults:** Don't accept raw Streamlit defaults when the design system has
+  an opinion. Apply `COLORS`, `CHART_COLORS`, `get_plotly_template()`, and `format_*`
+  helpers consistently. If a component looks "generic Streamlit", it's unfinished.
+- **Data is the interface:** Charts and tables are first-class UI. Treat axis labels,
+  grid lines, number formatting, and column alignment with the same care as buttons
+  and navigation.
+- **Subtle polish:** Hover states, focus rings, and smooth transitions (CSS only, ≤200ms)
+  convey quality. Never add decorative animations, overlays, or visual effects.
+- **Restraint is the aesthetic:** When in doubt, remove rather than add. White space,
+  consistent alignment, and typographic hierarchy do the heavy lifting.
 
 ## Update ARCHITECTURE.md
 
