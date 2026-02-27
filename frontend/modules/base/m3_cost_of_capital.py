@@ -27,7 +27,7 @@ from config.incentive_parameters import (
     AIT_COSTS,
     AIF_COSTS,
 )
-from config.formatting import format_percent, format_number
+from config.formatting import format_percent, format_number, format_pp
 from frontend.utils.state_manager import get_config_value
 from config.glossary import (
     PID_DEBT_RATIO, PID_ASSET_BETA, PID_RISK_FREE_RATE,
@@ -476,9 +476,9 @@ def _render_derived_section() -> None:
         st.metric(
             "Calculated WACC (real, pre-tax)",
             format_percent(wacc_real),
-            delta=f"{delta*100:+.2f} pp" if abs(delta) > 0.0001 else None
+            delta=format_pp(delta) if abs(delta) > 0.0001 else None
         )
-    
+
     _render_apply_row(wacc_real, f"{MODULE_KEY}_apply_derived")
 
 
@@ -501,7 +501,7 @@ def _render_direct_section() -> None:
     # Show baseline comparison if modified
     if abs(direct_wacc - BASELINE_WACC) > 0.0001:
         delta = direct_wacc - BASELINE_WACC
-        st.caption(f"= {format_percent(direct_wacc)} :orange[({delta*100:+.2f} pp from baseline)]")
+        st.caption(f"= {format_percent(direct_wacc)} :orange[({format_pp(delta)} from baseline)]")
     
     _render_apply_row(direct_wacc, f"{MODULE_KEY}_apply_direct")
 

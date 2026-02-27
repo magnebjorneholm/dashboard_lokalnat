@@ -21,6 +21,7 @@ from typing import Dict, Any
 
 from frontend.common.parameter_input import parameter_input
 from frontend.utils.state_manager import get_config_value
+from config.formatting import format_tkr
 from config.glossary import (
     PID_OPEX_SCALING, PID_FLEX_SCALING, PID_NON_ADJ_SCALING,
     VID_OPEX_ADJUSTABLE, VID_FLEX_SERVICE, VID_NON_ADJUSTABLE,
@@ -69,8 +70,8 @@ def render_scaling() -> Dict[str, Any]:
     # Show actual OPEX value for user's company
     effective_opex = bl_opex * (opex_scaling_val if opex_scaling_val else 1.0)
     st.caption(
-        f"Your baseline OPEX: **{bl_opex:,.0f} tkr** → "
-        f"Scaled: **{effective_opex:,.0f} tkr** (×{opex_scaling_val:.2f})"
+        f"Your baseline OPEX: **{format_tkr(bl_opex)}** → "
+        f"Scaled: **{format_tkr(effective_opex)}** (×{opex_scaling_val:.2f})"
     )
 
     # 4.1.2 Scaling factor flexibility services
@@ -132,7 +133,7 @@ def render_opex_vars() -> Dict[str, Any]:
     bl_opex = baselines.get("opex", 0.0)
     current_opex = get_config_value(MODULE_KEY, "opex_override", None)
     val = st.number_input(
-        f"{VID_OPEX_ADJUSTABLE} — {get_description(VID_OPEX_ADJUSTABLE)} (baseline: {bl_opex:,.0f} tkr)",
+        f"{VID_OPEX_ADJUSTABLE} — {get_description(VID_OPEX_ADJUSTABLE)} (baseline: {format_tkr(bl_opex)})",
         value=current_opex if current_opex is not None else bl_opex,
         min_value=0.0,
         step=1000.0,
@@ -142,13 +143,13 @@ def render_opex_vars() -> Dict[str, Any]:
     )
     if abs(val - bl_opex) > 0.5:
         config["opex_override"] = val
-        st.caption(f":orange[Modified] {VID_OPEX_ADJUSTABLE}: {val:,.0f} tkr (baseline {bl_opex:,.0f})")
+        st.caption(f":orange[Modified] {VID_OPEX_ADJUSTABLE}: {format_tkr(val)} (baseline {format_tkr(bl_opex)})")
 
     # 40.1.2 Flexibility service cost
     bl_flex = baselines.get("flex", 0.0)
     current_flex = get_config_value(MODULE_KEY, "flex_override", None)
     val = st.number_input(
-        f"{VID_FLEX_SERVICE} — {get_description(VID_FLEX_SERVICE)} (baseline: {bl_flex:,.0f} tkr)",
+        f"{VID_FLEX_SERVICE} — {get_description(VID_FLEX_SERVICE)} (baseline: {format_tkr(bl_flex)})",
         value=current_flex if current_flex is not None else bl_flex,
         min_value=0.0,
         step=1000.0,
@@ -158,13 +159,13 @@ def render_opex_vars() -> Dict[str, Any]:
     )
     if abs(val - bl_flex) > 0.5:
         config["flex_override"] = val
-        st.caption(f":orange[Modified] {VID_FLEX_SERVICE}: {val:,.0f} tkr (baseline {bl_flex:,.0f})")
+        st.caption(f":orange[Modified] {VID_FLEX_SERVICE}: {format_tkr(val)} (baseline {format_tkr(bl_flex)})")
 
     # 40.2.1 Total non-adjustable costs
     bl_nc = baselines.get("non_controllable", 0.0)
     current_nc = get_config_value(MODULE_KEY, "non_controllable_override", None)
     val = st.number_input(
-        f"{VID_NON_ADJUSTABLE} — {get_description(VID_NON_ADJUSTABLE)} (baseline: {bl_nc:,.0f} tkr)",
+        f"{VID_NON_ADJUSTABLE} — {get_description(VID_NON_ADJUSTABLE)} (baseline: {format_tkr(bl_nc)})",
         value=current_nc if current_nc is not None else bl_nc,
         min_value=0.0,
         step=1000.0,
@@ -174,7 +175,7 @@ def render_opex_vars() -> Dict[str, Any]:
     )
     if abs(val - bl_nc) > 0.5:
         config["non_controllable_override"] = val
-        st.caption(f":orange[Modified] {VID_NON_ADJUSTABLE}: {val:,.0f} tkr (baseline {bl_nc:,.0f})")
+        st.caption(f":orange[Modified] {VID_NON_ADJUSTABLE}: {format_tkr(val)} (baseline {format_tkr(bl_nc)})")
 
     return config
 

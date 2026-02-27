@@ -35,6 +35,7 @@ from pipeline.result_helpers import (
     active_categories, halfyear_values, hy_row_values,
     fmt_msek, fmt_delta_msek, fmt_pct,
 )
+from config.formatting import format_pp
 from calculations.capex.wacc_calculations import BASELINE_WACC
 from config.glossary import (
     capital_cost_var_id,
@@ -178,7 +179,7 @@ def _render_return_kpi(
     b_total = b_ord + b_tail
 
     wacc_delta = wacc_case - BASELINE_WACC
-    wacc_delta_str = f"{wacc_delta * 100:+.2f} pp" if abs(wacc_delta) > 1e-6 else None
+    wacc_delta_str = format_pp(wacc_delta) if abs(wacc_delta) > 1e-6 else None
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:

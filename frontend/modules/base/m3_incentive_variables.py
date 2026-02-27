@@ -15,6 +15,7 @@ from typing import Dict, Any, List, Tuple
 
 from frontend.utils.state_manager import get_user_reid
 from data_loaders.incentive_data import get_user_baseline_variables
+from config.formatting import format_number
 from config.glossary import (
     CUSTOMER_TYPES_ORDERED as CUSTOMER_TYPES,
     INCENTIVE_VARIABLE_META as VARIABLE_METADATA,
@@ -142,7 +143,8 @@ def _render_variable_input(
     is_modified = current_override is not None or abs(new_value - baseline_value) > 1e-9
     
     if is_modified:
-        st.caption(f":orange[Modified] (baseline: {baseline_value:{format_str.replace('%', '')}})")
+        _decimals = int(format_str.split('.')[1].rstrip('f')) if '.' in format_str else 0
+        st.caption(f":orange[Modified] (baseline: {format_number(baseline_value, _decimals)})")
         config[var_name] = new_value
     else:
         config[var_name] = None

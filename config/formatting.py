@@ -60,6 +60,21 @@ def format_number(value: float, decimals: int = 0) -> str:
         return f"{integer_part},{decimal_part}" if decimal_part else integer_part
 
 
+def format_pp(value: float, decimals: int = 2) -> str:
+    """
+    Format percentage-point delta with European decimal comma and sign.
+
+    Args:
+        value: Value as decimal (e.g. 0.0045 for +0.45 pp)
+        decimals: Number of decimal places
+
+    Returns:
+        Formatted string, e.g. "+0,45 pp"
+    """
+    formatted = f"{value * 100:+.{decimals}f}"
+    return formatted.replace(".", ",") + " pp"
+
+
 def format_delta(value: float, unit: str = "tkr") -> str:
     """
     Format delta value with +/- prefix.

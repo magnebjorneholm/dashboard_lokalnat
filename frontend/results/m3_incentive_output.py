@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 from frontend.common.styling import COLORS, CHART_COLORS
 from config.colors import INCENTIVE_COLORS, get_plotly_template, get_plotly_template_safe
+from config.formatting import format_number
 from pipeline.result_helpers import TOLERANCE
 from config.column_names import (
     COL_INCENTIVE_TOTAL, COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
@@ -384,9 +385,9 @@ def _render_waterfall_chart(row: pd.Series, title_suffix: str) -> None:
             f"<div style='background:{bg};border-left:3px solid "
             f"{border};padding:8px 12px;border-radius:4px;margin-top:-8px;"
             f"font-size:0.88em;color:{fg}'>"
-            f"Return for cap calculation: <b>{ret_period / 1e6:,.2f} MSEK</b>"
+            f"Return for cap calculation: <b>{format_number(ret_period / 1e6, 2)} MSEK</b>"
             f" &nbsp;|&nbsp; "
-            f"Max adjustment (±1/3): <b>{abs(max_adj) / 1e6:,.2f} MSEK</b>"
+            f"Max adjustment (±1/3): <b>{format_number(abs(max_adj) / 1e6, 2)} MSEK</b>"
             f"{cap_note}</div>",
             unsafe_allow_html=True,
         )

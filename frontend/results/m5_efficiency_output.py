@@ -40,6 +40,7 @@ from config.colors import (
     WATERFALL_COLORS, SCATTER_COLORS, ZONE_COLORS, get_plotly_template_safe,
 )
 from pipeline.result_helpers import fmt_pct as _fmt_pct, fmt_tkr as _fmt_tkr
+from config.formatting import format_pp, format_percent, format_number, format_delta
 from config.glossary import (
     VID_EFFICIENCY_SCORE, VID_SUPER_EFFICIENCY, VID_EFFICIENCY_POTENTIAL,
     VID_APPLIED_POTENTIAL, VID_OPEX_EFF_ADJUSTMENT, VID_CAPEX_EFF_ADJUSTMENT,
@@ -511,7 +512,7 @@ def _render_efficiency_summary(case, baseline, params, user_reid):
         st.metric(
             f"{VID_APPLIED_POTENTIAL} Truncated potential",
             _fmt_pct(pot_tr_case, 2) if pot_tr_case is not None else "-",
-            delta=f"{delta_pot*100:+.2f} pp" if delta_pot and abs(delta_pot) > 0.0001 else None,
+            delta=format_pp(delta_pot) if delta_pot and abs(delta_pot) > 0.0001 else None,
             delta_color="inverse",
         )
 
@@ -520,7 +521,7 @@ def _render_efficiency_summary(case, baseline, params, user_reid):
         st.metric(
             "Applied annual requirement",
             _fmt_pct(effkrav_case, 2) if effkrav_case else "-",
-            delta=f"{delta_ek*100:+.2f} pp" if delta_ek and abs(delta_ek) > 0.0001 else None,
+            delta=format_pp(delta_ek) if delta_ek and abs(delta_ek) > 0.0001 else None,
             delta_color="inverse",
         )
 
@@ -581,7 +582,18 @@ def _render_efficiency_summary(case, baseline, params, user_reid):
                 "Delta": rank_delta_str,
             })
 
-        st.dataframe(pd.DataFrame(rows_m), hide_index=True, width="stretch")
+        st.dataframe(
+            pd.DataFrame(rows_m),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "ID": st.column_config.TextColumn("ID", width="small"),
+                "Measure": st.column_config.TextColumn("Measure", width="medium"),
+                "Case": st.column_config.TextColumn("Case", width="small"),
+                "Baseline": st.column_config.TextColumn("Baseline", width="small"),
+                "Delta": st.column_config.TextColumn("Delta", width="small"),
+            },
+        )
 
     # --- Parameter reference table ---
     with st.expander("5.2-5.3 Efficiency parameters"):
@@ -589,18 +601,29 @@ def _render_efficiency_summary(case, baseline, params, user_reid):
         bp = BASELINE_PARAMS
         rows_p = [
             (PID_MAX_POTENTIAL_CAP, "Max potential cap", _fmt_pct(p["trunkering_max"]), _fmt_pct(bp["trunkering_max"]),
-             f"{(p['trunkering_max'] - bp['trunkering_max'])*100:+.2f} pp" if abs(p["trunkering_max"] - bp["trunkering_max"]) > 0.0001 else "-"),
+             format_pp(p['trunkering_max'] - bp['trunkering_max']) if abs(p["trunkering_max"] - bp["trunkering_max"]) > 0.0001 else "-"),
             (PID_REALIZATION_TIME, "Realization time", f"{int(p['realiseringstid'])} yr", f"{int(bp['realiseringstid'])} yr",
              f"{int(p['realiseringstid'] - bp['realiseringstid']):+d} yr" if p["realiseringstid"] != bp["realiseringstid"] else "-"),
             (PID_CUSTOMER_SHARING, "Customer sharing", _fmt_pct(p["kunddelning"]), _fmt_pct(bp["kunddelning"]),
-             f"{(p['kunddelning'] - bp['kunddelning'])*100:+.2f} pp" if abs(p["kunddelning"] - bp["kunddelning"]) > 0.0001 else "-"),
+             format_pp(p['kunddelning'] - bp['kunddelning']) if abs(p["kunddelning"] - bp["kunddelning"]) > 0.0001 else "-"),
             (PID_MIN_ANNUAL_REQ, "Min annual requirement", _fmt_pct(p["outlier_krav"]), _fmt_pct(bp["outlier_krav"]),
-             f"{(p['outlier_krav'] - bp['outlier_krav'])*100:+.2f} pp" if abs(p["outlier_krav"] - bp["outlier_krav"]) > 0.0001 else "-"),
+             format_pp(p['outlier_krav'] - bp['outlier_krav']) if abs(p["outlier_krav"] - bp["outlier_krav"]) > 0.0001 else "-"),
             (PID_TRUNC_MIN, "Truncation min (derived)", _fmt_pct(p["trunkering_min"], 2), _fmt_pct(bl_trunkering_min, 2),
-             f"{(p['trunkering_min'] - bl_trunkering_min)*100:+.2f} pp" if abs(p["trunkering_min"] - bl_trunkering_min) > 0.0001 else "-"),
+             format_pp(p['trunkering_min'] - bl_trunkering_min) if abs(p["trunkering_min"] - bl_trunkering_min) > 0.0001 else "-"),
         ]
         df_params = pd.DataFrame(rows_p, columns=["ID", "Parameter", "Case", "Baseline", "Delta"])
-        st.dataframe(df_params, hide_index=True, width="stretch")
+        st.dataframe(
+            df_params,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "ID": st.column_config.TextColumn("ID", width="small"),
+                "Parameter": st.column_config.TextColumn("Parameter", width="medium"),
+                "Case": st.column_config.TextColumn("Case", width="small"),
+                "Baseline": st.column_config.TextColumn("Baseline", width="small"),
+                "Delta": st.column_config.TextColumn("Delta", width="small"),
+            },
+        )
 
 
 def _add_measure_row(rows, var_id, label, case_str, bl_str, case_val, bl_val, fmt="score"):
@@ -610,11 +633,11 @@ def _add_measure_row(rows, var_id, label, case_str, bl_str, case_val, bl_val, fm
         delta = case_val - bl_val
         if abs(delta) > 0.0001:
             if fmt == "score":
-                delta_str = f"{delta:+.3f}"
+                delta_str = f"{delta:+.3f}".replace(".", ",")
             elif fmt == "pp1":
-                delta_str = f"{delta*100:+.1f} pp"
+                delta_str = format_pp(delta, decimals=1)
             elif fmt == "pp2":
-                delta_str = f"{delta*100:+.2f} pp"
+                delta_str = format_pp(delta)
     rows.append({"ID": var_id, "Measure": label, "Case": case_str, "Baseline": bl_str, "Delta": delta_str})
 
 
@@ -854,7 +877,7 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
 
     if method_used == "TOTEX":
         if opex_andel is not None and capex_andel is not None:
-            st.caption(f"TOTEX method -- allocation: OPEX {opex_andel*100:.1f}% / CAPEX {capex_andel*100:.1f}%")
+            st.caption(f"TOTEX method -- allocation: OPEX {format_percent(opex_andel, 1)} / CAPEX {format_percent(capex_andel, 1)}")
         else:
             st.caption("Cost base: TOTEX")
     else:
@@ -868,8 +891,8 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
         delta = total_eff_case - total_eff_baseline
         st.metric(
             "Total efficiency adjustment (period)",
-            f"-{total_eff_case:,.0f} tkr",
-            delta=f"{-delta:,.0f} tkr" if abs(delta) > 0.5 else None,
+            f"-{format_number(total_eff_case)} tkr",
+            delta=format_delta(-delta) if abs(delta) > 0.5 else None,
             delta_color="inverse",
         )
 
@@ -963,7 +986,18 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
         _add_cost_row(rows, VID_CAPEX_EFF_ADJUSTMENT, "CAPEX efficiency adjustment", -(capex_eff or 0), -(bl_capex_eff or 0), negate_delta=True)
         _add_cost_row(rows, VID_CAPEX_AFTER_EFF, "CAPEX after efficiency adj.", capex_efter, bl_capex_efter)
 
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    st.dataframe(
+        pd.DataFrame(rows),
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "ID": st.column_config.TextColumn("ID", width="small"),
+            "Component": st.column_config.TextColumn("Component", width="medium"),
+            "Case (tkr)": st.column_config.TextColumn("Case (tkr)", width="small"),
+            "Baseline (tkr)": st.column_config.TextColumn("Baseline (tkr)", width="small"),
+            "Delta (tkr)": st.column_config.TextColumn("Delta (tkr)", width="small"),
+        },
+    )
 
 
 def _add_cost_row(rows, var_id, label, case_val, bl_val, negate_delta=False):
