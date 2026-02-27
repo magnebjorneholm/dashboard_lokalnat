@@ -16,6 +16,8 @@ Below Revenue frame, three adjustment sub-components are shown:
 
 from typing import Dict
 
+from config.colors import COLORS, DIAGRAM_COLORS as DC
+
 
 VARIABLE_IDS = {
     'paverkbara': '40.1',
@@ -36,19 +38,19 @@ VARIABLE_IDS = {
 }
 
 
-# Shared CSS for both layouts
-_SHARED_CSS = """
+# Shared CSS for both layouts (colors injected from design system)
+_SHARED_CSS = f"""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { 
-    background: #F8FAFC;
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
+    background: {DC["result_bg"]};
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     padding: 16px;
     -webkit-font-smoothing: antialiased;
-}
-.box {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
+}}
+.box {{
+    background: {DC["box_bg"]};
+    border: 1px solid {DC["box_border"]};
     padding: 12px 16px;
     text-align: center;
     position: absolute;
@@ -56,34 +58,34 @@ body {
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     cursor: default;
     z-index: 10;
-}
-.box:hover {
-    border-color: #94A3B8;
+}}
+.box:hover {{
+    border-color: {DC["box_hover_border"]};
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-.box.modified {
-    border-left: 3px solid #2563EB;
-}
-.box.modified:hover {
-    border-color: #2563EB;
+}}
+.box.modified {{
+    border-left: 3px solid {DC["box_modified_border"]};
+}}
+.box.modified:hover {{
+    border-color: {DC["box_modified_border"]};
     border-left-width: 3px;
-}
-.box.result {
-    background: #F8FAFC;
-    border-color: #CBD5E1;
-}
-.box.sub-component {
-    background: #FFFFFF;
-    border-color: #E2E8F0;
+}}
+.box.result {{
+    background: {DC["result_bg"]};
+    border-color: {DC["result_border"]};
+}}
+.box.sub-component {{
+    background: {DC["box_bg"]};
+    border-color: {DC["box_border"]};
     padding: 10px 12px;
-}
-.box-id {
+}}
+.box-id {{
     position: absolute;
     top: -8px;
     left: -8px;
     height: 18px;
     padding: 0 6px;
-    background: #64748B;
+    background: {DC["box_id_bg"]};
     color: #FFFFFF;
     font-size: 9px;
     font-weight: 500;
@@ -92,48 +94,48 @@ body {
     align-items: center;
     justify-content: center;
     white-space: nowrap;
-}
-.box.modified .box-id {
-    background: #2563EB;
-}
-.box-id:empty {
+}}
+.box.modified .box-id {{
+    background: {DC["box_id_modified_bg"]};
+}}
+.box-id:empty {{
     display: none;
-}
-.box-title {
+}}
+.box-title {{
     font-size: 11px;
     font-weight: 500;
-    color: #475569;
+    color: {DC["box_title_color"]};
     margin-bottom: 4px;
     line-height: 1.3;
-}
-.box.sub-component .box-title {
+}}
+.box.sub-component .box-title {{
     font-size: 10px;
-    color: #64748B;
-}
-.box-value {
+    color: {DC["sub_title_color"]};
+}}
+.box-value {{
     font-size: 12px;
     font-weight: 600;
-    color: #0F172A;
+    color: {DC["box_value_color"]};
     font-variant-numeric: tabular-nums;
-}
-.box.sub-component .box-value {
+}}
+.box.sub-component .box-value {{
     font-size: 11px;
-}
-.box.modified .box-value {
-    color: #1E40AF;
-}
-.flow-line {
+}}
+.box.modified .box-value {{
+    color: {DC["box_value_modified"]};
+}}
+.flow-line {{
     position: absolute;
-    border-left: 1px solid #CBD5E1;
+    border-left: 1px solid {DC["flow_line"]};
     z-index: 1;
-}
-.tooltip {
+}}
+.tooltip {{
     position: absolute;
     bottom: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
-    background: #1E293B;
-    color: #F8FAFC;
+    background: {DC["tooltip_bg"]};
+    color: {DC["tooltip_text"]};
     padding: 6px 10px;
     border-radius: 4px;
     font-size: 10px;
@@ -143,27 +145,27 @@ body {
     pointer-events: none;
     transition: opacity 0.15s ease;
     z-index: 100;
-}
-.tooltip::after {
+}}
+.tooltip::after {{
     content: '';
     position: absolute;
     top: 100%;
     left: 50%;
     transform: translateX(-50%);
     border: 4px solid transparent;
-    border-top-color: #1E293B;
-}
-.box:hover .tooltip {
+    border-top-color: {DC["tooltip_bg"]};
+}}
+.box:hover .tooltip {{
     opacity: 1;
-}
-.tooltip:empty {
+}}
+.tooltip:empty {{
     display: none;
-}
-.flow-line-h {
+}}
+.flow-line-h {{
     position: absolute;
-    border-top: 1px solid #CBD5E1;
+    border-top: 1px solid {DC["flow_line"]};
     z-index: 1;
-}
+}}
 """
 
 

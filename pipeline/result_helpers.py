@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
-from config.colors import CHART_COLORS
+from config.colors import CHART_COLORS, COMPARISON_COLORS
 from config.time_codes import (
     TIMECODE_TO_HALFYEAR as TIME_LABELS,
     PERIOD_2024_2027_CODES as TIME_CODES_ORDERED,
@@ -86,11 +86,11 @@ def calc_delta(case_val: float, baseline_val: float) -> Tuple[Optional[float], O
     return delta_abs, delta_pct
 
 
-# Chart colours for case/baseline ord/tail pattern
-CLR_CASE_ORD = CHART_COLORS[0]       # Primary Blue
-CLR_CASE_TAIL = "#93C5FD"            # Light blue (blue-300)
-CLR_BL_ORD = "#64748B"               # Slate-500
-CLR_BL_TAIL = "#CBD5E1"              # Slate-300
+# Chart colours for case/baseline ord/tail pattern (from design system)
+CLR_CASE_ORD = COMPARISON_COLORS["case_ord"]
+CLR_CASE_TAIL = COMPARISON_COLORS["case_tail"]
+CLR_BL_ORD = COMPARISON_COLORS["bl_ord"]
+CLR_BL_TAIL = COMPARISON_COLORS["bl_tail"]
 
 
 # ---------------------------------------------------------------------------

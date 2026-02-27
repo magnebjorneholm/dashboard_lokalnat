@@ -17,17 +17,7 @@ import pandas as pd
 from config.column_names import (
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_EFF_REQ_ANNUAL,
 )
-
-
-COLORS = {
-    "primary": "#2563EB",
-    "primary_dark": "#1E40AF",
-    "primary_light": "#3B82F6",
-    "text": "#0F172A",
-    "text_muted": "#475569",
-    "bg": "#F8FAFC",
-    "highlight": "#DC2626",
-}
+from config.colors import COLORS, GEO_COLORSCALE
 
 MAP_STYLES = {
     "light": "carto-positron",
@@ -128,15 +118,8 @@ def create_efficiency_map(
         zmin = 0
         zmax = 100
 
-    # Green-red colorscale: red = low efficiency, green = high efficiency
-    colorscale = [
-        [0, "#CBD5E1"],     # Gray for missing data
-        [0.001, "#DC2626"], # Red (lowest percentile)
-        [0.25, "#F97316"],  # Orange
-        [0.5, "#EAB308"],   # Yellow (median)
-        [0.75, "#22C55E"],  # Light green
-        [1, "#15803D"]      # Dark green (highest percentile)
-    ]
+    # Muted red-green colorscale from design system
+    colorscale = GEO_COLORSCALE
 
     # Determine colorbar title based on column
     label = COLUMN_LABELS.get(value_column, value_column)
@@ -182,8 +165,8 @@ def create_efficiency_map(
         ),
         height=height,
         margin=dict(r=0, t=0, l=0, b=0),
-        paper_bgcolor=COLORS["bg"],
-        font=dict(family="Inter, sans-serif", size=11, color=COLORS["text"])
+        paper_bgcolor=COLORS["bg_page"],
+        font=dict(family="Inter, sans-serif", size=11, color=COLORS["text_primary"])
     )
 
     return fig
@@ -250,7 +233,7 @@ def _add_company_highlight(fig: go.Figure, user_geoms: gpd.GeoDataFrame) -> None
                 lon=lons,
                 lat=lats,
                 mode="lines",
-                line=dict(width=2.5, color=COLORS["highlight"]),
+                line=dict(width=2.5, color=COLORS["error"]),
                 showlegend=False,
                 hoverinfo="skip"
             ))

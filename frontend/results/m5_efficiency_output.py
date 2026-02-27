@@ -35,7 +35,10 @@ from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
-from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
+from frontend.common.styling import COLORS, CHART_COLORS
+from config.colors import (
+    WATERFALL_COLORS, SCATTER_COLORS, ZONE_COLORS, get_plotly_template_safe,
+)
 from pipeline.result_helpers import fmt_pct as _fmt_pct, fmt_tkr as _fmt_tkr
 from config.glossary import (
     VID_EFFICIENCY_SCORE, VID_SUPER_EFFICIENCY, VID_EFFICIENCY_POTENTIAL,
@@ -67,24 +70,24 @@ BASELINE_PARAMS = {
     "outlier_krav": 0.01,
 }
 
-# Zone colors (subtle, professional)
-ZONE_CAP = "rgba(234, 88, 12, 0.08)"
-ZONE_ACTIVE = "rgba(37, 99, 235, 0.06)"
-ZONE_FLOOR = "rgba(5, 150, 105, 0.08)"
-ZONE_CAP_BORDER = "rgba(234, 88, 12, 0.25)"
-ZONE_FLOOR_BORDER = "rgba(5, 150, 105, 0.25)"
+# Zone colors (from design system)
+ZONE_CAP = ZONE_COLORS["cap_fill"]
+ZONE_ACTIVE = ZONE_COLORS["active_fill"]
+ZONE_FLOOR = ZONE_COLORS["floor_fill"]
+ZONE_CAP_BORDER = ZONE_COLORS["cap_border"]
+ZONE_FLOOR_BORDER = ZONE_COLORS["floor_border"]
 
-# Waterfall colors (consulting standard)
-WF_BASE = "#3B82F6"        # Blue-500: cost bases (positive absolute/relative)
-WF_DEDUCTION = "#DC2626"   # Red-600: efficiency deductions
-WF_TOTAL = "#1E3A5F"       # Dark navy: net totals
+# Waterfall colors (from design system)
+WF_BASE = WATERFALL_COLORS["base"]
+WF_DEDUCTION = WATERFALL_COLORS["deduction"]
+WF_TOTAL = WATERFALL_COLORS["total"]
 
-# Scatter plot colors
-SC_NORMAL = "#94A3B8"      # Slate-400: normal companies
-SC_EFFICIENT = "#059669"   # Emerald: efficient companies
-SC_OUTLIER = "#EA580C"     # Orange: outliers
-SC_USER = "#2563EB"        # Primary blue: user's company
-SC_FRONTIER = "rgba(5, 150, 105, 0.4)"  # Frontier line
+# Scatter plot colors (from design system)
+SC_NORMAL = SCATTER_COLORS["normal"]
+SC_EFFICIENT = SCATTER_COLORS["efficient"]
+SC_OUTLIER = SCATTER_COLORS["outlier"]
+SC_USER = SCATTER_COLORS["user"]
+SC_FRONTIER = SCATTER_COLORS["frontier"]
 
 
 # ============================================================================
@@ -144,11 +147,7 @@ def _get_baseline_trunkering_min():
 
 def _tmpl_safe():
     """Get plotly template dict with xaxis/yaxis removed to avoid conflicts."""
-    tmpl = get_plotly_template()
-    return (
-        {k: v for k, v in tmpl.items() if k not in ("template", "xaxis", "yaxis", "margin")},
-        tmpl.get("template", "plotly_white"),
-    )
+    return get_plotly_template_safe()
 
 
 def _ordinal(n: int) -> str:

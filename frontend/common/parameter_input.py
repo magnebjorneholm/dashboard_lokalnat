@@ -229,7 +229,7 @@ def baseline_badge(is_baseline: bool) -> str:
         )
     else:
         return (
-            f'<span style="background: #FEF3C7; color: #92400E; '
+            f'<span style="background: {COLORS["warning_light"]}; color: {COLORS["warning"]}; '
             f'padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 500;">'
             f'MODIFIED</span>'
         )

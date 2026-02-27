@@ -35,7 +35,8 @@ from config.column_names import (
 from config.glossary import (
     VID_OPEX_ADJUSTABLE, VID_FLEX_SERVICE, VID_NON_ADJUSTABLE,
 )
-from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
+from frontend.common.styling import COLORS, CHART_COLORS
+from config.colors import WATERFALL_COLORS, get_plotly_template_safe
 from pipeline.result_helpers import (
     fmt_tkr as _fmt_tkr, fmt_msek as _fmt_msek,
     fmt_delta_msek as _fmt_delta_msek,
@@ -46,10 +47,10 @@ from pipeline.result_helpers import (
 # CONSTANTS
 # ============================================================================
 
-# Waterfall colors (consulting standard)
-WF_BASE = "#3B82F6"        # Blue-500
-WF_DEDUCTION = "#DC2626"   # Red-600
-WF_TOTAL = "#1E3A5F"       # Dark navy
+# Waterfall colors (from design system)
+WF_BASE = WATERFALL_COLORS["base"]
+WF_DEDUCTION = WATERFALL_COLORS["deduction"]
+WF_TOTAL = WATERFALL_COLORS["total"]
 
 # Category chart colors
 CLR_CONTROLLABLE = CHART_COLORS[0]   # Primary Blue
@@ -179,11 +180,7 @@ def _get_noncontrollable_categories(
 
 def _tmpl_safe():
     """Get plotly template dict with xaxis/yaxis removed to avoid conflicts."""
-    tmpl = get_plotly_template()
-    return (
-        {k: v for k, v in tmpl.items() if k not in ("template", "xaxis", "yaxis", "margin")},
-        tmpl.get("template", "plotly_white"),
-    )
+    return get_plotly_template_safe()
 
 
 # ============================================================================

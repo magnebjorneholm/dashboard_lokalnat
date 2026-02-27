@@ -34,7 +34,8 @@ from typing import Dict, Any, Optional, List, TYPE_CHECKING
 if TYPE_CHECKING:
     from pipeline.core import PipelineResult
 
-from frontend.common.styling import COLORS, CHART_COLORS, get_plotly_template
+from frontend.common.styling import COLORS, CHART_COLORS
+from config.colors import INCENTIVE_COLORS, get_plotly_template, get_plotly_template_safe
 from pipeline.result_helpers import TOLERANCE
 from config.column_names import (
     COL_INCENTIVE_TOTAL, COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
@@ -50,14 +51,14 @@ from config.glossary import (
 # Constants
 # ---------------------------------------------------------------------------
 
-# Colours -- semantic mapping for the three incentive types
-CLR_QUALITY = CHART_COLORS[0]      # Primary Blue
-CLR_NETLOSS = CHART_COLORS[1]      # Teal
-CLR_LOAD = CHART_COLORS[2]         # Violet
-CLR_CAP = CHART_COLORS[4]          # Orange  -- cap adjustments
-CLR_TOTAL = CHART_COLORS[3]        # Emerald -- totals / subtotals
-CLR_NEGATIVE = "#DC2626"           # Red (for negative waterfall bars)
-CLR_POSITIVE = "#059669"           # Emerald (for positive waterfall bars)
+# Colours -- semantic mapping for the three incentive types (from design system)
+CLR_QUALITY = INCENTIVE_COLORS["quality"]
+CLR_NETLOSS = INCENTIVE_COLORS["netloss"]
+CLR_LOAD = INCENTIVE_COLORS["load"]
+CLR_CAP = INCENTIVE_COLORS["cap"]
+CLR_TOTAL = INCENTIVE_COLORS["total"]
+CLR_NEGATIVE = INCENTIVE_COLORS["negative"]
+CLR_POSITIVE = INCENTIVE_COLORS["positive"]
 
 SNI_LABELS = {
     1: "Agriculture",
