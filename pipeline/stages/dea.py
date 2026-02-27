@@ -16,6 +16,8 @@ is that DEA inputs are based on historical data that has already occurred.
 No print statements - logging handled by PipelineDebugLogger.
 """
 
+from typing import Optional
+
 from config import DeaConfig, EfficiencyMethod
 from pipeline.stages.stage_outputs import PreDeaStageOutput, DeaStageOutput, BaselineStageOutput
 from calculations import run_dea_analysis
@@ -23,7 +25,8 @@ from calculations.frontier.dea_calculations import BASELINE_DEA_SPEC
 
 
 def stage_dea(
-    pre_dea: PreDeaStageOutput,
+    pre_dea: Optional[PreDeaStageOutput] = None,
+    *,
     config: DeaConfig,
     baseline: BaselineStageOutput = None
 ) -> DeaStageOutput:

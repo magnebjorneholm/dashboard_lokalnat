@@ -117,8 +117,8 @@ def run_pipeline(
     # =========================================================================
     dea_output = stage_dea(
         pre_dea_output,
-        case_config.dea,
-        baseline_output
+        config=case_config.dea,
+        baseline=baseline_output,
     )
     
     if debug:

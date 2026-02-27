@@ -228,6 +228,115 @@ def _render_m7_tab():
         config = benchmarking.render_dea_spec()
         set_module_config("addon_benchmarking", config)
 
+        # --- Mini-run ---
+        if st.button("Run DEA", type="secondary", key="mini_run_dea_btn"):
+            _execute_dea_mini_run(config)
+
+        _render_mini_run_stale_indicator()
+
+        mini_result = st.session_state.get("mini_run_result")
+        mini_baseline = st.session_state.get("mini_run_baseline")
+        if mini_result is not None and mini_baseline is not None:
+            from frontend.results.m7_mini_run_output import render_mini_results
+            render_mini_results(mini_result, mini_baseline)
+
+
+def _build_eff_req_params() -> dict:
+    """Read current M5 parameters from ui_config for efficiency requirement calc."""
+    m5 = st.session_state.get("ui_config", {}).get("m5_efficiency", {})
+    params = {}
+
+    v = m5.get("trunkering_max")
+    if v is not None:
+        params["truncation_max"] = v
+
+    v = m5.get("trunkering_min")
+    if v is not None:
+        params["truncation_min"] = v
+
+    v = m5.get("outlier_krav")
+    if v is not None:
+        params["outlier_req"] = v
+
+    v = m5.get("kunddelning")
+    if v is not None:
+        params["customer_sharing"] = v
+
+    v = m5.get("realiseringstid")
+    if v is not None:
+        params["realization_time"] = v
+
+    v = m5.get("tillsynsperiod")
+    if v is not None:
+        params["supervision_period"] = v
+
+    return params
+
+
+def _execute_dea_mini_run(addon_config: dict) -> None:
+    """Run DEA mini-run and store results in session state."""
+    import copy
+
+    user_reid = get_user_reid()
+    if not user_reid:
+        st.error("Select a company first.")
+        return
+
+    with st.spinner("Running DEA analysis..."):
+        try:
+            from data_loaders.baseline_data import load_baseline_data
+            from pipeline.mini_run import run_dea_mini
+            from config.config_adapter import build_dea_config
+            from config.case_definition import DeaConfig
+
+            baseline_data = load_baseline_data()
+
+            # Build DEA config from current M7 settings
+            ui_config = st.session_state.get("ui_config", {})
+            dea_config = build_dea_config(ui_config)
+
+            # Current M5 params for efficiency requirement
+            eff_req_params = _build_eff_req_params()
+
+            # Case mini-run: current DEA spec + current M5
+            case_result = run_dea_mini(
+                baseline_data, dea_config, user_reid, eff_req_params or None
+            )
+
+            # Baseline mini-run: baseline DEA + baseline M5 (defaults)
+            bl = st.session_state.get("mini_run_baseline")
+            if bl is None or bl.user_reid != user_reid:
+                baseline_result = run_dea_mini(
+                    baseline_data, DeaConfig(), user_reid
+                )
+            else:
+                baseline_result = bl
+
+            st.session_state["mini_run_result"] = case_result
+            st.session_state["mini_run_baseline"] = baseline_result
+            st.session_state["mini_run_config_snapshot"] = {
+                "addon_benchmarking": copy.deepcopy(addon_config),
+                "m5_efficiency": copy.deepcopy(
+                    ui_config.get("m5_efficiency", {})
+                ),
+            }
+        except Exception as e:
+            st.error(f"DEA mini-run failed: {e}")
+
+
+def _render_mini_run_stale_indicator() -> None:
+    """Show warning if M7/M5 config changed since last mini-run."""
+    snapshot = st.session_state.get("mini_run_config_snapshot")
+    if snapshot is None:
+        return
+
+    ui_config = st.session_state.get("ui_config", {})
+    current_m7 = ui_config.get("addon_benchmarking", {})
+    current_m5 = ui_config.get("m5_efficiency", {})
+
+    if current_m7 != snapshot.get("addon_benchmarking") or current_m5 != snapshot.get("m5_efficiency"):
+        st.caption(":orange[Config changed since last run]")
+
 
 # =============================================================================
 # RENDER TABS — each fragment is called inside its tab context

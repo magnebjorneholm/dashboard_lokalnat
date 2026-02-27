@@ -83,7 +83,7 @@ def build_case_definition(
     user_id_network = reid_to_id_network(user_reid)
     
     pre_dea = _build_pre_dea_config(ui_config, user_id_network)
-    dea = _build_dea_config(ui_config)
+    dea = build_dea_config(ui_config)
     post_dea = _build_post_dea_config(ui_config)
     
     return CaseDefinition(
@@ -327,7 +327,7 @@ def _get_scaled_user_capbase(
         return None
 
 
-def _build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
+def build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
     """Build DeaConfig from addon_benchmarking."""
     addon = ui_config.get("addon_benchmarking", {})
     
