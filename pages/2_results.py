@@ -43,7 +43,6 @@ from frontend.results import (
     m3_incentive_output,
     m4_operating_exp_output,
     m5_efficiency_output,
-    m7_benchmarking_output,
 )
 
 init_session_state()
@@ -361,7 +360,6 @@ has_changes = {
     "m3": _has_m3_changes(),
     "m4": _has_m4_changes(),
     "m5": _has_m5_changes(),
-    "m7": ui_config.get("addon_benchmarking", {}).get("dea_method") == "custom",
 }
 
 def tab_label(key: str, name: str) -> str:
@@ -375,7 +373,6 @@ tab_labels = [
     tab_label("m3", "M3 Cost of Capital"),
     tab_label("m4", "M4 Operating expenditures"),
     tab_label("m5", "M5 Efficiency incentive"),
-    tab_label("m7", "M7 Benchmarking"),
 ]
 
 tabs = st.tabs(tab_labels)
@@ -401,10 +398,6 @@ with tabs[3]:
 # Tab 5: Efficiency incentive (M5)
 with tabs[4]:
     m5_efficiency_output.render(case, baseline, ui_config, user_reid=user_reid)
-
-# Tab 7: Benchmarking (M7)
-with tabs[5]:
-    m7_benchmarking_output.render(case, baseline, ui_config)
 
 st.divider()
 

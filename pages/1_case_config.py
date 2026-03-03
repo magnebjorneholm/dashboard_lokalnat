@@ -238,7 +238,7 @@ def _render_m7_tab():
         mini_result = st.session_state.get("mini_run_result")
         mini_baseline = st.session_state.get("mini_run_baseline")
         if mini_result is not None and mini_baseline is not None:
-            from frontend.results.m7_mini_run_output import render_mini_results
+            from frontend.modules.addons.mini_run_output import render_mini_results
             render_mini_results(mini_result, mini_baseline)
 
 

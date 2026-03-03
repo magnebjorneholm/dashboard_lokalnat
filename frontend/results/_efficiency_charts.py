@@ -1,7 +1,7 @@
 """
 Shared efficiency visualization components.
 
-Used by both M5 (full pipeline results) and M7 mini-run (isolated DEA).
+Used by M5 (full pipeline results) and the benchmarking mini-run (isolated DEA).
 All functions accept pre-extracted data -- no PipelineResult or MiniRunResult
 dependencies.
 """

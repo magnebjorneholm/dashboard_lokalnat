@@ -11,7 +11,6 @@ from frontend.results import (
     m3_cost_of_capital_output,
     m4_operating_exp_output,
     m5_efficiency_output,
-    m7_benchmarking_output,
 )
 
 __all__ = [
@@ -20,5 +19,4 @@ __all__ = [
     "m3_cost_of_capital_output",
     "m4_operating_exp_output",
     "m5_efficiency_output",
-    "m7_benchmarking_output",
 ]

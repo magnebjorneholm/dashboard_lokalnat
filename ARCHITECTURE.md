@@ -136,6 +136,7 @@ dashboard_lokalnat/
 |   |   |   |-- m5_efficiency.py          # render_efficiency_params()
 |   |   |-- addons/
 |   |       |-- benchmarking.py           # render_dea_spec()
+|   |       |-- mini_run_output.py        # Inline DEA/StoNED mini-run results in Configure
 |   |
 |   |-- results/                  # Output renderers per module
 |   |   |-- m1_asset_base_output.py       # NUAV, category breakdown
@@ -145,7 +146,6 @@ dashboard_lokalnat/
 |   |   |-- m3_incentive_output.py        # Quality/incentive adjustments
 |   |   |-- m4_operating_exp_output.py    # OPEX results
 |   |   |-- m5_efficiency_output.py       # Efficiency requirements
-|   |   |-- m7_benchmarking_output.py     # DEA results, rankings
 |   |
 |   |-- utils/                    # Streamlit-dependent frontend utilities
 |       |-- state_manager.py      # Session state: init, get/set, config references
@@ -334,7 +334,7 @@ Each module has sections for fine-grained control.
 | M3 Incentive  | Quality/incentive adj.      | m3_incentive_variables.py   | m3_incentive_output.py        | m3_quality_adjustments   |
 | M4            | Operating expenditure       | m4_operating_exp.py         | m4_operating_exp_output.py    | m4_operating_exp         |
 | M5            | Efficiency requirement      | m5_efficiency.py            | m5_efficiency_output.py       | m5_efficiency            |
-| M7            | Benchmarking (DEA)          | benchmarking.py             | m7_benchmarking_output.py     | addon_benchmarking       |
+| M7            | Benchmarking (DEA)          | benchmarking.py             | _(results shown in M5)_       | addon_benchmarking       |
 
 **Sections (example M1):**
 - `m1.scaling` -- Scaling factors (param 1.1-1.2, all companies)
@@ -701,7 +701,7 @@ pages/1_case_config.py
     |-- frontend.utils.state_manager     (is_section_selected)
 
 pages/2_results.py
-    |-- frontend.results.m1-m7_output    (render functions)
+    |-- frontend.results.m1-m5_output    (render functions)
     |-- visualization.diagram_data, diagram_utils
     |-- visualization.geo_data, geo_visualization
     |-- frontend.utils.export_button
