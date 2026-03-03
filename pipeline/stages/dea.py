@@ -1,17 +1,22 @@
 """
 pipeline/stages/dea.py
 
-Stage 3: DEA
-Runs Data Envelopment Analysis for efficiency measurement.
+Stage 3: Efficiency estimation
+Runs DEA or loads pre-computed StoNED results.
 
-Supports 2 methods:
+Supports 3 methods:
 1. baseline - Use Ei's baseline DEA results
 2. dea - Run new DEA model with custom inputs/outputs
+3. stoned - Load pre-computed StoNED efficiency scores
 
 DEA always uses baseline (historical) OPEX/CAPEX/TOTEX values. User changes
 to cost levels via pre_dea (scaling, overrides, WACC changes) do NOT affect
 DEA inputs — they only affect the revenue frame in post_dea. The rationale
 is that DEA inputs are based on historical data that has already occurred.
+
+StoNED results are pre-computed offline and stored in data/stoned/. The
+outputs use the same column structure as DEA so downstream stages work
+unchanged.
 
 No print statements - logging handled by PipelineDebugLogger.
 """
@@ -94,6 +99,22 @@ def stage_dea(
             dea_results=dea_results,
             dea_method="dea",
             dea_executed=True
+        )
+
+    # =========================================================================
+    # SCENARIO 3: Pre-computed StoNED — load stored results
+    # =========================================================================
+    elif config.method == EfficiencyMethod.STONED:
+
+        if not config.stoned_model_id:
+            raise ValueError("StoNED method requires stoned_model_id in DeaConfig")
+
+        from data_loaders.stoned_data import load_stoned_results
+
+        return DeaStageOutput(
+            dea_results=load_stoned_results(config.stoned_model_id),
+            dea_method="stoned",
+            dea_executed=False,
         )
 
     else:

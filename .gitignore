@@ -208,3 +208,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .streamlit/secrets.toml
+
+# Project-specific
+mosek_license/
+reference_repos/

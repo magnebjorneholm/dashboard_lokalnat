@@ -229,7 +229,8 @@ def _render_m7_tab():
         set_module_config("addon_benchmarking", config)
 
         # --- Mini-run ---
-        if st.button("Run DEA", type="secondary", key="mini_run_dea_btn"):
+        _btn_label = "Run StoNED" if config.get("dea_method") == "stoned" else "Run DEA"
+        if st.button(_btn_label, type="secondary", key="mini_run_dea_btn"):
             _execute_dea_mini_run(config)
 
         _render_mini_run_stale_indicator()
@@ -282,7 +283,9 @@ def _execute_dea_mini_run(addon_config: dict) -> None:
         st.error("Select a company first.")
         return
 
-    with st.spinner("Running DEA analysis..."):
+    _method = addon_config.get("dea_method", "dea")
+    _spinner = "Loading StoNED results..." if _method == "stoned" else "Running DEA analysis..."
+    with st.spinner(_spinner):
         try:
             from data_loaders.baseline_data import load_baseline_data
             from pipeline.mini_run import run_dea_mini
@@ -321,7 +324,8 @@ def _execute_dea_mini_run(addon_config: dict) -> None:
                 ),
             }
         except Exception as e:
-            st.error(f"DEA mini-run failed: {e}")
+            _label = "StoNED" if _method == "stoned" else "DEA"
+            st.error(f"{_label} mini-run failed: {e}")
 
 
 def _render_mini_run_stale_indicator() -> None:

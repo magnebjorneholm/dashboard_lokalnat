@@ -330,7 +330,15 @@ def _get_scaled_user_capbase(
 def build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
     """Build DeaConfig from addon_benchmarking."""
     addon = ui_config.get("addon_benchmarking", {})
-    
+
+    # StoNED: pre-computed model
+    if addon.get("dea_method") == "stoned":
+        return DeaConfig(
+            method=EfficiencyMethod.STONED,
+            stoned_model_id=addon.get("stoned_model_id"),
+        )
+
+    # Custom DEA
     _op = BASELINE_DEA_SPEC['outlier_params']
     if addon.get("dea_method") == "custom":
         return DeaConfig(
@@ -342,8 +350,9 @@ def build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
             q_lower=addon.get("dea_q_lower", _op['q_lower']),
             q_upper=addon.get("dea_q_upper", _op['q_upper']),
         )
-    else:
-        return DeaConfig(method=EfficiencyMethod.BASELINE)
+
+    # Baseline
+    return DeaConfig(method=EfficiencyMethod.BASELINE)
 
 
 def _is_empty_or_none(value: Any) -> bool:

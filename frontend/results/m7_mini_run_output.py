@@ -26,7 +26,9 @@ def render_mini_results(
     """Render mini-run results inline in the M7 tab."""
 
     st.divider()
-    st.markdown("**DEA results** (mini-run)")
+    dea_method = result.dea_method if hasattr(result, "dea_method") else "dea"
+    label = "StoNED results" if dea_method == "stoned" else "DEA results"
+    st.markdown(f"**{label}** (mini-run)")
 
     # Build params from current M5 ui_config
     m5_config = st.session_state.get("ui_config", {}).get("m5_efficiency", {})

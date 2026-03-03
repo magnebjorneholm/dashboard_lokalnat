@@ -44,8 +44,8 @@ class EfficiencyMethod(str, Enum):
     """Methods for efficiency analysis (DEA stage)."""
     BASELINE = "baseline"
     DEA = "dea"
-    # Phase 2: SFA = "sfa"
-    # Phase 2: STONED = "stoned"
+    STONED = "stoned"
+    # Future: SFA = "sfa"
 
 
 class ControllableMethod(str, Enum):
@@ -160,6 +160,9 @@ class DeaConfig:
     q_lower: float = 25.0
     q_upper: float = 75.0
     multiplier: float = 2.0
+
+    # StoNED pre-computed model (used when method == STONED)
+    stoned_model_id: Optional[str] = None
 
 
 @dataclass

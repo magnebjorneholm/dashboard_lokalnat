@@ -1,0 +1,56 @@
+{
+  "M1": {
+    "model_id": "M1",
+    "label": "StoNED TOTEX (VRS, QLE)",
+    "description": "Cost: totex_first_year, Outputs: CU, MW, NS, MWhl, MWhh, Decomp: QLE",
+    "cost_variable": "totex_first_year",
+    "output_variables": [
+      "CU",
+      "MW",
+      "NS",
+      "MWhl",
+      "MWhh"
+    ],
+    "rts": "vrs",
+    "cet": "mult",
+    "fun": "cost",
+    "decomposition": "QLE",
+    "sigma_u": 0.047898,
+    "sigma_v": 0.118879,
+    "mu": 0.038217,
+    "lambda_ratio": 0.4029,
+    "n_firms": 144,
+    "n_excluded_ex_ante": 4,
+    "eff_min": 0.9443,
+    "eff_median": 0.9633,
+    "eff_max": 0.9749,
+    "computed_at": "2026-03-03T09:30:55"
+  },
+  "M2": {
+    "model_id": "M2",
+    "label": "StoNED TOTEX (CRS, QLE)",
+    "description": "Cost: totex_first_year, Outputs: CU, MW, NS, MWhl, MWhh, Decomp: QLE",
+    "cost_variable": "totex_first_year",
+    "output_variables": [
+      "CU",
+      "MW",
+      "NS",
+      "MWhl",
+      "MWhh"
+    ],
+    "rts": "crs",
+    "cet": "mult",
+    "fun": "cost",
+    "decomposition": "QLE",
+    "sigma_u": -0.01187,
+    "sigma_v": 0.127978,
+    "mu": -0.009471,
+    "lambda_ratio": -0.0928,
+    "n_firms": 144,
+    "n_excluded_ex_ante": 4,
+    "eff_min": 1.0087,
+    "eff_median": 1.0095,
+    "eff_max": 1.0104,
+    "computed_at": "2026-03-03T09:31:24"
+  }
+}
