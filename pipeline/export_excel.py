@@ -364,6 +364,111 @@ def _compute_rank(dea_results: pd.DataFrame, user_reid: str) -> Tuple[Optional[i
     return int(matches[0]) + 1, total
 
 
+def _get_depreciation_return(case_result, baseline_result, user_reid: str) -> Dict[str, Dict[str, float]]:
+    """Extract depreciation and return period totals (same logic as diagram_data).
+
+    Returns dict with keys 'depreciation' and 'return', each having 'case' and 'baseline'.
+    Also returns per-year return if available from pre_dea.
+    """
+    from calculations.capex.wacc_calculations import BASELINE_WACC
+
+    capex_method = case_result.pre_dea.capex_method
+    sdf_ir = baseline_result.baseline.sdf_ir
+
+    # Baseline: always from SDF
+    bl_dep, bl_ret = 0.0, 0.0
+    if sdf_ir is not None and not sdf_ir.empty:
+        user_mask = sdf_ir['REId'] == user_reid
+        if user_mask.any():
+            user_row = sdf_ir[user_mask].iloc[0]
+            if COL_RETURN_PERIOD in sdf_ir.columns:
+                bl_ret = float(pd.to_numeric(user_row.get(COL_RETURN_PERIOD, 0), errors='coerce') or 0)
+            if COL_CAPITAL_COST_PERIOD in sdf_ir.columns:
+                bl_cap = float(pd.to_numeric(user_row.get(COL_CAPITAL_COST_PERIOD, 0), errors='coerce') or 0)
+                bl_dep = bl_cap - bl_ret
+
+    # Case: from SDF (baseline mode) or pre_dea (parameter_change mode)
+    if capex_method == 'baseline':
+        c_dep, c_ret = bl_dep, bl_ret
+    else:
+        df_all = case_result.pre_dea.df_all_companies
+        user_mask = df_all[COL_REID] == user_reid
+        if user_mask.any():
+            user_row = df_all[user_mask].iloc[0]
+            c_dep = 0.0
+            c_ret = 0.0
+            if COL_DEPRECIATION_PERIOD in df_all.columns:
+                c_dep = float(user_row.get(COL_DEPRECIATION_PERIOD, 0) or 0)
+            elif all(f'depreciation_{y}' in df_all.columns for y in [2024, 2025, 2026, 2027]):
+                c_dep = sum(float(user_row.get(f'depreciation_{y}', 0) or 0) for y in [2024, 2025, 2026, 2027])
+            if COL_RETURN_PERIOD in df_all.columns:
+                c_ret = float(user_row.get(COL_RETURN_PERIOD, 0) or 0)
+            elif all(f'return_on_assets_{y}' in df_all.columns for y in [2024, 2025, 2026, 2027]):
+                c_ret = sum(float(user_row.get(f'return_on_assets_{y}', 0) or 0) for y in [2024, 2025, 2026, 2027])
+        else:
+            c_dep, c_ret = bl_dep, bl_ret
+
+    return {
+        'depreciation': {'case': c_dep, 'baseline': bl_dep},
+        'return': {'case': c_ret, 'baseline': bl_ret},
+    }
+
+
+def _get_return_per_year(case_result, baseline_result, user_reid: str) -> Dict[str, Dict[str, float]]:
+    """Extract return on assets per year from pre_dea/SDF.
+
+    Returns {year_str: {'case': val, 'baseline': val}} for 2024-2027 + 'Period'.
+    """
+    years = [2024, 2025, 2026, 2027]
+    result = {}
+
+    # Baseline per year from SDF
+    sdf_ir = baseline_result.baseline.sdf_ir
+    bl_yearly = {}
+    if sdf_ir is not None and not sdf_ir.empty:
+        user_mask = sdf_ir['REId'] == user_reid
+        if user_mask.any():
+            user_row = sdf_ir[user_mask].iloc[0]
+            for y in years:
+                col = f'return_on_assets_{y}'
+                if col in sdf_ir.columns:
+                    bl_yearly[y] = float(pd.to_numeric(user_row.get(col, 0), errors='coerce') or 0)
+                else:
+                    bl_yearly[y] = 0.0
+        else:
+            bl_yearly = {y: 0.0 for y in years}
+    else:
+        bl_yearly = {y: 0.0 for y in years}
+
+    # Case per year from pre_dea (or same as baseline if capex_method == 'baseline')
+    capex_method = case_result.pre_dea.capex_method
+    if capex_method == 'baseline':
+        c_yearly = dict(bl_yearly)
+    else:
+        df_all = case_result.pre_dea.df_all_companies
+        c_yearly = {}
+        user_mask = df_all[COL_REID] == user_reid
+        if user_mask.any():
+            user_row = df_all[user_mask].iloc[0]
+            for y in years:
+                col = f'return_on_assets_{y}'
+                if col in df_all.columns:
+                    c_yearly[y] = float(user_row.get(col, 0) or 0)
+                else:
+                    c_yearly[y] = 0.0
+        else:
+            c_yearly = {y: 0.0 for y in years}
+
+    for y in years:
+        result[str(y)] = {'case': c_yearly.get(y, 0.0), 'baseline': bl_yearly.get(y, 0.0)}
+
+    result['Period'] = {
+        'case': sum(c_yearly.values()),
+        'baseline': sum(bl_yearly.values()),
+    }
+    return result
+
+
 def _load_category_data(case_result, baseline_result, user_id_network):
     """Load category-level data for user's company (case + baseline).
 
@@ -418,6 +523,9 @@ def _build_summary_sheet(
     case_ir = case_result.post_dea.user_revenue_frame
     bl_ir = baseline_result.post_dea.user_revenue_frame
 
+    # Extract depreciation/return from SDF/pre_dea (not in user_revenue_frame)
+    dep_ret = _get_depreciation_return(case_result, baseline_result, user_reid)
+
     # ---- Section A: Revenue Frame ----
     row = _write_section_header(ws, row, "Revenue Frame (Period 2024-2027)", n_cols)
     headers = ["Component", "Case (tkr)", "Baseline (tkr)", "Delta (tkr)", "Delta (%)"]
@@ -425,11 +533,12 @@ def _build_summary_sheet(
 
     rf_fmts = [None, _FMT_TKR, _FMT_TKR, _FMT_TKR_SIGN, _FMT_PCT_SIGN]
 
-    rf_components = [
+    # Components from revenue frame Series, ordered to match waterfall
+    rf_components_before_dep = [
         ("40.1.1 Controllable OPEX", COL_CONTROLLABLE_IN_RF, COL_CONTROLLABLE_PERIOD),
         ("40.2.1 Non-controllable OPEX", COL_NON_CONTROLLABLE, None),
-        ("20.1 Depreciation", COL_DEPRECIATION_PERIOD, None),
-        ("30.1 Return (WACC)", COL_RETURN_PERIOD, None),
+    ]
+    rf_components_after_dep = [
         ("50.4.1 Efficiency OPEX adj.", COL_OPEX_EFF_DEDUCTION, None),
         ("50.4.2 Efficiency CAPEX adj.", COL_CAPEX_EFF_DEDUCTION, None),
         ("30.5.2 Incentive adjustment", COL_INCENTIVE_TOTAL, None),
@@ -438,7 +547,26 @@ def _build_summary_sheet(
         ("State aid deduction", COL_STATE_DEDUCTION, None),
     ]
 
-    for label, col_key, fallback_key in rf_components:
+    # Controllable + Non-controllable first
+    for label, col_key, fallback_key in rf_components_before_dep:
+        c_val = _safe(case_ir, col_key, _safe(case_ir, fallback_key) if fallback_key else 0.0)
+        b_val = _safe(bl_ir, col_key, _safe(bl_ir, fallback_key) if fallback_key else 0.0)
+        d = _delta(c_val, b_val)
+        dp = _delta_pct(c_val, b_val)
+        row = _write_data_row(ws, row, [label, c_val, b_val, d, dp],
+                              formats=rf_fmts, delta_cols=[3])
+
+    # Depreciation and Return (from SDF/pre_dea, not revenue frame)
+    for label, dep_ret_key in [("20.1 Depreciation", "depreciation"), ("30.1 Return (WACC)", "return")]:
+        c_val = dep_ret[dep_ret_key]['case']
+        b_val = dep_ret[dep_ret_key]['baseline']
+        d = _delta(c_val, b_val)
+        dp = _delta_pct(c_val, b_val)
+        row = _write_data_row(ws, row, [label, c_val, b_val, d, dp],
+                              formats=rf_fmts, delta_cols=[3])
+
+    # Efficiency adjustments, incentives, other
+    for label, col_key, fallback_key in rf_components_after_dep:
         c_val = _safe(case_ir, col_key, _safe(case_ir, fallback_key) if fallback_key else 0.0)
         b_val = _safe(bl_ir, col_key, _safe(bl_ir, fallback_key) if fallback_key else 0.0)
         # Negate deductions for display (they reduce the frame)
@@ -493,8 +621,8 @@ def _build_summary_sheet(
             row += 1
 
             # ---- Section C: M2 Depreciation ----
-            case_dep = _aggregate_period_for_component(case_cat, 'depreciation_ord', 'depreciation_tail')
-            bl_dep = _aggregate_period_for_component(bl_cat, 'depreciation_ord', 'depreciation_tail')
+            case_dep = _aggregate_period_for_component(case_cat, 'dep_ord', 'dep_tail')
+            bl_dep = _aggregate_period_for_component(bl_cat, 'dep_ord', 'dep_tail')
 
             if case_dep or bl_dep:
                 row = _write_section_header(ws, row, "M2 Depreciation (period total)", n_cols)
@@ -545,18 +673,17 @@ def _build_summary_sheet(
             row = _write_data_row(ws, row, [f"  {key}", val, "", "", ""],
                                   formats=[None, _FMT_RATIO, None, None, None])
 
-    # Return on assets per year
+    # Return on assets per year (from SDF/pre_dea, not revenue frame)
+    ret_yearly = _get_return_per_year(case_result, baseline_result, user_reid)
     row += 1
     row = _write_col_headers(ws, row, ["Return on assets", "Case (tkr)", "Baseline (tkr)", "Delta (tkr)", "Delta (%)"])
-    for year, col in [("2024", COL_RETURN_2024), ("2025", COL_RETURN_2025),
-                      ("2026", COL_RETURN_2026), ("2027", COL_RETURN_2027),
-                      ("Period", COL_RETURN_PERIOD)]:
-        c_val = _safe(case_ir, col)
-        b_val = _safe(bl_ir, col)
+    for year_key in ["2024", "2025", "2026", "2027", "Period"]:
+        c_val = ret_yearly[year_key]['case']
+        b_val = ret_yearly[year_key]['baseline']
         d = _delta(c_val, b_val)
         dp = _delta_pct(c_val, b_val)
-        is_tot = (year == "Period")
-        row = _write_data_row(ws, row, [year, c_val, b_val, d, dp],
+        is_tot = (year_key == "Period")
+        row = _write_data_row(ws, row, [year_key, c_val, b_val, d, dp],
                               formats=rf_fmts, delta_cols=[3], is_total=is_tot)
     row += 1
 
@@ -590,10 +717,11 @@ def _build_summary_sheet(
         year_fmts = [None, _FMT_TKR, _FMT_TKR, _FMT_TKR, _FMT_TKR]
         for _, yr_row in incentive_details.iterrows():
             year = yr_row.get("year", "")
-            quality = yr_row.get("inter_incentive", 0.0) or 0.0
-            netloss = yr_row.get("loss_incentive", 0.0) or 0.0
-            load = yr_row.get("util_incentive", 0.0) or 0.0
-            total = yr_row.get("incentive_total_year", 0.0) or 0.0
+            # Incentive detail values are in kr -- convert to tkr
+            quality = (yr_row.get("inter_incentive", 0.0) or 0.0) / 1000
+            netloss = (yr_row.get("loss_incentive", 0.0) or 0.0) / 1000
+            load = (yr_row.get("util_incentive", 0.0) or 0.0) / 1000
+            total = (yr_row.get("incentive_total_year", 0.0) or 0.0) / 1000
             row = _write_data_row(ws, row, [year, quality, netloss, load, total],
                                   formats=year_fmts)
     row += 1
@@ -634,14 +762,6 @@ def _build_summary_sheet(
         row = _write_data_row(ws, row, [label, c_val, b_val, d, dp],
                               formats=rf_fmts, delta_cols=[3])
 
-    row = _write_data_row(ws, row, [f"Method: {method}", "", "", "", ""])
-    if method == "TOTEX":
-        opex_share = _safe(case_ir, COL_OPEX_SHARE)
-        capex_share = _safe(case_ir, COL_CAPEX_SHARE)
-        if opex_share and capex_share:
-            row = _write_data_row(ws, row,
-                                  [f"  Allocation: OPEX {opex_share*100:.1f}% / CAPEX {capex_share*100:.1f}%",
-                                   "", "", "", ""])
     row += 1
 
     # ---- Section G: M5 Efficiency ----
@@ -716,58 +836,83 @@ def _build_capital_base_detail_sheet(
     ws = wb.create_sheet("Capital Base Detail")
     row = _write_header_block(ws, company_name, user_reid, case_name)
 
+    # Flat side-by-side layout: one row per (category, half-year),
+    # with Case / Baseline / Delta columns for each component.
     headers = [
         "Category", "Period",
-        "NUAV Ord (tkr)", "NUAV Tail (tkr)", "NUAV Total (tkr)",
-        "Dep Ord (tkr)", "Dep Tail (tkr)", "Dep Total (tkr)",
-        "Return Ord (tkr)", "Return Tail (tkr)", "Return Total (tkr)",
+        "NUAV Case (tkr)", "NUAV Baseline (tkr)", "NUAV Δ (tkr)",
+        "Dep Case (tkr)", "Dep Baseline (tkr)", "Dep Δ (tkr)",
+        "Return Case (tkr)", "Return Baseline (tkr)", "Return Δ (tkr)",
     ]
-    fmts = [None, None] + [_FMT_TKR] * 9
+    fmts = [None, None] + [_FMT_TKR] * 3 + [_FMT_TKR] * 3 + [_FMT_TKR] * 3
+    delta_cols = [4, 7, 10]  # 0-based indices for the delta columns
 
-    for section_label, df in [("Case values", case_cat), ("Baseline values", bl_cat)]:
+    # Ensure columns exist on both DataFrames
+    _value_cols = ['nuav_ord', 'nuav_tail', 'dep_ord', 'dep_tail',
+                   'return_ord', 'return_tail']
+    for df in [case_cat, bl_cat]:
+        if df is not None:
+            for col in _value_cols:
+                if col not in df.columns:
+                    df[col] = 0.0
+
+    # Build a merged index of all (cat_encode, time) pairs
+    all_keys = set()
+    for df in [case_cat, bl_cat]:
+        if df is not None and not df.empty:
+            for _, r in df.iterrows():
+                all_keys.add((int(r['cat_encode']), int(r.get('time', 0))))
+
+    # Index both DataFrames by (cat_encode, time) for fast lookup
+    def _index_df(df):
+        lookup = {}
         if df is None or df.empty:
-            continue
+            return lookup
+        for _, r in df.iterrows():
+            key = (int(r['cat_encode']), int(r.get('time', 0)))
+            lookup[key] = r
+        return lookup
 
-        row = _write_section_header(ws, row, section_label, len(headers))
-        row = _write_col_headers(ws, row, headers)
+    case_lookup = _index_df(case_cat)
+    bl_lookup = _index_df(bl_cat)
 
-        # Ensure columns exist
-        for col in ['nuav_ord', 'nuav_tail', 'depreciation_ord', 'depreciation_tail',
-                     'return_ord', 'return_tail']:
-            if col not in df.columns:
-                df[col] = 0.0
+    row = _write_section_header(ws, row, "Capital base — Case vs Baseline", len(headers))
+    row = _write_col_headers(ws, row, headers)
 
-        for ce in sorted(df['cat_encode'].unique()):
-            cat_name = get_category_short_name(int(ce))
-            cat_rows = df[df['cat_encode'] == ce].sort_values('time')
+    def _total(r, ord_col, tail_col):
+        return float(r.get(ord_col, 0) or 0) + float(r.get(tail_col, 0) or 0)
 
-            for _, r in cat_rows.iterrows():
-                tc = int(r.get('time', 0))
-                period_label = TIMECODE_TO_HALFYEAR.get(tc, str(tc))
+    _zero = pd.Series({c: 0.0 for c in _value_cols})
 
-                nuav_o = float(r.get('nuav_ord', 0))
-                nuav_t = float(r.get('nuav_tail', 0))
-                dep_o = float(r.get('depreciation_ord', 0))
-                dep_t = float(r.get('depreciation_tail', 0))
-                ret_o = float(r.get('return_ord', 0))
-                ret_t = float(r.get('return_tail', 0))
+    for ce, tc in sorted(all_keys):
+        cat_name = get_category_short_name(ce)
+        period_label = TIMECODE_TO_HALFYEAR.get(tc, str(tc))
 
-                row = _write_data_row(ws, row, [
-                    cat_name, period_label,
-                    nuav_o, nuav_t, nuav_o + nuav_t,
-                    dep_o, dep_t, dep_o + dep_t,
-                    ret_o, ret_t, ret_o + ret_t,
-                ], formats=fmts)
+        cr = case_lookup.get((ce, tc), _zero)
+        br = bl_lookup.get((ce, tc), _zero)
 
-        row += 1  # blank between sections
+        c_nuav = _total(cr, 'nuav_ord', 'nuav_tail')
+        b_nuav = _total(br, 'nuav_ord', 'nuav_tail')
+        c_dep = _total(cr, 'dep_ord', 'dep_tail')
+        b_dep = _total(br, 'dep_ord', 'dep_tail')
+        c_ret = _total(cr, 'return_ord', 'return_tail')
+        b_ret = _total(br, 'return_ord', 'return_tail')
+
+        row = _write_data_row(ws, row, [
+            cat_name, period_label,
+            c_nuav, b_nuav, c_nuav - b_nuav,
+            c_dep, b_dep, c_dep - b_dep,
+            c_ret, b_ret, c_ret - b_ret,
+        ], formats=fmts, delta_cols=delta_cols)
 
     _set_column_widths(ws, [
         (1, 25), (2, 10),
-        (3, 14), (4, 14), (5, 14),
-        (6, 14), (7, 14), (8, 14),
-        (9, 14), (10, 14), (11, 14),
+        (3, 16), (4, 16), (5, 14),
+        (6, 16), (7, 16), (8, 14),
+        (9, 16), (10, 16), (11, 14),
     ])
-    ws.freeze_panes = "A5"
+    ws.freeze_panes = "A6"
+    ws.auto_filter.ref = ws.dimensions
 
 
 # =============================================================================
@@ -791,49 +936,45 @@ def _build_all_companies_revenue_sheet(wb: Workbook, case_result, user_reid: str
     if COL_COMPANY_NAME not in df.columns and names:
         df[COL_COMPANY_NAME] = df[COL_REID].map(names)
 
-    # Select relevant columns (only those that exist)
+    # Select relevant columns in waterfall order (matching Summary Section A)
     output_cols = [COL_REID, COL_COMPANY_NAME]
     rf_cols = [
-        COL_CAPITAL_COST_PERIOD, COL_CONTROLLABLE_IN_RF, COL_CONTROLLABLE_PERIOD,
-        COL_NON_CONTROLLABLE, COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
+        COL_CONTROLLABLE_IN_RF, COL_CONTROLLABLE_PERIOD,
+        COL_NON_CONTROLLABLE,
+        COL_CAPITAL_COST_PERIOD,
+        COL_OPEX_EFF_DEDUCTION, COL_CAPEX_EFF_DEDUCTION,
         COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE, COL_LOAD_INCENTIVE,
-        COL_INCENTIVE_TOTAL, COL_REVENUE_FRAME, COL_EFF_REQ_ANNUAL, COL_METHOD_USED,
+        COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
+        COL_REVENUE_FRAME,
     ]
     selected = [c for c in output_cols + rf_cols if c in df.columns]
     df = df[selected].copy()
-
-    # Merge efficiency requirement if separate
-    all_eff = case_result.post_dea.all_eff_reqs
-    if all_eff is not None and COL_EFF_REQ_ANNUAL not in df.columns:
-        df = df.merge(all_eff[[COL_REID, COL_EFF_REQ_ANNUAL]], on=COL_REID, how="left")
 
     # Rename for readability
     rename = {
         COL_REID: "REId",
         COL_COMPANY_NAME: "Company",
-        COL_CAPITAL_COST_PERIOD: "Capital Cost (tkr)",
-        COL_CONTROLLABLE_IN_RF: "Controllable in RF (tkr)",
+        COL_CONTROLLABLE_IN_RF: "Controllable OPEX (tkr)",
         COL_CONTROLLABLE_PERIOD: "Controllable Period (tkr)",
         COL_NON_CONTROLLABLE: "Non-controllable (tkr)",
-        COL_FLEXIBILITY: "Flexibility (tkr)",
-        COL_INTERRUPTION: "Interruption (tkr)",
-        COL_STATE_DEDUCTION: "State Deduction (tkr)",
+        COL_CAPITAL_COST_PERIOD: "Capital Cost (tkr)",
+        COL_OPEX_EFF_DEDUCTION: "OPEX Eff. Deduction (tkr)",
+        COL_CAPEX_EFF_DEDUCTION: "CAPEX Eff. Deduction (tkr)",
         COL_QUALITY_INCENTIVE: "Quality Incentive (tkr)",
         COL_NETLOSS_INCENTIVE: "Netloss Incentive (tkr)",
         COL_LOAD_INCENTIVE: "Load Incentive (tkr)",
-        COL_INCENTIVE_TOTAL: "Incentive Total (tkr)",
+        COL_FLEXIBILITY: "Flexibility (tkr)",
+        COL_INTERRUPTION: "Interruption (tkr)",
+        COL_STATE_DEDUCTION: "State Deduction (tkr)",
         COL_REVENUE_FRAME: "Revenue Frame (tkr)",
-        COL_EFF_REQ_ANNUAL: "Eff. Req (%)",
-        COL_METHOD_USED: "Method",
     }
     df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
 
     # Formats
     col_fmts = {v: _FMT_TKR for k, v in rename.items()
                 if "(tkr)" in v and v in df.columns}
-    col_fmts["Eff. Req (%)"] = _FMT_PCT
 
-    ws = wb.create_sheet("All Companies - Revenue")
+    ws = wb.create_sheet("Revenue Frame Decomposition")
     _write_raw_dataframe(ws, df, highlight_reid=user_reid, column_formats=col_fmts)
 
     # Column widths
@@ -858,7 +999,7 @@ def _build_all_companies_revenue_sheet(wb: Workbook, case_result, user_reid: str
 # SHEET 4: ALL COMPANIES - DEA
 # =============================================================================
 
-def _build_all_companies_dea_sheet(wb: Workbook, case_result, user_reid: str):
+def _build_all_companies_dea_sheet(wb: Workbook, case_result, baseline_result, user_reid: str):
     dea = case_result.dea.dea_results
     if dea is None or dea.empty:
         return
@@ -868,40 +1009,101 @@ def _build_all_companies_dea_sheet(wb: Workbook, case_result, user_reid: str):
     if COL_COMPANY_NAME not in df.columns and names:
         df[COL_COMPANY_NAME] = df[COL_REID].map(names)
 
-    # Merge eff req
+    # Merge case eff req
     all_eff = case_result.post_dea.all_eff_reqs
     if all_eff is not None and COL_EFF_REQ_ANNUAL not in df.columns:
         df = df.merge(all_eff[[COL_REID, COL_EFF_REQ_ANNUAL]], on=COL_REID, how="left")
 
-    output_cols = [COL_REID, COL_COMPANY_NAME, COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF,
-                   COL_DEA_POTENTIAL, COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL]
+    # Merge baseline efficiency + eff req for comparison
+    bl_dea = baseline_result.dea.dea_results
+    if bl_dea is not None and not bl_dea.empty:
+        bl_cols = [COL_REID]
+        bl_rename = {}
+        if COL_DEA_EFFICIENCY in bl_dea.columns:
+            bl_cols.append(COL_DEA_EFFICIENCY)
+            bl_rename[COL_DEA_EFFICIENCY] = "bl_dea_efficiency"
+        if COL_DEA_POTENTIAL in bl_dea.columns:
+            bl_cols.append(COL_DEA_POTENTIAL)
+            bl_rename[COL_DEA_POTENTIAL] = "bl_potential"
+        df = df.merge(
+            bl_dea[bl_cols].rename(columns=bl_rename),
+            on=COL_REID, how="left",
+        )
+    bl_eff_reqs = baseline_result.post_dea.all_eff_reqs
+    if bl_eff_reqs is not None and COL_EFF_REQ_ANNUAL in bl_eff_reqs.columns:
+        df = df.merge(
+            bl_eff_reqs[[COL_REID, COL_EFF_REQ_ANNUAL]].rename(
+                columns={COL_EFF_REQ_ANNUAL: "bl_eff_req_annual"}
+            ),
+            on=COL_REID, how="left",
+        )
+
+    # Merge DEA input variables from pre_dea (costs + outputs used in DEA)
+    df_all = case_result.pre_dea.df_all_companies
+    dea_input_cols = [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+                      COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH]
+    merge_cols = [c for c in dea_input_cols if c in df_all.columns]
+    if merge_cols and COL_REID in df_all.columns:
+        df = df.merge(df_all[[COL_REID] + merge_cols], on=COL_REID, how="left")
+
+    output_cols = [COL_REID, COL_COMPANY_NAME,
+                   COL_DEA_EFFICIENCY, "bl_dea_efficiency",
+                   COL_DEA_SUPER_EFF,
+                   COL_DEA_POTENTIAL, "bl_potential",
+                   COL_IS_OUTLIER,
+                   COL_EFF_REQ_ANNUAL, "bl_eff_req_annual",
+                   COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+                   COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH]
     selected = [c for c in output_cols if c in df.columns]
     df = df[selected].copy()
 
     rename = {
         COL_REID: "REId",
         COL_COMPANY_NAME: "Company",
-        COL_DEA_EFFICIENCY: "DEA Efficiency",
+        COL_DEA_EFFICIENCY: "DEA Efficiency (Case)",
+        "bl_dea_efficiency": "DEA Efficiency (Baseline)",
         COL_DEA_SUPER_EFF: "Super-Efficiency",
-        COL_DEA_POTENTIAL: "Potential",
+        COL_DEA_POTENTIAL: "Potential (Case)",
+        "bl_potential": "Potential (Baseline)",
         COL_IS_OUTLIER: "Outlier",
-        COL_EFF_REQ_ANNUAL: "Eff. Req (%)",
+        COL_EFF_REQ_ANNUAL: "Eff. Req (Case)",
+        "bl_eff_req_annual": "Eff. Req (Baseline)",
+        COL_CAPITAL_COST_2024: "Cap Cost 2024 (tkr)",
+        COL_CONTROLLABLE_AVG: "Controllable Avg (tkr)",
+        COL_CU: "CU",
+        COL_MW: "MW",
+        COL_NS: "NS",
+        COL_MWH_LOW: "MWhl",
+        COL_MWH_HIGH: "MWhh",
     }
     df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
 
     col_fmts = {
-        "DEA Efficiency": _FMT_RATIO,
+        "DEA Efficiency (Case)": _FMT_RATIO,
+        "DEA Efficiency (Baseline)": _FMT_RATIO,
         "Super-Efficiency": _FMT_RATIO,
-        "Potential": _FMT_PCT,
-        "Eff. Req (%)": _FMT_PCT,
+        "Potential (Case)": _FMT_PCT,
+        "Potential (Baseline)": _FMT_PCT,
+        "Eff. Req (Case)": _FMT_PCT,
+        "Eff. Req (Baseline)": _FMT_PCT,
+        "Cap Cost 2024 (tkr)": _FMT_TKR,
+        "Controllable Avg (tkr)": _FMT_TKR,
+        "CU": _FMT_TKR,
+        "MW": '#,##0.0',
+        "NS": _FMT_TKR,
+        "MWhl": _FMT_TKR,
+        "MWhh": _FMT_TKR,
     }
 
-    ws = wb.create_sheet("All Companies - DEA")
+    ws = wb.create_sheet("DEA")
     _write_raw_dataframe(ws, df, highlight_reid=user_reid, column_formats=col_fmts)
 
     widths = [(1, _W_REID), (2, _W_NAME)]
-    for i in range(3, len(df.columns) + 1):
-        widths.append((i, _W_PCT))
+    for i, col_name in enumerate(df.columns[2:], 3):
+        if "(tkr)" in col_name or col_name in ("CU", "MW", "NS", "MWhl", "MWhh"):
+            widths.append((i, _W_TKR))
+        else:
+            widths.append((i, _W_PCT))
     _set_column_widths(ws, widths)
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
@@ -922,7 +1124,6 @@ def _build_all_companies_costs_sheet(wb: Workbook, case_result, user_reid: str):
         COL_CAPITAL_COST_PERIOD,
         COL_CONTROLLABLE_AVG,
         COL_TOTEX,
-        COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
         COL_DEPRECIATION_PERIOD, COL_RETURN_PERIOD,
     ]
     selected = [c for c in output_cols if c in df_all.columns]
@@ -938,21 +1139,14 @@ def _build_all_companies_costs_sheet(wb: Workbook, case_result, user_reid: str):
         COL_CAPITAL_COST_PERIOD: "Cap Cost Period (tkr)",
         COL_CONTROLLABLE_AVG: "Controllable Avg (tkr)",
         COL_TOTEX: "TOTEX 1st Year (tkr)",
-        COL_CU: "CU",
-        COL_MW: "MW",
-        COL_NS: "NS",
-        COL_MWH_LOW: "MWhl",
-        COL_MWH_HIGH: "MWhh",
         COL_DEPRECIATION_PERIOD: "Depreciation Period (tkr)",
         COL_RETURN_PERIOD: "Return Period (tkr)",
     }
     df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
 
     col_fmts = {v: _FMT_TKR for k, v in rename.items() if "(tkr)" in v and v in df.columns}
-    col_fmts.update({"CU": _FMT_TKR, "MW": '#,##0.0', "NS": _FMT_TKR,
-                      "MWhl": _FMT_TKR, "MWhh": _FMT_TKR})
 
-    ws = wb.create_sheet("All Companies - Costs")
+    ws = wb.create_sheet("Costs")
     _write_raw_dataframe(ws, df, highlight_reid=user_reid, column_formats=col_fmts)
 
     widths = [(1, _W_REID), (2, _W_NAME)]
@@ -977,26 +1171,36 @@ def _build_all_companies_incentives_sheet(wb: Workbook, case_result, user_reid: 
     if COL_COMPANY_NAME not in df.columns and names:
         df[COL_COMPANY_NAME] = df[COL_REID].map(names)
 
+    # Merge OPEX/CAPEX efficiency deductions from revenue frames
+    all_rf = case_result.post_dea.all_revenue_frames
+    if all_rf is not None and not all_rf.empty:
+        eff_cols = [c for c in [COL_OPEX_EFF_DEDUCTION, COL_CAPEX_EFF_DEDUCTION]
+                    if c in all_rf.columns]
+        if eff_cols and COL_REID in all_rf.columns:
+            df = df.merge(all_rf[[COL_REID] + eff_cols], on=COL_REID, how="left")
+
     output_cols = [COL_REID, COL_COMPANY_NAME,
+                   COL_OPEX_EFF_DEDUCTION, COL_CAPEX_EFF_DEDUCTION,
                    COL_QUALITY_INCENTIVE, COL_NETLOSS_INCENTIVE,
-                   COL_LOAD_INCENTIVE, COL_INCENTIVE_TOTAL, COL_MISSING_INCENTIVE]
+                   COL_LOAD_INCENTIVE, COL_MISSING_INCENTIVE]
     selected = [c for c in output_cols if c in df.columns]
     df = df[selected].copy()
 
     rename = {
         COL_REID: "REId",
         COL_COMPANY_NAME: "Company",
+        COL_OPEX_EFF_DEDUCTION: "OPEX Eff. Deduction (tkr)",
+        COL_CAPEX_EFF_DEDUCTION: "CAPEX Eff. Deduction (tkr)",
         COL_QUALITY_INCENTIVE: "Quality Incentive (tkr)",
         COL_NETLOSS_INCENTIVE: "Netloss Incentive (tkr)",
         COL_LOAD_INCENTIVE: "Load Incentive (tkr)",
-        COL_INCENTIVE_TOTAL: "Incentive Total (tkr)",
         COL_MISSING_INCENTIVE: "Missing Data",
     }
     df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
 
     col_fmts = {v: _FMT_TKR for k, v in rename.items() if "(tkr)" in v and v in df.columns}
 
-    ws = wb.create_sheet("All Companies - Incentive")
+    ws = wb.create_sheet("Incentives")
     _write_raw_dataframe(ws, df, highlight_reid=user_reid, column_formats=col_fmts)
 
     widths = [(1, _W_REID), (2, _W_NAME)]
@@ -1126,7 +1330,7 @@ def create_case_export(
 
     # Sheet 3-6: Raw data (all 148 companies)
     _build_all_companies_revenue_sheet(wb, case_result, user_reid)
-    _build_all_companies_dea_sheet(wb, case_result, user_reid)
+    _build_all_companies_dea_sheet(wb, case_result, baseline_result, user_reid)
     _build_all_companies_costs_sheet(wb, case_result, user_reid)
     _build_all_companies_incentives_sheet(wb, case_result, user_reid)
 
