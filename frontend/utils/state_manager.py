@@ -33,7 +33,6 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
     },
     "m2_depreciation": {
         "lifetime_adjustments": None,   # Dict[int, Dict[str, int]] {cat_encode: {'ekdep': val, 'maxdep': val}}
-        "lifetime_level": "cat",        # 'cat' or 'subcat'
     },
     "m3_cost_of_capital": {
         "wacc_override": None,  # None = use baseline (0.0453)

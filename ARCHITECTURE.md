@@ -412,7 +412,7 @@ Results shown with case-vs-baseline comparison (orange = modified)
 ```python
 DEFAULT_UI_CONFIG = {
     "m1_asset_base":          {general_scaling, cat_scaling, var_scaling, kent_file_*},
-    "m2_depreciation":        {lifetime_adjustments, lifetime_level},
+    "m2_depreciation":        {lifetime_adjustments},
     "m3_cost_of_capital":     {wacc_override},
     "m3_quality_adjustments": {enable_quality/netloss/load, adj_max_*, sharing_*, k_nf},
     "m3_incentive_variables": {nf_norm/obs, ug_norm/obs, cemi4_norm/obs, ...},

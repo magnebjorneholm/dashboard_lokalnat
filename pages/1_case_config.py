@@ -145,10 +145,11 @@ def _render_m2_tab():
         _render_not_selected_message()
         return
 
+    user_id_network = get_user_id_network()
     st.markdown("#### 2. Depreciation")
 
     if is_section_selected("m2", "lifetimes"):
-        config = m2_depreciation.render_lifetimes()
+        config = m2_depreciation.render_lifetimes(user_id_network=user_id_network)
         set_module_config("m2_depreciation", config)
 
 

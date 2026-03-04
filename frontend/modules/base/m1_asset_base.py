@@ -56,7 +56,7 @@ def render_scaling(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     st.divider()
     
     # === 1.2 CATEGORY SCALING FACTORS ===
-    cat_scaling = _render_category_scaling()
+    cat_scaling = _render_category_scaling(user_id_network=user_id_network)
     if cat_scaling:
         config["cat_scaling"] = cat_scaling
     
@@ -134,7 +134,7 @@ def render(user_id_network: Optional[int] = None) -> Dict[str, Any]:
         config["general_scaling"] = general_scaling
     
     # === 1.2 CATEGORY SCALING FACTORS ===
-    cat_scaling = _render_category_scaling()
+    cat_scaling = _render_category_scaling(user_id_network=user_id_network)
     if cat_scaling:
         config["cat_scaling"] = cat_scaling
     
@@ -194,7 +194,9 @@ def _render_general_scaling() -> float:
 # 1.2 CATEGORY SCALING FACTORS
 # =============================================================================
 
-def _render_category_scaling() -> Optional[Dict[int, float]]:
+def _render_category_scaling(
+    user_id_network: Optional[int] = None,
+) -> Optional[Dict[int, float]]:
     """Render category-level scaling factors (Param 1.2.1-1.2.17)."""
     st.markdown("##### 1.2 Category scaling factors")
     from config.glossary import scaling_param_id as _sp
@@ -223,33 +225,66 @@ def _render_category_scaling() -> Optional[Dict[int, float]]:
                 '_cat_encode': cat.cat_encode,
             })
         df = pd.DataFrame(data)
+
+        # Add company-specific context columns if available
+        if user_id_network is not None:
+            try:
+                summary = _get_ordinarie_summary(user_id_network)
+                if not summary.empty:
+                    context = summary[['cat_encode', 'Components', 'NUAV (Mkr)']].copy()
+                    df = df.merge(
+                        context,
+                        left_on='_cat_encode',
+                        right_on='cat_encode',
+                        how='left',
+                    ).drop(columns=['cat_encode'])
+                    df['Components'] = df['Components'].fillna(0).astype(int)
+                    df['NUAV (Mkr)'] = df['NUAV (Mkr)'].fillna(0.0)
+            except Exception:
+                pass  # Graceful fallback — show editor without context
+
         st.session_state[source_key] = df
     else:
         df = st.session_state[source_key]
 
+    has_context = 'Components' in df.columns
+    display_cols = ['Param-ID', 'Category', 'Components', 'NUAV (Mkr)', 'Scaling'] if has_context else ['Param-ID', 'Category', 'Scaling']
+    disabled_cols = ['Param-ID', 'Category', 'Components', 'NUAV (Mkr)'] if has_context else ['Param-ID', 'Category']
+
+    col_config = {
+        'Param-ID': st.column_config.TextColumn(
+            'Param-ID', width="small"
+        ),
+        'Category': st.column_config.TextColumn(
+            'Category', width="large"
+        ),
+        'Scaling': st.column_config.NumberColumn(
+            'Scaling',
+            min_value=0.5,
+            max_value=2.0,
+            step=0.01,
+            format="%.2f",
+            width="small",
+            help="1.0 = no change"
+        ),
+    }
+    if has_context:
+        col_config['Components'] = st.column_config.NumberColumn(
+            'Components', format="%d", width="small",
+            help="Read-only",
+        )
+        col_config['NUAV (Mkr)'] = st.column_config.NumberColumn(
+            'NUAV (Mkr)', format="%.1f", width="small",
+            help="Read-only",
+        )
+
     edited_df = st.data_editor(
-        df[['Param-ID', 'Category', 'Scaling']],
+        df[display_cols],
         width='stretch',
         hide_index=True,
         num_rows="fixed",
-        disabled=['Param-ID', 'Category'],
-        column_config={
-            'Param-ID': st.column_config.TextColumn(
-                'Param-ID', width="small"
-            ),
-            'Category': st.column_config.TextColumn(
-                'Category', width="large"
-            ),
-            'Scaling': st.column_config.NumberColumn(
-                'Scaling',
-                min_value=0.5,
-                max_value=2.0,
-                step=0.01,
-                format="%.2f",
-                width="small",
-                help="1.0 = no change"
-            )
-        },
+        disabled=disabled_cols,
+        column_config=col_config,
         key=f"{MODULE_KEY}_cat_scaling"
     )
     
