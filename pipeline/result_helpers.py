@@ -52,15 +52,33 @@ def fmt_percent(value: float, decimals: int = 1, show_sign: bool = False,
 
 
 def fmt_msek(value: float) -> str:
-    """Format tkr value as MSEK string (divide by 1000, 1 decimal)."""
-    return f"{value / TKR_TO_MSEK:,.1f} MSEK"
+    """Format tkr value as MSEK string with adaptive precision.
+
+    >= 1000 MSEK: 0 decimals (e.g. '1 235 MSEK')
+    <  1000 MSEK: 1 decimal  (e.g. '123.5 MSEK')
+    Space as thousands separator, period as decimal.
+    """
+    msek = value / TKR_TO_MSEK
+    if abs(msek) >= 1000:
+        formatted = f"{msek:,.0f}".replace(",", " ")
+    else:
+        formatted = f"{msek:,.1f}".replace(",", " ")
+    return f"{formatted} MSEK"
 
 
 def fmt_delta_msek(delta: float, tolerance: float = 0.01) -> "Optional[str]":
-    """Format tkr delta as MSEK string with sign, or None if below tolerance."""
+    """Format tkr delta as MSEK string with sign, or None if below tolerance.
+
+    Adaptive precision (see fmt_msek). Period as decimal separator.
+    """
     if abs(delta) < tolerance:
         return None
-    return f"{delta / TKR_TO_MSEK:+,.1f} MSEK"
+    msek = delta / TKR_TO_MSEK
+    if abs(msek) >= 1000:
+        formatted = f"{msek:+,.0f}".replace(",", " ")
+    else:
+        formatted = f"{msek:+,.1f}".replace(",", " ")
+    return f"{formatted} MSEK"
 
 
 def fmt_pct(value: float, decimals: int = 2) -> str:

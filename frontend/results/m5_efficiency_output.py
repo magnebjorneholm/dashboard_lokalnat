@@ -455,6 +455,14 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
             _fmt_tkr(opex_efter),
         ]
 
+    # Custom hover text
+    hover = []
+    for lbl, val, msr in zip(labels, values, measures):
+        if msr in ("total", "absolute"):
+            hover.append(f"<b>{lbl}</b><br>{val:,.0f} tkr")
+        else:
+            hover.append(f"<b>{lbl}</b><br>{val:+,.0f} tkr")
+
     fig = go.Figure(go.Waterfall(
         orientation="v",
         measure=measures,
@@ -467,6 +475,8 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
         increasing=dict(marker_color=WF_BASE),
         decreasing=dict(marker_color=WF_DEDUCTION),
         totals=dict(marker_color=WF_TOTAL),
+        hovertext=hover,
+        hovertemplate="%{hovertext}<extra></extra>",
     ))
 
     # Baseline reference line (only when case differs from baseline)
@@ -492,7 +502,7 @@ def _render_cost_waterfall(case_ir, baseline_ir, m5_config):
         showlegend=False,
         yaxis_title="tkr",
         xaxis=dict(showgrid=False, linecolor=COLORS["bg_muted"]),
-        yaxis=dict(gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"]),
+        yaxis=dict(showgrid=True, gridcolor=COLORS["bg_muted"], linecolor=COLORS["bg_muted"]),
     )
 
     st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})

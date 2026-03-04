@@ -95,15 +95,29 @@ YEARS = [2024, 2025, 2026, 2027]
 # ---------------------------------------------------------------------------
 
 def _fmt_msek(v: float) -> str:
-    """Format kr value as MSEK string."""
-    return f"{v / 1e6:,.2f} MSEK"
+    """Format kr value as MSEK string with adaptive precision.
+
+    >= 1000 MSEK: 0 decimals. < 1000 MSEK: 1 decimal.
+    Space as thousands separator, period as decimal.
+    """
+    msek = v / 1e6
+    if abs(msek) >= 1000:
+        formatted = f"{msek:,.0f}".replace(",", " ")
+    else:
+        formatted = f"{msek:,.1f}".replace(",", " ")
+    return f"{formatted} MSEK"
 
 
 def _fmt_delta_msek(d: float) -> Optional[str]:
     """Format delta in kr as MSEK string, return None if negligible."""
     if abs(d) < 1e3:  # less than 1 tkr
         return None
-    return f"{d / 1e6:+,.2f} MSEK"
+    msek = d / 1e6
+    if abs(msek) >= 1000:
+        formatted = f"{msek:+,.0f}".replace(",", " ")
+    else:
+        formatted = f"{msek:+,.1f}".replace(",", " ")
+    return f"{formatted} MSEK"
 
 
 def _kr_to_msek(v: float) -> float:
@@ -316,6 +330,14 @@ def _render_waterfall_chart(row: pd.Series, title_suffix: str) -> None:
 
     values_msek = [v / 1e6 for v in values_kr]
 
+    # Custom hover text
+    hover = []
+    for lbl, val, msr in zip(labels, values_msek, measures):
+        if msr == "total":
+            hover.append(f"<b>{lbl}</b><br>{val:,.2f} MSEK")
+        else:
+            hover.append(f"<b>{lbl}</b><br>{val:+,.2f} MSEK")
+
     # Custom text annotations
     text_vals = []
     for v, m in zip(values_msek, measures):
@@ -346,6 +368,8 @@ def _render_waterfall_chart(row: pd.Series, title_suffix: str) -> None:
         increasing=dict(marker=dict(color=CLR_POSITIVE)),
         decreasing=dict(marker=dict(color=CLR_NEGATIVE)),
         totals=dict(marker=dict(color=COLORS["primary"])),
+        hovertext=hover,
+        hovertemplate="%{hovertext}<extra></extra>",
     ))
 
     fig.update_layout(
@@ -357,7 +381,7 @@ def _render_waterfall_chart(row: pd.Series, title_suffix: str) -> None:
         xaxis=dict(
             title="MSEK",
             showgrid=True,
-            gridcolor=COLORS["bg_subtle"],
+            gridcolor=COLORS["bg_muted"],
             zeroline=True,
             zerolinecolor=COLORS["bg_muted"],
             zerolinewidth=1,

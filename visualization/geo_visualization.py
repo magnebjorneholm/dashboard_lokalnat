@@ -233,7 +233,7 @@ def _add_company_highlight(fig: go.Figure, user_geoms: gpd.GeoDataFrame) -> None
                 lon=lons,
                 lat=lats,
                 mode="lines",
-                line=dict(width=2.5, color=COLORS["error"]),
+                line=dict(width=2.5, color=COLORS["primary"]),
                 showlegend=False,
                 hoverinfo="skip"
             ))

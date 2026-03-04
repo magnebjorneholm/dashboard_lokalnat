@@ -363,6 +363,14 @@ def _render_opex_waterfall(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
 
     values_msek = [v / 1e3 for v in values_tkr]
 
+    # Custom hover text
+    hover = []
+    for lbl, val, msr in zip(labels, values_msek, measures):
+        if msr in ("total", "absolute"):
+            hover.append(f"<b>{lbl}</b><br>{val:,.1f} MSEK")
+        else:
+            hover.append(f"<b>{lbl}</b><br>{val:+,.1f} MSEK")
+
     # Baseline total for reference line
     b_ctrl_in_rf = _safe_ir(baseline_ir, COL_CONTROLLABLE_IN_RF,
                             _safe_ir(baseline_ir, COL_CONTROLLABLE_PERIOD))
@@ -404,6 +412,8 @@ def _render_opex_waterfall(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
         increasing=dict(marker=dict(color=COLORS["success"])),
         decreasing=dict(marker=dict(color=COLORS["error"])),
         totals=dict(marker=dict(color=COLORS["primary"])),
+        hovertext=hover,
+        hovertemplate="%{hovertext}<extra></extra>",
     ))
 
     if has_delta:
@@ -429,7 +439,7 @@ def _render_opex_waterfall(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
         xaxis=dict(
             title="MSEK",
             showgrid=True,
-            gridcolor=COLORS["bg_subtle"],
+            gridcolor=COLORS["bg_muted"],
             zeroline=True,
             zerolinecolor=COLORS["bg_muted"],
             zerolinewidth=1,

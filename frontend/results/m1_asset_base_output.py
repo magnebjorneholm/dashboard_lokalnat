@@ -144,9 +144,9 @@ def _render_kpi_hero(
     with col1:
         st.metric("Total", fmt_msek(c_total), fmt_delta_msek(d_total))
     with col2:
-        st.metric("Ordinarie", fmt_msek(c_ord), fmt_delta_msek(d_ord))
+        st.metric("Ordinary", fmt_msek(c_ord), fmt_delta_msek(d_ord))
     with col3:
-        st.metric("Svans (tail)", fmt_msek(c_tail), fmt_delta_msek(d_tail))
+        st.metric("Tail", fmt_msek(c_tail), fmt_delta_msek(d_tail))
 
 
 

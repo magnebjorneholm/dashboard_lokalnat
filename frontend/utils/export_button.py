@@ -13,19 +13,21 @@ def render_export_button(
     company_name: str,
     baseline_result,
     case_result,
-    ui_config: dict
+    ui_config: dict,
+    case_name: str = "",
 ):
     """
-    Renderar export-knapp fÃ¶r Excel-nedladdning.
-    
+    Renderar export-knapp for Excel-nedladdning.
+
     Args:
-        user_reid: AnvÃ¤ndarens REId
+        user_reid: Användarens REId
         company_name: Company name
         baseline_result: Baseline pipeline-resultat
         case_result: Case pipeline-resultat
         ui_config: UI-konfiguration
+        case_name: Case name for header block
     """
-    
+
     if st.button("Export to Excel", type="secondary", width='stretch'):
         try:
             with st.spinner("Creating Excel file..."):
@@ -34,7 +36,8 @@ def render_export_button(
                     company_name=company_name,
                     baseline_result=baseline_result,
                     case_result=case_result,
-                    ui_config=ui_config
+                    ui_config=ui_config,
+                    case_name=case_name,
                 )
                 filename = get_export_filename(user_reid)
             

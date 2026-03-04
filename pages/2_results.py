@@ -33,6 +33,7 @@ from frontend.common.styling import COLORS, get_plotly_template
 from pipeline.result_helpers import (
     fmt_tkr as format_tkr,
     fmt_percent as format_percent,
+    fmt_msek, fmt_delta_msek,
     calc_delta,
 )
 from config.column_names import COL_REVENUE_FRAME, COL_CAPITAL_COST_PERIOD
@@ -159,6 +160,7 @@ with col_map:
                 zoom=3.0
             )
             st.plotly_chart(fig, key="efficiency_map", width='stretch')
+            st.caption(f"{company_name} ({user_reid}) is highlighted in blue")
         else:
             st.info("No efficiency data available for map visualization.")
             
@@ -183,14 +185,20 @@ delta_abs, delta_pct = calc_delta(total_case, total_baseline)
 col1, col2, col3 = st.columns([2, 1, 1])
 
 with col1:
+    delta_str = None
+    if delta_abs:
+        pct_str = f"{delta_pct:+.1f}"
+        base = fmt_delta_msek(delta_abs)
+        if base:
+            delta_str = f"{base} ({pct_str}%)"
     st.metric(
         label="Total revenue frame",
-        value=f"{total_case:,.0f} tkr",
-        delta=f"{delta_abs:+,.0f} tkr ({delta_pct:+.1f}%)" if delta_abs else None
+        value=fmt_msek(total_case),
+        delta=delta_str,
     )
 
 with col2:
-    st.metric(label="Baseline", value=f"{total_baseline:,.0f} tkr")
+    st.metric(label="Baseline", value=fmt_msek(total_baseline))
 
 with col3:
     cap_case = case_ir[COL_CAPITAL_COST_PERIOD]
@@ -198,8 +206,8 @@ with col3:
     cap_delta, cap_pct = calc_delta(cap_case, cap_baseline)
     st.metric(
         label="30.1 Capital cost",
-        value=f"{cap_case:,.0f} tkr",
-        delta=f"{cap_pct:+.1f}%" if cap_pct else None
+        value=fmt_msek(cap_case),
+        delta=f"{cap_pct:+.1f}%" if cap_pct else None,
     )
 
 st.markdown("")
@@ -230,15 +238,21 @@ wf_components = [
 wf_labels = []
 wf_values = []
 wf_measures = []
+wf_hover = []
 
 for label, dd_key, negate, measure in wf_components:
     comp = dd.get(dd_key, {})
     val = float(comp.get('value', 0))
     if negate:
         val = -val
+    val_msek = val / 1e3
     wf_labels.append(label)
-    wf_values.append(val / 1e3)  # tkr to MSEK
+    wf_values.append(val_msek)
     wf_measures.append(measure)
+    if measure == "total":
+        wf_hover.append(f"<b>{label}</b><br>{val_msek:,.1f} MSEK")
+    else:
+        wf_hover.append(f"<b>{label}</b><br>{val_msek:+,.1f} MSEK")
 
 tmpl = get_plotly_template()
 
@@ -248,7 +262,7 @@ fig_wf = go.Figure(go.Waterfall(
     x=wf_values,
     measure=wf_measures,
     textposition="outside",
-    text=[f"{v:+,.1f}" if m != "total" and abs(v) > 0.05 else (f"{v:,.1f}" if m == "total" else "") for v, m in zip(wf_values, wf_measures)],
+    text=[f"{v:+,.1f}" if m != "total" and abs(v) > 0.05 else (f"{v:,.1f}" if m == "total" else ("±0" if m != "total" else "")) for v, m in zip(wf_values, wf_measures)],
     textfont=dict(size=11, family="Inter, sans-serif"),
     connector=dict(
         line=dict(color=COLORS["bg_muted"], width=1, dash="dot")
@@ -256,7 +270,34 @@ fig_wf = go.Figure(go.Waterfall(
     increasing=dict(marker=dict(color=COLORS["success"])),
     decreasing=dict(marker=dict(color=COLORS["error"])),
     totals=dict(marker=dict(color=COLORS["primary"])),
+    hovertext=wf_hover,
+    hovertemplate="%{hovertext}<extra></extra>",
 ))
+
+# Mark zero-value components with a thin line marker
+running = 0.0
+zero_y = []
+zero_x = []
+for label, val, measure in zip(wf_labels, wf_values, wf_measures):
+    if measure == "relative":
+        if abs(val) < 0.05:
+            zero_y.append(label)
+            zero_x.append(running)
+        running += val
+
+if zero_y:
+    fig_wf.add_trace(go.Scatter(
+        x=zero_x, y=zero_y,
+        mode="markers",
+        marker=dict(
+            symbol="line-ns",
+            size=16,
+            line=dict(width=2, color=COLORS["text_muted"]),
+            color=COLORS["text_muted"],
+        ),
+        showlegend=False,
+        hoverinfo="skip",
+    ))
 
 fig_wf.update_layout(
     font=tmpl.get("font", {}),
@@ -267,13 +308,14 @@ fig_wf.update_layout(
     xaxis=dict(
         title="MSEK",
         showgrid=True,
-        gridcolor=COLORS["bg_subtle"],
+        gridcolor=COLORS["bg_muted"],
         zeroline=True,
         zerolinecolor=COLORS["bg_muted"],
         zerolinewidth=1,
     ),
     yaxis=dict(
-        showgrid=False,
+        showgrid=True,
+        gridcolor=COLORS["bg_muted"],
         automargin=True,
         autorange="reversed",
     ),
@@ -413,7 +455,8 @@ render_export_button(
     company_name=company_name,
     baseline_result=baseline,
     case_result=case,
-    ui_config=st.session_state.get("ui_config", {})
+    ui_config=st.session_state.get("ui_config", {}),
+    case_name=case_name,
 )
 
 st.caption("Use **Save case** in the sidebar to save this configuration.")
