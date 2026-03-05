@@ -307,8 +307,7 @@ fig_wf.update_layout(
     height=max(380, len(wf_labels) * 38),
     xaxis=dict(
         title="MSEK",
-        showgrid=True,
-        gridcolor=COLORS["bg_muted"],
+        showgrid=False,
         zeroline=True,
         zerolinecolor=COLORS["bg_muted"],
         zerolinewidth=1,
@@ -316,6 +315,7 @@ fig_wf.update_layout(
     yaxis=dict(
         showgrid=True,
         gridcolor=COLORS["bg_muted"],
+        tickson="boundaries",
         automargin=True,
         autorange="reversed",
     ),

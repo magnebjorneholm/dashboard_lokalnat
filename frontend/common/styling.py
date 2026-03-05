@@ -110,11 +110,27 @@ def _get_custom_css() -> str:
             border-color: {COLORS["bg_muted"]};
         }}
         
+        /* === SIDEBAR === */
+        /* Lock sidebar width — prevent drag-resize while keeping open/close */
+        [data-testid="stSidebar"] {{
+            min-width: 336px !important;
+            max-width: 336px !important;
+        }}
+        [data-testid="stSidebar"] > div {{
+            width: 336px !important;
+        }}
+        /* Hide the resize handle */
+        [data-testid="stSidebar"]::after,
+        [data-testid="stSidebarContent"]::after {{
+            pointer-events: none !important;
+            display: none !important;
+        }}
+
         /* === BRANDING === */
         #MainMenu {{
             visibility: hidden;
         }}
-        
+
         footer {{
             visibility: hidden;
         }}

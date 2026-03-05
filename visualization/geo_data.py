@@ -203,6 +203,10 @@ def prepare_map_data_from_pipeline(
     # Merge all data sources
     dea_results['REId'] = dea_results['REId'].str.strip().str.upper()
 
+    # Drop baseline eff_req column to avoid _x/_y suffix collision with post_dea value
+    if COL_EFF_REQ_ANNUAL in dea_results.columns:
+        dea_results = dea_results.drop(columns=[COL_EFF_REQ_ANNUAL])
+
     combined = dea_results.merge(cu_data, on='REId', how='left')
     combined = combined.merge(effkrav_data, on='REId', how='left')
     combined = combined.merge(ir_data, on='REId', how='left')

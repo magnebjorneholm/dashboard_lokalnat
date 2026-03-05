@@ -53,9 +53,9 @@ WATERFALL_COLORS = {
 # Case/baseline comparison (M1, M2, M3 return)
 COMPARISON_COLORS = {
     "case_ord": CHART_COLORS[0],  # Primary Blue
-    "case_tail": "#93C5FD",       # Blue-300
+    "case_tail": "#60A5FA",       # Blue-400
     "bl_ord": "#64748B",          # Slate-500
-    "bl_tail": "#CBD5E1",         # Slate-300
+    "bl_tail": "#94A3B8",         # Slate-400
 }
 
 # Scatter plot (M5 frontier chart)

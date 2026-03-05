@@ -455,24 +455,28 @@ def _render_halfyear_chart(hy_df: pd.DataFrame, title_label: str) -> None:
     # Baseline (behind)
     fig.add_trace(go.Bar(
         x=hy_df['Period'], y=hy_df['BL Ord'],
-        name='Baseline Ord', marker_color=CLR_BL_ORD, offsetgroup='baseline',
+        name='Baseline Ord', marker_color=CLR_BL_ORD,
+        offsetgroup='baseline',
         hovertemplate='%{x}<br>BL Ord: %{y:,.2f} MSEK<extra></extra>',
     ))
     fig.add_trace(go.Bar(
         x=hy_df['Period'], y=hy_df['BL Tail'],
-        name='Baseline Tail', marker_color=CLR_BL_TAIL, offsetgroup='baseline',
+        name='Baseline Tail', marker_color=CLR_BL_TAIL,
+        offsetgroup='baseline',
         hovertemplate='%{x}<br>BL Tail: %{y:,.2f} MSEK<extra></extra>',
     ))
 
     # Case (in front)
     fig.add_trace(go.Bar(
         x=hy_df['Period'], y=hy_df['Case Ord'],
-        name='Case Ord', marker_color=CLR_CASE_ORD, offsetgroup='case',
+        name='Case Ord', marker_color=CLR_CASE_ORD,
+        offsetgroup='case',
         hovertemplate='%{x}<br>Case Ord: %{y:,.2f} MSEK<extra></extra>',
     ))
     fig.add_trace(go.Bar(
         x=hy_df['Period'], y=hy_df['Case Tail'],
-        name='Case Tail', marker_color=CLR_CASE_TAIL, offsetgroup='case',
+        name='Case Tail', marker_color=CLR_CASE_TAIL,
+        offsetgroup='case',
         hovertemplate='%{x}<br>Case Tail: %{y:,.2f} MSEK<extra></extra>',
     ))
 
