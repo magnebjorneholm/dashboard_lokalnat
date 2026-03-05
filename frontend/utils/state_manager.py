@@ -499,8 +499,10 @@ def set_computed_config(
     selected_modules: Set[str],
 ) -> None:
     """Store a frozen copy of the config used in the last pipeline run."""
+    from datetime import datetime
     st.session_state["computed_ui_config"] = copy.deepcopy(ui_config)
     st.session_state["computed_selected_modules"] = set(selected_modules)
+    st.session_state["computed_at"] = datetime.now()
 
 
 def get_computed_config():
@@ -509,6 +511,11 @@ def get_computed_config():
         st.session_state.get("computed_ui_config"),
         st.session_state.get("computed_selected_modules"),
     )
+
+
+def get_computed_at():
+    """Return the datetime of the last computation, or None."""
+    return st.session_state.get("computed_at")
 
 
 def set_saved_reference(

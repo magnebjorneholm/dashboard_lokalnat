@@ -14,7 +14,6 @@ from frontend.utils.state_manager import (
     init_session_state,
     get_user_reid,
     get_case_name,
-    get_case_notes,
     get_filtered_ui_config,
     has_unsaved_changes,
     has_config_changed_since_compute,
@@ -115,10 +114,7 @@ company_name = case.extraction.company_name
 
 st.markdown(f"**{company_name}** ({user_reid})")
 
-case_notes = get_case_notes()
-if case_notes:
-    with st.expander("Case notes", expanded=False):
-        st.caption(case_notes)
+
 
 
 # =============================================================================

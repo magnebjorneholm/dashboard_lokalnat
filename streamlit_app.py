@@ -32,6 +32,7 @@ from frontend.utils.state_manager import (
     has_unsaved_changes,
     has_config_changed_since_compute,
     revert_to_saved,
+    get_computed_at,
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
@@ -323,6 +324,17 @@ def _render_sidebar_actions():
     """Render case management controls in sidebar."""
     st.divider()
 
+    # --- Case info ---
+    case_name = get_case_name()
+    if case_name:
+        st.markdown(f"**{case_name}**")
+        case_notes = get_case_notes()
+        if case_notes:
+            st.caption(case_notes)
+    computed_at = get_computed_at()
+    if computed_at:
+        st.caption(f"Computed {computed_at.strftime('%H:%M, %d %b')}")
+
     # --- Compute button ---
     if st.button("Compute Revenue Frame", type="primary", width='stretch'):
         _run_calculation()
@@ -398,10 +410,6 @@ def _render_dev_mode_selector():
         reid = reid_lookup.get(selected_display)
         if reid:
             set_user_reid(reid)
-
-    st.divider()
-    current_reid = st.session_state.get('user_reid')
-    st.caption(f"Selected: {get_company_display(current_reid)}")
 
 
 def _render_authenticated_sidebar():
