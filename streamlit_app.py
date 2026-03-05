@@ -18,12 +18,12 @@ from frontend.utils.state_manager import (
     get_user_reid,
     get_case_id,
     get_case_name,
-    set_case_name,
     get_case_notes,
-    set_case_notes,
     get_selected_modules,
     mark_case_saved,
     set_case_id,
+    set_case_name,
+    set_case_notes,
     increment_saved_cases_count,
     set_computed_config,
     get_computed_config,
@@ -165,13 +165,13 @@ def _run_calculation() -> None:
     """Run the revenue frame calculation pipeline."""
     from frontend.utils.state_manager import get_filtered_ui_config
     from config.config_adapter import build_case_definition
-    
+
     user_reid = get_user_reid()
-    
+
     if user_reid is None:
         st.error("No company selected.")
         return
-    
+
     with st.status("Running calculation...", expanded=True) as status:
         try:
             st.write("Loading baseline data...")
@@ -198,11 +198,11 @@ def _run_calculation() -> None:
                 user_reid,
                 filtered_config
             )
-            
+
             st.write("Calculating revenue frame...")
             case_result = run_pipeline(baseline_data, case_definition)
             st.session_state["case_result"] = case_result
-            
+
             st.session_state["calculation_done"] = True
 
             # Store which config produced this result
@@ -212,7 +212,7 @@ def _run_calculation() -> None:
             )
 
             status.update(label="Calculation complete", state="complete")
-            
+
         except ValueError as e:
             st.error(f"Configuration error: {e}")
             status.update(label="Error", state="error")
@@ -223,21 +223,23 @@ def _run_calculation() -> None:
                 st.exception(e)
             status.update(label="Error", state="error")
             return
-    
+
     st.switch_page("pages/2_results.py")
 
 
-def _do_save_case(force_new: bool = False) -> bool:
+def _do_save_case(force_new: bool = False, name_override: str = None, notes_override: str = None) -> bool:
     """Save the current case to storage. Uses computed config if available.
 
     Args:
         force_new: If True, always create a new case (ignore existing case_id).
+        name_override: If set, use this name instead of session state.
+        notes_override: If set, use this notes instead of session state.
     """
     from frontend.utils.case_storage import save_case
 
     user_reid = get_user_reid()
-    case_name = get_case_name() or "Untitled Case"
-    case_notes = get_case_notes()
+    case_name = name_override if name_override is not None else (get_case_name() or "Untitled Case")
+    case_notes = notes_override if notes_override is not None else get_case_notes()
     case_id = None if force_new else get_case_id()
 
     # Prefer computed config (last pipeline run); fall back to working state
@@ -260,6 +262,8 @@ def _do_save_case(force_new: bool = False) -> bool:
         )
 
         set_case_id(saved.id)
+        set_case_name(case_name)
+        set_case_notes(case_notes)
         mark_case_saved()
         set_saved_reference(ui_config, selected_modules)
 
@@ -276,114 +280,65 @@ def _do_save_case(force_new: bool = False) -> bool:
         return False
 
 
-def _on_sidebar_name_change():
-    """Callback: sync sidebar name input to session state and auto-persist."""
-    new_name = st.session_state["sidebar_case_name"]
-    set_case_name(new_name)
-    # Auto-persist for saved cases
+@st.dialog("Save case")
+def _save_case_dialog():
+    """Dialog for saving the current case."""
     case_id = get_case_id()
+    case_name = get_case_name() or ""
+    case_notes = get_case_notes()
+
     if case_id:
-        from frontend.utils.case_storage import update_case_metadata
-        try:
-            update_case_metadata(get_user_reid(), case_id, new_name, get_case_notes())
-        except Exception:
-            pass  # Best-effort, full save still available
-
-
-def _on_sidebar_notes_change():
-    """Callback: sync sidebar notes input to session state and auto-persist."""
-    new_notes = st.session_state["sidebar_case_notes"]
-    set_case_notes(new_notes)
-    case_id = get_case_id()
-    if case_id:
-        from frontend.utils.case_storage import update_case_metadata
-        try:
-            update_case_metadata(get_user_reid(), case_id, get_case_name() or "Untitled Case", new_notes)
-        except Exception:
-            pass
-
-
-@st.dialog("Update saved case")
-def _confirm_update_case():
-    """Confirmation dialog before overwriting an existing case."""
-    case_name = get_case_name() or "Untitled Case"
-    st.write(f"Overwrite saved case **{case_name}** with the last computed configuration?")
-    col_yes, col_no = st.columns(2)
-    with col_yes:
-        if st.button("Update", type="primary", width='stretch', key="dialog_update"):
+        # --- Existing case: Update or Fork ---
+        if st.button(f'Update "{case_name}"', type="primary", key="dialog_update", width='stretch'):
             if _do_save_case():
-                st.toast("Case updated successfully")
-            st.rerun()
-    with col_no:
-        if st.button("Cancel", width='stretch', key="dialog_update_cancel"):
+                st.toast(f'Updated "{case_name}"')
             st.rerun()
 
+        st.divider()
 
-@st.dialog("Save as new case")
-def _confirm_save_as_new():
-    """Confirmation dialog before creating a new case."""
-    case_name = get_case_name() or "Untitled Case"
-    st.write(f"Save current configuration as a new case: **{case_name}**?")
-    col_yes, col_no = st.columns(2)
-    with col_yes:
-        if st.button("Save", type="primary", width='stretch', key="dialog_save"):
-            if _do_save_case(force_new=True):
-                st.toast("Saved as new case")
-            st.rerun()
-    with col_no:
-        if st.button("Cancel", width='stretch', key="dialog_cancel"):
-            st.rerun()
+        st.markdown("**Save as new case**")
+        new_name = st.text_input("Name", value=f"{case_name} (copy)", key="dialog_fork_name")
+        new_notes = st.text_area("Notes", value=case_notes, key="dialog_fork_notes")
+        if st.button("Save as new case", key="dialog_fork_save", width='stretch'):
+            if not new_name.strip():
+                st.warning("Enter a case name.")
+            else:
+                if _do_save_case(force_new=True, name_override=new_name, notes_override=new_notes):
+                    st.toast(f'Saved as "{new_name}"')
+                st.rerun()
+    else:
+        # --- First save ---
+        save_name = st.text_input("Name", value=case_name, key="dialog_save_name")
+        save_notes = st.text_area("Notes", value=case_notes, key="dialog_save_notes")
+        if st.button("Save case", type="primary", key="dialog_save", width='stretch'):
+            if not save_name.strip():
+                st.warning("Enter a case name.")
+            else:
+                if _do_save_case(name_override=save_name, notes_override=save_notes):
+                    st.toast(f'Saved "{save_name}"')
+                st.rerun()
 
 
 def _render_sidebar_actions():
     """Render case management controls in sidebar."""
     st.divider()
 
-    # --- Active case identity (always shows source of truth) ---
-    # Callbacks fire before script body, so values are already up-to-date here
-    case_name = get_case_name()
-    case_notes = get_case_notes()
-    if case_name:
-        st.markdown(f"**{case_name}**")
-        if case_notes:
-            st.caption(case_notes)
-    else:
-        st.caption("No case name")
-
-    # --- Edit name / notes (on_change callbacks update immediately) ---
-    st.text_input(
-        "Case name",
-        placeholder="Enter case name",
-        key="sidebar_case_name",
-        label_visibility="collapsed",
-        on_change=_on_sidebar_name_change,
-    )
-    st.text_input(
-        "Notes",
-        placeholder="Notes (optional)",
-        key="sidebar_case_notes",
-        label_visibility="collapsed",
-        on_change=_on_sidebar_notes_change,
-    )
-
-    st.divider()
-
     # --- Compute button ---
     if st.button("Compute Revenue Frame", type="primary", width='stretch'):
         _run_calculation()
 
-    # --- Update saved case (only for existing cases, with confirmation) ---
-    case_id = get_case_id()
-    if case_id:
-        if st.button("Update saved case (last run)", width='stretch'):
-            _confirm_update_case()
+    # --- Save case button (only after computation) ---
+    if st.session_state.get("calculation_done"):
+        if st.button("Save case", width='stretch'):
+            _save_case_dialog()
 
-    # --- Save as new case (always available, with confirmation) ---
-    if st.button("Save as new case (last run)", width='stretch'):
-        _confirm_save_as_new()
+        from frontend.utils.case_storage import get_case_count
+        user_reid = get_user_reid()
+        if user_reid:
+            st.caption(f"Saved cases: {get_case_count(user_reid)}/10")
 
-    # --- Revert button ---
-    revert_label = "Revert to saved" if has_saved_reference() else "Reset to defaults"
+    # --- Revert / New case button ---
+    revert_label = "Revert to saved" if has_saved_reference() else "New case"
     if st.button(revert_label, width='stretch'):
         revert_to_saved()
         st.toast("Configuration reverted")
@@ -396,26 +351,22 @@ def _render_sidebar_actions():
         st.caption("Unsaved changes")
 
 
-# =============================================================================
-# SIDEBAR
-# =============================================================================
-
 def render_sidebar():
     """Render sidebar with company selection based on auth state."""
     with st.sidebar:
         st.header("Regumetrica")
-        
+
         # Dev mode indicator
         if is_dev_mode():
             st.caption("Dev Mode (auth bypassed)")
             _render_dev_mode_selector()
-        
+
         elif is_authenticated():
             _render_authenticated_sidebar()
-        
+
         else:
             st.warning("Not logged in")
-        
+
         # Action buttons (always visible when company is selected)
         if get_user_reid():
             _render_sidebar_actions()
@@ -426,28 +377,28 @@ def _render_dev_mode_selector():
     companies = _get_company_list()
     if not companies:
         companies = [{"REId": "REL00886", "display": "Test Company (REL00886)"}]
-    
+
     options = [c["display"] for c in companies]
     reid_lookup = {c["display"]: c["REId"] for c in companies}
-    
+
     default_idx = 0
     for i, c in enumerate(companies):
         if c["REId"] == "REL00886":
             default_idx = i
             break
-    
+
     selected_display = st.selectbox(
         "Select Company",
         options=options,
         index=default_idx,
         key="company_selector"
     )
-    
+
     if selected_display:
         reid = reid_lookup.get(selected_display)
         if reid:
             set_user_reid(reid)
-    
+
     st.divider()
     current_reid = st.session_state.get('user_reid')
     st.caption(f"Selected: {get_company_display(current_reid)}")
@@ -458,42 +409,42 @@ def _render_authenticated_sidebar():
     email = get_auth_email()
     role = get_auth_role()
     reid = get_auth_reid()
-    
+
     st.caption(f"User: {email}")
-    
+
     if role == "regulator":
         st.caption("Regulator access")
         st.divider()
-        
+
         companies = _get_company_list()
-        
+
         if companies:
             options = [c["display"] for c in companies]
             reid_lookup = {c["display"]: c["REId"] for c in companies}
-            
+
             selected_display = st.selectbox(
                 "Select Company to Analyze",
                 options=options,
                 key="regulator_company_selector"
             )
-            
+
             if selected_display:
                 selected_reid = reid_lookup.get(selected_display)
                 if selected_reid:
                     set_user_reid(selected_reid)
-            
+
             current_reid = st.session_state.get('user_reid')
             st.caption(f"Analyzing: {get_company_display(current_reid)}")
-    
+
     else:
         company_display = get_company_display(reid)
         st.caption(f"Company: {company_display}")
-        
+
         if reid and st.session_state.get("user_reid") != reid:
             set_user_reid(reid)
-    
+
     st.divider()
-    
+
     # Logout button
     if st.button("Logout", width='stretch'):
         delete_auth_cookie()

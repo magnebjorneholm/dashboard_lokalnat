@@ -328,7 +328,7 @@ st.divider()
 
 
 if has_unsaved_changes():
-    st.caption("This result has not been saved yet. Use **Save case** / **Update saved case** in the sidebar.")
+    st.caption("This result has not been saved yet. Use **Save case** in the sidebar.")
 
 
 

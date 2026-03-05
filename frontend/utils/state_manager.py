@@ -199,6 +199,9 @@ def reset_case() -> None:
     _clear_selection_widget_keys()
     # Clear all config-related widget keys so widgets re-init from ui_config
     _clear_config_widget_keys()
+    # Clear case identity widget keys so they reinitialize
+    for key in ("define_case_name", "define_case_notes"):
+        st.session_state.pop(key, None)
 
 
 def _clear_selection_widget_keys() -> None:

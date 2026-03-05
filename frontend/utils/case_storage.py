@@ -63,34 +63,34 @@ class SavedCase:
     selected_modules: List[str]  # e.g., ["m1", "m3.wacc", "m3.incentive_params"]
     had_kent_file: bool
     kent_file_name: Optional[str]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage."""
         return asdict(self)
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SavedCase":
         """Create SavedCase from dictionary."""
         return cls(**data)
-    
+
     @classmethod
     def from_firestore(cls, doc_id: str, data: Dict[str, Any]) -> "SavedCase":
         """Create SavedCase from Firestore document."""
         # Convert Firestore timestamps to ISO strings
         created_at = data.get("created_at")
         updated_at = data.get("updated_at")
-        
+
         if hasattr(created_at, "isoformat"):
             created_at = created_at.isoformat()
         elif hasattr(created_at, "timestamp"):
             # Firestore Timestamp
             created_at = datetime.fromtimestamp(created_at.timestamp()).isoformat()
-        
+
         if hasattr(updated_at, "isoformat"):
             updated_at = updated_at.isoformat()
         elif hasattr(updated_at, "timestamp"):
             updated_at = datetime.fromtimestamp(updated_at.timestamp()).isoformat()
-        
+
         return cls(
             id=doc_id,
             name=data.get("name", ""),
@@ -125,12 +125,12 @@ def _serialize_ui_config(ui_config: Dict[str, Any]) -> Dict[str, Any]:
     Excludes kent_file_bytes and converts non-serializable types.
     """
     serialized = {}
-    
+
     for module_key, module_config in ui_config.items():
         if not isinstance(module_config, dict):
             serialized[module_key] = module_config
             continue
-        
+
         serialized_module = {}
         for key, value in module_config.items():
             if key == "kent_file_bytes":
@@ -141,9 +141,9 @@ def _serialize_ui_config(ui_config: Dict[str, Any]) -> Dict[str, Any]:
                 serialized_module[key] = _serialize_dict(value)
             else:
                 serialized_module[key] = value
-        
+
         serialized[module_key] = serialized_module
-    
+
     return serialized
 
 
@@ -199,13 +199,13 @@ def _firestore_save(
     """Save case to Firestore."""
     db = get_firestore_client()
     now = datetime.now()
-    
+
     m1 = ui_config.get("m1_asset_base", {})
     had_kent = m1.get("kent_file_bytes") is not None
     kent_name = m1.get("kent_file_name") if had_kent else None
-    
+
     serialized_config = _serialize_ui_config(ui_config)
-    
+
     if case_id is None:
         # New case - check limit
         existing = _firestore_list(user_reid)
@@ -223,7 +223,7 @@ def _firestore_save(
             created_at = datetime.fromisoformat(existing_case.created_at)
         else:
             created_at = now
-    
+
     doc_data = {
         "user_reid": user_reid,
         "name": case_name,
@@ -235,9 +235,9 @@ def _firestore_save(
         "had_kent_file": had_kent,
         "kent_file_name": kent_name,
     }
-    
+
     db.collection(COLLECTION_NAME).document(case_id).set(doc_data)
-    
+
     return SavedCase(
         id=case_id,
         name=case_name,
@@ -255,57 +255,57 @@ def _firestore_save(
 def _firestore_load(user_reid: str, case_id: str) -> Optional[SavedCase]:
     """Load case from Firestore."""
     db = get_firestore_client()
-    
+
     doc = db.collection(COLLECTION_NAME).document(case_id).get()
-    
+
     if not doc.exists:
         return None
-    
+
     data = doc.to_dict()
-    
+
     # Verify ownership
     if data.get("user_reid") != user_reid:
         return None
-    
+
     return SavedCase.from_firestore(doc.id, data)
 
 
 def _firestore_list(user_reid: str) -> List[SavedCase]:
     """List all cases for a user from Firestore."""
     db = get_firestore_client()
-    
+
     # Query without order_by to avoid composite index requirement
     # Sorting done in Python instead
     query = db.collection(COLLECTION_NAME).where(
         filter=FieldFilter("user_reid", "==", user_reid)
     )
-    
+
     cases = []
     for doc in query.stream():
         try:
             cases.append(SavedCase.from_firestore(doc.id, doc.to_dict()))
         except Exception:
             continue
-    
+
     # Sort by updated_at descending (newest first)
     cases.sort(key=lambda c: c.updated_at, reverse=True)
-    
+
     return cases
 
 
 def _firestore_delete(user_reid: str, case_id: str) -> bool:
     """Delete case from Firestore."""
     db = get_firestore_client()
-    
+
     # Verify ownership first
     doc = db.collection(COLLECTION_NAME).document(case_id).get()
     if not doc.exists:
         return False
-    
+
     data = doc.to_dict()
     if data.get("user_reid") != user_reid:
         return False
-    
+
     db.collection(COLLECTION_NAME).document(case_id).delete()
     return True
 
@@ -337,13 +337,13 @@ def _local_save(
     """Save case to local JSON file."""
     user_dir = _local_ensure_user_dir(user_reid)
     now = datetime.now().isoformat()
-    
+
     m1 = ui_config.get("m1_asset_base", {})
     had_kent = m1.get("kent_file_bytes") is not None
     kent_name = m1.get("kent_file_name") if had_kent else None
-    
+
     serialized_config = _serialize_ui_config(ui_config)
-    
+
     if case_id is None:
         existing = _local_list(user_reid)
         if len(existing) >= MAX_CASES_PER_USER:
@@ -356,7 +356,7 @@ def _local_save(
     else:
         existing_case = _local_load(user_reid, case_id)
         created_at = existing_case.created_at if existing_case else now
-    
+
     saved_case = SavedCase(
         id=case_id,
         name=case_name,
@@ -369,21 +369,21 @@ def _local_save(
         had_kent_file=had_kent,
         kent_file_name=kent_name,
     )
-    
+
     file_path = user_dir / f"{case_id}.json"
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(saved_case.to_dict(), f, indent=2, ensure_ascii=False)
-    
+
     return saved_case
 
 
 def _local_load(user_reid: str, case_id: str) -> Optional[SavedCase]:
     """Load case from local JSON file."""
     file_path = _local_get_user_dir(user_reid) / f"{case_id}.json"
-    
+
     if not file_path.exists():
         return None
-    
+
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -395,10 +395,10 @@ def _local_load(user_reid: str, case_id: str) -> Optional[SavedCase]:
 def _local_list(user_reid: str) -> List[SavedCase]:
     """List all cases from local storage."""
     user_dir = _local_get_user_dir(user_reid)
-    
+
     if not user_dir.exists():
         return []
-    
+
     cases = []
     for file_path in user_dir.glob("*.json"):
         try:
@@ -407,7 +407,7 @@ def _local_list(user_reid: str) -> List[SavedCase]:
             cases.append(SavedCase.from_dict(data))
         except Exception:
             continue
-    
+
     cases.sort(key=lambda c: c.updated_at, reverse=True)
     return cases
 
@@ -415,10 +415,10 @@ def _local_list(user_reid: str) -> List[SavedCase]:
 def _local_delete(user_reid: str, case_id: str) -> bool:
     """Delete case from local storage."""
     file_path = _local_get_user_dir(user_reid) / f"{case_id}.json"
-    
+
     if not file_path.exists():
         return False
-    
+
     file_path.unlink()
     return True
 
@@ -437,7 +437,7 @@ def save_case(
 ) -> SavedCase:
     """
     Save a case to storage (Firestore or local fallback).
-    
+
     Args:
         user_reid: User's REId
         case_name: Name of the case
@@ -445,10 +445,10 @@ def save_case(
         ui_config: The ui_config dict from session_state
         selected_modules: Set of selected module/section keys
         case_id: Existing case ID (for updates) or None for new case
-    
+
     Returns:
         SavedCase object
-    
+
     Raises:
         ValueError: If max cases exceeded
     """
@@ -465,11 +465,11 @@ def save_case(
 def load_case(user_reid: str, case_id: str) -> Optional[SavedCase]:
     """
     Load a case from storage.
-    
+
     Args:
         user_reid: User's REId
         case_id: Case ID to load
-    
+
     Returns:
         SavedCase object or None if not found
     """
@@ -482,10 +482,10 @@ def load_case(user_reid: str, case_id: str) -> Optional[SavedCase]:
 def list_cases(user_reid: str) -> List[SavedCase]:
     """
     List all saved cases for a user.
-    
+
     Args:
         user_reid: User's REId
-    
+
     Returns:
         List of SavedCase objects, sorted by updated_at (newest first)
     """
@@ -498,11 +498,11 @@ def list_cases(user_reid: str) -> List[SavedCase]:
 def delete_case(user_reid: str, case_id: str) -> bool:
     """
     Delete a case from storage.
-    
+
     Args:
         user_reid: User's REId
         case_id: Case ID to delete
-    
+
     Returns:
         True if deleted, False if not found
     """
@@ -528,15 +528,15 @@ def apply_case_to_session(
 ) -> None:
     """
     Apply a loaded case to session state.
-    
+
     Sets up widget states for both module and section checkboxes.
-    
+
     Args:
         case: The SavedCase to apply
         session_state: Streamlit session_state dict
     """
     selected_set = set(case.selected_modules)
-    
+
     # Clear old widget states
     keys_to_clear = [k for k in list(session_state.keys())
                      if k.startswith("module_select_") or k.startswith("section_select_")]
@@ -549,7 +549,7 @@ def apply_case_to_session(
     except Exception:
         # Best-effort: if st.session_state isn't available, continue
         pass
-    
+
     # Set module and section checkbox states
     for module in ALL_MODULES:
         if module.has_sections:
@@ -562,26 +562,23 @@ def apply_case_to_session(
             # Simple modules: set module checkbox
             widget_key = f"module_select_{module.key}"
             session_state[widget_key] = module.key in selected_set
-    
-    # Clear the load selectbox
-    if "load_case_select" in session_state:
-        del session_state["load_case_select"]
-    
+
+    # Clear the load selectbox and case identity widgets so they reinitialize
+    for key in ("load_case_select", "define_case_name", "define_case_notes"):
+        session_state.pop(key, None)
+
     # Apply ui_config
     deserialized_config = _deserialize_ui_config(case.ui_config)
     session_state["ui_config"] = deserialized_config
-    
+
     # Apply case metadata
     session_state["case_id"] = case.id
     session_state["case_name"] = case.name
     session_state["case_notes"] = case.notes
 
-    # Clear sidebar widget keys so they reinitialize with loaded values on rerun
-    for key in ("sidebar_case_name", "sidebar_case_notes"):
-        session_state.pop(key, None)
     session_state["selected_modules"] = selected_set
     session_state["case_saved"] = True
-    
+
     # Reset calculation state
     session_state["calculation_done"] = False
     session_state["case_result"] = None
@@ -594,72 +591,3 @@ def apply_case_to_session(
     # Clear computed reference (must recalculate)
     session_state["computed_ui_config"] = None
     session_state["computed_selected_modules"] = None
-
-
-def update_case_metadata(
-    user_reid: str,
-    case_id: str,
-    name: str,
-    notes: str,
-) -> bool:
-    """Update only name and notes for an existing case (not config).
-
-    Returns True on success, raises on failure.
-    """
-    if _use_firestore():
-        return _firestore_update_metadata(user_reid, case_id, name, notes)
-    else:
-        return _local_update_metadata(user_reid, case_id, name, notes)
-
-
-def _firestore_update_metadata(
-    user_reid: str, case_id: str, name: str, notes: str
-) -> bool:
-    db = get_firestore_client()
-    doc_ref = db.collection(COLLECTION_NAME).document(case_id)
-    doc = doc_ref.get()
-    if not doc.exists or doc.to_dict().get("user_reid") != user_reid:
-        return False
-    doc_ref.update({"name": name, "notes": notes, "updated_at": datetime.now()})
-    return True
-
-
-def _local_update_metadata(
-    user_reid: str, case_id: str, name: str, notes: str
-) -> bool:
-    file_path = _local_get_user_dir(user_reid) / f"{case_id}.json"
-    if not file_path.exists():
-        return False
-    with open(file_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if data.get("user_reid") != user_reid:
-        return False
-    data["name"] = name
-    data["notes"] = notes
-    data["updated_at"] = datetime.now().isoformat()
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    return True
-
-
-def get_case_display_info(case: SavedCase) -> Dict[str, Any]:
-    """Get display-friendly information about a case."""
-    try:
-        created = datetime.fromisoformat(case.created_at.replace("Z", "+00:00"))
-        updated = datetime.fromisoformat(case.updated_at.replace("Z", "+00:00"))
-        created_str = created.strftime("%Y-%m-%d %H:%M")
-        updated_str = updated.strftime("%Y-%m-%d %H:%M")
-    except ValueError:
-        created_str = case.created_at
-        updated_str = case.updated_at
-    
-    return {
-        "id": case.id,
-        "name": case.name,
-        "notes": case.notes[:100] + "..." if len(case.notes) > 100 else case.notes,
-        "created": created_str,
-        "updated": updated_str,
-        "modules": len(case.selected_modules),
-        "had_kent": case.had_kent_file,
-        "kent_name": case.kent_file_name,
-    }

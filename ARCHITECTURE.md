@@ -318,7 +318,7 @@ pages/login.py    --auth-->    pages/0_case_definition.py  (Define)
 - Applies styling
 - Initializes session state
 - Auth guard: `check_auth()` -> shows login OR app navigation
-- Sidebar: Company selector + case name/notes + Compute + Save/Update + Revert
+- Sidebar: Company selector + Compute + Save case + Revert/New case
 
 
 ## 6. Module Architecture (M1-M7)
@@ -435,13 +435,17 @@ Three levels of config exist for tracking changes:
 - `has_unsaved_changes()`: computed differs from saved (shows "Unsaved changes" indicator)
 - `has_config_changed_since_compute()`: working differs from computed (shows stale results warning)
 
-### Case Management (Sidebar)
+### Case Management
 
-- **Name/notes**: Edited exclusively in sidebar via `on_change` callbacks
-- **Active display**: Case name shown as bold header, notes as caption (always source of truth)
-- **Buttons**: Compute | Update saved case (if `case_id`) | Save as new case | Revert/Reset
-- **Save as new case**: Creates new case (`force_new=True`), enabling "fork" workflow
-- **Load case**: Define page. Clears sidebar widget keys so inputs reinitialize on rerun
+- **Name/notes**: Set on Define page, stored in session state only (no auto-persist to DB)
+- **Save**: Sidebar dialog after computation. Three modes:
+  - First save: user enters name/notes, creates new case in DB
+  - Update: overwrites existing case with computed config
+  - Fork ("Save as new case"): creates copy with new name
+- **Load case**: Define page. Clears widget keys so inputs reinitialize on rerun
+- **Delete case**: Define page, inline confirmation next to Load
+- **New case**: Define page button, resets all state (calls `reset_case()`)
+- **Revert to saved**: Sidebar button, restores working state to last saved/loaded config
 
 ### data_editor Widget Caching
 
