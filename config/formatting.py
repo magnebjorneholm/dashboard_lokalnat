@@ -4,8 +4,8 @@ Number Formatting for Regumetrica UI.
 Handles thousand separators, percentages, and currency formats.
 Includes HTML formatting for delta values with color coding.
 
-Note: Uses European number format (comma as decimal separator, space as 
-thousand separator) as per Swedish regulatory standards, but with English labels.
+Note: Uses space as thousand separator and period as decimal separator,
+with English labels.
 """
 
 from typing import Optional
@@ -26,53 +26,50 @@ def format_tkr(value: float) -> str:
 
 def format_percent(value: float, decimals: int = 2) -> str:
     """
-    Format as percentage with European decimal comma.
-    
+    Format as percentage.
+
     Args:
         value: Value as decimal (e.g. 0.0453 for 4.53%)
         decimals: Number of decimal places
-        
+
     Returns:
         Formatted string, e.g. "4.53%"
     """
     formatted = f"{value * 100:.{decimals}f}"
-    return formatted.replace(".", ",") + "%"
+    return formatted + "%"
 
 
 def format_number(value: float, decimals: int = 0) -> str:
     """
-    Format number with European conventions.
-    
+    Format number with space as thousand separator and period as decimal.
+
     Args:
         value: Numeric value
         decimals: Number of decimal places
-        
+
     Returns:
-        Formatted string with European conventions
+        Formatted string
     """
     if decimals == 0:
         return f"{value:,.0f}".replace(",", " ")
     else:
         formatted = f"{value:,.{decimals}f}"
-        parts = formatted.split(".")
-        integer_part = parts[0].replace(",", " ")
-        decimal_part = parts[1] if len(parts) > 1 else ""
-        return f"{integer_part},{decimal_part}" if decimal_part else integer_part
+        return formatted.replace(",", " ")
 
 
 def format_pp(value: float, decimals: int = 2) -> str:
     """
-    Format percentage-point delta with European decimal comma and sign.
+    Format percentage-point delta with sign.
 
     Args:
         value: Value as decimal (e.g. 0.0045 for +0.45 pp)
         decimals: Number of decimal places
 
     Returns:
-        Formatted string, e.g. "+0,45 pp"
+        Formatted string, e.g. "+0.45 pp"
     """
     formatted = f"{value * 100:+.{decimals}f}"
-    return formatted.replace(".", ",") + " pp"
+    return formatted + " pp"
 
 
 def format_delta(value: float, unit: str = "tkr") -> str:
@@ -149,6 +146,6 @@ def format_delta_percent_html(
     arrow = "↑ " if value > 0 else ("↓ " if value < 0 else "")
     arrow_str = arrow if show_arrow else ""
     
-    formatted_value = f"{value * 100:.{decimals}f}".replace(".", ",")
+    formatted_value = f"{value * 100:.{decimals}f}"
     
     return f'<span style="color: {color}; font-weight: 500;">{arrow_str}{sign}{formatted_value}%</span>'

@@ -20,7 +20,6 @@ from auth.firebase_auth import (
     is_user_logged_in,
     is_dev_mode,
 )
-from auth.cookie_session import set_auth_cookie
 
 
 # =============================================================================
@@ -199,8 +198,9 @@ def render_login_form(auth_manager) -> None:
                 st.session_state['pending_verification_token'] = user.get('idToken')
                 return
             
-            # Save refresh token in cookie for session persistence
-            set_auth_cookie(user.get('refreshToken', ''))
+            # Defer cookie setting to next render cycle (st.rerun below
+            # would discard the JS component before it reaches the client)
+            st.session_state["_pending_auth_cookie"] = user.get('refreshToken', '')
 
             # Get user claims
             claims = auth_manager.get_user_claims(user['idToken'])

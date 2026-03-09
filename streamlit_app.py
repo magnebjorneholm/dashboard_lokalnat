@@ -36,7 +36,7 @@ from frontend.utils.state_manager import (
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
-from auth.cookie_session import get_auth_cookie, delete_auth_cookie
+from auth.cookie_session import get_auth_cookie, set_auth_cookie, delete_auth_cookie
 from config.column_names import COL_COMPANY_NAME
 
 # Page configuration
@@ -495,11 +495,25 @@ results = st.Page(
 try_restore_auth_from_cookie()
 
 if check_auth():
+    # Set pending auth cookie (deferred from login to ensure JS renders)
+    pending_token = st.session_state.pop("_pending_auth_cookie", None)
+    if pending_token:
+        set_auth_cookie(pending_token)
+
     render_sidebar()
 
     pg = st.navigation([case_definition, case_config, results])
     pg.run()
 
 else:
-    pg = st.navigation([login_page])
-    pg.run()
+    # Register ALL pages to prevent "Page not found" on refresh
+    # (URL may still point to a protected page after auth fails)
+    pg = st.navigation(
+        [login_page, case_definition, case_config, results],
+        position="hidden",
+    )
+    # Redirect to login if user landed on a protected page
+    if pg != login_page:
+        st.switch_page(login_page)
+    else:
+        pg.run()

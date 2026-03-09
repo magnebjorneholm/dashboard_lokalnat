@@ -62,8 +62,8 @@ Chart palette (7 colors, colorblind-safe):
 - Body: Inter (400/500/600/700)
 - Data/code: IBM Plex Mono (400/500)
 - Financial data uses tabular figures (`font-feature-settings: 'tnum'`)
-- Number format: European — space as thousands separator, comma as decimal
-  - `1 234 567 tkr`, `4,53%`, `+1 234 tkr`
+- Number format: space as thousands separator, period as decimal
+  - `1 234 567 tkr`, `4.53%`, `+1 234 tkr`
 
 ### Design rules
 
