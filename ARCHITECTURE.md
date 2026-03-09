@@ -559,8 +559,17 @@ Authentication survives page refreshes via a browser cookie storing the Firebase
 1. `delete_auth_cookie()` → expires the cookie
 2. `auth_manager.sign_out()` → clears session state
 
-**Note:** Only auth state is persisted. UI config (`ui_config`, `selected_modules`, results) resets to
-baseline on refresh. Users should save their case to Firestore to preserve work across sessions.
+### Session Store (state_manager.py)
+
+Working state (ui_config, selected_modules, results, case metadata) is persisted across
+page refreshes via a server-side `@st.cache_resource` dict keyed by `auth_uid`.
+
+**Save points:** after compute, after case save, after case load, after revert.
+**Clear points:** on reset ("New case"), on logout.
+
+**Limitations:** Store is cleared on server restart (Render redeploy). Config changes
+made after compute but before a new compute are not persisted. Users should save their
+case to Firestore to preserve work across sessions.
 
 
 ## 12. Config Dataclasses (config/case_definition.py)
