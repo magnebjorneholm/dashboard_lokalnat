@@ -56,6 +56,9 @@ COMPARISON_COLORS = {
     "case_tail": "#60A5FA",       # Blue-400
     "bl_ord": "#64748B",          # Slate-500
     "bl_tail": "#94A3B8",         # Slate-400
+    "bl_pattern": "/",            # Diagonal lines on baseline bars
+    "bl_pattern_fgcolor": "rgba(255,255,255,0.5)",
+    "bl_pattern_size": 6,
 }
 
 # Scatter plot (M5 frontier chart)

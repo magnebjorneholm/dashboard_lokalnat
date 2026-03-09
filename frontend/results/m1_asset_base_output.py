@@ -33,6 +33,7 @@ from pipeline.result_helpers import (
     ensure_component_cols, aggregate_period, aggregate_halfyears,
     active_categories, halfyear_values, hy_row_values,
     fmt_msek, fmt_delta_msek,
+    add_comparison_traces,
 )
 
 
@@ -192,45 +193,12 @@ def _render_category_chart(
     tmpl = get_plotly_template()
     fig = go.Figure()
 
-    # Baseline bars (behind)
-    fig.add_trace(go.Bar(
-        y=chart_df['label'],
-        x=chart_df['b_ord'],
-        name='Baseline Ord',
-        orientation='h',
-        marker_color=CLR_BL_ORD,
-        offsetgroup='baseline',
-        hovertemplate='%{y}<br>Baseline Ord: %{x:,.0f} tkr<extra></extra>',
-    ))
-    fig.add_trace(go.Bar(
-        y=chart_df['label'],
-        x=chart_df['b_tail'],
-        name='Baseline Tail',
-        orientation='h',
-        marker_color=CLR_BL_TAIL,
-        offsetgroup='baseline',
-        hovertemplate='%{y}<br>Baseline Tail: %{x:,.0f} tkr<extra></extra>',
-    ))
-
-    # Case bars (in front)
-    fig.add_trace(go.Bar(
-        y=chart_df['label'],
-        x=chart_df['c_ord'],
-        name='Case Ord',
-        orientation='h',
-        marker_color=CLR_CASE_ORD,
-        offsetgroup='case',
-        hovertemplate='%{y}<br>Case Ord: %{x:,.0f} tkr<extra></extra>',
-    ))
-    fig.add_trace(go.Bar(
-        y=chart_df['label'],
-        x=chart_df['c_tail'],
-        name='Case Tail',
-        orientation='h',
-        marker_color=CLR_CASE_TAIL,
-        offsetgroup='case',
-        hovertemplate='%{y}<br>Case Tail: %{x:,.0f} tkr<extra></extra>',
-    ))
+    add_comparison_traces(
+        fig, chart_df['label'],
+        c_ord=chart_df['c_ord'], c_tail=chart_df['c_tail'],
+        b_ord=chart_df['b_ord'], b_tail=chart_df['b_tail'],
+        orientation='h', unit='tkr', fmt=',.0f',
+    )
 
     fig.update_layout(
         barmode='stack',
@@ -452,41 +420,12 @@ def _render_halfyear_chart(hy_df: pd.DataFrame, title_label: str) -> None:
     tmpl = get_plotly_template()
     fig = go.Figure()
 
-    # Baseline (behind)
-    fig.add_trace(go.Bar(
-        x=hy_df['Period'],
-        y=hy_df['BL Ord'],
-        name='Baseline Ord',
-        marker_color=CLR_BL_ORD,
-        offsetgroup='baseline',
-        hovertemplate='%{x}<br>BL Ord: %{y:,.0f} tkr<extra></extra>',
-    ))
-    fig.add_trace(go.Bar(
-        x=hy_df['Period'],
-        y=hy_df['BL Tail'],
-        name='Baseline Tail',
-        marker_color=CLR_BL_TAIL,
-        offsetgroup='baseline',
-        hovertemplate='%{x}<br>BL Tail: %{y:,.0f} tkr<extra></extra>',
-    ))
-
-    # Case (in front)
-    fig.add_trace(go.Bar(
-        x=hy_df['Period'],
-        y=hy_df['Case Ord'],
-        name='Case Ord',
-        marker_color=CLR_CASE_ORD,
-        offsetgroup='case',
-        hovertemplate='%{x}<br>Case Ord: %{y:,.0f} tkr<extra></extra>',
-    ))
-    fig.add_trace(go.Bar(
-        x=hy_df['Period'],
-        y=hy_df['Case Tail'],
-        name='Case Tail',
-        marker_color=CLR_CASE_TAIL,
-        offsetgroup='case',
-        hovertemplate='%{x}<br>Case Tail: %{y:,.0f} tkr<extra></extra>',
-    ))
+    add_comparison_traces(
+        fig, hy_df['Period'],
+        c_ord=hy_df['Case Ord'], c_tail=hy_df['Case Tail'],
+        b_ord=hy_df['BL Ord'], b_tail=hy_df['BL Tail'],
+        orientation='v', unit='tkr', fmt=',.0f',
+    )
 
     fig.update_layout(
         barmode='stack',

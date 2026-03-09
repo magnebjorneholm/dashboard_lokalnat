@@ -7,6 +7,7 @@ copy-pasted across multiple output files.
 """
 
 import pandas as pd
+import plotly.graph_objects as go
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -109,6 +110,88 @@ CLR_CASE_ORD = COMPARISON_COLORS["case_ord"]
 CLR_CASE_TAIL = COMPARISON_COLORS["case_tail"]
 CLR_BL_ORD = COMPARISON_COLORS["bl_ord"]
 CLR_BL_TAIL = COMPARISON_COLORS["bl_tail"]
+
+# Baseline pattern config (diagonal lines for visual distinction in legend)
+_BL_PATTERN = dict(
+    shape=COMPARISON_COLORS["bl_pattern"],
+    fgcolor=COMPARISON_COLORS["bl_pattern_fgcolor"],
+    size=COMPARISON_COLORS["bl_pattern_size"],
+    fillmode="overlay",
+)
+
+
+def add_comparison_traces(
+    fig: go.Figure,
+    labels,
+    c_ord,
+    c_tail,
+    b_ord,
+    b_tail,
+    *,
+    orientation: str = "h",
+    unit: str = "tkr",
+    fmt: str = ",.0f",
+) -> go.Figure:
+    """Add the standard 4 Case/Baseline Ord/Tail bar traces to a figure.
+
+    Args:
+        fig: Plotly Figure to add traces to.
+        labels: Category labels (y-axis for horizontal, x-axis for vertical).
+        c_ord, c_tail, b_ord, b_tail: Data arrays for each trace.
+        orientation: 'h' for horizontal bars, 'v' for vertical.
+        unit: Unit string for hover (e.g. 'tkr', 'MSEK').
+        fmt: Number format string for hover values.
+
+    Returns:
+        The figure (for chaining).
+    """
+    is_h = orientation == "h"
+    pos_key = "y" if is_h else "x"
+    val_key = "x" if is_h else "y"
+
+    # Baseline bars (behind, with pattern fill)
+    fig.add_trace(go.Bar(**{
+        pos_key: labels, val_key: b_ord,
+        "name": "Baseline Ord",
+        "orientation": orientation,
+        "marker": dict(color=CLR_BL_ORD, pattern=_BL_PATTERN),
+        "offsetgroup": "baseline",
+        "legendgroup": "baseline",
+        "legendgrouptitle_text": "Baseline",
+        "hovertemplate": f"%{{{'y' if is_h else 'x'}}}<br>BL Ord: %{{{'x' if is_h else 'y'}:{fmt}}} {unit}<extra></extra>",
+    }))
+    fig.add_trace(go.Bar(**{
+        pos_key: labels, val_key: b_tail,
+        "name": "Baseline Tail",
+        "orientation": orientation,
+        "marker": dict(color=CLR_BL_TAIL, pattern=_BL_PATTERN),
+        "offsetgroup": "baseline",
+        "legendgroup": "baseline",
+        "hovertemplate": f"%{{{'y' if is_h else 'x'}}}<br>BL Tail: %{{{'x' if is_h else 'y'}:{fmt}}} {unit}<extra></extra>",
+    }))
+
+    # Case bars (in front, solid)
+    fig.add_trace(go.Bar(**{
+        pos_key: labels, val_key: c_ord,
+        "name": "Case Ord",
+        "orientation": orientation,
+        "marker_color": CLR_CASE_ORD,
+        "offsetgroup": "case",
+        "legendgroup": "case",
+        "legendgrouptitle_text": "Case",
+        "hovertemplate": f"%{{{'y' if is_h else 'x'}}}<br>Case Ord: %{{{'x' if is_h else 'y'}:{fmt}}} {unit}<extra></extra>",
+    }))
+    fig.add_trace(go.Bar(**{
+        pos_key: labels, val_key: c_tail,
+        "name": "Case Tail",
+        "orientation": orientation,
+        "marker_color": CLR_CASE_TAIL,
+        "offsetgroup": "case",
+        "legendgroup": "case",
+        "hovertemplate": f"%{{{'y' if is_h else 'x'}}}<br>Case Tail: %{{{'x' if is_h else 'y'}:{fmt}}} {unit}<extra></extra>",
+    }))
+
+    return fig
 
 
 # ---------------------------------------------------------------------------
