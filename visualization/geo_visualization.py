@@ -19,6 +19,14 @@ from config.column_names import (
 )
 from config.colors import COLORS, GEO_COLORSCALE
 
+# Columns where lower values are "better" (more efficient / less costly)
+_LOWER_IS_BETTER = {
+    COL_EFF_REQ_ANNUAL,
+    "IR_per_CU",
+    "CAPEX_per_CU",
+    "OPEX_per_CU",
+}
+
 MAP_STYLES = {
     "light": "carto-positron",
     "dark": "carto-darkmatter",
@@ -34,6 +42,7 @@ COLUMN_LABELS = {
     "IR_per_CU": "Revenue frame per customer",
     "CAPEX_per_CU": "Capital cost per customer",
     "OPEX_per_CU": "OPEX per customer",
+    "incentive_pct_of_return": "Incentive adj. (% of return)",
 }
 
 
@@ -46,7 +55,8 @@ def get_available_value_columns(gdf: gpd.GeoDataFrame) -> List[str]:
 
     priority_order = [
         COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_EFF_REQ_ANNUAL,
-        "IR_per_CU", "CAPEX_per_CU", "OPEX_per_CU"
+        "IR_per_CU", "CAPEX_per_CU", "OPEX_per_CU",
+        "incentive_pct_of_return",
     ]
     priority = [c for c in priority_order if c in numeric_cols]
 
@@ -104,6 +114,8 @@ def create_efficiency_map(
         # Convert raw values to percentile ranks (0-100)
         from scipy.stats import rankdata
         ranks = rankdata(valid_values.values, method='average')
+        if value_column in _LOWER_IS_BETTER:
+            ranks = len(ranks) + 1 - ranks  # Invert: lowest value → highest percentile
         percentiles = (ranks - 1) / max(len(ranks) - 1, 1) * 100
 
         # Map percentiles back to all rows (NaN stays as -1)
@@ -190,6 +202,7 @@ def _create_hover_text(row: pd.Series, value_column: str) -> str:
         ("IR_per_CU", "Rev. frame/cust.", ",.1f", False),
         ("CAPEX_per_CU", "Capital cost/cust.", ",.1f", False),
         ("OPEX_per_CU", "OPEX/cust.", ",.1f", False),
+        ("incentive_pct_of_return", "Incentive/return", ".1%", True),
     ]
 
     for col, label, fmt, is_percent in metrics:
@@ -212,9 +225,22 @@ def _create_hover_text(row: pd.Series, value_column: str) -> str:
 
 
 def _add_company_highlight(fig: go.Figure, user_geoms: gpd.GeoDataFrame) -> None:
-    """Add red outline for user company areas."""
+    """Add semi-transparent fill and thick outline for user company areas."""
     company_plot = user_geoms.to_crs(4326).copy()
 
+    # 1. Semi-transparent fill overlay
+    geojson = json.loads(company_plot.to_json())
+    fig.add_trace(go.Choroplethmap(
+        geojson=geojson,
+        locations=company_plot.index,
+        z=[1] * len(company_plot),
+        colorscale=[[0, COLORS["primary"]], [1, COLORS["primary"]]],
+        marker=dict(opacity=0.15, line=dict(width=0, color="rgba(0,0,0,0)")),
+        showscale=False,
+        hoverinfo="skip",
+    ))
+
+    # 2. Thick border
     for _, row in company_plot.iterrows():
         geom = row.geometry
         polygons = []
@@ -233,7 +259,7 @@ def _add_company_highlight(fig: go.Figure, user_geoms: gpd.GeoDataFrame) -> None
                 lon=lons,
                 lat=lats,
                 mode="lines",
-                line=dict(width=2.5, color=COLORS["primary"]),
+                line=dict(width=4, color=COLORS["primary"]),
                 showlegend=False,
                 hoverinfo="skip"
             ))

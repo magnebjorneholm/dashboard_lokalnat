@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from config.column_names import (
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_EFF_REQ_ANNUAL,
     COL_REVENUE_FRAME, COL_CAPITAL_COST_PERIOD, COL_CONTROLLABLE_PERIOD,
+    COL_INCENTIVE_TOTAL, COL_RETURN_PERIOD,
 )
 
 EXPECTED_CRS = 3006  # SWEREF99 TM
@@ -60,6 +61,10 @@ def load_shapefile(shapefile_path: str | Path) -> gpd.GeoDataFrame:
     # Clean up columns — "FöretagNa" is the shapefile's column (external source, not renamed)
     gdf = gdf.rename(columns={"FöretagNa": "Företag"})
     gdf = gdf[["REId", "Företag", "geometry"]].copy()
+
+    # Simplify geometry for faster browser rendering (100m tolerance in SWEREF99 TM)
+    # Reduces ~182K vertices → ~24K, GeoJSON from 6.5 MB → 1.1 MB
+    gdf["geometry"] = gdf.geometry.simplify(tolerance=100, preserve_topology=True)
 
     return gdf
 
@@ -196,9 +201,16 @@ def prepare_map_data_from_pipeline(
 
     # Get revenue frame data from post_dea
     ir_data = pipeline_result.post_dea.all_revenue_frames[
-        ['REId', COL_REVENUE_FRAME, COL_CAPITAL_COST_PERIOD, COL_CONTROLLABLE_PERIOD]
+        ['REId', COL_REVENUE_FRAME, COL_CAPITAL_COST_PERIOD, COL_CONTROLLABLE_PERIOD,
+         COL_INCENTIVE_TOTAL]
     ].copy()
     ir_data['REId'] = ir_data['REId'].str.strip().str.upper()
+
+    # Get return on assets from baseline SDF IR (not in revenue frame assembly)
+    sdf_ir = pipeline_result.baseline.sdf_ir
+    return_data = sdf_ir[['REId', COL_RETURN_PERIOD]].copy()
+    return_data['REId'] = return_data['REId'].str.strip().str.upper()
+    ir_data = ir_data.merge(return_data, on='REId', how='left')
 
     # Merge all data sources
     dea_results['REId'] = dea_results['REId'].str.strip().str.upper()
@@ -216,10 +228,16 @@ def prepare_map_data_from_pipeline(
     combined['CAPEX_per_CU'] = combined[COL_CAPITAL_COST_PERIOD] / combined['CU']
     combined['OPEX_per_CU'] = combined[COL_CONTROLLABLE_PERIOD] / combined['CU']
 
+    # Incentive adjustment as share of return on assets
+    combined['incentive_pct_of_return'] = (
+        combined[COL_INCENTIVE_TOTAL] / combined[COL_RETURN_PERIOD]
+    )
+
     # Select columns for map visualization
     value_columns = [
         COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_EFF_REQ_ANNUAL,
-        'IR_per_CU', 'CAPEX_per_CU', 'OPEX_per_CU'
+        'IR_per_CU', 'CAPEX_per_CU', 'OPEX_per_CU',
+        'incentive_pct_of_return',
     ]
 
     # Aggregate by REId
