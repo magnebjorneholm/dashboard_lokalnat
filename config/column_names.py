@@ -17,7 +17,7 @@ COL_ID_NETWORK = "id_network"
 COL_COMPANY_NAME = "company_name"  # was: Företag
 
 # =============================================================================
-# Capital costs (from KENT calculations / Data_modeller)
+# Capital costs (from capcost_a.parquet / KENT calculations)
 # =============================================================================
 COL_CAPITAL_COST_2024 = "capital_cost_2024"  # was: CAPEX, Kapitalkostnad_2024
 COL_CAPITAL_COST_2025 = "capital_cost_2025"
@@ -26,7 +26,7 @@ COL_CAPITAL_COST_2027 = "capital_cost_2027"
 COL_CAPITAL_COST_PERIOD = "capital_cost_period"  # was: Kapitalkostnad_Period, Kapitalkostnad_Total
 
 # =============================================================================
-# Depreciation (from KENT / Data_modeller)
+# Depreciation (from capcost_a.parquet / KENT)
 # =============================================================================
 COL_DEPRECIATION_2024 = "depreciation_2024"  # was: Avskrivning, Avskrivning_2024
 COL_DEPRECIATION_2025 = "depreciation_2025"
@@ -35,7 +35,7 @@ COL_DEPRECIATION_2027 = "depreciation_2027"
 COL_DEPRECIATION_PERIOD = "depreciation_period"  # was: Avskrivning_Period
 
 # =============================================================================
-# Return on assets (from KENT / Data_modeller)
+# Return on assets (from capcost_a.parquet / KENT)
 # =============================================================================
 COL_RETURN_2024 = "return_on_assets_2024"  # was: Avkastning, Avkastning_2024
 COL_RETURN_2025 = "return_on_assets_2025"
@@ -138,14 +138,8 @@ DATA_MODELLER_RENAME = {
     "Företag": COL_COMPANY_NAME,
     "CAPEX": COL_CAPITAL_COST_2024,
     "OPEXp": COL_CONTROLLABLE_AVG,
-    "Avskrivning": COL_DEPRECIATION_2024,
-    # Note: "Avkastning" (aggregate) is dropped before rename; only per-year kept
-    "Avkastning_2024": COL_RETURN_2024,
-    "Avkastning_2025": COL_RETURN_2025,
-    "Avkastning_2026": COL_RETURN_2026,
-    "Avkastning_2027": COL_RETURN_2027,
-    "Avkastning_Period": COL_RETURN_PERIOD,
     # Note: "Kapitalkostnad_2024" alias is not created; CAPEX maps directly
+    # Note: Avkastning columns removed from DM; return sourced from capcost_a.parquet
     "TOTEX": COL_TOTEX,
 }
 

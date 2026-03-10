@@ -16,14 +16,14 @@ import streamlit as st
 
 from config.column_names import (
     COL_REID, COL_DMU, COL_COMPANY_NAME,
-    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_DEPRECIATION_2024,
+    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
     COL_RETURN_2024, COL_RETURN_2025, COL_RETURN_2026, COL_RETURN_2027,
     COL_RETURN_PERIOD, COL_TOTEX,
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_DEA_POTENTIAL,
     COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL,
     DATA_MODELLER_RENAME, EIS_DEA_RENAME, SDF_IR_RENAME,
     SDF_IR_REVENUE_FRAME_PATTERNS, COL_REVENUE_FRAME,
-    COL_CAPITAL_COST_PERIOD, COL_DEPRECIATION_PERIOD, COL_RETURN_PERIOD,
+    COL_CAPITAL_COST_PERIOD, COL_DEPRECIATION_PERIOD,
 )
 
 
@@ -74,17 +74,18 @@ class BaselineData:
 
 def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
     """
-    Load Data_modeller.xlsx with DEA data and per-year return.
+    Load Data_modeller.xlsx with company identifiers, volumes, and OPEXp/CAPEX.
+
+    Capital cost data (return, depreciation) is sourced from capcost_a.parquet,
+    not from this file. Avkastning columns have been removed from the Excel.
 
     Args:
         data_path: Path to data folder. If None, use default paths.
 
     Returns:
-        DataFrame with columns:
-        ['DMU', 'REId', 'Företag', 'OPEXp', 'CAPEX', 'Avskrivning', 'Avkastning',
-         'CU', 'MW', 'NS', 'MWhl', 'MWhh', 'TOTEX', 'Kapitalkostnad_2024',
-         'Avkastning_2024', 'Avkastning_2025', 'Avkastning_2026', 'Avkastning_2027',
-         'Avkastning_Period']
+        DataFrame with columns (after rename):
+        ['DMU', 'REId', 'company_name', 'controllable_cost_average',
+         'capital_cost_2024', 'CU', 'MW', 'NS', 'MWhl', 'MWhh', 'totex_first_year']
     """
     data_file = _find_data_file("ei/Data_modeller.xlsx", data_path)
 
@@ -116,52 +117,56 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Handle Avskrivning and Avkastning (aggregate)
-    if 'Avskrivning' in df.columns:
-        df['Avskrivning'] = pd.to_numeric(df['Avskrivning'], errors="coerce")
-    else:
-        df['Avskrivning'] = df['CAPEX'] * 0.5
-        print("  WARNING: Avskrivning missing, using approximation (CAPEX * 0.5)")
-
-    if 'Avkastning' in df.columns:
-        df['Avkastning'] = pd.to_numeric(df['Avkastning'], errors="coerce")
-    else:
-        df['Avkastning'] = df['CAPEX'] * 0.5
-        print("  WARNING: Avkastning missing, using approximation (CAPEX * 0.5)")
-
-    # Handle per-year return columns
-    yearly_return_cols = ['Avkastning_2024', 'Avkastning_2025',
-                          'Avkastning_2026', 'Avkastning_2027']
-
-    for col in yearly_return_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-        else:
-            df[col] = df['Avkastning']
-            print(f"  WARNING: {col} missing, using Avkastning as approximation")
-
-    # Handle Avkastning_Period (period sum)
-    if 'Avkastning_Period' in df.columns:
-        df['Avkastning_Period'] = pd.to_numeric(df['Avkastning_Period'], errors="coerce")
-    else:
-        df['Avkastning_Period'] = (
-            df['Avkastning_2024'] + df['Avkastning_2025'] +
-            df['Avkastning_2026'] + df['Avkastning_2027']
-        )
-        print("  WARNING: Avkastning_Period missing, calculated from per-year values")
-
     # Calculate TOTEX (before rename, using original column names)
     df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
-
-    # Drop legacy aggregate columns that conflict with per-year columns
-    # Avkastning (aggregate) conflicts with Avkastning_2024; per-year is more accurate
-    if 'Avkastning' in df.columns and 'Avkastning_2024' in df.columns:
-        df = df.drop(columns=['Avkastning'])
 
     # Rename Swedish → English at the load boundary
     df = df.rename(columns=DATA_MODELLER_RENAME)
 
     return df
+
+
+def _aggregate_return_from_capcost(data_path: Optional[str] = None) -> pd.DataFrame:
+    """
+    Aggregate return on assets per company per year from capcost_a.parquet.
+
+    Returns:
+        DataFrame with REId, return_on_assets_2024-2027, return_on_assets_period
+    """
+    from data_loaders.rab_data import load_capcost_a
+    from config.time_codes import YEAR_TO_TIMECODES
+
+    df = load_capcost_a(data_path)
+    df = df.copy()
+    df['return_total'] = df['return_ord'] + df['return_tail']
+
+    # Map timecodes to years
+    tc_to_year = {}
+    for year, tcs in YEAR_TO_TIMECODES.items():
+        for tc in tcs:
+            tc_to_year[tc] = year
+    df['year'] = df['time'].map(tc_to_year)
+
+    # Aggregate per company per year
+    yearly = df.groupby(['id_network', 'year'])['return_total'].sum().reset_index()
+    pivot = yearly.pivot(index='id_network', columns='year', values='return_total').reset_index()
+
+    # Map id_network → REId
+    pivot['REId'] = pivot['id_network'].apply(lambda x: f"REL{x:05d}")
+
+    # Rename to canonical column names
+    year_col_map = {
+        2024: COL_RETURN_2024,
+        2025: COL_RETURN_2025,
+        2026: COL_RETURN_2026,
+        2027: COL_RETURN_2027,
+    }
+    pivot = pivot.rename(columns=year_col_map)
+
+    return_cols = [COL_RETURN_2024, COL_RETURN_2025, COL_RETURN_2026, COL_RETURN_2027]
+    pivot[COL_RETURN_PERIOD] = pivot[return_cols].sum(axis=1)
+
+    return pivot[['REId'] + return_cols + [COL_RETURN_PERIOD]]
 
 
 def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
@@ -320,15 +325,6 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     df_all_companies = _load_data_modeller(data_path)
     print(f"  Loaded {len(df_all_companies)} companies")
 
-    # Verify per-year return
-    yearly_cols = [COL_RETURN_2024, COL_RETURN_2025,
-                   COL_RETURN_2026, COL_RETURN_2027]
-    has_yearly = all(col in df_all_companies.columns for col in yearly_cols)
-    if has_yearly:
-        print(f"  Per-year return available (2024-2027)")
-    else:
-        print(f"  Per-year return missing or approximated")
-
     # 2. Load EIs_DEA.xlsx
     print("Loading EIs_DEA.xlsx...")
     dea_results = _load_eis_dea(data_path)
@@ -358,7 +354,13 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     print(f"  Loaded grunddata (ctrl: {len(controllable_detail)}, meta: {len(controllable_meta)}, "
           f"nonctrl: {len(non_controllable_detail)} rows)")
 
-    # 6. Replace OPEXp with SDF-derived controllable_cost_average
+    # 6. Add return on assets from capcost_a.parquet
+    print("Aggregating return on assets from capcost_a...")
+    return_df = _aggregate_return_from_capcost(data_path)
+    df_all_companies = df_all_companies.merge(return_df, on="REId", how="left")
+    print(f"  Added per-year return (2024-2027) for {len(return_df)} companies")
+
+    # 8. Replace OPEXp with SDF-derived controllable_cost_average
     from calculations.opex.cost_aggregation import aggregate_controllable
     sdf_derived = aggregate_controllable(controllable_detail, controllable_meta)
     # Compute opexp_equivalent = controllable_cost_average + neo_adjustments/4
@@ -382,7 +384,7 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     )
     print(f"  Replaced OPEXp with SDF-derived controllable_cost_average")
 
-    # 7. Validate
+    # 9. Validate
     n_companies = len(df_all_companies)
     n_dea = len(dea_results)
     if n_companies != n_dea:
