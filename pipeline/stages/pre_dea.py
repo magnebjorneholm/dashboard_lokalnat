@@ -108,6 +108,7 @@ def stage_pre_dea(
             wacc_inputs=result.wacc_inputs,
             wacc_derived=result.wacc_derived,
             df_by_category=result.df_by_category,
+            user_capbase_a=result.user_capbase_a,
         )
 
     return result
@@ -138,9 +139,13 @@ def _get_user_capbase(
         return config.user_capbase_scaled.copy(), "var_scaled"
     
     elif source == CapbaseSource.KENT_UPLOAD:
+        # Use pre-parsed capbase_a if available (from saved case)
+        if config.kent_capbase_df is not None:
+            return config.kent_capbase_df.copy(), "kent_upload"
+
         if config.kent_file_bytes is None:
-            raise ValueError("KENT_UPLOAD source requires kent_file_bytes")
-        
+            raise ValueError("KENT_UPLOAD source requires kent_file_bytes or kent_capbase_df")
+
         # Convert KENT Excel to capbase_a format (steps 1-4)
         from calculations.capex.kent_capbase_prep import build_capbase_a_from_kent
 
@@ -252,7 +257,7 @@ def _apply_capex_method(
     config: PreDeaConfig,
     user_capbase: Optional[pd.DataFrame],
     user_id_network: int,
-    source_used: str
+    source_used: str,
 ) -> PreDeaStageOutput:
     """
     Apply calculation method to get final CAPEX/OPEX values.
@@ -370,6 +375,7 @@ def _method_baseline_with_custom_source(
         wacc_inputs=wacc_chain["wacc_inputs"],
         wacc_derived=wacc_chain["wacc_derived"],
         df_by_category=df_by_category,
+        user_capbase_a=user_capbase,
     )
 
 
@@ -428,6 +434,7 @@ def _method_parameter_change(
         wacc_inputs=wacc_chain["wacc_inputs"],
         wacc_derived=wacc_chain["wacc_derived"],
         df_by_category=df_by_category,
+        user_capbase_a=user_capbase,
     )
 
 

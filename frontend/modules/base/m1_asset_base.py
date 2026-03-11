@@ -79,12 +79,13 @@ def render_quantities(user_id_network: Optional[int] = None) -> Dict[str, Any]:
         st.info("Log in to access company-specific asset quantity adjustments.")
         return config
     
-    # Check if KENT is uploaded (disables this section)
-    existing_kent = st.session_state.get("ui_config", {}).get(MODULE_KEY, {}).get("kent_file_bytes")
-    
+    # Check if KENT is uploaded or saved capbase exists (disables this section)
+    m1_cfg = st.session_state.get("ui_config", {}).get(MODULE_KEY, {})
+    has_kent = m1_cfg.get("kent_file_bytes") is not None or m1_cfg.get("kent_capbase_parquet") is not None
+
     var_scaling = _render_variables_scaling(
         user_id_network,
-        disabled=(existing_kent is not None)
+        disabled=has_kent
     )
     if var_scaling:
         config["var_scaling"] = var_scaling
@@ -113,7 +114,10 @@ def render_kent(user_id_network: Optional[int] = None) -> Dict[str, Any]:
     if kent_result.get("kent_file_bytes") is not None:
         config["kent_file_bytes"] = kent_result["kent_file_bytes"]
         config["kent_file_name"] = kent_result["kent_file_name"]
-    
+    elif kent_result.get("kent_file_name") is not None:
+        # Saved capbase parquet exists (no fresh upload) — preserve filename
+        config["kent_file_name"] = kent_result["kent_file_name"]
+
     return config
 
 
@@ -485,20 +489,32 @@ def _render_kent_upload() -> Dict[str, Any]:
         "kent_file_bytes": None,
         "kent_file_name": None,
     }
-    
+
     st.markdown("##### 1.4 Upload KENT file")
     st.caption(
         "Upload custom capital base data from KENT. "
         "This overrides asset quantity scaling above."
     )
-    
+
+    # Check if capbase is persisted from a previous saved case
+    existing_m1 = st.session_state.get("ui_config", {}).get(MODULE_KEY, {})
+    has_saved_capbase = existing_m1.get("kent_capbase_parquet") is not None
+    saved_kent_name = existing_m1.get("kent_file_name")
+
+    if has_saved_capbase:
+        st.success(
+            f"Capital base loaded from saved case"
+            + (f" (KENT: {saved_kent_name})" if saved_kent_name else "")
+            + ". Upload a new file below to replace it."
+        )
+
     uploaded_file = st.file_uploader(
         "KENT Excel file",
         type=["xlsx", "xls"],
         key=f"{MODULE_KEY}_kent_upload",
         help="Export from KENT regulatory template"
     )
-    
+
     if uploaded_file is not None:
         result["kent_file_bytes"] = uploaded_file.getvalue()
         result["kent_file_name"] = uploaded_file.name
@@ -507,7 +523,10 @@ def _render_kent_upload() -> Dict[str, Any]:
             "KENT file will be used for capital base calculations. "
             "Parameter scaling factors (1.1, 1.2) still apply."
         )
-    
+    elif has_saved_capbase:
+        # Keep saved parquet and filename in config so pipeline uses them
+        result["kent_file_name"] = saved_kent_name
+
     return result
 
 

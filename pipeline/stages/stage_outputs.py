@@ -62,6 +62,10 @@ class PreDeaStageOutput:
     # Structure: (id_network, cat_encode, time) with nuav/dep/return columns
     df_by_category: Optional[pd.DataFrame] = None
 
+    # User's capbase_a (if KENT_UPLOAD or VAR_SCALED source was used)
+    # Stored so it can be persisted as parquet for case save/load
+    user_capbase_a: Optional[pd.DataFrame] = None
+
 
 @dataclass(frozen=True)
 class DeaStageOutput:

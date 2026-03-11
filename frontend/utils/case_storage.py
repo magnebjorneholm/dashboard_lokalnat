@@ -19,6 +19,7 @@ Document structure:
     - kent_file_name: str or null
 """
 
+import base64
 import copy
 import json
 import os
@@ -135,6 +136,9 @@ def _serialize_ui_config(ui_config: Dict[str, Any]) -> Dict[str, Any]:
         for key, value in module_config.items():
             if key == "kent_file_bytes":
                 continue
+            if key == "kent_capbase_parquet" and isinstance(value, bytes):
+                serialized_module[key] = base64.b64encode(value).decode("ascii")
+                continue
             if isinstance(value, set):
                 serialized_module[key] = list(value)
             elif isinstance(value, dict):
@@ -164,7 +168,17 @@ def _serialize_dict(d: Dict) -> Dict:
 
 def _deserialize_ui_config(serialized: Dict[str, Any]) -> Dict[str, Any]:
     """Deserialize ui_config from storage, converting string keys back to int where appropriate."""
-    return _convert_numeric_keys(serialized)
+    result = _convert_numeric_keys(serialized)
+
+    # Restore kent_capbase_parquet from base64 string to bytes
+    m1 = result.get("m1_asset_base")
+    if isinstance(m1, dict) and isinstance(m1.get("kent_capbase_parquet"), str):
+        try:
+            m1["kent_capbase_parquet"] = base64.b64decode(m1["kent_capbase_parquet"])
+        except Exception:
+            m1.pop("kent_capbase_parquet", None)
+
+    return result
 
 
 def _convert_numeric_keys(obj: Any) -> Any:
@@ -201,7 +215,7 @@ def _firestore_save(
     now = datetime.now()
 
     m1 = ui_config.get("m1_asset_base", {})
-    had_kent = m1.get("kent_file_bytes") is not None
+    had_kent = m1.get("kent_file_bytes") is not None or m1.get("kent_capbase_parquet") is not None
     kent_name = m1.get("kent_file_name") if had_kent else None
 
     serialized_config = _serialize_ui_config(ui_config)
@@ -339,7 +353,7 @@ def _local_save(
     now = datetime.now().isoformat()
 
     m1 = ui_config.get("m1_asset_base", {})
-    had_kent = m1.get("kent_file_bytes") is not None
+    had_kent = m1.get("kent_file_bytes") is not None or m1.get("kent_capbase_parquet") is not None
     kent_name = m1.get("kent_file_name") if had_kent else None
 
     serialized_config = _serialize_ui_config(ui_config)

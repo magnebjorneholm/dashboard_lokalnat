@@ -206,6 +206,15 @@ def _run_calculation() -> None:
 
             st.session_state["calculation_done"] = True
 
+            # Persist KENT-derived capbase_a as parquet bytes (for case save/load)
+            if case_result.pre_dea.user_capbase_a is not None:
+                import io as _io
+                _buf = _io.BytesIO()
+                case_result.pre_dea.user_capbase_a.to_parquet(_buf, index=False)
+                m1_cfg = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
+                m1_cfg["kent_capbase_parquet"] = _buf.getvalue()
+                st.session_state["ui_config"]["m1_asset_base"] = m1_cfg
+
             # Store which config produced this result
             set_computed_config(
                 ui_config=st.session_state.get("ui_config", {}),

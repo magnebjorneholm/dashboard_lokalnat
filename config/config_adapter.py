@@ -123,12 +123,19 @@ def _build_pre_dea_config(
     m3 = ui_config.get("m3_cost_of_capital", {})
     
     # === CAPBASE SOURCE (for logged-in company) ===
+    # Priority: fresh KENT upload > saved capbase parquet > var scaling > baseline
     kent_file_bytes = m1.get("kent_file_bytes")
+    kent_capbase_parquet = m1.get("kent_capbase_parquet")
     var_scaling = m1.get("var_scaling")
-    
+
+    kent_capbase_df = None
     if kent_file_bytes is not None:
         capbase_source = CapbaseSource.KENT_UPLOAD
         user_capbase_scaled = None
+    elif kent_capbase_parquet is not None:
+        capbase_source = CapbaseSource.KENT_UPLOAD
+        user_capbase_scaled = None
+        kent_capbase_df = _deserialize_capbase_parquet(kent_capbase_parquet)
     elif var_scaling:
         capbase_source = CapbaseSource.VAR_SCALED
         user_capbase_scaled = _get_scaled_user_capbase(user_id_network, var_scaling)
@@ -172,6 +179,7 @@ def _build_pre_dea_config(
         user_capbase_scaled=user_capbase_scaled,
         kent_file_bytes=kent_file_bytes if capbase_source == CapbaseSource.KENT_UPLOAD else None,
         kent_user_id_network=user_id_network if capbase_source == CapbaseSource.KENT_UPLOAD else None,
+        kent_capbase_df=kent_capbase_df,
 
         # Method (for all companies)
         method=capex_method,
@@ -252,6 +260,15 @@ def _extract_wacc_inputs(m3: Dict[str, Any]) -> tuple:
         wacc_derived_inputs = None
     
     return wacc_input_method, wacc_capm_inputs, wacc_derived_inputs
+
+
+def _deserialize_capbase_parquet(parquet_bytes: bytes) -> Optional[pd.DataFrame]:
+    """Deserialize capbase_a from parquet bytes (stored in ui_config from a saved case)."""
+    try:
+        from io import BytesIO
+        return pd.read_parquet(BytesIO(parquet_bytes))
+    except Exception:
+        return None
 
 
 def _combine_scaling_factors(
@@ -532,6 +549,8 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
     m1 = ui_config.get("m1_asset_base", {})
     if m1.get("kent_file_bytes"):
         changed.append("KENT file uploaded")
+    elif m1.get("kent_capbase_parquet"):
+        changed.append("KENT capital base (saved)")
     if m1.get("general_scaling") and m1.get("general_scaling") != 1.0:
         changed.append(f"{PID_GENERAL_SCALING} General scaling: {m1['general_scaling']:.2f}")
     if m1.get("cat_scaling"):
@@ -612,6 +631,9 @@ def get_source_method_summary(ui_config: Dict[str, Any]) -> Dict[str, str]:
     if m1.get("kent_file_bytes"):
         source = "KENT_UPLOAD"
         source_desc = f"KENT file: {m1.get('kent_file_name', 'unknown')}"
+    elif m1.get("kent_capbase_parquet"):
+        source = "KENT_UPLOAD"
+        source_desc = f"KENT (saved): {m1.get('kent_file_name', 'unknown')}"
     elif m1.get("var_scaling"):
         source = "VAR_SCALED"
         n = len(m1["var_scaling"])

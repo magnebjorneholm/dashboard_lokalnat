@@ -341,6 +341,7 @@ def _has_m1_changes() -> bool:
     m1 = ui_config.get("m1_asset_base", {})
     return (
         m1.get("kent_file_bytes") is not None or
+        m1.get("kent_capbase_parquet") is not None or
         (m1.get("general_scaling") is not None and m1.get("general_scaling") != 1.0) or
         (m1.get("cat_scaling") and len(m1.get("cat_scaling")) > 0) or
         (m1.get("var_scaling") and len(m1.get("var_scaling")) > 0)

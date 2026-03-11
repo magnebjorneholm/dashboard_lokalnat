@@ -116,6 +116,7 @@ class PreDeaConfig:
     # KENT upload specific (if source = KENT_UPLOAD)
     kent_file_bytes: Optional[bytes] = None
     kent_user_id_network: Optional[int] = None
+    kent_capbase_df: Optional[Any] = None  # Pre-parsed capbase_a DataFrame (from saved case)
     
     # === Calculation method (uniform for all) ===
     method: CapexMethod = CapexMethod.BASELINE

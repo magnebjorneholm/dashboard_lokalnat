@@ -123,9 +123,11 @@ def _render_m1_tab():
     if is_section_selected("m1", "kent"):
         if is_section_selected("m1", "scaling") or is_section_selected("m1", "quantities"):
             st.divider()
-        # Warn if case originally had KENT file that wasn't restored
+        # Warn only if case had KENT but neither raw bytes nor saved capbase exists
         m1_cfg = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
-        if m1_cfg.get("kent_file_name") and not m1_cfg.get("kent_file_bytes"):
+        if (m1_cfg.get("kent_file_name")
+                and not m1_cfg.get("kent_file_bytes")
+                and not m1_cfg.get("kent_capbase_parquet")):
             st.warning(
                 f"This case originally used a KENT file "
                 f"(**{m1_cfg['kent_file_name']}**) which was not saved. "
