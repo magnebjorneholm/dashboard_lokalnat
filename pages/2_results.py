@@ -35,7 +35,7 @@ from pipeline.result_helpers import (
     fmt_msek, fmt_delta_msek,
     calc_delta,
 )
-from config.column_names import COL_REVENUE_FRAME, COL_CAPITAL_COST_PERIOD
+from config.column_names import COL_REVENUE_FRAME, COL_CAPITAL_COST_IN_RF
 from frontend.results import (
     m1_asset_base_output,
     m2_depreciation_output,
@@ -196,8 +196,8 @@ with col2:
     st.metric(label="Baseline", value=fmt_msek(total_baseline))
 
 with col3:
-    cap_case = case_ir[COL_CAPITAL_COST_PERIOD]
-    cap_baseline = baseline_ir[COL_CAPITAL_COST_PERIOD]
+    cap_case = case_ir[COL_CAPITAL_COST_IN_RF]
+    cap_baseline = baseline_ir[COL_CAPITAL_COST_IN_RF]
     cap_delta, cap_pct = calc_delta(cap_case, cap_baseline)
     st.metric(
         label="30.1 Capital cost",
