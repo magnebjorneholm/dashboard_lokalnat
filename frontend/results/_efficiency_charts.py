@@ -125,10 +125,8 @@ def render_efficiency_distributions(
     effkrav_baseline: Optional[float],
     params: dict,
     key_prefix: str = "m5",
-    cu_weights: Optional[np.ndarray] = None,
-    effkrav_cu_weights: Optional[np.ndarray] = None,
 ) -> None:
-    """Tabbed efficiency distributions: firm count, customer-weighted, and CDF."""
+    """Efficiency distributions: efficiency scores and requirements histograms."""
 
     st.markdown("**Efficiency Distribution**")
 
@@ -136,61 +134,22 @@ def render_efficiency_distributions(
     floor_pct = params["trunkering_min"] * 100
     outlier_krav_pct = params["outlier_krav"] * 100
 
-    has_cu = cu_weights is not None and len(cu_weights) > 0
-
-    if has_cu:
-        tab_labels = ["Firm distribution", "Customer-weighted", "Customer CDF"]
-        tab_firm, tab_cu, tab_cdf = st.tabs(tab_labels)
-    else:
-        # Fallback for mini-run (no CU data)
-        tab_firm = st.container()
-
-    with tab_firm:
-        st.caption(
-            f"Left chart: distribution of DEA efficiency scores for all 148 companies. "
-            f"Companies with potential above {cap_pct:.0f}% (efficiency below {1 - params['trunkering_max']:.2f}) "
-            f"are capped at {cap_pct:.0f}%. "
-            f"Companies with potential below {floor_pct:.1f}% (efficiency above {1 - params['trunkering_min']:.3f}) "
-            f"are floored at {floor_pct:.1f}% "
-            f"(derived from the minimum annual requirement of {outlier_krav_pct:.1f}%/yr). "
-            f"Right chart: resulting annual efficiency requirements after truncation and realization."
-        )
-        col_left, col_right = st.columns(2)
-        with col_left:
-            _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params,
-                                         key_prefix=key_prefix)
-        with col_right:
-            _render_effkrav_histogram(effkrav_all_df, effkrav_case, effkrav_baseline,
-                                      key_prefix=key_prefix)
-
-    if has_cu:
-        with tab_cu:
-            st.caption(
-                f"Same efficiency bins as the firm histogram, but each company is weighted by its "
-                f"customer count (CU). Shows the number of customers served by companies in each "
-                f"efficiency range. Zone annotations show total CU and share per truncation zone."
-            )
-            col_left2, col_right2 = st.columns(2)
-            with col_left2:
-                _render_cu_weighted_histogram(eff_scores, cu_weights, eff_case, params,
-                                             key_prefix=key_prefix)
-            with col_right2:
-                if effkrav_cu_weights is not None:
-                    _render_cu_weighted_effkrav_histogram(
-                        effkrav_all_df, effkrav_cu_weights, effkrav_case,
-                        key_prefix=f"{key_prefix}_cu")
-                else:
-                    _render_effkrav_histogram(effkrav_all_df, effkrav_case, effkrav_baseline,
-                                              key_prefix=f"{key_prefix}_cu")
-
-        with tab_cdf:
-            st.caption(
-                f"Cumulative share of all customers served by companies with efficiency "
-                f"at or below each score. Read off the customer share affected by each "
-                f"truncation threshold directly from the intersection points."
-            )
-            _render_cu_cdf(eff_scores, cu_weights, eff_case, params,
-                           key_prefix=key_prefix)
+    st.caption(
+        f"Left chart: distribution of DEA efficiency scores for all 148 companies. "
+        f"Companies with potential above {cap_pct:.0f}% (efficiency below {1 - params['trunkering_max']:.2f}) "
+        f"are capped at {cap_pct:.0f}%. "
+        f"Companies with potential below {floor_pct:.1f}% (efficiency above {1 - params['trunkering_min']:.3f}) "
+        f"are floored at {floor_pct:.1f}% "
+        f"(derived from the minimum annual requirement of {outlier_krav_pct:.1f}%/yr). "
+        f"Right chart: resulting annual efficiency requirements after truncation and realization."
+    )
+    col_left, col_right = st.columns(2)
+    with col_left:
+        _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params,
+                                     key_prefix=key_prefix)
+    with col_right:
+        _render_effkrav_histogram(effkrav_all_df, effkrav_case, effkrav_baseline,
+                                  key_prefix=key_prefix)
 
 
 def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params,
@@ -383,80 +342,6 @@ def _render_effkrav_histogram(effkrav_all_df, effkrav_case, effkrav_baseline,
 
     st.plotly_chart(fig, width='stretch', config={"displayModeBar": False},
                     key=f"{key_prefix}_effkrav_hist")
-
-
-def _render_cu_weighted_effkrav_histogram(effkrav_all_df, cu_weights_aligned,
-                                          effkrav_case, key_prefix="m5"):
-    """Histogram of annual efficiency requirements weighted by customer count."""
-
-    if effkrav_all_df is None or COL_EFF_REQ_ANNUAL not in effkrav_all_df.columns:
-        st.info("Efficiency requirement data not available.")
-        return
-
-    mask = effkrav_all_df[COL_EFF_REQ_ANNUAL].notna().values
-    effkrav_arr = effkrav_all_df[COL_EFF_REQ_ANNUAL].values[mask] * 100  # to %
-    cu_arr = np.asarray(cu_weights_aligned)[mask]
-
-    # Compute weighted histogram
-    counts, bin_edges = np.histogram(effkrav_arr, bins=20, weights=cu_arr)
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    bin_width = bin_edges[1] - bin_edges[0]
-
-    layout_kwargs, template = _tmpl_safe()
-    fig = go.Figure()
-
-    fig.add_trace(go.Bar(
-        x=bin_centers,
-        y=counts,
-        width=bin_width * 0.97,
-        marker_color=CHART_COLORS[1],
-        marker_line_color="white",
-        marker_line_width=1,
-        opacity=0.85,
-        hovertemplate="Requirement: %{x:.2f}%/yr<br>Customers: %{y:,.0f}<extra></extra>",
-        name="",
-        showlegend=False,
-    ))
-
-    # Case company marker
-    if effkrav_case is not None:
-        y_max_approx = counts.max() * 1.05
-        fig.add_vline(
-            x=effkrav_case * 100,
-            line_dash="solid",
-            line_color=CHART_COLORS[1],
-            line_width=2,
-        )
-        fig.add_annotation(
-            x=effkrav_case * 100, y=y_max_approx,
-            text=f"<b>Case: {effkrav_case*100:.2f}%</b>",
-            showarrow=False,
-            font=dict(size=11, color=CHART_COLORS[1]),
-            bgcolor="rgba(255,255,255,0.9)",
-            borderpad=3, yanchor="bottom",
-        )
-
-    fig.update_layout(
-        **layout_kwargs,
-        template=template,
-        title=dict(text="Annual Efficiency Requirements (customer-weighted)",
-                   font=dict(size=13)),
-        xaxis_title="Requirement (%/yr)",
-        yaxis_title="Number of customers (CU)",
-        height=340,
-        bargap=0.03,
-        xaxis=dict(
-            showgrid=False,
-            linecolor=COLORS["bg_muted"],
-        ),
-        yaxis=dict(
-            gridcolor=COLORS["bg_subtle"],
-            linecolor=COLORS["bg_muted"],
-        ),
-    )
-
-    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False},
-                    key=f"{key_prefix}_cu_effkrav_hist")
 
 
 # ============================================================================
@@ -664,222 +549,6 @@ def _render_detail_tables(
                 "Delta": st.column_config.TextColumn("Delta", width="small"),
             },
         )
-
-
-# ============================================================================
-# CUSTOMER-WEIGHTED HISTOGRAM
-# ============================================================================
-
-def _render_cu_weighted_histogram(eff_scores, cu_weights, eff_case, params,
-                                  key_prefix="m5"):
-    """Histogram of efficiency scores weighted by customer count (CU)."""
-
-    eff_cap = 1 - params["trunkering_max"]
-    eff_floor = 1 - params["trunkering_min"]
-
-    # Compute weighted histogram (Plotly histogram doesn't support weights)
-    x_min = max(0, min(eff_scores.min(), eff_cap) - 0.05)
-    x_max = max(eff_scores.max() * 1.02, 1.05)
-    counts, bin_edges = np.histogram(eff_scores, bins=25, weights=cu_weights,
-                                     range=(x_min, x_max))
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    bin_width = bin_edges[1] - bin_edges[0]
-
-    # Zone statistics
-    total_cu = cu_weights.sum()
-    cu_cap = cu_weights[eff_scores < eff_cap].sum()
-    cu_floor = cu_weights[eff_scores > eff_floor].sum()
-    cu_active = total_cu - cu_cap - cu_floor
-
-    layout_kwargs, template = _tmpl_safe()
-    fig = go.Figure()
-
-    fig.add_trace(go.Bar(
-        x=bin_centers,
-        y=counts,
-        width=bin_width * 0.97,
-        marker_color=CHART_COLORS[0],
-        marker_line_color="white",
-        marker_line_width=1,
-        opacity=0.85,
-        hovertemplate="Efficiency: %{x:.3f}<br>Customers: %{y:,.0f}<extra></extra>",
-        name="",
-        showlegend=False,
-    ))
-
-    # Truncation zones (same as firm histogram)
-    fig.add_vrect(
-        x0=x_min, x1=eff_cap,
-        fillcolor=ZONE_CAP,
-        line=dict(color=ZONE_CAP_BORDER, width=1, dash="dot"),
-        annotation_text=f"Cap: {cu_cap:,.0f} CU ({cu_cap/total_cu*100:.0f}%)",
-        annotation_position="top right",
-        annotation_font_size=10,
-        annotation_font_color=COLORS["warning"],
-    )
-
-    fig.add_vrect(
-        x0=eff_cap, x1=eff_floor,
-        fillcolor=ZONE_ACTIVE,
-        line_width=0,
-    )
-
-    fig.add_vrect(
-        x0=eff_floor, x1=x_max,
-        fillcolor=ZONE_FLOOR,
-        line=dict(color=ZONE_FLOOR_BORDER, width=1, dash="dot"),
-        annotation_text=f"Floor: {cu_floor:,.0f} CU ({cu_floor/total_cu*100:.0f}%)",
-        annotation_position="top left",
-        annotation_font_size=10,
-        annotation_font_color=COLORS["success"],
-    )
-
-    # Case company marker
-    if eff_case is not None:
-        y_max_approx = counts.max() * 1.05
-        fig.add_vline(
-            x=eff_case,
-            line_dash="solid",
-            line_color=CHART_COLORS[0],
-            line_width=2,
-        )
-        fig.add_annotation(
-            x=eff_case, y=y_max_approx,
-            text=f"<b>Case: {eff_case:.3f}</b>",
-            showarrow=False,
-            font=dict(size=11, color=CHART_COLORS[0]),
-            bgcolor="rgba(255,255,255,0.9)",
-            borderpad=3, yanchor="bottom",
-        )
-
-    fig.update_layout(
-        **layout_kwargs,
-        template=template,
-        title=dict(text="Efficiency Scores (customer-weighted)", font=dict(size=13)),
-        xaxis_title="Efficiency score",
-        yaxis_title="Number of customers (CU)",
-        height=340,
-        bargap=0.03,
-        xaxis=dict(
-            range=[x_min, x_max],
-            dtick=0.05,
-            showgrid=False,
-            linecolor=COLORS["bg_muted"],
-        ),
-        yaxis=dict(
-            gridcolor=COLORS["bg_subtle"],
-            linecolor=COLORS["bg_muted"],
-        ),
-    )
-
-    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False},
-                    key=f"{key_prefix}_cu_hist")
-
-
-# ============================================================================
-# CUSTOMER CDF
-# ============================================================================
-
-def _render_cu_cdf(eff_scores, cu_weights, eff_case, params, key_prefix="m5"):
-    """Cumulative distribution of customers by efficiency score."""
-
-    eff_cap = 1 - params["trunkering_max"]
-    eff_floor = 1 - params["trunkering_min"]
-
-    # Sort by efficiency score ascending, compute cumulative CU share
-    sort_idx = np.argsort(eff_scores)
-    eff_sorted = eff_scores[sort_idx]
-    cu_sorted = cu_weights[sort_idx]
-    total_cu = cu_sorted.sum()
-    cum_share = np.cumsum(cu_sorted) / total_cu * 100  # 0-100%
-
-    # Add origin point for clean step function start
-    eff_plot = np.concatenate([[eff_sorted[0]], eff_sorted])
-    cum_plot = np.concatenate([[0.0], cum_share])
-
-    layout_kwargs, template = _tmpl_safe()
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=eff_plot,
-        y=cum_plot,
-        mode="lines",
-        line=dict(color=CHART_COLORS[0], width=2.5),
-        line_shape="hv",
-        hovertemplate="Efficiency: %{x:.3f}<br>Cumulative: %{y:.1f}%<extra></extra>",
-        name="",
-        showlegend=False,
-    ))
-
-    # Truncation zones (background)
-    x_min = max(0, eff_sorted[0] - 0.05)
-    x_max = max(eff_sorted[-1] * 1.02, 1.05)
-
-    fig.add_vrect(x0=x_min, x1=eff_cap, fillcolor=ZONE_CAP, line_width=0)
-    fig.add_vrect(x0=eff_cap, x1=eff_floor, fillcolor=ZONE_ACTIVE, line_width=0)
-    fig.add_vrect(x0=eff_floor, x1=x_max, fillcolor=ZONE_FLOOR, line_width=0)
-
-    # CDF values at thresholds (interpolate)
-    cdf_at_cap = np.interp(eff_cap, eff_sorted, cum_share)
-    cdf_at_floor = np.interp(eff_floor, eff_sorted, cum_share)
-
-    # Vertical threshold lines + horizontal readoff lines
-    for eff_thresh, cdf_val, color, label in [
-        (eff_cap, cdf_at_cap, COLORS["warning"], "Cap"),
-        (eff_floor, cdf_at_floor, COLORS["success"], "Floor"),
-    ]:
-        fig.add_vline(x=eff_thresh, line_dash="dash", line_color=color, line_width=1.5)
-        fig.add_hline(y=cdf_val, line_dash="dot", line_color=color, line_width=1,
-                      opacity=0.6)
-        fig.add_annotation(
-            x=eff_thresh, y=cdf_val,
-            text=f"{label}: {cdf_val:.1f}%",
-            showarrow=True, arrowhead=0, arrowwidth=1, arrowcolor=color,
-            ax=40, ay=-25,
-            font=dict(size=10, color=color),
-            bgcolor="rgba(255,255,255,0.9)",
-            borderpad=3,
-        )
-
-    # Case company marker
-    if eff_case is not None:
-        cdf_at_case = float(np.interp(eff_case, eff_sorted, cum_share))
-        fig.add_vline(x=eff_case, line_dash="solid", line_color=CHART_COLORS[0],
-                      line_width=2)
-        fig.add_annotation(
-            x=eff_case, y=cdf_at_case,
-            text=f"<b>Case: {eff_case:.3f}</b><br>{cdf_at_case:.1f}% of customers",
-            showarrow=True, arrowhead=0, arrowwidth=1.5,
-            arrowcolor=CHART_COLORS[0],
-            ax=-60, ay=-30,
-            font=dict(size=11, color=CHART_COLORS[0]),
-            bgcolor="rgba(255,255,255,0.9)",
-            borderpad=4,
-        )
-
-    fig.update_layout(
-        **layout_kwargs,
-        template=template,
-        title=dict(text="Cumulative Customer Share by Efficiency", font=dict(size=13)),
-        xaxis_title="Efficiency score",
-        yaxis_title="Cumulative share of customers (%)",
-        height=380,
-        xaxis=dict(
-            range=[x_min, x_max],
-            dtick=0.05,
-            showgrid=False,
-            linecolor=COLORS["bg_muted"],
-        ),
-        yaxis=dict(
-            range=[0, 105],
-            dtick=10,
-            gridcolor=COLORS["bg_subtle"],
-            linecolor=COLORS["bg_muted"],
-        ),
-    )
-
-    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False},
-                    key=f"{key_prefix}_cu_cdf")
 
 
 def _add_measure_row(rows, var_id, label, case_str, bl_str, case_val, bl_val, fmt="score"):

@@ -5,7 +5,6 @@ Two visual blocks:
 1. Efficiency Distribution -- Two Plotly histograms side-by-side:
    (a) Efficiency scores with truncation zone overlay and company markers.
    (b) Annual efficiency requirements distribution with company marker.
-   Tabs: Firm distribution, Customer-weighted, Customer CDF.
 2. Company Efficiency Summary -- KPI hero row (4 metrics: score, rank,
    truncated potential, annual requirement) + super-efficiency badge +
    outlier warning + 50.3 measures table + parameters.
@@ -30,7 +29,7 @@ if TYPE_CHECKING:
 
 from config.column_names import (
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF,
-    COL_CU, COL_REID,
+    COL_REID,
 )
 from frontend.results._efficiency_charts import (
     get_params,
@@ -91,22 +90,8 @@ def render(
 
     # --- Block 1: Distributions (shared) ---
     dea_case = case.dea.dea_results.copy()
-    df_companies = case.pre_dea.df_all_companies
-
-    # Merge CU with efficiency scores to align ordering
-    merged = dea_case.merge(
-        df_companies[[COL_REID, COL_CU]], on=COL_REID, how="left"
-    )
-    valid = merged[COL_DEA_EFFICIENCY].dropna()
-    eff_scores = valid.values
-    cu_weights = merged.loc[valid.index, COL_CU].fillna(0).values
-
-    # Build CU weights aligned with effkrav_all_df
+    eff_scores = dea_case[COL_DEA_EFFICIENCY].dropna().values
     effkrav_df = case.post_dea.all_eff_reqs
-    effkrav_merged = effkrav_df.merge(
-        df_companies[[COL_REID, COL_CU]], on=COL_REID, how="left"
-    )
-    effkrav_cu_weights = effkrav_merged[COL_CU].fillna(0).values
 
     render_efficiency_distributions(
         eff_scores=eff_scores,
@@ -117,8 +102,6 @@ def render(
         effkrav_baseline=baseline.post_dea.user_eff_req_pct,
         params=params,
         key_prefix="m5",
-        cu_weights=cu_weights,
-        effkrav_cu_weights=effkrav_cu_weights,
     )
 
     st.divider()

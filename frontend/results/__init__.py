@@ -9,7 +9,6 @@ from frontend.results import (
     m1_asset_base_output,
     m2_depreciation_output,
     m3_cost_of_capital_output,
-    m4_operating_exp_output,
     m5_efficiency_output,
 )
 
@@ -17,6 +16,5 @@ __all__ = [
     "m1_asset_base_output",
     "m2_depreciation_output",
     "m3_cost_of_capital_output",
-    "m4_operating_exp_output",
     "m5_efficiency_output",
 ]

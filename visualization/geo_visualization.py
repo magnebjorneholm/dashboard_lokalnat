@@ -19,14 +19,6 @@ from config.column_names import (
 )
 from config.colors import COLORS, GEO_COLORSCALE
 
-# Columns where lower values are "better" (more efficient / less costly)
-_LOWER_IS_BETTER = {
-    COL_EFF_REQ_ANNUAL,
-    "IR_per_CU",
-    "CAPEX_per_CU",
-    "OPEX_per_CU",
-}
-
 MAP_STYLES = {
     "light": "carto-positron",
     "dark": "carto-darkmatter",
@@ -114,8 +106,6 @@ def create_efficiency_map(
         # Convert raw values to percentile ranks (0-100)
         from scipy.stats import rankdata
         ranks = rankdata(valid_values.values, method='average')
-        if value_column in _LOWER_IS_BETTER:
-            ranks = len(ranks) + 1 - ranks  # Invert: lowest value → highest percentile
         percentiles = (ranks - 1) / max(len(ranks) - 1, 1) * 100
 
         # Map percentiles back to all rows (NaN stays as -1)

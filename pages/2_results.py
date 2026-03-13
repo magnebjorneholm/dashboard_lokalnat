@@ -41,7 +41,6 @@ from frontend.results import (
     m2_depreciation_output,
     m3_return_output,
     m3_incentive_output,
-    m4_operating_exp_output,
     m5_efficiency_output,
 )
 
@@ -155,7 +154,7 @@ with col_map:
                 height=500,
                 zoom=3.0
             )
-            st.plotly_chart(fig, key="efficiency_map", width='stretch')
+            st.plotly_chart(fig, key="efficiency_map", width='stretch', config={"displayModeBar": False})
             st.caption(f"{company_name} ({user_reid}) is highlighted in blue")
         else:
             st.info("No efficiency data available for map visualization.")
@@ -365,17 +364,6 @@ def _has_m3_changes() -> bool:
         not m3_qual.get("enable_load", True)
     )
 
-def _has_m4_changes() -> bool:
-    m4 = ui_config.get("m4_operating_exp", {})
-    return (
-        m4.get("opex_scaling") is not None
-        or m4.get("flex_scaling") is not None
-        or m4.get("non_adj_scaling") is not None
-        or m4.get("opex_override") is not None
-        or m4.get("flex_override") is not None
-        or m4.get("non_controllable_override") is not None
-    )
-
 def _has_m5_changes() -> bool:
     m5 = ui_config.get("m5_efficiency", {})
     # Compare against baseline values (not just is not None) because
@@ -397,7 +385,6 @@ has_changes = {
     "m1": _has_m1_changes(),
     "m2": _has_m2_changes(),
     "m3": _has_m3_changes(),
-    "m4": _has_m4_changes(),
     "m5": _has_m5_changes(),
 }
 
@@ -410,7 +397,6 @@ tab_labels = [
     tab_label("m1", "M1 Regulatory asset base valuation"),
     tab_label("m2", "M2 Depreciation"),
     tab_label("m3", "M3 Cost of Capital"),
-    tab_label("m4", "M4 Operating expenditures"),
     tab_label("m5", "M5 Efficiency incentive"),
 ]
 
@@ -430,12 +416,8 @@ with tabs[2]:
     st.divider()
     m3_incentive_output.render(case, baseline, ui_config)
 
-# Tab 4: Operating expenditures (M4)
+# Tab 4: Efficiency incentive (M5)
 with tabs[3]:
-    m4_operating_exp_output.render(case, baseline, ui_config)
-
-# Tab 5: Efficiency incentive (M5)
-with tabs[4]:
     m5_efficiency_output.render(case, baseline, ui_config, user_reid=user_reid)
 
 st.divider()
