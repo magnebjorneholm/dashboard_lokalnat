@@ -261,7 +261,7 @@ def _render_return_category_chart(
         bargroupgap=0.15,
     )
 
-    st.plotly_chart(fig, width='stretch', key="m3_return_category_chart")
+    st.plotly_chart(fig, width='stretch', key="m3_return_category_chart", config={"displayModeBar": False})
 
 
 # ---------------------------------------------------------------------------
@@ -458,4 +458,4 @@ def _render_halfyear_chart(hy_df: pd.DataFrame, title_label: str) -> None:
         bargroupgap=0.15,
     )
 
-    st.plotly_chart(fig, width='stretch', key="m3_return_halfyear_chart")
+    st.plotly_chart(fig, width='stretch', key="m3_return_halfyear_chart", config={"displayModeBar": False})

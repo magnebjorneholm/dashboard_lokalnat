@@ -317,7 +317,7 @@ fig_wf.update_layout(
     showlegend=False,
 )
 
-st.plotly_chart(fig_wf, key="revenue_frame_waterfall", width='stretch')
+st.plotly_chart(fig_wf, key="revenue_frame_waterfall", width='stretch', config={"displayModeBar": False})
 
 st.divider()
 

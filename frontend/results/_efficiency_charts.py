@@ -202,8 +202,6 @@ def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params,
     )
 
     # Company markers
-    y_max_approx = len(eff_scores) / 6
-
     if eff_baseline is not None:
         fig.add_vline(
             x=eff_baseline,
@@ -212,12 +210,12 @@ def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params,
             line_width=1.5,
         )
         fig.add_annotation(
-            x=eff_baseline, y=y_max_approx * 0.92,
+            x=eff_baseline, y=0.75, yref="paper",
             text=f"Baseline: {eff_baseline:.3f}",
             showarrow=False,
             font=dict(size=10, color=COLORS["text_muted"]),
             bgcolor="rgba(255,255,255,0.85)",
-            borderpad=3, yanchor="bottom",
+            borderpad=3, yanchor="top",
         )
 
     if eff_case is not None:
@@ -228,7 +226,7 @@ def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params,
             line_width=2,
         )
         fig.add_annotation(
-            x=eff_case, y=y_max_approx * 1.05,
+            x=eff_case, y=0.75, yref="paper",
             text=f"<b>Case: {eff_case:.3f}</b>",
             showarrow=False,
             font=dict(size=11, color=CHART_COLORS[0]),
@@ -244,16 +242,19 @@ def _render_efficiency_histogram(eff_scores, eff_case, eff_baseline, params,
         yaxis_title="Number of companies",
         height=340,
         bargap=0.03,
+        dragmode=False,
         xaxis=dict(
             range=[
                 max(0, min(eff_scores.min(), eff_cap) - 0.05),
                 max(eff_scores.max() * 1.02, 1.05),
             ],
             dtick=0.05,
+            fixedrange=True,
             showgrid=False,
             linecolor=COLORS["bg_muted"],
         ),
         yaxis=dict(
+            fixedrange=True,
             gridcolor=COLORS["bg_subtle"],
             linecolor=COLORS["bg_muted"],
         ),
@@ -288,8 +289,6 @@ def _render_effkrav_histogram(effkrav_all_df, effkrav_case, effkrav_baseline,
         showlegend=False,
     ))
 
-    y_max_approx = len(effkrav_values) / 5
-
     if effkrav_baseline is not None:
         fig.add_vline(
             x=effkrav_baseline * 100,
@@ -298,12 +297,12 @@ def _render_effkrav_histogram(effkrav_all_df, effkrav_case, effkrav_baseline,
             line_width=1.5,
         )
         fig.add_annotation(
-            x=effkrav_baseline * 100, y=y_max_approx * 0.92,
+            x=effkrav_baseline * 100, y=0.75, yref="paper",
             text=f"Baseline: {effkrav_baseline*100:.2f}%",
             showarrow=False,
             font=dict(size=10, color=COLORS["text_muted"]),
             bgcolor="rgba(255,255,255,0.85)",
-            borderpad=3, yanchor="bottom",
+            borderpad=3, yanchor="top",
         )
 
     if effkrav_case is not None:
@@ -314,7 +313,7 @@ def _render_effkrav_histogram(effkrav_all_df, effkrav_case, effkrav_baseline,
             line_width=2,
         )
         fig.add_annotation(
-            x=effkrav_case * 100, y=y_max_approx * 1.05,
+            x=effkrav_case * 100, y=0.75, yref="paper",
             text=f"<b>Case: {effkrav_case*100:.2f}%</b>",
             showarrow=False,
             font=dict(size=11, color=CHART_COLORS[1]),
@@ -330,11 +329,14 @@ def _render_effkrav_histogram(effkrav_all_df, effkrav_case, effkrav_baseline,
         yaxis_title="Number of companies",
         height=340,
         bargap=0.03,
+        dragmode=False,
         xaxis=dict(
+            fixedrange=True,
             showgrid=False,
             linecolor=COLORS["bg_muted"],
         ),
         yaxis=dict(
+            fixedrange=True,
             gridcolor=COLORS["bg_subtle"],
             linecolor=COLORS["bg_muted"],
         ),

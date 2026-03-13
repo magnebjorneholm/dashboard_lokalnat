@@ -394,7 +394,7 @@ def _render_waterfall_chart(row: pd.Series, title_suffix: str) -> None:
         showlegend=False,
     )
 
-    st.plotly_chart(fig, width='stretch', key="m3_inc_waterfall")
+    st.plotly_chart(fig, width='stretch', key="m3_inc_waterfall", config={"displayModeBar": False})
 
     # Cap reference below chart -- styled as a subtle info row
     max_adj = _safe_col(row, "max_adj")
@@ -535,4 +535,4 @@ def _render_heatmap(
         yaxis=dict(automargin=True, autorange="reversed"),
     )
 
-    st.plotly_chart(fig, width='stretch', key=f"m3_inc_{indicator}_heatmap")
+    st.plotly_chart(fig, width='stretch', key=f"m3_inc_{indicator}_heatmap", config={"displayModeBar": False})
