@@ -191,6 +191,19 @@ def add_comparison_traces(
         "hovertemplate": f"%{{{'y' if is_h else 'x'}}}<br>Case Tail: %{{{'x' if is_h else 'y'}:{fmt}}} {unit}<extra></extra>",
     }))
 
+    # Centralised legend: always visible, non-interactive
+    fig.update_layout(
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='left',
+            x=0,
+            itemclick=False,
+            itemdoubleclick=False,
+        ),
+    )
+
     return fig
 
 

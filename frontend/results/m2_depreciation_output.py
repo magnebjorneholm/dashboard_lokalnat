@@ -223,13 +223,6 @@ def _render_category_chart(
             showgrid=False,
             automargin=True,
         ),
-        legend=dict(
-            orientation='h',
-            yanchor='bottom',
-            y=1.02,
-            xanchor='left',
-            x=0,
-        ),
         bargroupgap=0.15,
     )
 
@@ -446,13 +439,6 @@ def _render_halfyear_chart(hy_df: pd.DataFrame, title_label: str) -> None:
             title='Depreciation (MSEK)',
             showgrid=True,
             gridcolor=COLORS['bg_subtle'],
-        ),
-        legend=dict(
-            orientation='h',
-            yanchor='bottom',
-            y=1.02,
-            xanchor='left',
-            x=0,
         ),
         bargroupgap=0.15,
     )
