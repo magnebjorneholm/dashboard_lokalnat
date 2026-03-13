@@ -393,22 +393,26 @@ def _create_opex_html(data: Dict[str, dict]) -> str:
         _adjustment_boxes(data, y6),
     ])
     
+    # Merge bar y-position (matches _merge_and_fork_lines)
+    y_merge = y4 + box_h + 13
+
     upper_lines = "\n".join([
         "<!-- Flow lines row 1 to row 2 -->",
         _flow_line(line_left, y1 + box_h, y2 - y1 - box_h),
         _flow_line(col2 + 65, y1 + box_h, y4 - y1 - box_h),
         _flow_line(col3 + 65, y1 + box_h, y2 - y1 - box_h),
         _flow_line(line_right, y1 + box_h, y2 - y1 - box_h),
-        
-        "<!-- Flow lines row 2 -->",
+
+        "<!-- Flow lines row 2: Eff->Operating, Dep->Capital, Return->Capital -->",
         _flow_line(line_left, y2 + box_h, y4 - y2 - box_h),
         _flow_line(col3 + 65, y2 + box_h, y4 - y2 - box_h),
-        _flow_line(line_right, y2 + box_h, y3 - y2 - box_h),
-        
-        "<!-- Flow lines row 3 -->",
-        _flow_line(line_right, y3 + 58, y4 - y3 - 58),
+        _flow_line(line_right, y2 + box_h, y4 - y2 - box_h),
+
+        "<!-- Quality flows to merge point (separate from capital costs) -->",
+        _flow_line(line_right, y3 + 58, y_merge - (y3 + 58)),
+        _flow_line_h(cap_center, y_merge, line_right - cap_center),
     ])
-    
+
     merge_fork = _merge_and_fork_lines(
         op_center=op_center,
         cap_center=cap_center,
@@ -420,7 +424,7 @@ def _create_opex_html(data: Dict[str, dict]) -> str:
         sub_left_center=sub_left_center,
         sub_right_center=sub_right_center,
     )
-    
+
     lines = upper_lines + "\n" + merge_fork
     
     return _wrap_html(boxes, lines, 500)
@@ -505,30 +509,34 @@ def _create_totex_html(data: Dict[str, dict]) -> str:
         _adjustment_boxes(data, y6),
     ])
     
+    # Merge bar y-position (matches _merge_and_fork_lines)
+    y_merge = y4 + box_h + 13
+
     upper_lines = "\n".join([
         "<!-- Row 1 to Row 2 -->",
         _flow_line(line_left, y1 + box_h, y2 - y1 - box_h),
         _flow_line(col2 + 65, y1 + box_h, y4 - y1 - box_h),
         _flow_line(dep_center, y1 + box_h, y2 - y1 - box_h),
         _flow_line(ret_center, y1 + box_h, y2 - y1 - box_h),
-        
+
         "<!-- OPEX eff to Operating costs -->",
         _flow_line(line_left, y2 + box_h, y4 - y2 - box_h),
-        
+
         "<!-- Depreciation straight down to Capital costs -->",
         _flow_line(dep_center, y2 + box_h, y4 - y2 - box_h),
-        
-        "<!-- Return down to Quality -->",
-        _flow_line(ret_center, y2 + box_h, y3 - y2 - box_h),
-        
+
+        "<!-- Return straight down to Capital costs -->",
+        _flow_line(ret_center, y2 + box_h, y4 - y2 - box_h),
+
         "<!-- Return fork: horizontal branch at fork point, vertical into CAPEX eff -->",
         _flow_line_h(ret_fork_x, y_fork, ret_center - ret_fork_x),
         _flow_line(ret_fork_x, y_fork, y3 - y_fork),
-        
-        "<!-- Quality to Capital costs -->",
-        _flow_line(ret_center, y3 + 58, y4 - y3 - 58),
+
+        "<!-- Quality flows to merge point (separate from capital costs) -->",
+        _flow_line(ret_center, y3 + 58, y_merge - (y3 + 58)),
+        _flow_line_h(cap_center, y_merge, ret_center - cap_center),
     ])
-    
+
     merge_fork = _merge_and_fork_lines(
         op_center=op_center,
         cap_center=cap_center,

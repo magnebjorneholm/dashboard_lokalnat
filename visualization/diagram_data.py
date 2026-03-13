@@ -1,13 +1,13 @@
 """
-frontend/utils/diagram_data.py
+visualization/diagram_data.py
 
 Prepares data for revenue frame decomposition diagram.
 Handles all capex_method variations, and OPEX vs TOTEX efficiency methods.
 
 Data flow:
-- Controllable costs (before deduction): From SDF (Average 2018-2021 * 4 + Neo adjustments)
+- Controllable costs: From user_revenue_frame (pipeline output)
 - Efficiency requirement: Calculated as (before - after), split OPEX/CAPEX for TOTEX
-- Depreciation/Return: From SDF (baseline) or KENT (parameter_change)
+- Depreciation/Return: From pipeline (capital_cost_period - return_on_assets_period)
 - Capital base: Derived from return / WACC
 - Other adjustments: Flexibility services + interruption compensation - state aid deduction
 """
@@ -25,8 +25,7 @@ from config.column_names import (
     COL_NON_CONTROLLABLE, COL_INCENTIVE_TOTAL,
     COL_FLEXIBILITY, COL_INTERRUPTION, COL_STATE_DEDUCTION,
     COL_CAPEX_EFF_DEDUCTION, COL_REVENUE_FRAME,
-    COL_DEPRECIATION_PERIOD, COL_RETURN_PERIOD,
-    COL_CAPITAL_COST_PERIOD,
+    COL_RETURN_PERIOD, COL_CAPITAL_COST_PERIOD,
 )
 from calculations.capex.wacc_calculations import BASELINE_WACC
 
@@ -120,18 +119,16 @@ def prepare_diagram_data(
         lopande_value = opex_efter_value + ej_paverkbara_value
         lopande_baseline = opex_efter_baseline + ej_paverkbara_baseline
 
-        # Capital costs = Dep + Ret - CAPEX_eff + Quality
+        # Capital costs = Dep + Ret - CAPEX_eff (matches COL_CAPITAL_COST_IN_RF)
         kapitalkostnad_value = (
             capex_data['avskrivningar']['value']
             + capex_data['avkastning']['value']
             - capex_eff_value
-            + kvalitet_value
         )
         kapitalkostnad_baseline = (
             capex_data['avskrivningar']['baseline']
             + capex_data['avkastning']['baseline']
             - capex_eff_baseline
-            + kvalitet_baseline
         )
     else:
         # OPEX mode: single efficiency requirement on controllable costs only
@@ -144,16 +141,14 @@ def prepare_diagram_data(
         lopande_value = paverkbara_efter_value + ej_paverkbara_value
         lopande_baseline = paverkbara_efter_baseline + ej_paverkbara_baseline
 
-        # Capital costs = Dep + Ret + Quality (no CAPEX reduction)
+        # Capital costs = Dep + Ret (matches COL_CAPITAL_COST_PERIOD)
         kapitalkostnad_value = (
             capex_data['avskrivningar']['value']
             + capex_data['avkastning']['value']
-            + kvalitet_value
         )
         kapitalkostnad_baseline = (
             capex_data['avskrivningar']['baseline']
             + capex_data['avkastning']['baseline']
-            + kvalitet_baseline
         )
 
     # Total revenue frame
@@ -307,89 +302,62 @@ def _get_capital_cost_components(
     user_reid: str
 ) -> Dict[str, dict]:
     """
-    Get depreciation and return on assets based on capex_method.
-    """
-    capex_method = case_result.pre_dea.capex_method
-    wacc_used = case_result.pre_dea.wacc_used or BASELINE_WACC
+    Get depreciation and return on assets from pipeline data.
 
-    baseline_avskr, baseline_avkast = _get_avskr_avkast_from_sdf(
-        baseline_result.baseline.sdf_ir, user_reid
+    Uses the same data sources as the revenue frame assembly:
+    - capital_cost_period from user_revenue_frame (matches KPI)
+    - return_on_assets_period from pre_dea.df_all_companies
+    - depreciation = capital_cost_period - return_on_assets_period
+    """
+    case_ir = case_result.post_dea.user_revenue_frame
+    baseline_ir = baseline_result.post_dea.user_revenue_frame
+
+    # Capital cost period from revenue frame (same source as KPI)
+    case_capkost = float(case_ir.get(COL_CAPITAL_COST_PERIOD, 0))
+    baseline_capkost = float(baseline_ir.get(COL_CAPITAL_COST_PERIOD, 0))
+
+    # Return from pre_dea.df_all_companies (available for all capex methods)
+    case_avkast = _get_return_from_pre_dea(
+        case_result.pre_dea.df_all_companies, user_reid
+    )
+    baseline_avkast = _get_return_from_pre_dea(
+        baseline_result.pre_dea.df_all_companies, user_reid
     )
 
-    if capex_method == 'baseline':
-        return {
-            'avskrivningar': {
-                'value': baseline_avskr,
-                'baseline': baseline_avskr
-            },
-            'avkastning': {
-                'value': baseline_avkast,
-                'baseline': baseline_avkast
-            }
+    # Derive depreciation so dep + return = capital_cost_period (by construction)
+    case_avskr = case_capkost - case_avkast
+    baseline_avskr = baseline_capkost - baseline_avkast
+
+    return {
+        'avskrivningar': {
+            'value': case_avskr,
+            'baseline': baseline_avskr
+        },
+        'avkastning': {
+            'value': case_avkast,
+            'baseline': baseline_avkast
         }
-
-    else:  # parameter_change
-        case_avskr, case_avkast = _get_avskr_avkast_from_pre_dea(
-            case_result.pre_dea.df_all_companies, user_reid
-        )
-
-        return {
-            'avskrivningar': {
-                'value': case_avskr,
-                'baseline': baseline_avskr
-            },
-            'avkastning': {
-                'value': case_avkast,
-                'baseline': baseline_avkast
-            }
-        }
+    }
 
 
-def _get_avskr_avkast_from_sdf(sdf_ir: pd.DataFrame, user_reid: str) -> tuple:
-    """Extract depreciation and return period sums from SDF IR sheet."""
-    user_mask = sdf_ir['REId'] == user_reid
-
-    if not user_mask.any():
-        return 0.0, 0.0
-
-    user_row = sdf_ir[user_mask].iloc[0]
-
-    avkastning = 0.0
-    if COL_RETURN_PERIOD in sdf_ir.columns:
-        avkastning = float(pd.to_numeric(user_row.get(COL_RETURN_PERIOD, 0), errors='coerce') or 0)
-
-    kapitalkostnad = 0.0
-    if COL_CAPITAL_COST_PERIOD in sdf_ir.columns:
-        kapitalkostnad = float(pd.to_numeric(user_row.get(COL_CAPITAL_COST_PERIOD, 0), errors='coerce') or 0)
-
-    avskrivning = kapitalkostnad - avkastning
-
-    return avskrivning, avkastning
-
-
-def _get_avskr_avkast_from_pre_dea(df: pd.DataFrame, user_reid: str) -> tuple:
-    """Extract depreciation and return from pre_dea DataFrame (KENT output)."""
+def _get_return_from_pre_dea(df: pd.DataFrame, user_reid: str) -> float:
+    """Extract return on assets period sum from pre_dea DataFrame."""
     user_mask = df['REId'] == user_reid
 
     if not user_mask.any():
-        return 0.0, 0.0
+        return 0.0
 
     user_row = df[user_mask].iloc[0]
 
-    avskrivning = 0.0
-    avkastning = 0.0
+    if COL_RETURN_PERIOD in df.columns:
+        return float(user_row.get(COL_RETURN_PERIOD, 0) or 0)
 
-    if 'depreciation_period' in df.columns:
-        avskrivning = float(user_row.get('depreciation_period', 0) or 0)
-    elif all(f'depreciation_{y}' in df.columns for y in [2024, 2025, 2026, 2027]):
-        avskrivning = sum(float(user_row.get(f'depreciation_{y}', 0) or 0) for y in [2024, 2025, 2026, 2027])
+    # Fallback: sum per-year columns
+    yearly_cols = [f'return_on_assets_{y}' for y in [2024, 2025, 2026, 2027]]
+    if all(c in df.columns for c in yearly_cols):
+        return sum(float(user_row.get(c, 0) or 0) for c in yearly_cols)
 
-    if 'return_on_assets_period' in df.columns:
-        avkastning = float(user_row.get('return_on_assets_period', 0) or 0)
-    elif all(f'return_on_assets_{y}' in df.columns for y in [2024, 2025, 2026, 2027]):
-        avkastning = sum(float(user_row.get(f'return_on_assets_{y}', 0) or 0) for y in [2024, 2025, 2026, 2027])
-
-    return avskrivning, avkastning
+    return 0.0
 
 
 
