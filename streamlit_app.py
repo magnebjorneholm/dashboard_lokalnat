@@ -16,10 +16,7 @@ from frontend.utils.state_manager import (
     get_auth_email,
     is_regulator,
     get_user_reid,
-    get_case_name,
-    get_case_notes,
     has_saved_reference,
-    has_config_changed_since_compute,
     revert_to_saved,
     get_computed_at,
 )
@@ -157,13 +154,6 @@ def _render_sidebar_actions():
 
     st.divider()
 
-    # --- Case info ---
-    case_name = get_case_name()
-    if case_name:
-        st.markdown(f"**{case_name}**")
-        case_notes = get_case_notes()
-        if case_notes:
-            st.caption(case_notes)
     computed_at = get_computed_at()
     if computed_at:
         st.caption(f"Computed {computed_at.strftime('%H:%M, %d %b')}")
@@ -178,10 +168,6 @@ def _render_sidebar_actions():
         revert_to_saved()
         st.toast("Configuration reverted")
         st.rerun()
-
-    # --- Status indicators ---
-    if has_config_changed_since_compute():
-        st.caption("Config changed since last run — results may be outdated.")
 
 
 def render_sidebar():

@@ -15,8 +15,6 @@ from frontend.utils.state_manager import (
     get_user_reid,
     get_case_name,
     get_filtered_ui_config,
-    has_unsaved_changes,
-    has_config_changed_since_compute,
 )
 from frontend.utils.export_button import render_export_button
 from visualization.diagram_data import prepare_diagram_data
@@ -87,7 +85,7 @@ else:
     st.subheader("Results")
 
 from frontend.common.save_bar import render_save_bar
-render_save_bar()
+render_save_bar(show_warning=True)
 
 user_reid = get_user_reid()
 if user_reid is None:
@@ -98,13 +96,6 @@ if user_reid is None:
 if not st.session_state.get("calculation_done"):
     st.info("Use the **Compute Revenue Frame** button in the sidebar to run the calculation.")
     st.stop()
-
-# Warn if config changed since last computation
-if has_config_changed_since_compute():
-    st.warning(
-        "Configuration changed since last computation — results may be outdated. "
-        "Click **Compute Revenue Frame** in the sidebar to update."
-    )
 
 # From here on, calculation has been performed
 baseline = st.session_state.get("baseline_result")
@@ -325,9 +316,6 @@ st.plotly_chart(fig_wf, key="revenue_frame_waterfall", width='stretch', config={
 st.divider()
 
 
-if has_unsaved_changes():
-    st.caption("This result has not been saved yet. Use **Save case** in the sidebar.")
-
 
 
 # =============================================================================
@@ -441,4 +429,3 @@ render_export_button(
     case_name=case_name,
 )
 
-st.caption("Use **Save case** in the sidebar to save this configuration.")
