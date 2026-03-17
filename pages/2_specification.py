@@ -39,9 +39,12 @@ st.title("Regumetrica")
 
 case_name = get_case_name()
 if case_name:
-    st.subheader(f"Configure: {case_name}")
+    st.subheader(f"Specification: {case_name}")
 else:
-    st.subheader("Configure")
+    st.subheader("Specification")
+
+from frontend.common.save_bar import render_save_bar
+render_save_bar()
 
 user_reid = get_user_reid()
 if user_reid is None:
@@ -72,7 +75,7 @@ def _render_not_selected_message():
     """Render message for non-selected modules."""
     st.info(
         "This module is not selected for configuration. "
-        "Go to **Define** to enable it, or proceed with baseline values."
+        "Go to **Case Setup** to enable it, or proceed with baseline values."
     )
 
 

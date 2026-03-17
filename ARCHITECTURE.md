@@ -105,9 +105,10 @@ dashboard_lokalnat/
 |
 |-- pages/                        # Streamlit multi-page app
 |   |-- login.py                  # Authentication (Firebase)
-|   |-- 0_case_definition.py      # Step 1: Select modules/sections, name case
-|   |-- 1_case_config.py          # Step 2: Configure parameters (tabs M1-M7)
-|   |-- 2_results.py              # Step 3: Display results, stale warning, export
+|   |-- 0_case_manager.py         # Case Manager: create/load/delete/compare cases
+|   |-- 1_case_setup.py           # Case Setup: select modules/sections
+|   |-- 2_specification.py        # Specification: configure parameters (tabs M1-M7)
+|   |-- 3_revenue_frame.py        # Revenue Frame: display results, export
 |
 |-- config/                       # Constants, metadata, domain configuration (no Streamlit)
 |   |-- case_definition.py        # Dataclasses: CaseDefinition, PreDeaConfig, DeaConfig, etc.
@@ -125,6 +126,8 @@ dashboard_lokalnat/
 |   |-- common/                   # Shared Streamlit components
 |   |   |-- parameter_input.py    # Reusable input component with baseline comparison
 |   |   |-- styling.py            # CSS injection, font loading (re-exports from config.colors)
+|   |   |-- save_bar.py           # Persistent save bar (saved/unsaved/new states)
+|   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
 |   |
 |   |-- modules/                  # Input renderers per module
 |   |   |-- base/
@@ -150,6 +153,8 @@ dashboard_lokalnat/
 |   |-- utils/                    # Streamlit-dependent frontend utilities
 |       |-- state_manager.py      # Session state: init, get/set, config references
 |       |-- case_storage.py       # Save/load cases (Firestore/local JSON)
+|       |-- case_actions.py       # Extracted do_save_case(), run_calculation()
+|       |-- result_snapshot.py    # Lightweight KPI extraction for case comparison
 |       |-- export_button.py      # Export button component
 |
 |-- pipeline/
@@ -247,16 +252,17 @@ Dependencies flow strictly downward. Lower layers NEVER import from higher layer
 ```
 Layer 1: PAGES (top)
     streamlit_app.py, pages/login.py,
-    pages/0_case_definition.py, pages/1_case_config.py,
-    pages/2_results.py
+    pages/0_case_manager.py, pages/1_case_setup.py,
+    pages/2_specification.py, pages/3_revenue_frame.py
         |
         | imports
         v
 Layer 2: FRONTEND (Streamlit-dependent only)
     Left side: FRONTEND UTILS
-        state_manager.py, case_storage.py, export_button.py
+        state_manager.py, case_storage.py, case_actions.py,
+        result_snapshot.py, export_button.py
     Right side: FRONTEND COMMON + MODULES
-        parameter_input.py, styling.py,
+        parameter_input.py, styling.py, save_bar.py, case_comparison.py,
         m1_asset_base.py .. m5_efficiency.py, benchmarking.py
         |
         | imports
@@ -302,15 +308,18 @@ Layer 6: AUTH / FIRESTORE
 ```
 Unauthenticated                Authenticated
 ---------------                -------------
-pages/login.py    --auth-->    pages/0_case_definition.py  (Define)
+pages/login.py    --auth-->    pages/0_case_manager.py     (Case Manager)
                                        |
                                        v
-                               pages/1_case_config.py      (Configure)
+                               pages/1_case_setup.py       (Case Setup)
+                                       |
+                                       v
+                               pages/2_specification.py    (Specification)
                                        |
                                   [Compute] (sidebar button)
                                        |
                                        v
-                               pages/2_results.py          (Results)
+                               pages/3_revenue_frame.py    (Revenue Frame)
 ```
 
 **Entrypoint:** `streamlit_app.py`
@@ -318,7 +327,7 @@ pages/login.py    --auth-->    pages/0_case_definition.py  (Define)
 - Applies styling
 - Initializes session state
 - Auth guard: `check_auth()` -> shows login OR app navigation
-- Sidebar: Company selector + Compute + Save case + Revert/New case
+- Sidebar: Company selector + Compute + Revert/New case + stale results indicator
 
 
 ## 6. Module Architecture (M1-M7)
@@ -432,19 +441,24 @@ Three levels of config exist for tracking changes:
 2. **Computed reference** (`computed_ui_config`, `computed_selected_modules`) — frozen at last pipeline run
 3. **Saved reference** (`saved_ui_config`, `saved_selected_modules`) — frozen at last DB save/load
 
-- `has_unsaved_changes()`: computed differs from saved (shows "Unsaved changes" indicator)
+- `has_unsaved_changes()`: working differs from saved (shows "Unsaved" in save bar)
 - `has_config_changed_since_compute()`: working differs from computed (shows stale results warning)
 
 ### Case Management
 
-- **Name/notes**: Set on Define page, stored in session state only (no auto-persist to DB)
-- **Save**: Sidebar dialog after computation. Three modes:
-  - First save: user enters name/notes, creates new case in DB
-  - Update: overwrites existing case with computed config
-  - Fork ("Save as new case"): creates copy with new name
-- **Load case**: Define page. Clears widget keys so inputs reinitialize on rerun
-- **Delete case**: Define page, inline confirmation next to Load
-- **New case**: Define page button, resets all state (calls `reset_case()`)
+- **Name/notes**: Set on Case Manager page, stored in session state only (no auto-persist to DB)
+- **Save**: Persistent save bar on pages 1-3 (decoupled from computation). Three modes:
+  - First save ("Save as..."): user enters name, creates new case in DB
+  - Update ("Save"): overwrites existing case with current working state
+  - Fork ("Save as new..."): creates copy with new name/UUID
+- **Result snapshot**: When saving with computed results, a lightweight KPI snapshot
+  (~15 aggregated values + baseline equivalents) is persisted alongside the config.
+  Enables instant case comparison on Case Manager without re-running the pipeline.
+- **Load case**: Case Manager page. Clears widget keys so inputs reinitialize on rerun
+- **Delete case**: Case Manager page, inline confirmation
+- **Compare cases**: Case Manager page. Checkbox per case (disabled without snapshot),
+  "Compare selected" renders side-by-side KPI table with baseline and delta coloring.
+- **New case**: Case Manager page button, resets all state (calls `reset_case()`)
 - **Revert to saved**: Sidebar button, restores working state to last saved/loaded config
 
 ### data_editor Widget Caching
@@ -703,22 +717,38 @@ streamlit_app.py
     |-- frontend.utils.state_manager      (init, get/set functions)
     |-- frontend.common.styling           (apply_styling)
     |-- auth.firebase_auth                (is_dev_mode, initialize_firebase_auth)
-    |-- [lazy] data_loaders.baseline_data (load_baseline_data)
-    |-- [lazy] config.config_adapter      (build_case_definition)
-    |-- [lazy] pipeline.core              (run_pipeline)
-    |-- [lazy] frontend.utils.case_storage (save_case)
 
-pages/1_case_config.py
+pages/0_case_manager.py
+    |-- frontend.utils.state_manager     (init, get/set, reset_case)
+    |-- frontend.utils.case_storage      (list/load/delete, apply_case_to_session)
+    |-- frontend.common.case_comparison  (render_comparison_table)
+    |-- pipeline.result_helpers          (fmt_tkr)
+
+pages/1_case_setup.py
+    |-- frontend.utils.state_manager     (init, module selection)
+    |-- frontend.common.save_bar         (render_save_bar)
+
+pages/2_specification.py
     |-- frontend.modules.base.m1-m5      (render_* functions)
     |-- frontend.modules.addons.benchmarking
     |-- frontend.utils.state_manager     (is_section_selected)
+    |-- frontend.common.save_bar         (render_save_bar)
 
-pages/2_results.py
+pages/3_revenue_frame.py
     |-- frontend.results.m1-m5_output    (render functions)
     |-- visualization.diagram_data, diagram_utils
     |-- visualization.geo_data, geo_visualization
     |-- frontend.utils.export_button
+    |-- frontend.common.save_bar         (render_save_bar)
     |-- pipeline.result_helpers          (formatting/aggregation helpers)
+
+frontend.utils.case_actions
+    |-- frontend.utils.case_storage      (save_case)
+    |-- frontend.utils.state_manager     (get/set config, compute_config_hash)
+    |-- frontend.utils.result_snapshot   (extract_result_snapshot)
+    |-- config.config_adapter            (build_case_definition)
+    |-- pipeline.core                    (run_pipeline)
+    |-- data_loaders.baseline_data       (load_baseline_data)
 
 config.config_adapter
     |-- config.case_definition           (CaseDefinition, enums)

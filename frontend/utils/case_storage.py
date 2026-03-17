@@ -64,6 +64,7 @@ class SavedCase:
     selected_modules: List[str]  # e.g., ["m1", "m3.wacc", "m3.incentive_params"]
     had_kent_file: bool
     kent_file_name: Optional[str]
+    result_snapshot: Optional[Dict[str, Any]] = None  # Lightweight KPIs for comparison
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage."""
@@ -72,6 +73,7 @@ class SavedCase:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SavedCase":
         """Create SavedCase from dictionary."""
+        data.setdefault("result_snapshot", None)
         return cls(**data)
 
     @classmethod
@@ -103,6 +105,7 @@ class SavedCase:
             selected_modules=data.get("selected_modules", []),
             had_kent_file=data.get("had_kent_file", False),
             kent_file_name=data.get("kent_file_name"),
+            result_snapshot=data.get("result_snapshot"),
         )
 
 
@@ -209,6 +212,7 @@ def _firestore_save(
     ui_config: Dict[str, Any],
     selected_modules: Set[str],
     case_id: Optional[str] = None,
+    result_snapshot: Optional[Dict[str, Any]] = None,
 ) -> SavedCase:
     """Save case to Firestore."""
     db = get_firestore_client()
@@ -248,6 +252,7 @@ def _firestore_save(
         "selected_modules": list(selected_modules),
         "had_kent_file": had_kent,
         "kent_file_name": kent_name,
+        "result_snapshot": result_snapshot,
     }
 
     db.collection(COLLECTION_NAME).document(case_id).set(doc_data)
@@ -263,6 +268,7 @@ def _firestore_save(
         selected_modules=list(selected_modules),
         had_kent_file=had_kent,
         kent_file_name=kent_name,
+        result_snapshot=result_snapshot,
     )
 
 
@@ -347,6 +353,7 @@ def _local_save(
     ui_config: Dict[str, Any],
     selected_modules: Set[str],
     case_id: Optional[str] = None,
+    result_snapshot: Optional[Dict[str, Any]] = None,
 ) -> SavedCase:
     """Save case to local JSON file."""
     user_dir = _local_ensure_user_dir(user_reid)
@@ -382,6 +389,7 @@ def _local_save(
         selected_modules=list(selected_modules),
         had_kent_file=had_kent,
         kent_file_name=kent_name,
+        result_snapshot=result_snapshot,
     )
 
     file_path = user_dir / f"{case_id}.json"
@@ -448,6 +456,7 @@ def save_case(
     ui_config: Dict[str, Any],
     selected_modules: Set[str],
     case_id: Optional[str] = None,
+    result_snapshot: Optional[Dict[str, Any]] = None,
 ) -> SavedCase:
     """
     Save a case to storage (Firestore or local fallback).
@@ -459,6 +468,7 @@ def save_case(
         ui_config: The ui_config dict from session_state
         selected_modules: Set of selected module/section keys
         case_id: Existing case ID (for updates) or None for new case
+        result_snapshot: Lightweight KPIs for comparison (None if not computed)
 
     Returns:
         SavedCase object
@@ -468,11 +478,13 @@ def save_case(
     """
     if _use_firestore():
         return _firestore_save(
-            user_reid, case_name, case_notes, ui_config, selected_modules, case_id
+            user_reid, case_name, case_notes, ui_config, selected_modules,
+            case_id, result_snapshot,
         )
     else:
         return _local_save(
-            user_reid, case_name, case_notes, ui_config, selected_modules, case_id
+            user_reid, case_name, case_notes, ui_config, selected_modules,
+            case_id, result_snapshot,
         )
 
 
@@ -578,7 +590,7 @@ def apply_case_to_session(
             session_state[widget_key] = module.key in selected_set
 
     # Clear the load selectbox and case identity widgets so they reinitialize
-    for key in ("load_case_select", "define_case_name", "define_case_notes"):
+    for key in ("load_case_select", "cm_case_name", "cm_case_notes"):
         session_state.pop(key, None)
 
     # Apply ui_config

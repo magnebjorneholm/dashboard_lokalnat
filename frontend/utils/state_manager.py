@@ -5,6 +5,8 @@ Handles session state initialization, reset and access.
 Supports section-level selection for modules with multiple configuration areas.
 """
 
+import hashlib
+import json
 import streamlit as st
 import copy
 from typing import Dict, Any, Optional, Set
@@ -199,8 +201,12 @@ def reset_case() -> None:
     _clear_selection_widget_keys()
     # Clear all config-related widget keys so widgets re-init from ui_config
     _clear_config_widget_keys()
-    # Clear case identity widget keys so they reinitialize
-    for key in ("define_case_name", "define_case_notes"):
+    # Reset case identity widgets to empty (setting value, not popping,
+    # because Streamlit's internal widget cache ignores popped keys)
+    st.session_state["cm_case_name"] = ""
+    st.session_state["cm_case_notes"] = ""
+    # Clear selectbox/multiselect so they reinitialize
+    for key in ("cm_case_select", "cm_compare_multiselect"):
         st.session_state.pop(key, None)
 
     # Clear session store so refresh doesn't restore reset state
@@ -556,22 +562,50 @@ def _configs_equal(a: Any, b: Any, tol: float = 1e-9) -> bool:
     return a == b
 
 
-def has_unsaved_changes() -> bool:
-    """True if a computation exists that differs from the saved reference.
+def _make_hash_serializable(obj: Any) -> Any:
+    """Convert obj to a JSON-safe form for hashing. Bytes are replaced with
+    a length placeholder so that the hash depends on presence/size but not
+    on compression-level differences."""
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, bytes):
+        return f"<bytes:{len(obj)}>"
+    if isinstance(obj, set):
+        return sorted(str(v) for v in obj)
+    if isinstance(obj, (list, tuple)):
+        return [_make_hash_serializable(v) for v in obj]
+    if isinstance(obj, dict):
+        return {str(k): _make_hash_serializable(v) for k, v in sorted(obj.items(), key=lambda x: str(x[0]))}
+    return str(obj)
 
-    Returns False when no computation has been done yet (nothing to save).
-    Returns True when computed config exists but no saved reference exists,
-    or when computed config differs from the saved reference.
+
+def compute_config_hash(ui_config: dict, selected_modules: set) -> str:
+    """Deterministic hash of a case configuration.
+
+    Returns the first 16 hex characters of a SHA-256 digest.  Used to detect
+    whether a result snapshot still matches the current config.
     """
-    computed_ui = st.session_state.get("computed_ui_config")
-    if computed_ui is None:
-        return False
-    computed_modules = st.session_state.get("computed_selected_modules", set())
+    payload = {
+        "ui_config": _make_hash_serializable(ui_config),
+        "selected_modules": sorted(str(m) for m in selected_modules),
+    }
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def has_unsaved_changes() -> bool:
+    """True if working config differs from the saved reference.
+
+    Returns False when no saved reference exists (new case, nothing to compare).
+    Returns True when working state differs from the last saved/loaded config.
+    """
     saved_ui = st.session_state.get("saved_ui_config")
-    saved_modules = st.session_state.get("saved_selected_modules", set())
     if saved_ui is None:
-        return True
-    return not _configs_equal(computed_ui, saved_ui) or computed_modules != saved_modules
+        return False
+    saved_modules = st.session_state.get("saved_selected_modules", set())
+    current_ui = st.session_state.get("ui_config", {})
+    current_modules = get_selected_modules()
+    return not _configs_equal(current_ui, saved_ui) or current_modules != saved_modules
 
 
 def has_config_changed_since_compute() -> bool:

@@ -86,6 +86,9 @@ if case_name:
 else:
     st.subheader("Results")
 
+from frontend.common.save_bar import render_save_bar
+render_save_bar()
+
 user_reid = get_user_reid()
 if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")

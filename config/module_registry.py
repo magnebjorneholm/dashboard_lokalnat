@@ -8,8 +8,8 @@ Supports section-level granularity for modules with multiple
 distinct configuration areas (e.g., M3 with WACC, incentive params, variables).
 
 Used by:
-- 0_case_definition.py for module/section selection display
-- 1_case_config.py for conditional rendering
+- 1_case_setup.py for module/section selection display
+- 2_specification.py for conditional rendering
 - state_manager.py for filtering config by selection
 - case_storage.py for inferring selected sections from saved cases
 """

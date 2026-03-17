@@ -16,20 +16,9 @@ from frontend.utils.state_manager import (
     get_auth_email,
     is_regulator,
     get_user_reid,
-    get_case_id,
     get_case_name,
     get_case_notes,
-    get_selected_modules,
-    mark_case_saved,
-    set_case_id,
-    set_case_name,
-    set_case_notes,
-    increment_saved_cases_count,
-    set_computed_config,
-    get_computed_config,
-    set_saved_reference,
     has_saved_reference,
-    has_unsaved_changes,
     has_config_changed_since_compute,
     revert_to_saved,
     get_computed_at,
@@ -162,187 +151,10 @@ def try_restore_auth_from_cookie() -> bool:
 # SIDEBAR ACTIONS
 # =============================================================================
 
-def _run_calculation() -> None:
-    """Run the revenue frame calculation pipeline."""
-    from frontend.utils.state_manager import get_filtered_ui_config
-    from config.config_adapter import build_case_definition
-
-    user_reid = get_user_reid()
-
-    if user_reid is None:
-        st.error("No company selected.")
-        return
-
-    with st.status("Running calculation...", expanded=True) as status:
-        try:
-            st.write("Loading baseline data...")
-            from data_loaders.baseline_data import load_baseline_data
-            from pipeline.core import run_pipeline
-            baseline_data = load_baseline_data()
-
-            # Reuse cached baseline if same company
-            cached_reid = st.session_state.get("_baseline_reid")
-            if cached_reid == user_reid and st.session_state.get("baseline_result") is not None:
-                st.write("Using cached baseline...")
-                baseline_result = st.session_state["baseline_result"]
-            else:
-                st.write("Computing baseline...")
-                from config.case_definition import get_baseline_config
-                baseline_config = get_baseline_config(user_reid)
-                baseline_result = run_pipeline(baseline_data, baseline_config)
-                st.session_state["baseline_result"] = baseline_result
-                st.session_state["_baseline_reid"] = user_reid
-
-            st.write("Building case...")
-            filtered_config = get_filtered_ui_config()
-            case_definition = build_case_definition(
-                user_reid,
-                filtered_config
-            )
-
-            st.write("Calculating revenue frame...")
-            case_result = run_pipeline(baseline_data, case_definition)
-            st.session_state["case_result"] = case_result
-
-            st.session_state["calculation_done"] = True
-
-            # Persist KENT-derived capbase_a as parquet bytes (for case save/load)
-            if case_result.pre_dea.user_capbase_a is not None:
-                import io as _io
-                _buf = _io.BytesIO()
-                case_result.pre_dea.user_capbase_a.to_parquet(_buf, index=False)
-                m1_cfg = st.session_state.get("ui_config", {}).get("m1_asset_base", {})
-                m1_cfg["kent_capbase_parquet"] = _buf.getvalue()
-                st.session_state["ui_config"]["m1_asset_base"] = m1_cfg
-
-            # Store which config produced this result
-            set_computed_config(
-                ui_config=st.session_state.get("ui_config", {}),
-                selected_modules=get_selected_modules(),
-            )
-
-            # Persist to session store (survives page refresh)
-            auth_uid = st.session_state.get("auth_uid")
-            if auth_uid:
-                from frontend.utils.state_manager import save_to_session_store
-                save_to_session_store(auth_uid)
-
-            status.update(label="Calculation complete", state="complete")
-
-        except ValueError as e:
-            st.error(f"Configuration error: {e}")
-            status.update(label="Error", state="error")
-            return
-        except Exception as e:
-            st.error(f"Calculation error: {e}")
-            with st.expander("Technical details"):
-                st.exception(e)
-            status.update(label="Error", state="error")
-            return
-
-    st.switch_page("pages/2_results.py")
-
-
-def _do_save_case(force_new: bool = False, name_override: str = None, notes_override: str = None) -> bool:
-    """Save the current case to storage. Uses computed config if available.
-
-    Args:
-        force_new: If True, always create a new case (ignore existing case_id).
-        name_override: If set, use this name instead of session state.
-        notes_override: If set, use this notes instead of session state.
-    """
-    from frontend.utils.case_storage import save_case
-
-    user_reid = get_user_reid()
-    case_name = name_override if name_override is not None else (get_case_name() or "Untitled Case")
-    case_notes = notes_override if notes_override is not None else get_case_notes()
-    case_id = None if force_new else get_case_id()
-
-    # Prefer computed config (last pipeline run); fall back to working state
-    computed_ui, computed_modules = get_computed_config()
-    if computed_ui is not None:
-        ui_config = computed_ui
-        selected_modules = computed_modules
-    else:
-        ui_config = st.session_state.get("ui_config", {})
-        selected_modules = get_selected_modules()
-
-    try:
-        saved = save_case(
-            user_reid=user_reid,
-            case_name=case_name,
-            case_notes=case_notes,
-            ui_config=ui_config,
-            selected_modules=selected_modules,
-            case_id=case_id,
-        )
-
-        set_case_id(saved.id)
-        set_case_name(case_name)
-        set_case_notes(case_notes)
-        mark_case_saved()
-        set_saved_reference(ui_config, selected_modules)
-
-        if case_id is None:
-            increment_saved_cases_count()
-
-        # Update session store so refresh reflects saved state
-        auth_uid = st.session_state.get("auth_uid")
-        if auth_uid:
-            from frontend.utils.state_manager import save_to_session_store
-            save_to_session_store(auth_uid)
-
-        return True
-
-    except ValueError as e:
-        st.error(str(e))
-        return False
-    except Exception as e:
-        st.error(f"Failed to save case: {e}")
-        return False
-
-
-@st.dialog("Save case")
-def _save_case_dialog():
-    """Dialog for saving the current case."""
-    case_id = get_case_id()
-    case_name = get_case_name() or ""
-    case_notes = get_case_notes()
-
-    if case_id:
-        # --- Existing case: Update or Fork ---
-        if st.button(f'Update "{case_name}"', type="primary", key="dialog_update", width='stretch'):
-            if _do_save_case():
-                st.toast(f'Updated "{case_name}"')
-            st.rerun()
-
-        st.divider()
-
-        st.markdown("**Save as new case**")
-        new_name = st.text_input("Name", value=f"{case_name} (copy)", key="dialog_fork_name")
-        new_notes = st.text_area("Notes", value=case_notes, key="dialog_fork_notes")
-        if st.button("Save as new case", key="dialog_fork_save", width='stretch'):
-            if not new_name.strip():
-                st.warning("Enter a case name.")
-            else:
-                if _do_save_case(force_new=True, name_override=new_name, notes_override=new_notes):
-                    st.toast(f'Saved as "{new_name}"')
-                st.rerun()
-    else:
-        # --- First save ---
-        save_name = st.text_input("Name", value=case_name, key="dialog_save_name")
-        save_notes = st.text_area("Notes", value=case_notes, key="dialog_save_notes")
-        if st.button("Save case", type="primary", key="dialog_save", width='stretch'):
-            if not save_name.strip():
-                st.warning("Enter a case name.")
-            else:
-                if _do_save_case(name_override=save_name, notes_override=save_notes):
-                    st.toast(f'Saved "{save_name}"')
-                st.rerun()
-
-
 def _render_sidebar_actions():
     """Render case management controls in sidebar."""
+    from frontend.utils.case_actions import run_calculation
+
     st.divider()
 
     # --- Case info ---
@@ -358,17 +170,7 @@ def _render_sidebar_actions():
 
     # --- Compute button ---
     if st.button("Compute Revenue Frame", type="primary", width='stretch'):
-        _run_calculation()
-
-    # --- Save case button (only after computation) ---
-    if st.session_state.get("calculation_done"):
-        if st.button("Save case", width='stretch'):
-            _save_case_dialog()
-
-        from frontend.utils.case_storage import get_case_count
-        user_reid = get_user_reid()
-        if user_reid:
-            st.caption(f"Saved cases: {get_case_count(user_reid)}/10")
+        run_calculation()
 
     # --- Revert / New case button ---
     revert_label = "Revert to saved" if has_saved_reference() else "New case"
@@ -379,9 +181,7 @@ def _render_sidebar_actions():
 
     # --- Status indicators ---
     if has_config_changed_since_compute():
-        st.caption("Config changed since last run — save will use the last computed configuration.")
-    if has_unsaved_changes():
-        st.caption("Unsaved changes")
+        st.caption("Config changed since last run — results may be outdated.")
 
 
 def render_sidebar():
@@ -497,19 +297,24 @@ login_page = st.Page(
     title="Login",
 )
 
-case_definition = st.Page(
-    "pages/0_case_definition.py",
-    title="Define",
+case_manager = st.Page(
+    "pages/0_case_manager.py",
+    title="1. Case Manager",
 )
 
-case_config = st.Page(
-    "pages/1_case_config.py",
-    title="Configure",
+case_setup = st.Page(
+    "pages/1_case_setup.py",
+    title="2. Case Setup",
 )
 
-results = st.Page(
-    "pages/2_results.py",
-    title="Results",
+specification = st.Page(
+    "pages/2_specification.py",
+    title="3. Specification",
+)
+
+revenue_frame = st.Page(
+    "pages/3_revenue_frame.py",
+    title="4. Revenue Frame",
 )
 
 
@@ -534,14 +339,14 @@ if check_auth():
 
     render_sidebar()
 
-    pg = st.navigation([case_definition, case_config, results])
+    pg = st.navigation([case_manager, case_setup, specification, revenue_frame])
     pg.run()
 
 else:
     # Register ALL pages to prevent "Page not found" on refresh
     # (URL may still point to a protected page after auth fails)
     pg = st.navigation(
-        [login_page, case_definition, case_config, results],
+        [login_page, case_manager, case_setup, specification, revenue_frame],
         position="hidden",
     )
     # Redirect to login if user landed on a protected page

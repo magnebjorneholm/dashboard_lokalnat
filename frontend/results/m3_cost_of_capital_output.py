@@ -77,7 +77,7 @@ def render_incentives(
 ) -> None:
     """Render M3 incentive adjustment outputs (30.2-30.5).
 
-    Public entry point so 2_results.py can call WACC and incentives separately.
+    Public entry point so 3_revenue_frame.py can call WACC and incentives separately.
     """
     case_ir = case.post_dea.user_revenue_frame
     baseline_ir = baseline.post_dea.user_revenue_frame
