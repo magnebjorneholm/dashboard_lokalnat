@@ -230,18 +230,22 @@ def _clear_config_widget_keys() -> None:
     The list is intentionally conservative but can be extended if new prefixes
     are introduced. Operates directly on `st.session_state`.
     """
-    prefixes = [
-    "m1_", "m2_", "m3_", "m4_", "m5_", "m5_eff_",
-    "addon_", "wacc_", "scaling_",
+    keys_to_clear = [
+        k for k in list(st.session_state.keys())
+        if any(k.startswith(p) for p in _CONFIG_WIDGET_PREFIXES)
     ]
-
-    keys_to_clear = [k for k in list(st.session_state.keys()) if any(k.startswith(p) for p in prefixes)]
     for k in keys_to_clear:
         try:
             del st.session_state[k]
         except Exception:
             # Ignore if already removed concurrently
             pass
+
+
+_CONFIG_WIDGET_PREFIXES = (
+    "m1_", "m2_", "m3_", "m4_", "m5_", "m5_eff_",
+    "addon_", "wacc_", "scaling_",
+)
 
 
 def get_config_value(module_key: str, param_key: str, default: Any):

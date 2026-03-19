@@ -16,7 +16,6 @@ from frontend.utils.state_manager import (
     get_selected_modules,
     is_section_selected,
     is_module_selected,
-    revert_to_saved,
 )
 
 from frontend.modules.base import (
@@ -46,13 +45,6 @@ else:
 
 from frontend.common.save_bar import render_save_bar
 render_save_bar()
-
-col_revert, col_spacer = st.columns([0.2, 0.8])
-with col_revert:
-    if st.button("Revert to saved", key="spec_revert", use_container_width=True):
-        revert_to_saved()
-        st.toast("Configuration reverted")
-        st.rerun()
 
 user_reid = get_user_reid()
 if user_reid is None:
