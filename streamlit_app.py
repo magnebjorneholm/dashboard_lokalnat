@@ -149,25 +149,8 @@ def try_restore_auth_from_cookie() -> bool:
 # =============================================================================
 
 def _render_sidebar_actions():
-    """Render case management controls in sidebar."""
-    from frontend.utils.case_actions import run_calculation
-
-    st.divider()
-
-    computed_at = get_computed_at()
-    if computed_at:
-        st.caption(f"Computed {computed_at.strftime('%H:%M, %d %b')}")
-
-    # --- Compute button ---
-    if st.button("Compute Revenue Frame", type="primary", width='stretch'):
-        run_calculation()
-
-    # --- Revert / New case button ---
-    revert_label = "Revert to saved" if has_saved_reference() else "New case"
-    if st.button(revert_label, width='stretch'):
-        revert_to_saved()
-        st.toast("Configuration reverted")
-        st.rerun()
+    """Render case management controls in sidebar (placeholder, buttons moved to Revenue Frame)."""
+    pass
 
 
 def render_sidebar():
@@ -284,22 +267,22 @@ login_page = st.Page(
 )
 
 case_manager = st.Page(
-    "pages/0_case_manager.py",
-    title="1. Case Manager",
+    "pages/1_create_and_select_case.py",
+    title="1. Create and select case",
 )
 
 case_setup = st.Page(
-    "pages/1_case_setup.py",
+    "pages/2_case_setup.py",
     title="2. Case Setup",
 )
 
 specification = st.Page(
-    "pages/2_specification.py",
+    "pages/3_specification.py",
     title="3. Specification",
 )
 
 revenue_frame = st.Page(
-    "pages/3_revenue_frame.py",
+    "pages/4_revenue_frame.py",
     title="4. Revenue Frame",
 )
 

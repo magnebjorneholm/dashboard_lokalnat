@@ -15,6 +15,9 @@ from frontend.utils.state_manager import (
     get_user_reid,
     get_case_name,
     get_filtered_ui_config,
+    has_saved_reference,
+    revert_to_saved,
+    get_computed_at,
 )
 from frontend.utils.export_button import render_export_button
 from visualization.diagram_data import prepare_diagram_data
@@ -87,6 +90,23 @@ else:
 from frontend.common.save_bar import render_save_bar
 render_save_bar(show_warning=True)
 
+# --- Compute / Revert buttons ---
+from frontend.utils.case_actions import run_calculation
+
+computed_at = get_computed_at()
+col_compute, col_revert, col_spacer = st.columns([0.2, 0.2, 0.6])
+with col_compute:
+    if st.button("Compute Revenue Frame", type="primary", key="rf_compute", use_container_width=True):
+        run_calculation()
+with col_revert:
+    revert_label = "Revert to saved" if has_saved_reference() else "New case"
+    if st.button(revert_label, key="rf_revert", use_container_width=True):
+        revert_to_saved()
+        st.toast("Configuration reverted")
+        st.rerun()
+if computed_at:
+    st.caption(f"Computed {computed_at.strftime('%H:%M, %d %b')}")
+
 user_reid = get_user_reid()
 if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")
@@ -94,7 +114,7 @@ if user_reid is None:
 
 # If no calculation done yet, show case summary
 if not st.session_state.get("calculation_done"):
-    st.info("Use the **Compute Revenue Frame** button in the sidebar to run the calculation.")
+    st.info("Run **Compute Revenue Frame** above to see results.")
     st.stop()
 
 # From here on, calculation has been performed

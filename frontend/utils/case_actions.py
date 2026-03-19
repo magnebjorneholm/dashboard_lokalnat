@@ -176,4 +176,4 @@ def run_calculation() -> None:
             status.update(label="Error", state="error")
             return
 
-    st.switch_page("pages/3_revenue_frame.py")
+    st.switch_page("pages/4_revenue_frame.py")

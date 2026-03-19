@@ -371,7 +371,7 @@ def main():
     if is_dev_mode():
         st.info("**Dev mode enabled** - Authentication is bypassed")
         if st.button("Continue to app", type="primary"):
-            st.switch_page("pages/0_case_manager.py")
+            st.switch_page("pages/1_create_and_select_case.py")
         return
     
     # Check if already logged in
@@ -389,7 +389,7 @@ def main():
         col1, col2 = st.columns([1, 1])
         with col1:
             if st.button("Continue to app", type="primary", width='stretch'):
-                st.switch_page("pages/0_case_manager.py")
+                st.switch_page("pages/1_create_and_select_case.py")
         with col2:
             if st.button("Logout", width='stretch'):
                 from auth.cookie_session import delete_auth_cookie

@@ -543,6 +543,28 @@ def get_case_count(user_reid: str) -> int:
     return len(list_cases(user_reid))
 
 
+def case_name_exists(
+    user_reid: str, name: str, exclude_case_id: Optional[str] = None,
+) -> bool:
+    """Check if a case name already exists for this user (case-insensitive).
+
+    Args:
+        user_reid: User's REId
+        name: Case name to check
+        exclude_case_id: Case ID to exclude (for edits — don't match against self)
+
+    Returns:
+        True if a case with that name already exists
+    """
+    needle = name.strip().lower()
+    for c in list_cases(user_reid):
+        if c.id == exclude_case_id:
+            continue
+        if c.name.strip().lower() == needle:
+            return True
+    return False
+
+
 def get_storage_backend() -> str:
     """Get current storage backend name (for debugging)."""
     return "Firestore" if _use_firestore() else "Local JSON"

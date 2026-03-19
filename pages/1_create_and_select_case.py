@@ -29,8 +29,10 @@ from frontend.utils.case_storage import (
     list_cases,
     load_case,
     delete_case,
+    save_case,
     apply_case_to_session,
     get_case_count,
+    case_name_exists,
 )
 from frontend.utils.case_actions import do_save_case
 from frontend.common.case_comparison import render_comparison_table
@@ -123,6 +125,8 @@ def _confirm_duplicate_dialog(case_id: str, case_name: str, case_notes: str):
     if st.button("Duplicate", type="primary", use_container_width=True):
         if not dup_name.strip():
             st.warning("Enter a name for the duplicate.")
+        elif case_name_exists(get_user_reid(), dup_name):
+            st.warning(f'A case named "{dup_name}" already exists.')
         else:
             case_data = load_case(get_user_reid(), case_id)
             if case_data:
@@ -139,12 +143,41 @@ def _confirm_duplicate_dialog(case_id: str, case_name: str, case_notes: str):
                     st.rerun()
 
 
+@st.dialog("Edit case")
+def _confirm_edit_dialog(case: SavedCase):
+    """Modal dialog for editing a saved case's name and notes."""
+    edit_name = st.text_input("Name", value=case.name, key="cm_edit_name")
+    edit_notes = st.text_area("Notes", value=case.notes, key="cm_edit_notes")
+
+    if st.button("Save", type="primary", use_container_width=True):
+        if not edit_name.strip():
+            st.warning("Enter a case name.")
+        elif case_name_exists(get_user_reid(), edit_name, exclude_case_id=case.id):
+            st.warning(f'A case named "{edit_name}" already exists.')
+        else:
+            save_case(
+                user_reid=case.user_reid,
+                case_name=edit_name,
+                case_notes=edit_notes,
+                ui_config=case.ui_config,
+                selected_modules=case.selected_modules,
+                case_id=case.id,
+                result_snapshot=case.result_snapshot,
+            )
+            # If the edited case is the currently loaded one, sync session state
+            if get_case_id() == case.id:
+                set_case_name(edit_name)
+                set_case_notes(edit_notes)
+            st.session_state["_toast_message"] = f'Updated "{edit_name}"'
+            st.rerun()
+
+
 # =============================================================================
 # PAGE CONTENT
 # =============================================================================
 
 st.title("Regumetrica")
-st.subheader("Case Manager")
+st.subheader("1. Create and select case")
 
 # Check company selection
 user_reid = get_user_reid()
@@ -172,7 +205,7 @@ def _on_case_notes_change():
     set_case_notes(st.session_state["cm_case_notes"])
 
 
-st.markdown("##### Case identity")
+st.markdown("##### New case")
 
 st.text_input(
     "Case name",
@@ -252,7 +285,7 @@ if saved_cases:
                 st.caption("○ No computed results")
 
             # Action buttons
-            col_load, col_dup, col_delete = st.columns(3)
+            col_load, col_edit, col_dup, col_delete = st.columns(4)
             with col_load:
                 if st.button(
                     "Load case", type="primary", key="cm_load_case",
@@ -265,6 +298,13 @@ if saved_cases:
                             f"Loaded: {case_data.name}"
                         )
                         st.rerun()
+
+            with col_edit:
+                if st.button(
+                    "Edit", key="cm_edit_case",
+                    use_container_width=True,
+                ):
+                    _confirm_edit_dialog(selected_case)
 
             with col_dup:
                 if st.button(

@@ -80,6 +80,8 @@ def _render_new_case_button() -> None:
 def _save_as_new_dialog():
     """Dialog for saving as a new case (fork or first save)."""
     from frontend.utils.case_actions import do_save_case
+    from frontend.utils.state_manager import get_user_reid
+    from frontend.utils.case_storage import case_name_exists
 
     case_id = get_case_id()
     case_name = get_case_name() or ""
@@ -99,6 +101,8 @@ def _save_as_new_dialog():
     ):
         if not save_name.strip():
             st.warning("Enter a case name.")
+        elif case_name_exists(get_user_reid(), save_name):
+            st.warning(f'A case named "{save_name}" already exists.')
         else:
             force_new = case_id is not None
             if do_save_case(force_new=force_new, name_override=save_name, notes_override=save_notes):
