@@ -15,7 +15,6 @@ from frontend.utils.state_manager import (
     get_user_reid,
     get_case_name,
     get_filtered_ui_config,
-    has_saved_reference,
     has_config_changed_since_compute,
     revert_to_saved,
     get_computed_at,
@@ -104,8 +103,7 @@ with col_compute:
     if st.button("Compute Revenue Frame", type="primary", key="rf_compute", use_container_width=True):
         run_calculation()
 with col_revert:
-    revert_label = "Revert to saved" if has_saved_reference() else "New case"
-    if st.button(revert_label, key="rf_revert", use_container_width=True):
+    if st.button("Revert to saved", key="rf_revert", use_container_width=True):
         revert_to_saved()
         st.toast("Configuration reverted")
         st.rerun()

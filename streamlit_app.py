@@ -16,9 +16,6 @@ from frontend.utils.state_manager import (
     get_auth_email,
     is_regulator,
     get_user_reid,
-    has_saved_reference,
-    revert_to_saved,
-    get_computed_at,
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
