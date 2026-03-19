@@ -16,6 +16,7 @@ from frontend.utils.state_manager import (
     get_case_name,
     get_filtered_ui_config,
     has_saved_reference,
+    has_config_changed_since_compute,
     revert_to_saved,
     get_computed_at,
 )
@@ -88,7 +89,11 @@ else:
     st.subheader("Results")
 
 from frontend.common.save_bar import render_save_bar
-render_save_bar(show_warning=True)
+
+render_save_bar()
+
+if has_config_changed_since_compute():
+    st.warning("Configuration changed since last computation — results may be outdated.")
 
 # --- Compute / Revert buttons ---
 from frontend.utils.case_actions import run_calculation

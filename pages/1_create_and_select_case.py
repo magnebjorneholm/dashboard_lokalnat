@@ -1,15 +1,17 @@
 """
-Case Manager Page.
+Create & Select Case Page.
 
 Landing page for managing regulatory cases.
 Allows users to:
-- Name and describe cases
+- Create new cases (saved to DB immediately)
 - Load previously saved cases (with snapshot info)
 - Delete saved cases
+- Duplicate saved cases
+- Edit case name/notes
 - Compare cases with result snapshots
-- Start new cases
 """
 
+import copy
 import streamlit as st
 from datetime import datetime
 
@@ -23,6 +25,7 @@ from frontend.utils.state_manager import (
     set_case_name,
     set_case_notes,
     set_saved_cases_count,
+    DEFAULT_UI_CONFIG,
 )
 from frontend.utils.case_storage import (
     SavedCase,
@@ -34,7 +37,6 @@ from frontend.utils.case_storage import (
     get_case_count,
     case_name_exists,
 )
-from frontend.utils.case_actions import do_save_case
 from frontend.common.case_comparison import render_comparison_table
 from config.module_registry import parse_selection_key
 from config.formatting import format_tkr as format_tkr_display
@@ -92,7 +94,7 @@ def _format_case_compare(c: SavedCase) -> str:
 
 
 # =============================================================================
-# DELETE DIALOG
+# DIALOGS
 # =============================================================================
 
 
@@ -128,19 +130,23 @@ def _confirm_duplicate_dialog(case_id: str, case_name: str, case_notes: str):
         elif case_name_exists(get_user_reid(), dup_name):
             st.warning(f'A case named "{dup_name}" already exists.')
         else:
-            case_data = load_case(get_user_reid(), case_id)
-            if case_data:
-                apply_case_to_session(case_data, st.session_state)
-                success = do_save_case(
-                    force_new=True,
-                    name_override=dup_name,
-                    notes_override=dup_notes,
+            user_reid = get_user_reid()
+            source = load_case(user_reid, case_id)
+            if source:
+                duplicated = save_case(
+                    user_reid=user_reid,
+                    case_name=dup_name,
+                    case_notes=dup_notes,
+                    ui_config=source.ui_config,
+                    selected_modules=set(source.selected_modules),
+                    case_id=None,  # new case
+                    result_snapshot=source.result_snapshot,
                 )
-                if success:
-                    st.session_state["_toast_message"] = (
-                        f'Duplicated as "{dup_name}"'
-                    )
-                    st.rerun()
+                apply_case_to_session(duplicated, st.session_state)
+                st.session_state["_toast_message"] = (
+                    f'Duplicated as "{dup_name}"'
+                )
+                st.rerun()
 
 
 @st.dialog("Edit case")
@@ -191,37 +197,45 @@ set_saved_cases_count(case_count)
 
 
 # =============================================================================
-# CASE IDENTITY
+# CREATE NEW CASE
 # =============================================================================
-
-
-def _on_case_name_change():
-    """Sync case name widget to session state."""
-    set_case_name(st.session_state["cm_case_name"])
-
-
-def _on_case_notes_change():
-    """Sync case notes widget to session state."""
-    set_case_notes(st.session_state["cm_case_notes"])
-
 
 st.markdown("##### New case")
 
-st.text_input(
+create_name = st.text_input(
     "Case name",
-    value=get_case_name() or "",
+    value="",
     placeholder="Enter case name",
-    key="cm_case_name",
-    on_change=_on_case_name_change,
+    key="cm_create_name",
 )
-st.text_area(
+create_notes = st.text_area(
     "Notes",
-    value=get_case_notes(),
+    value="",
     placeholder="Notes (optional)",
-    key="cm_case_notes",
-    on_change=_on_case_notes_change,
+    key="cm_create_notes",
     height=80,
 )
+
+col_create, _ = st.columns([0.2, 0.8])
+with col_create:
+    if st.button("Create case", type="primary", use_container_width=True):
+        name = create_name.strip()
+        if not name:
+            st.warning("Enter a case name.")
+        elif case_name_exists(user_reid, name):
+            st.warning(f'A case named "{name}" already exists.')
+        else:
+            created = save_case(
+                user_reid=user_reid,
+                case_name=name,
+                case_notes=create_notes,
+                ui_config=copy.deepcopy(DEFAULT_UI_CONFIG),
+                selected_modules=set(),
+                case_id=None,
+            )
+            apply_case_to_session(created, st.session_state)
+            st.session_state["_toast_message"] = f'Created "{name}"'
+            st.rerun()
 
 st.divider()
 
@@ -259,8 +273,14 @@ if saved_cases:
             and selected_case.result_snapshot.get("revenue_frame") is not None
         )
 
+        # Highlight if this is the currently loaded case
+        is_loaded = get_case_id() == selected_case.id
+
         with st.container(border=True):
-            st.markdown(f"**{selected_case.name}**")
+            if is_loaded:
+                st.markdown(f"**{selected_case.name}** *(current)*")
+            else:
+                st.markdown(f"**{selected_case.name}**")
 
             # Metadata
             if has_snapshot:
@@ -280,9 +300,9 @@ if saved_cases:
             st.caption("  \n".join(meta_lines))
 
             if has_snapshot:
-                st.caption("✓ Has computed results")
+                st.caption("Has computed results")
             else:
-                st.caption("○ No computed results")
+                st.caption("No computed results")
 
             # Action buttons
             col_load, col_edit, col_dup, col_delete = st.columns(4)
@@ -290,6 +310,7 @@ if saved_cases:
                 if st.button(
                     "Load case", type="primary", key="cm_load_case",
                     use_container_width=True,
+                    disabled=is_loaded,
                 ):
                     case_data = load_case(user_reid, selected_case.id)
                     if case_data:
@@ -327,7 +348,7 @@ if saved_cases:
                     )
 
 else:
-    st.caption("No saved cases yet. Configure and save a case to get started.")
+    st.caption("No saved cases yet. Create a case above to get started.")
 
 st.divider()
 
@@ -361,17 +382,6 @@ if comparable:
         st.caption("Select at least 2 cases to compare.")
 else:
     st.caption("No cases with computed results available for comparison.")
-
-st.divider()
-
-
-# =============================================================================
-# NEW CASE BUTTON
-# =============================================================================
-
-if st.button("New case", type="secondary"):
-    reset_case()
-    st.rerun()
 
 with st.sidebar:
     st.caption(f"Saved cases: {len(saved_cases)}/10")

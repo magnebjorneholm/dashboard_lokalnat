@@ -105,10 +105,10 @@ dashboard_lokalnat/
 |
 |-- pages/                        # Streamlit multi-page app
 |   |-- login.py                  # Authentication (Firebase)
-|   |-- 0_case_manager.py         # Case Manager: create/load/delete/compare cases
-|   |-- 1_case_setup.py           # Case Setup: select modules/sections
-|   |-- 2_specification.py        # Specification: configure parameters (tabs M1-M7)
-|   |-- 3_revenue_frame.py        # Revenue Frame: display results, export
+|   |-- 1_create_and_select_case.py  # Create/load/delete/duplicate/compare cases
+|   |-- 2_case_setup.py           # Case Setup: select modules/sections
+|   |-- 3_specification.py        # Specification: configure parameters (tabs M1-M7)
+|   |-- 4_revenue_frame.py        # Revenue Frame: display results, export
 |
 |-- config/                       # Constants, metadata, domain configuration (no Streamlit)
 |   |-- case_definition.py        # Dataclasses: CaseDefinition, PreDeaConfig, DeaConfig, etc.
@@ -126,7 +126,7 @@ dashboard_lokalnat/
 |   |-- common/                   # Shared Streamlit components
 |   |   |-- parameter_input.py    # Reusable input component with baseline comparison
 |   |   |-- styling.py            # CSS injection, font loading (re-exports from config.colors)
-|   |   |-- save_bar.py           # Persistent save bar (saved/unsaved/new states)
+|   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
 |   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
 |   |
 |   |-- modules/                  # Input renderers per module
@@ -252,8 +252,8 @@ Dependencies flow strictly downward. Lower layers NEVER import from higher layer
 ```
 Layer 1: PAGES (top)
     streamlit_app.py, pages/login.py,
-    pages/0_case_manager.py, pages/1_case_setup.py,
-    pages/2_specification.py, pages/3_revenue_frame.py
+    pages/1_create_and_select_case.py, pages/2_case_setup.py,
+    pages/3_specification.py, pages/4_revenue_frame.py
         |
         | imports
         v
@@ -308,18 +308,18 @@ Layer 6: AUTH / FIRESTORE
 ```
 Unauthenticated                Authenticated
 ---------------                -------------
-pages/login.py    --auth-->    pages/0_case_manager.py     (Case Manager)
+pages/login.py    --auth-->    pages/1_create_and_select_case.py  (Create & Select)
                                        |
                                        v
-                               pages/1_case_setup.py       (Case Setup)
+                               pages/2_case_setup.py              (Case Setup)
                                        |
                                        v
-                               pages/2_specification.py    (Specification)
+                               pages/3_specification.py           (Specification)
                                        |
-                                  [Compute] (sidebar button)
+                                  [Compute] (on page 4)
                                        |
                                        v
-                               pages/3_revenue_frame.py    (Revenue Frame)
+                               pages/4_revenue_frame.py           (Revenue Frame)
 ```
 
 **Entrypoint:** `streamlit_app.py`
@@ -441,25 +441,25 @@ Three levels of config exist for tracking changes:
 2. **Computed reference** (`computed_ui_config`, `computed_selected_modules`) — frozen at last pipeline run
 3. **Saved reference** (`saved_ui_config`, `saved_selected_modules`) — frozen at last DB save/load
 
-- `has_unsaved_changes()`: working differs from saved (shows "Unsaved" in save bar)
-- `has_config_changed_since_compute()`: working differs from computed (shows stale results warning)
+- `has_unsaved_changes()`: working differs from saved (guards save button)
+- `has_config_changed_since_compute()`: working differs from computed (stale results warning on page 4)
 
 ### Case Management
 
-- **Name/notes**: Set on Case Manager page, stored in session state only (no auto-persist to DB)
-- **Save**: Persistent save bar on pages 1-3 (decoupled from computation). Three modes:
-  - First save ("Save as..."): user enters name, creates new case in DB
-  - Update ("Save"): overwrites existing case with current working state
-  - Fork ("Save as new..."): creates copy with new name/UUID
-- **Result snapshot**: When saving with computed results, a lightweight KPI snapshot
-  (~15 aggregated values + baseline equivalents) is persisted alongside the config.
-  Enables instant case comparison on Case Manager without re-running the pipeline.
-- **Load case**: Case Manager page. Clears widget keys so inputs reinitialize on rerun
-- **Delete case**: Case Manager page, inline confirmation
-- **Compare cases**: Case Manager page. Checkbox per case (disabled without snapshot),
-  "Compare selected" renders side-by-side KPI table with baseline and delta coloring.
-- **New case**: Case Manager page button, resets all state (calls `reset_case()`)
-- **Revert to saved**: Sidebar button, restores working state to last saved/loaded config
+See `docs/case_system_framework.md` for the full conceptual framework.
+
+- **Create**: Page 1. User names a case, it is saved to DB immediately with default config.
+  A `case_id` is always present on pages 2-4.
+- **Save (update)**: Single "Save" button on pages 3-4. Always updates the existing case.
+  Saves the current working config regardless of computation state. Includes a KPI snapshot
+  only when working config matches the last computed config.
+- **Result snapshot**: Lightweight KPI snapshot (~15 aggregated values + baseline equivalents)
+  persisted alongside the config. Enables instant case comparison on page 1.
+- **Load case**: Page 1. Clears widget keys so inputs reinitialize on rerun.
+- **Delete case**: Page 1, modal confirmation.
+- **Duplicate case**: Page 1, modal dialog with new name. No fork from save bar.
+- **Compare cases**: Page 1. Multiselect of cases with snapshots, side-by-side KPI table.
+- **Revert to saved**: Page 4 button, restores working state to last saved/loaded config.
 
 ### data_editor Widget Caching
 
@@ -718,23 +718,22 @@ streamlit_app.py
     |-- frontend.common.styling           (apply_styling)
     |-- auth.firebase_auth                (is_dev_mode, initialize_firebase_auth)
 
-pages/0_case_manager.py
+pages/1_create_and_select_case.py
     |-- frontend.utils.state_manager     (init, get/set, reset_case)
-    |-- frontend.utils.case_storage      (list/load/delete, apply_case_to_session)
+    |-- frontend.utils.case_storage      (list/load/delete/save, apply_case_to_session)
     |-- frontend.common.case_comparison  (render_comparison_table)
     |-- pipeline.result_helpers          (fmt_tkr)
 
-pages/1_case_setup.py
+pages/2_case_setup.py
     |-- frontend.utils.state_manager     (init, module selection)
-    |-- frontend.common.save_bar         (render_save_bar)
 
-pages/2_specification.py
+pages/3_specification.py
     |-- frontend.modules.base.m1-m5      (render_* functions)
     |-- frontend.modules.addons.benchmarking
     |-- frontend.utils.state_manager     (is_section_selected)
     |-- frontend.common.save_bar         (render_save_bar)
 
-pages/3_revenue_frame.py
+pages/4_revenue_frame.py
     |-- frontend.results.m1-m5_output    (render functions)
     |-- visualization.diagram_data, diagram_utils
     |-- visualization.geo_data, geo_visualization

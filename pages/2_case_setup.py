@@ -44,9 +44,6 @@ if case_name:
 else:
     st.subheader("Case Setup")
 
-from frontend.common.save_bar import render_save_bar
-_save_bar_placeholder = st.empty()
-
 # Check company selection
 user_reid = get_user_reid()
 if user_reid is None:
@@ -162,7 +159,3 @@ for module in ADDON_MODULES:
 # Update selection if changed
 if new_selection != current_selection:
     set_selected_modules(new_selection)
-
-# Render save bar last so it reads up-to-date state (after widget callbacks)
-with _save_bar_placeholder.container():
-    render_save_bar()
