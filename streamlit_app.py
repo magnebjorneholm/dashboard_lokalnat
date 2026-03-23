@@ -19,7 +19,10 @@ from frontend.utils.state_manager import (
 )
 from frontend.common.styling import apply_styling
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
-from auth.cookie_session import get_auth_cookie, set_auth_cookie, delete_auth_cookie
+from auth.cookie_session import (
+    get_auth_cookie, set_auth_cookie, delete_auth_cookie,
+    get_case_cookie, set_case_cookie, delete_case_cookie,
+)
 from config.column_names import COL_COMPANY_NAME
 
 # Page configuration
@@ -141,6 +144,59 @@ def try_restore_auth_from_cookie() -> bool:
         return False
 
 
+def try_restore_case_from_cookie() -> None:
+    """Restore the last active case from cookie after a page refresh.
+
+    Runs at most once per Streamlit session (guarded by ``_case_restored``).
+    Only loads a case that still exists and belongs to the current user.
+    """
+    if st.session_state.get("_case_restored"):
+        return
+    st.session_state["_case_restored"] = True
+
+    case_id = get_case_cookie()
+    if not case_id:
+        return
+
+    user_reid = get_user_reid()
+    if not user_reid:
+        return
+
+    try:
+        from frontend.utils.case_storage import load_case, apply_case_to_session
+        case = load_case(user_reid, case_id)
+        if case:
+            apply_case_to_session(case, st.session_state)
+            # Mark as already synced so _sync_case_cookie doesn't re-write
+            st.session_state["_case_cookie_synced"] = case_id
+        else:
+            # Case was deleted or belongs to a different user — clean up
+            delete_case_cookie()
+    except Exception:
+        # Storage unavailable — don't block the app
+        pass
+
+
+def _sync_case_cookie() -> None:
+    """Keep the case cookie in sync with ``session_state["case_id"]``.
+
+    Called on every authenticated render. Only writes a cookie when the
+    active case actually changes, tracked via ``_case_cookie_synced``.
+    """
+    case_id = st.session_state.get("case_id")
+    last_synced = st.session_state.get("_case_cookie_synced")
+
+    if case_id == last_synced:
+        return
+
+    if case_id:
+        set_case_cookie(case_id)
+    else:
+        delete_case_cookie()
+
+    st.session_state["_case_cookie_synced"] = case_id
+
+
 # =============================================================================
 # SIDEBAR ACTIONS
 # =============================================================================
@@ -243,6 +299,7 @@ def _render_authenticated_sidebar():
     # Logout button
     if st.button("Logout", width='stretch'):
         delete_auth_cookie()
+        delete_case_cookie()
         auth_manager = initialize_firebase_auth()
         auth_manager.sign_out()
         st.session_state["user_reid"] = None
@@ -291,6 +348,11 @@ if check_auth():
     pending_token = st.session_state.pop("_pending_auth_cookie", None)
     if pending_token:
         set_auth_cookie(pending_token)
+
+    # Restore last saved case on page refresh (once per session)
+    try_restore_case_from_cookie()
+    # Keep case cookie in sync when user switches/creates/resets cases
+    _sync_case_cookie()
 
     render_sidebar()
 
