@@ -249,15 +249,15 @@ def _render_category_scaling(
             try:
                 summary = _get_ordinarie_summary(user_id_network)
                 if not summary.empty:
-                    context = summary[['cat_encode', 'Components', 'NUAV (Mkr)']].copy()
+                    context = summary[['cat_encode', 'NUAV (Mkr)']].copy()
+                    context = context.rename(columns={'NUAV (Mkr)': 'NUAV (MSEK)'})
                     df = df.merge(
                         context,
                         left_on='_cat_encode',
                         right_on='cat_encode',
                         how='left',
                     ).drop(columns=['cat_encode'])
-                    df['Components'] = df['Components'].fillna(0).astype(int)
-                    df['NUAV (Mkr)'] = df['NUAV (Mkr)'].fillna(0.0)
+                    df['NUAV (MSEK)'] = df['NUAV (MSEK)'].fillna(0.0)
             except Exception:
                 pass  # Graceful fallback — show editor without context
 
@@ -265,7 +265,7 @@ def _render_category_scaling(
     else:
         df = st.session_state[source_key]
 
-    has_context = 'Components' in df.columns
+    has_context = 'NUAV (MSEK)' in df.columns
     has_norm = 'Norm value (tkr)' in df.columns
 
     # Build column lists dynamically
@@ -275,8 +275,8 @@ def _render_category_scaling(
         display_cols.append('Norm value (tkr)')
         disabled_cols.append('Norm value (tkr)')
     if has_context:
-        display_cols.extend(['Components', 'NUAV (Mkr)'])
-        disabled_cols.extend(['Components', 'NUAV (Mkr)'])
+        display_cols.append('NUAV (MSEK)')
+        disabled_cols.append('NUAV (MSEK)')
     display_cols.append('Scaling')
 
     col_config = {
@@ -302,13 +302,9 @@ def _render_category_scaling(
             help="Weighted average norm value per component (read-only)",
         )
     if has_context:
-        col_config['Components'] = st.column_config.NumberColumn(
-            'Components', format="%d", width="small",
-            help="Read-only",
-        )
-        col_config['NUAV (Mkr)'] = st.column_config.NumberColumn(
-            'NUAV (Mkr)', format="%.1f", width="small",
-            help="Read-only",
+        col_config['NUAV (MSEK)'] = st.column_config.NumberColumn(
+            'NUAV (MSEK)', format="%.1f", width="small",
+            help="Your company's ordinarie asset value in this category (read-only)",
         )
 
     edited_df = st.data_editor(
