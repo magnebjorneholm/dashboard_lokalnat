@@ -640,8 +640,3 @@ def apply_case_to_session(
     session_state["computed_ui_config"] = None
     session_state["computed_selected_modules"] = None
 
-    # Persist to session store (survives page refresh)
-    from frontend.utils.state_manager import save_to_session_store
-    auth_uid = session_state.get("auth_uid")
-    if auth_uid:
-        save_to_session_store(auth_uid)

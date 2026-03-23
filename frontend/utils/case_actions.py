@@ -70,12 +70,6 @@ def do_save_case() -> bool:
         mark_case_saved()
         set_saved_reference(ui_config, selected_modules)
 
-        # Update session store so refresh reflects saved state
-        auth_uid = st.session_state.get("auth_uid")
-        if auth_uid:
-            from frontend.utils.state_manager import save_to_session_store
-            save_to_session_store(auth_uid)
-
         return True
 
     except ValueError as e:
@@ -143,12 +137,6 @@ def run_calculation() -> None:
             ui_config=st.session_state.get("ui_config", {}),
             selected_modules=get_selected_modules(),
         )
-
-        # Persist to session store (survives page refresh)
-        auth_uid = st.session_state.get("auth_uid")
-        if auth_uid:
-            from frontend.utils.state_manager import save_to_session_store
-            save_to_session_store(auth_uid)
 
         progress.progress(100, text="Calculation complete")
 

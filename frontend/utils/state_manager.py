@@ -209,11 +209,6 @@ def reset_case() -> None:
     for key in ("cm_case_select", "cm_compare_multiselect"):
         st.session_state.pop(key, None)
 
-    # Clear session store so refresh doesn't restore reset state
-    auth_uid = st.session_state.get("auth_uid")
-    if auth_uid:
-        clear_session_store(auth_uid)
-
 
 def _clear_selection_widget_keys() -> None:
     """Clear module/section checkbox widget keys to force re-initialization."""
@@ -651,65 +646,3 @@ def revert_to_saved() -> None:
 
     _clear_selection_widget_keys()
     _clear_config_widget_keys()
-
-    # Update session store so refresh reflects the reverted state
-    auth_uid = st.session_state.get("auth_uid")
-    if auth_uid:
-        save_to_session_store(auth_uid)
-
-
-# =============================================================================
-# SESSION STORE (survives page refresh via st.cache_resource)
-# =============================================================================
-
-_SESSION_STORE_KEYS = [
-    "user_reid",  # Included so regulators preserve company selection
-    "ui_config", "selected_modules",
-    "case_result", "baseline_result", "calculation_done",
-    "case_id", "case_name", "case_notes",
-    "computed_ui_config", "computed_selected_modules",
-    "saved_ui_config", "saved_selected_modules",
-    "_baseline_reid", "case_saved", "saved_cases_count",
-    "computed_at",
-]
-
-
-@st.cache_resource
-def _get_session_store() -> dict:
-    """Server-side store that persists across page refreshes."""
-    return {}
-
-
-def save_to_session_store(auth_uid: str) -> None:
-    """Snapshot current working state to session store."""
-    store = _get_session_store()
-    snapshot = {}
-    for key in _SESSION_STORE_KEYS:
-        val = st.session_state.get(key)
-        if val is not None:
-            # Deep copy mutable containers; frozen dataclasses safe by ref
-            if isinstance(val, (dict, list, set)):
-                snapshot[key] = copy.deepcopy(val)
-            else:
-                snapshot[key] = val
-    store[auth_uid] = snapshot
-
-
-def restore_from_session_store(auth_uid: str) -> bool:
-    """Restore working state from session store. Returns True if restored."""
-    store = _get_session_store()
-    snapshot = store.get(auth_uid)
-    if not snapshot:
-        return False
-    for key, val in snapshot.items():
-        if isinstance(val, (dict, list, set)):
-            st.session_state[key] = copy.deepcopy(val)
-        else:
-            st.session_state[key] = val
-    return True
-
-
-def clear_session_store(auth_uid: str) -> None:
-    """Clear stored state for a user (on explicit reset)."""
-    store = _get_session_store()
-    store.pop(auth_uid, None)

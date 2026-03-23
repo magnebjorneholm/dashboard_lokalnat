@@ -242,11 +242,6 @@ def _render_authenticated_sidebar():
 
     # Logout button
     if st.button("Logout", width='stretch'):
-        # Clear session store before wiping auth state
-        auth_uid = st.session_state.get("auth_uid")
-        if auth_uid:
-            from frontend.utils.state_manager import clear_session_store
-            clear_session_store(auth_uid)
         delete_auth_cookie()
         auth_manager = initialize_firebase_auth()
         auth_manager.sign_out()
@@ -296,12 +291,6 @@ if check_auth():
     pending_token = st.session_state.pop("_pending_auth_cookie", None)
     if pending_token:
         set_auth_cookie(pending_token)
-
-    # Restore working state from session store (page refresh)
-    auth_uid = st.session_state.get("auth_uid")
-    if auth_uid and not st.session_state.get("calculation_done"):
-        from frontend.utils.state_manager import restore_from_session_store
-        restore_from_session_store(auth_uid)
 
     render_sidebar()
 

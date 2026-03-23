@@ -7,7 +7,6 @@ Each module contains parameters (regulatory constants) and variables
 """
 
 import streamlit as st
-from typing import Set
 
 from frontend.utils.state_manager import (
     init_session_state,
@@ -59,14 +58,25 @@ st.caption(
 
 
 # =============================================================================
+# SELECTION CALLBACKS
+# =============================================================================
+
+def _on_module_toggle(selection_key: str, widget_key: str) -> None:
+    """on_change callback: sync checkbox to selected_modules."""
+    selected = get_selected_modules().copy()
+    if st.session_state[widget_key]:
+        selected.add(selection_key)
+    else:
+        selected.discard(selection_key)
+    set_selected_modules(selected)
+
+
+# =============================================================================
 # MODULE SELECTION
 # =============================================================================
 
-# Get current selection
+# Get current selection (authoritative source)
 current_selection = get_selected_modules()
-
-# Track new selections
-new_selection: Set[str] = set()
 
 
 def render_module_card(module: ModuleDefinition, is_addon: bool = False) -> None:
@@ -86,16 +96,18 @@ def _render_simple_module(module: ModuleDefinition, is_addon: bool) -> None:
     """Render a module without sections."""
     widget_key = f"module_select_{module.key}"
 
-    if widget_key not in st.session_state:
-        st.session_state[widget_key] = module.key in current_selection
+    # Always force widget key to match authoritative selected_modules
+    st.session_state[widget_key] = module.key in current_selection
 
     col_check, col_title = st.columns([0.05, 0.95])
 
     with col_check:
-        selected = st.checkbox(
+        st.checkbox(
             module.title,
             key=widget_key,
-            label_visibility="collapsed"
+            on_change=_on_module_toggle,
+            args=(module.key, widget_key),
+            label_visibility="collapsed",
         )
 
     with col_title:
@@ -104,9 +116,6 @@ def _render_simple_module(module: ModuleDefinition, is_addon: bool) -> None:
             title += " *(add-on)*"
         st.markdown(title)
         st.caption(module.description)
-
-    if selected:
-        new_selection.add(module.key)
 
 
 def _render_module_with_sections(module: ModuleDefinition, is_addon: bool) -> None:
@@ -125,18 +134,16 @@ def _render_module_with_sections(module: ModuleDefinition, is_addon: bool) -> No
         section_key = build_selection_key(module.key, section.key)
         section_widget_key = f"section_select_{section_key}"
 
-        if section_widget_key not in st.session_state:
-            st.session_state[section_widget_key] = section_key in current_selection
+        # Always force widget key to match authoritative selected_modules
+        st.session_state[section_widget_key] = section_key in current_selection
 
-        # Checkbox with descriptive label and help tooltip
-        section_selected = st.checkbox(
+        st.checkbox(
             section.label,
             key=section_widget_key,
+            on_change=_on_module_toggle,
+            args=(section_key, section_widget_key),
             help=section.help_text if section.help_text else None,
         )
-
-        if section_selected:
-            new_selection.add(section_key)
 
 
 # --- BASE MODULES ---
@@ -154,8 +161,3 @@ st.markdown("**Add-on modules**")
 for module in ADDON_MODULES:
     with st.container(border=True):
         render_module_card(module, is_addon=True)
-
-
-# Update selection if changed
-if new_selection != current_selection:
-    set_selected_modules(new_selection)
