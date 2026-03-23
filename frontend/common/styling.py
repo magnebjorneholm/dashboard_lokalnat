@@ -126,6 +126,17 @@ def _get_custom_css() -> str:
             display: none !important;
         }}
 
+        /* === SIDEBAR ALWAYS VISIBLE === */
+        /* Hide the collapse button inside the sidebar */
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebar"] button[kind="headerNoPadding"] {{
+            display: none !important;
+        }}
+        /* Hide the expand arrow shown when sidebar is collapsed */
+        [data-testid="collapsedControl"] {{
+            display: none !important;
+        }}
+
         /* === BRANDING === */
         #MainMenu {{
             visibility: hidden;
