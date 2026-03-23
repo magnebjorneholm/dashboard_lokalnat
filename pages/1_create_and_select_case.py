@@ -109,6 +109,8 @@ def _confirm_delete_dialog(case_id: str, case_name: str):
             delete_case(user, case_id)
             if get_case_id() == case_id:
                 reset_case()
+            # Reset selectbox to placeholder since selected case is gone
+            st.session_state["cm_case_select"] = 0
             st.session_state["_toast_message"] = "Case deleted"
             st.rerun()
     with col_no:
@@ -143,6 +145,11 @@ def _confirm_duplicate_dialog(case_id: str, case_name: str, case_notes: str):
                     result_snapshot=source.result_snapshot,
                 )
                 apply_case_to_session(duplicated, st.session_state)
+                # Clean up dialog widget keys so next open gets fresh values
+                for k in ["cm_dup_name", "cm_dup_notes"]:
+                    st.session_state.pop(k, None)
+                # New duplicate gets newest updated_at → first in list → index 1
+                st.session_state["cm_case_select"] = 1
                 st.session_state["_toast_message"] = (
                     f'Duplicated as "{dup_name}"'
                 )
@@ -174,6 +181,11 @@ def _confirm_edit_dialog(case: SavedCase):
             if get_case_id() == case.id:
                 set_case_name(edit_name)
                 set_case_notes(edit_notes)
+            # Clean up dialog widget keys so next open gets fresh values
+            for k in ["cm_edit_name", "cm_edit_notes"]:
+                st.session_state.pop(k, None)
+            # Edited case gets newest updated_at → first in list → index 1
+            st.session_state["cm_case_select"] = 1
             st.session_state["_toast_message"] = f'Updated "{edit_name}"'
             st.rerun()
 
