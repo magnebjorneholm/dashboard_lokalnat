@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 from config.asset_categories import ASSET_CATEGORIES, CATEGORY_BY_CODE
 from pipeline.result_helpers import (
-    TIME_LABELS, TOLERANCE,
+    TOLERANCE,
     load_baseline_category_data, get_case_category_data,
     fmt_tkr as _format_tkr,
     fmt_percent, fmt_number as _format_number,
@@ -124,22 +124,6 @@ def _aggregate_return_to_period(df: pd.DataFrame) -> pd.DataFrame:
     return agg_df
 
 
-def _aggregate_return_to_half_years(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep half-year breakdown per category with return values."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-    
-    result = df.copy()
-    result['time_label'] = result['time'].map(TIME_LABELS)
-    
-    for col in ['return_ord', 'return_tail']:
-        if col not in result.columns:
-            result[col] = 0.0
-    
-    result['return_total'] = result['return_ord'] + result['return_tail']
-    
-    return result
-
 
 def _build_return_comparison_table(
     case_period: pd.DataFrame,
@@ -189,45 +173,6 @@ def _build_return_comparison_table(
     return pd.DataFrame(rows)
 
 
-def _build_return_halfyear_table(
-    case_hy: pd.DataFrame,
-    baseline_hy: pd.DataFrame,
-    cat_encode: int
-) -> pd.DataFrame:
-    """Build half-year return comparison for a single category."""
-    rows = []
-    
-    for time_code, label in TIME_LABELS.items():
-        # Case
-        case_row = case_hy[(case_hy['cat_encode'] == cat_encode) & (case_hy['time'] == time_code)] if not case_hy.empty else pd.DataFrame()
-        if not case_row.empty:
-            c_ord = case_row['return_ord'].iloc[0]
-            c_tail = case_row['return_tail'].iloc[0]
-            c_total = case_row['return_total'].iloc[0]
-        else:
-            c_ord = c_tail = c_total = 0.0
-        
-        # Baseline
-        base_row = baseline_hy[(baseline_hy['cat_encode'] == cat_encode) & (baseline_hy['time'] == time_code)] if not baseline_hy.empty else pd.DataFrame()
-        if not base_row.empty:
-            b_ord = base_row['return_ord'].iloc[0]
-            b_tail = base_row['return_tail'].iloc[0]
-            b_total = base_row['return_total'].iloc[0]
-        else:
-            b_ord = b_tail = b_total = 0.0
-        
-        rows.append({
-            'Period': label,
-            'C Ord': c_ord,
-            'C Tail': c_tail,
-            'C Total': c_total,
-            'BL Ord': b_ord,
-            'BL Tail': b_tail,
-            'BL Total': b_total,
-        })
-    
-    return pd.DataFrame(rows)
-
 
 def _render_return_by_category(case: "PipelineResult", user_id_network: Optional[int]) -> None:
     """Render return on capital by category section."""
@@ -253,9 +198,6 @@ def _render_return_by_category(case: "PipelineResult", user_id_network: Optional
     
     case_period = _aggregate_return_to_period(case_cat)
     baseline_period = _aggregate_return_to_period(baseline_cat)
-    case_hy = _aggregate_return_to_half_years(case_cat)
-    baseline_hy = _aggregate_return_to_half_years(baseline_cat)
-    
     # Total return section
     c_ord = case_period['return_ord'].sum() if not case_period.empty else 0
     c_tail = case_period['return_tail'].sum() if not case_period.empty else 0
@@ -305,39 +247,6 @@ def _render_return_by_category(case: "PipelineResult", user_id_network: Optional
             }
         )
     
-    # Half-year breakdown expander
-    with st.expander("Per-half-year breakdown by category", expanded=False):
-        st.caption("Select a category (values in tkr):")
-        
-        cat_names = [cat.name for cat in ASSET_CATEGORIES]
-        selected_name = st.selectbox(
-            "Category",
-            options=cat_names,
-            key="m3_halfyear_cat_select",
-            label_visibility="collapsed"
-        )
-        
-        selected_cat = next((c for c in ASSET_CATEGORIES if c.name == selected_name), None)
-        if selected_cat:
-            hy_table = _build_return_halfyear_table(case_hy, baseline_hy, selected_cat.cat_encode)
-            
-            if not hy_table.empty:
-                st.dataframe(
-                    hy_table,
-                    hide_index=True,
-                    width='stretch',
-                    column_config={
-                        'Period': st.column_config.TextColumn('Period', width='small'),
-                        'C Ord': st.column_config.NumberColumn('C Ord', format='%.0f'),
-                        'C Tail': st.column_config.NumberColumn('C Tail', format='%.0f'),
-                        'C Total': st.column_config.NumberColumn('C Total', format='%.0f'),
-                        'BL Ord': st.column_config.NumberColumn('BL Ord', format='%.0f'),
-                        'BL Tail': st.column_config.NumberColumn('BL Tail', format='%.0f'),
-                        'BL Total': st.column_config.NumberColumn('BL Total', format='%.0f'),
-                    }
-                )
-            else:
-                st.info("No data available for this category.")
 
 
 def _render_wacc_section(

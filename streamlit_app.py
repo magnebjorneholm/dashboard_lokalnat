@@ -270,17 +270,17 @@ case_manager = st.Page(
 
 case_setup = st.Page(
     "pages/2_case_setup.py",
-    title="2. Case Setup",
+    title="2. Select modules to modify",
 )
 
 specification = st.Page(
     "pages/3_specification.py",
-    title="3. Specification",
+    title="3. Configure selected modules",
 )
 
 revenue_frame = st.Page(
     "pages/4_revenue_frame.py",
-    title="4. Revenue Frame",
+    title="4. Compute revenue frame and save",
 )
 
 

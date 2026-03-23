@@ -32,7 +32,7 @@ from pipeline.result_helpers import (
     CLR_CASE_ORD, CLR_CASE_TAIL, CLR_BL_ORD, CLR_BL_TAIL,
     load_baseline_category_data, get_case_category_data,
     aggregate_period, aggregate_halfyears,
-    active_categories, halfyear_values, hy_row_values,
+    active_categories, halfyear_values,
     fmt_msek, fmt_delta_msek, fmt_pct,
     add_comparison_traces,
 )
@@ -141,7 +141,6 @@ def _render_return_section(
     case_period = _agg_period(case_cat)
     bl_period = _agg_period(baseline_cat)
     case_hy = _agg_halfyears(case_cat)
-    bl_hy = _agg_halfyears(baseline_cat)
 
     active_cats = _active_cats(case_period, bl_period)
 
@@ -156,8 +155,7 @@ def _render_return_section(
     _render_return_category_chart(case_period, bl_period, active_cats)
     st.divider()
     _render_return_category_table(case_period, bl_period, case_hy, active_cats)
-    st.divider()
-    _render_return_halfyear_drilldown(case_hy, bl_hy, active_cats)
+
 
 
 # ---------------------------------------------------------------------------
@@ -349,107 +347,3 @@ def _render_return_category_table(
     )
 
 
-# ---------------------------------------------------------------------------
-# Return Half-year Drill-down
-# ---------------------------------------------------------------------------
-
-def _render_return_halfyear_drilldown(
-    case_hy: pd.DataFrame,
-    bl_hy: pd.DataFrame,
-    active_cats: List[int],
-) -> None:
-    """Expandable half-year breakdown with chart + table per category."""
-
-    with st.expander("Per-half-year breakdown by category", expanded=False):
-        if not active_cats:
-            st.info("No category data available.")
-            return
-
-        cat_options = {
-            f"{_var_id_return_combined(ce)} {CATEGORY_BY_CODE[ce].short_name}": ce
-            for ce in active_cats
-            if ce in CATEGORY_BY_CODE
-        }
-
-        selected_label = st.selectbox(
-            "Category",
-            options=list(cat_options.keys()),
-            key="m3_return_halfyear_cat_select",
-            label_visibility="collapsed",
-        )
-
-        if selected_label is None:
-            return
-
-        selected_ce = cat_options[selected_label]
-
-        # Build half-year comparison
-        hy_rows = []
-        for tc in TIME_CODES_ORDERED:
-            label = TIME_LABELS[tc]
-            c_vals = hy_row_values(case_hy, selected_ce, tc, _ORD, _TAIL, _TOTAL)
-            b_vals = hy_row_values(bl_hy, selected_ce, tc, _ORD, _TAIL, _TOTAL)
-            hy_rows.append({
-                'Period': label,
-                'Case Ord': c_vals[0] / 1e3,
-                'Case Tail': c_vals[1] / 1e3,
-                'Case Total': c_vals[2] / 1e3,
-                'BL Ord': b_vals[0] / 1e3,
-                'BL Tail': b_vals[1] / 1e3,
-                'BL Total': b_vals[2] / 1e3,
-            })
-
-        hy_df = pd.DataFrame(hy_rows)
-
-        # Chart
-        _render_halfyear_chart(hy_df, selected_label)
-
-        # Table
-        st.dataframe(
-            hy_df,
-            hide_index=True,
-            width='stretch',
-            column_config={
-                'Period': st.column_config.TextColumn('Period', width='small'),
-                'Case Ord': st.column_config.NumberColumn('Case Ord', format='%.2f'),
-                'Case Tail': st.column_config.NumberColumn('Case Tail', format='%.2f'),
-                'Case Total': st.column_config.NumberColumn('Case Total', format='%.2f'),
-                'BL Ord': st.column_config.NumberColumn('BL Ord', format='%.2f'),
-                'BL Tail': st.column_config.NumberColumn('BL Tail', format='%.2f'),
-                'BL Total': st.column_config.NumberColumn('BL Total', format='%.2f'),
-            },
-        )
-
-        st.caption("Values in MSEK.")
-
-
-def _render_halfyear_chart(hy_df: pd.DataFrame, title_label: str) -> None:
-    """Stacked bar chart: Case vs Baseline return per half-year."""
-
-    tmpl = get_plotly_template()
-    fig = go.Figure()
-
-    add_comparison_traces(
-        fig, hy_df['Period'],
-        c_ord=hy_df['Case Ord'], c_tail=hy_df['Case Tail'],
-        b_ord=hy_df['BL Ord'], b_tail=hy_df['BL Tail'],
-        orientation='v', unit='MSEK', fmt=',.2f',
-    )
-
-    fig.update_layout(
-        barmode='stack',
-        font=tmpl.get('font', {}),
-        paper_bgcolor=tmpl.get('paper_bgcolor', 'rgba(0,0,0,0)'),
-        plot_bgcolor=tmpl.get('plot_bgcolor', 'rgba(0,0,0,0)'),
-        margin=dict(l=10, r=20, t=10, b=30),
-        height=300,
-        xaxis=dict(showgrid=False),
-        yaxis=dict(
-            title='Return (MSEK)',
-            showgrid=True,
-            gridcolor=COLORS['bg_subtle'],
-        ),
-        bargroupgap=0.15,
-    )
-
-    st.plotly_chart(fig, width='stretch', key="m3_return_halfyear_chart", config={"displayModeBar": False})

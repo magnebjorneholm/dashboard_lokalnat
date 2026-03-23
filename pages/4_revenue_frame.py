@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 from frontend.utils.state_manager import (
     init_session_state,
     get_user_reid,
+    get_case_id,
     get_case_name,
     get_filtered_ui_config,
     has_config_changed_since_compute,
@@ -87,18 +88,26 @@ if case_name:
 else:
     st.subheader("Results")
 
-from frontend.common.save_bar import render_save_bar
-
-render_save_bar()
+from frontend.utils.case_actions import run_calculation, do_save_case
 
 if has_config_changed_since_compute():
     st.warning("Configuration changed since last computation — results may be outdated.")
 
-# --- Compute / Revert buttons ---
-from frontend.utils.case_actions import run_calculation
-
+# --- Save / Compute / Revert buttons (single row) ---
 computed_at = get_computed_at()
-col_compute, col_revert, col_spacer = st.columns([0.2, 0.2, 0.6])
+case_id = get_case_id()
+
+col_save, col_compute, col_revert, col_spacer = st.columns([0.15, 0.2, 0.15, 0.5])
+with col_save:
+    if case_id and st.button(
+        "Save", type="primary", key="save_bar_save",
+        use_container_width=True,
+        help="Update the saved case with your current configuration",
+    ):
+        if do_save_case():
+            case_name_saved = get_case_name() or "case"
+            st.toast(f'Saved "{case_name_saved}"')
+            st.rerun()
 with col_compute:
     if st.button("Compute Revenue Frame", type="primary", key="rf_compute", use_container_width=True):
         run_calculation()
