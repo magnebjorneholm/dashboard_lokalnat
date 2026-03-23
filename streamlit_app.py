@@ -107,8 +107,10 @@ def try_restore_auth_from_cookie() -> bool:
     """
     if st.session_state.get("_logging_out"):
         delete_auth_cookie()
-        delete_case_cookie()
-        st.session_state.pop("_logging_out", None)
+        # Only clear the flag once the browser has actually removed the cookie.
+        # Until then, keep blocking cookie-based auth restoration.
+        if not get_auth_cookie():
+            st.session_state.pop("_logging_out", None)
         return False
 
     if is_dev_mode() or is_authenticated():
