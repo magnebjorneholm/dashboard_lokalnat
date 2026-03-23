@@ -120,7 +120,7 @@ M1_ASSET_BASE = ModuleDefinition(
     sections=(
         ModuleSection(
             key="scaling",
-            label="1.1-1.2 General and asset type scaling factors",
+            label="1.1-1.2 General and norm value scaling factors",
             ui_config_keys=("m1_asset_base",),
             default_enabled=True,
             help_text="Parameters 1.1.1 (general), 1.2.X (per category). Affects all companies.",
