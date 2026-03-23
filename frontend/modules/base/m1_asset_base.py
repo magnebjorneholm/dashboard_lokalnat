@@ -3,7 +3,7 @@ Module 1: Regulatory Asset Base Valuation
 
 Handles:
 - 1.1 General scaling factor (Param 1.1.1) - all companies
-- 1.2 Category scaling factors (Param 1.2.1-1.2.17) - all companies
+- 1.2 Norm value scaling (Param 1.2.1-1.2.17) - all companies
 - 1.3 Asset quantities scaling (Var 10.2-10.18) - logged-in company only
 - 1.4 KENT upload - logged-in company only (overrides 1.3)
 
@@ -202,7 +202,7 @@ def _render_category_scaling(
     user_id_network: Optional[int] = None,
 ) -> Optional[Dict[int, float]]:
     """Render category-level scaling factors (Param 1.2.1-1.2.17)."""
-    st.markdown("##### 1.2 Category scaling factors")
+    st.markdown("##### 1.2 Norm value scaling")
     from config.glossary import scaling_param_id as _sp
     st.caption(
         "Scaling factors per asset category. Affects all companies uniformly. "
@@ -230,6 +230,20 @@ def _render_category_scaling(
             })
         df = pd.DataFrame(data)
 
+        # Add weighted average norm value per category (read-only context)
+        try:
+            norm_df = pd.read_parquet("data/reference/avg_norm_value_by_category.parquet")
+            norm_df['Norm value (tkr)'] = norm_df['avg_norm_value'] / 1000.0
+            df = df.merge(
+                norm_df[['cat_encode', 'Norm value (tkr)']],
+                left_on='_cat_encode',
+                right_on='cat_encode',
+                how='left',
+            ).drop(columns=['cat_encode'])
+            df['Norm value (tkr)'] = df['Norm value (tkr)'].fillna(0.0)
+        except Exception:
+            pass  # Graceful fallback — show editor without norm values
+
         # Add company-specific context columns if available
         if user_id_network is not None:
             try:
@@ -252,8 +266,18 @@ def _render_category_scaling(
         df = st.session_state[source_key]
 
     has_context = 'Components' in df.columns
-    display_cols = ['Param-ID', 'Category', 'Components', 'NUAV (Mkr)', 'Scaling'] if has_context else ['Param-ID', 'Category', 'Scaling']
-    disabled_cols = ['Param-ID', 'Category', 'Components', 'NUAV (Mkr)'] if has_context else ['Param-ID', 'Category']
+    has_norm = 'Norm value (tkr)' in df.columns
+
+    # Build column lists dynamically
+    display_cols = ['Param-ID', 'Category']
+    disabled_cols = ['Param-ID', 'Category']
+    if has_norm:
+        display_cols.append('Norm value (tkr)')
+        disabled_cols.append('Norm value (tkr)')
+    if has_context:
+        display_cols.extend(['Components', 'NUAV (Mkr)'])
+        disabled_cols.extend(['Components', 'NUAV (Mkr)'])
+    display_cols.append('Scaling')
 
     col_config = {
         'Param-ID': st.column_config.TextColumn(
@@ -272,6 +296,11 @@ def _render_category_scaling(
             help="1.0 = no change"
         ),
     }
+    if has_norm:
+        col_config['Norm value (tkr)'] = st.column_config.NumberColumn(
+            'Norm value (tkr)', format="%.1f", width="small",
+            help="Weighted average norm value per component (read-only)",
+        )
     if has_context:
         col_config['Components'] = st.column_config.NumberColumn(
             'Components', format="%d", width="small",
