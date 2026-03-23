@@ -94,6 +94,14 @@ def apply_login_background():
             h1 {{
                 text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             }}
+
+            /* Hide sidebar completely on login page */
+            [data-testid="stSidebar"] {{
+                display: none !important;
+            }}
+            [data-testid="collapsedControl"] {{
+                display: none !important;
+            }}
             </style>
             """,
             unsafe_allow_html=True
@@ -366,7 +374,13 @@ def render_verification_pending(auth_manager) -> None:
 
 def main():
     st.title("Regumetrica")
-    
+
+    # Deferred logout: delete cookies now that the page renders fully
+    if st.session_state.pop("_logging_out", False):
+        from auth.cookie_session import delete_auth_cookie, delete_case_cookie
+        delete_auth_cookie()
+        delete_case_cookie()
+
     # Check dev mode
     if is_dev_mode():
         st.info("**Dev mode enabled** - Authentication is bypassed")
@@ -392,8 +406,7 @@ def main():
                 st.switch_page("pages/1_create_and_select_case.py")
         with col2:
             if st.button("Logout", width='stretch'):
-                from auth.cookie_session import delete_auth_cookie
-                delete_auth_cookie()
+                st.session_state["_logging_out"] = True
                 auth_manager = initialize_firebase_auth()
                 auth_manager.sign_out()
                 st.rerun()

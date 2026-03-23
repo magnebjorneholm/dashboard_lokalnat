@@ -105,6 +105,12 @@ def try_restore_auth_from_cookie() -> bool:
 
     Returns True if auth was successfully restored.
     """
+    if st.session_state.get("_logging_out"):
+        delete_auth_cookie()
+        delete_case_cookie()
+        st.session_state.pop("_logging_out", None)
+        return False
+
     if is_dev_mode() or is_authenticated():
         return True
 
@@ -296,14 +302,24 @@ def _render_authenticated_sidebar():
 
     st.divider()
 
-    # Logout button
-    if st.button("Logout", width='stretch'):
-        delete_auth_cookie()
-        delete_case_cookie()
-        auth_manager = initialize_firebase_auth()
-        auth_manager.sign_out()
-        st.session_state["user_reid"] = None
-        st.rerun()
+    # Logout button with confirmation dialog
+    @st.dialog("Log out")
+    def _confirm_logout():
+        st.write("Are you sure you want to log out? Any unsaved changes will be lost.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, log out", type="primary", use_container_width=True):
+                st.session_state["_logging_out"] = True
+                auth_manager = initialize_firebase_auth()
+                auth_manager.sign_out()
+                st.session_state["user_reid"] = None
+                st.rerun()
+        with col2:
+            if st.button("Cancel", use_container_width=True):
+                st.rerun()
+
+    if st.button("Log out", use_container_width=True):
+        _confirm_logout()
 
 
 # =============================================================================
