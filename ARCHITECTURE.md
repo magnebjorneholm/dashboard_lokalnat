@@ -147,8 +147,8 @@ dashboard_lokalnat/
 |   |   |-- m3_cost_of_capital_output.py  # (imports m3_return_output)
 |   |   |-- m3_return_output.py           # WACC, return on assets
 |   |   |-- m3_incentive_output.py        # Quality/incentive adjustments
-|   |   |-- m4_operating_exp_output.py    # OPEX results
 |   |   |-- m5_efficiency_output.py       # Efficiency requirements
+|   |   |-- _efficiency_charts.py        # Shared efficiency chart helpers
 |   |
 |   |-- utils/                    # Streamlit-dependent frontend utilities
 |       |-- state_manager.py      # Session state: init, get/set, config references
@@ -163,6 +163,7 @@ dashboard_lokalnat/
 |   |-- post_dea_capex_helpers.py # Helper functions for post-DEA
 |   |-- result_helpers.py         # Shared formatting/aggregation for result output modules
 |   |-- export_excel.py           # Excel generation from PipelineResult
+|   |-- mini_run.py              # Lightweight DEA/StoNED mini-run (used by addons)
 |   |-- stages/
 |       |-- stage_outputs.py      # Frozen dataclasses per stage
 |       |-- baseline.py           # Stage 1: Convert BaselineData
@@ -204,6 +205,11 @@ dashboard_lokalnat/
 |   |-- cost_data.py              # Grunddata parquet loaders (used by baseline_data)
 |   |-- rab_data.py               # RAB data (capbase_a.parquet, capcost_a.parquet)
 |   |-- incentive_data.py         # Incentive parameters
+|   |-- stoned_data.py            # StoNED precomputed efficiency data
+|
+|-- scripts/                     # Utility scripts (offline data preparation)
+|   |-- generate_kent_from_capbase.py  # Generate KENT data from capbase
+|   |-- precompute_stoned.py           # Precompute StoNED efficiency results
 |
 |-- auth/
 |   |-- firebase_auth.py          # Firebase auth: login, registration, claims, dev mode
@@ -360,7 +366,7 @@ The data flows through 3 major phases: UI Configuration, Pipeline Execution, Res
 ### Phase 1: UI Configuration -> CaseDefinition
 
 ```
-Step 1: User adjusts parameters in pages/1_case_config.py
+Step 1: User adjusts parameters in pages/3_specification.py
 Step 2: Values stored in st.session_state["ui_config"] (Dict)
 Step 3: User clicks "Compute Revenue Frame"
 Step 4: config_adapter.build_case_definition(user_reid, ui_config) is called
@@ -387,7 +393,7 @@ Output: PipelineResult (frozen dataclass containing all 5 stage outputs)
 ### Phase 3: Results Display
 
 ```
-pages/2_results.py receives PipelineResult
+pages/4_revenue_frame.py receives PipelineResult
 Each output module calls: render(case_result, baseline_result, ui_config)
 Results shown with case-vs-baseline comparison (orange = modified)
 ```
@@ -880,7 +886,7 @@ max_dep (max depreciation years).
 
 **Run:** `./venv/Scripts/python.exe -m pytest tests/ -v`
 **Coverage:** `./venv/Scripts/python.exe -m pytest tests/ -v --cov=calculations --cov=pipeline`
-**205 tests**, all green, ~65s total runtime.
+**252 tests**, all green, ~65s total runtime.
 
 **Session-scoped fixtures** (loaded once in `tests/conftest.py`):
 - `baseline_data` -- Full BaselineData (all 148 companies)
@@ -893,5 +899,8 @@ max_dep (max depreciation years).
 - `test_baseline_replication.py` -- Replicates facit values with hardcoded expected values
 - `test_cost_aggregation.py` -- Verifies grunddata aggregation matches SDF sheets
 - `test_override_cascades.py` -- OPEX/flex/non-adj scaling and override cascade through pipeline
+- `test_mini_run.py` -- Mini-run (lightweight DEA/StoNED) tests
+- `test_stoned_data.py` -- StoNED data loading tests
+- `test_result_snapshot.py` -- Result snapshot extraction tests
 
 **Known:** Company 886 has ~354 tkr rounding difference in capital_cost_2024 (KENT vs DM).
