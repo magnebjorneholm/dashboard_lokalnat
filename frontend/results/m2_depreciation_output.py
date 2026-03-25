@@ -155,9 +155,9 @@ def _render_kpi_hero(
     with col1:
         st.metric(f"Total ({_dep_parent})", fmt_msek(c_total), fmt_delta_msek(d_total))
     with col2:
-        st.metric(f"Ordinarie ({VID_TOTAL_DEPRECIATION_ORD})", fmt_msek(c_ord), fmt_delta_msek(d_ord))
+        st.metric(f"Ordinary ({VID_TOTAL_DEPRECIATION_ORD})", fmt_msek(c_ord), fmt_delta_msek(d_ord))
     with col3:
-        st.metric(f"Svans ({VID_TOTAL_DEPRECIATION_TAIL})", fmt_msek(c_tail), fmt_delta_msek(d_tail))
+        st.metric(f"Tail ({VID_TOTAL_DEPRECIATION_TAIL})", fmt_msek(c_tail), fmt_delta_msek(d_tail))
 
 
 # ---------------------------------------------------------------------------

@@ -121,7 +121,7 @@ def render(
         bl_rank=bl_rank,
         n_total=case_total,
         params=params,
-        show_detail_tables=True,
+        show_detail_tables=False,
     )
 
 

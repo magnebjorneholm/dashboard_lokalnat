@@ -93,11 +93,14 @@ from frontend.utils.case_actions import run_calculation, do_save_case
 if has_config_changed_since_compute():
     st.warning("Configuration changed since last computation — results may be outdated.")
 
-# --- Save / Compute / Revert buttons (single row) ---
+# --- Compute / Save / Discard buttons (single row) ---
 computed_at = get_computed_at()
 case_id = get_case_id()
 
-col_save, col_compute, col_revert, col_spacer = st.columns([0.15, 0.2, 0.15, 0.5])
+col_compute, col_save, col_discard, col_spacer = st.columns([0.2, 0.15, 0.15, 0.5])
+with col_compute:
+    if st.button("Compute Revenue Frame", type="primary", key="rf_compute", use_container_width=True):
+        run_calculation()
 with col_save:
     if case_id and st.button(
         "Save", type="primary", key="save_bar_save",
@@ -108,13 +111,10 @@ with col_save:
             case_name_saved = get_case_name() or "case"
             st.toast(f'Saved "{case_name_saved}"')
             st.rerun()
-with col_compute:
-    if st.button("Compute Revenue Frame", type="primary", key="rf_compute", use_container_width=True):
-        run_calculation()
-with col_revert:
-    if st.button("Revert to saved", key="rf_revert", use_container_width=True):
+with col_discard:
+    if st.button("Discard changes", key="rf_revert", use_container_width=True):
         revert_to_saved()
-        st.toast("Configuration reverted")
+        st.toast("Changes discarded")
         st.rerun()
 if computed_at:
     st.caption(f"Computed {computed_at.strftime('%H:%M, %d %b')}")
