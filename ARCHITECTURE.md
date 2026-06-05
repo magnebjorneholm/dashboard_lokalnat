@@ -217,36 +217,63 @@ dashboard_lokalnat/
 |   |-- cookie_session.py         # Cookie-based session persistence (refresh token)
 |
 |-- data/                         # Data files (external/regulatory sources, DO NOT RENAME)
-|   |-- Data_modeller.xlsx        # Main data: 148 companies, CAPEX/OPEX/volumes/returns
-|   |-- EIs_DEA.xlsx              # Ei's baseline DEA results
-|   |-- [SDF running costs].xlsx  # SDF regulatory submissions (Swedish filename w/ diacritics)
-|   |-- capbase_a.parquet         # Capital base per company/category/time (18 MB)
-|   |-- capbase_a_mini.parquet    # Mini version for testing (3 companies)
-|   |-- capcost_a.parquet         # Capital costs per category
-|   |-- controllable_a.parquet    # Controllable cost grunddata (detail per category/year)
-|   |-- controllable_a_mini.parquet # Mini version for testing (3 companies)
-|   |-- controllable_meta.parquet # Controllable cost meta (index, neo_adjustment, eff_req_pct)
-|   |-- controllable_meta_mini.parquet # Mini version for testing (3 companies)
-|   |-- non_controllable_a.parquet # Non-controllable cost grunddata (per category/year)
-|   |-- non_controllable_a_mini.parquet # Mini version for testing (3 companies)
-|   |-- reconciliation_id_network_firm_dmu.csv  # ID mapping (REId <-> id_network <-> DMU)
-|   |-- adjustment_final (1).csv  # Adjustment variables
-|   |-- all_adjust_vars.csv       # All adjustable variables
+|   |-- ei/                       # Ei source files
+|   |   |-- Data_modeller.xlsx    # Main data: 148 companies, CAPEX/OPEX/volumes/returns
+|   |   |-- EIs_DEA.xlsx          # Ei's baseline DEA results
+|   |   |-- Löpande kostnader från SDF 2024-27.xlsx  # SDF regulatory submissions
+|   |-- rab_and_capex/            # Capital base / cost
+|   |   |-- capbase_a.parquet     # Capital base per company/category/time (18 MB)
+|   |   |-- capcost_a.parquet     # Capital costs per category
+|   |-- opex/                     # OPEX grunddata
+|   |   |-- controllable_a.parquet     # Controllable cost grunddata (detail per category/year)
+|   |   |-- controllable_meta.parquet  # Controllable cost meta (index, neo_adjustment, eff_req_pct)
+|   |   |-- non_controllable_a.parquet # Non-controllable cost grunddata (per category/year)
+|   |-- adjustments/              # Incentive variables
+|   |   |-- all_adjust_vars.csv   # All adjustable variables (48 cols)
+|   |-- reference/                # Reference / mapping data
+|   |   |-- reconciliation_id_network_firm_dmu.csv  # ID mapping (REId <-> id_network <-> DMU)
+|   |   |-- avg_norm_value_by_category.parquet      # Per-category average normvalue
+|   |-- stoned/                   # Pre-computed StoNED models
+|   |   |-- M1.parquet
+|   |   |-- M2.parquet
+|   |   |-- models.json           # Metadata for each StoNED model
+|   |   |-- STONED_EXPORT_SPEC.md
+|   |-- test/                     # Mini parquet versions for unit tests (3 companies)
+|   |   |-- capbase_a_mini.parquet
+|   |   |-- controllable_a_mini.parquet
+|   |   |-- controllable_meta_mini.parquet
+|   |   |-- non_controllable_a_mini.parquet
+|   |-- examples/                 # Example uploads (KENT, paverkbara)
+|   |   |-- capbase_a_exempel.xlsx
+|   |   |-- exempel_paverkbara.xlsx
+|   |   |-- generated_kent_886.xlsx
 |   |-- shapefiles/               # Geographic shapefiles (municipality/county)
+|   |-- updated_shapefiles/       # Network operator area shapefiles
 |
-|-- tests/                        # pytest test suite (205 tests, ~85s)
-    |-- conftest.py               # Session-scoped fixtures
-    |-- test_baseline_replication.py
-    |-- test_kent_calculations.py
-    |-- test_wacc.py
-    |-- test_dea.py
-    |-- test_efficiency_requirement.py
-    |-- test_controllable_costs.py
-    |-- test_cost_aggregation.py     # Grunddata aggregation verification
-    |-- test_incentive_calculations.py
-    |-- test_revenue_frame.py
-    |-- test_pipeline_integration.py
-    |-- test_override_cascades.py    # Category override cascade tests
+|-- tests/                        # pytest test suite (252 tests, ~65s)
+|   |-- conftest.py               # Session-scoped fixtures
+|   |-- test_baseline_replication.py
+|   |-- test_kent_calculations.py
+|   |-- test_wacc.py
+|   |-- test_dea.py
+|   |-- test_efficiency_requirement.py
+|   |-- test_controllable_costs.py
+|   |-- test_cost_aggregation.py     # Grunddata aggregation verification
+|   |-- test_incentive_calculations.py
+|   |-- test_revenue_frame.py
+|   |-- test_pipeline_integration.py
+|   |-- test_override_cascades.py    # Category override cascade tests
+|   |-- test_mini_run.py             # Mini-run (lightweight DEA/StoNED) tests
+|   |-- test_stoned_data.py          # StoNED data loading tests
+|   |-- test_result_snapshot.py      # Result snapshot extraction tests
+|
+|-- user_manual_latex/            # LaTeX source for the user manual PDF (see Section 19)
+    |-- Regumetrica user manual.tex   # Root document (article, natbib)
+    |-- preamble_paper.tex            # Packages, geometry, theorem envs, hyperref
+    |-- references_regumetrica.bib    # Bibliography
+    |-- latexmkrc                     # latexmk config: $out_dir=build, BIBINPUTS=..
+    |-- LATEX_VSCODE_SETUP.md         # Setup guide (MiKTeX + LaTeX Workshop)
+    |-- build/                        # PDF + temp artifacts (gitignored)
 ```
 
 
@@ -347,7 +374,7 @@ Each module has sections for fine-grained control.
 | M2            | Depreciation                | m2_depreciation.py          | m2_depreciation_output.py     | m2_depreciation          |
 | M3 WACC       | Cost of capital (CAPM)      | m3_cost_of_capital.py       | m3_return_output.py           | m3_cost_of_capital       |
 | M3 Incentive  | Quality/incentive adj.      | m3_incentive_variables.py   | m3_incentive_output.py        | m3_quality_adjustments   |
-| M4            | Operating expenditure       | m4_operating_exp.py         | m4_operating_exp_output.py    | m4_operating_exp         |
+| M4            | Operating expenditure       | m4_operating_exp.py         | _(no dedicated output module)_ | m4_operating_exp         |
 | M5            | Efficiency requirement      | m5_efficiency.py            | m5_efficiency_output.py       | m5_efficiency            |
 | M7            | Benchmarking (DEA)          | benchmarking.py             | _(results shown in M5)_       | addon_benchmarking       |
 
@@ -598,28 +625,31 @@ case to Firestore to preserve work across sessions.
 
 - `CapbaseSource`: BASELINE, VAR_SCALED, KENT_UPLOAD
 - `CapexMethod`: BASELINE, PARAMETER_CHANGE
-- `EfficiencyMethod`: BASELINE, DEA
+- `EfficiencyMethod`: BASELINE, DEA, STONED
 - `ControllableMethod`: OPEX, TOTEX
 
 ### Config Dataclasses
 
 **PreDeaConfig** (Stage 2):
-- capbase_source, user_capbase_scaled, kent_file_bytes, kent_user_id_network
+- capbase_source, user_capbase_scaled, kent_file_bytes, kent_user_id_network,
+  kent_capbase_df (pre-parsed capbase for saved cases)
 - method (CapexMethod), wacc, normvalue_adjustments, lifetime_adjustments
-- wacc_input_method ("capm"/"derived"/"direct"/"baseline"), wacc_capm_inputs
+- wacc_input_method ("capm"/"derived"/"direct"/"baseline"),
+  wacc_capm_inputs (3.1.X), wacc_derived_inputs (3.2.X)
 - opex_scaling (4.1.1) -- float multiplier for user's company controllable OPEX only
 - opex_override (40.1.1) -- absolute OPEXp in tkr for user's company (trumps scaling)
 
 **DeaConfig** (Stage 3):
 - method (EfficiencyMethod), inputs, outputs, rts ("crs"/"vrs")
 - orientation ("input"), q_lower (25.0), q_upper (75.0), multiplier (2.0)
+- stoned_model_id -- pre-computed StoNED model id (used when method == STONED)
 
 **IncentiveConfig** (nested in PostDeaConfig):
 - kpi, k_nf, sharing_netloss (0.75), adj_max_agg (1/3), adj_max_cemi4 (0.25)
 - ait_costs, aif_costs, enable_quality/netloss/load, variable_overrides
 
 **PostDeaConfig** (Stage 5):
-- truncation_min (0.01), truncation_max (0.30), outlier_req (0.01)
+- truncation_min (None = auto-derive from outlier_req), truncation_max (0.30), outlier_req (0.01)
 - customer_sharing (0.50), realization_time (8), supervision_period (4)
 - controllable_method (OPEX/TOTEX), incentive (IncentiveConfig)
 - flex_scaling (4.1.2) -- float multiplier for all companies' flexibility costs
@@ -785,24 +815,27 @@ dependencies like `data_loaders` and `pipeline` for faster initial rendering.
 
 ## 16. Data Files
 
-| File                                          | Format  | Contents                                        |
-|-----------------------------------------------|---------|-------------------------------------------------|
-| data/Data_modeller.xlsx                       | Excel   | 148 companies: CAPEX, OPEX, volumes, returns    |
-| data/EIs_DEA.xlsx                             | Excel   | Ei's baseline DEA results                       |
-| data/[SDF running costs].xlsx                 | Excel   | SDF submissions: revenue cap, controllable, etc. |
-| data/capbase_a.parquet                        | Parquet | Capital base per company/category/time (18 MB)  |
-| data/capbase_a_mini.parquet                   | Parquet | Mini capbase for testing (3 companies)          |
-| data/capcost_a.parquet                        | Parquet | Capital costs per category                      |
-| data/controllable_a.parquet                   | Parquet | Controllable grunddata: REId, category, year, amount |
-| data/controllable_meta.parquet                | Parquet | Controllable meta: index factors, neo_adjustment |
-| data/non_controllable_a.parquet               | Parquet | Non-controllable grunddata: REId, kent_category, year, amount |
-| data/*_mini.parquet                           | Parquet | Mini versions (3 test companies) for unit tests |
-| data/reconciliation_id_network_firm_dmu.csv   | CSV     | ID mapping: REId <-> id_network <-> DMU         |
-| data/adjustment_final (1).csv                 | CSV     | Adjustment variables                            |
-| data/all_adjust_vars.csv                      | CSV     | All adjustable variables (48 cols)              |
-| data/shapefiles/                              | SHP     | Geographic boundaries (municipality/county)     |
+| File                                                 | Format  | Contents                                        |
+|------------------------------------------------------|---------|-------------------------------------------------|
+| data/ei/Data_modeller.xlsx                           | Excel   | 148 companies: CAPEX, OPEX, volumes, returns    |
+| data/ei/EIs_DEA.xlsx                                 | Excel   | Ei's baseline DEA results                       |
+| data/ei/Löpande kostnader från SDF 2024-27.xlsx      | Excel   | SDF submissions: revenue cap, controllable, etc. |
+| data/rab_and_capex/capbase_a.parquet                 | Parquet | Capital base per company/category/time (18 MB)  |
+| data/rab_and_capex/capcost_a.parquet                 | Parquet | Capital costs per category                      |
+| data/opex/controllable_a.parquet                     | Parquet | Controllable grunddata: REId, category, year, amount |
+| data/opex/controllable_meta.parquet                  | Parquet | Controllable meta: index factors, neo_adjustment |
+| data/opex/non_controllable_a.parquet                 | Parquet | Non-controllable grunddata: REId, kent_category, year, amount |
+| data/test/*_mini.parquet                             | Parquet | Mini versions (3 test companies) for unit tests |
+| data/reference/reconciliation_id_network_firm_dmu.csv | CSV    | ID mapping: REId <-> id_network <-> DMU         |
+| data/reference/avg_norm_value_by_category.parquet    | Parquet | Per-category average normvalue                  |
+| data/adjustments/all_adjust_vars.csv                 | CSV     | All adjustable variables (48 cols)              |
+| data/stoned/M*.parquet, models.json                  | Parquet | Pre-computed StoNED efficiency models           |
+| data/examples/                                       | Excel   | Example KENT / paverkbara upload files          |
+| data/shapefiles/                                     | SHP     | Geographic boundaries (municipality/county)     |
+| data/updated_shapefiles/                             | SHP     | Network operator area shapefiles                |
 
-**Note:** The SDF file has a Swedish filename with diacritics. In code it is loaded from
+**Note:** The SDF file has a Swedish filename with diacritics
+(`Löpande kostnader från SDF 2024-27.xlsx`). In code it is loaded from
 `data_loaders/baseline_data.py` via a path constant.
 
 **REId format:** `"REL00886"` -> `id_network: 886` (conversion via `reid_to_id_network()`)
@@ -904,3 +937,33 @@ max_dep (max depreciation years).
 - `test_result_snapshot.py` -- Result snapshot extraction tests
 
 **Known:** Company 886 has ~354 tkr rounding difference in capital_cost_2024 (KENT vs DM).
+
+
+## 19. User Manual (LaTeX)
+
+The user manual is authored in LaTeX and is independent of the Python application.
+
+**Source:** `user_manual_latex/Regumetrica user manual.tex` (article class, natbib bibliography via `aer.bst`).
+**Output:** `user_manual_latex/build/Regumetrica user manual.pdf` (gitignored under root `build/` rule).
+
+### Toolchain
+
+- **MiKTeX** provides `pdflatex`, `bibtex`, and `latexmk` — must be on PATH.
+- **VS Code extension:** `James-Yu.latex-workshop`.
+- **Build config:** `user_manual_latex/latexmkrc` — sets `$pdf_mode = 1`, `$out_dir = 'build'`,
+  and `ensure_path('BIBINPUTS', '..')` so `bibtex` can find the `.bib` from inside `build/`.
+- **Editor config:** `latex-workshop.*` keys in `.vscode/settings.json` point the PDF viewer
+  at `build/` and select the `latexmk` recipe.
+
+### Building
+
+| Method   | Command                                                                       |
+|----------|-------------------------------------------------------------------------------|
+| VS Code  | Open the `.tex`, press **Ctrl+Alt+B** (build), **Ctrl+Alt+V** (preview tab).  |
+| Terminal | `cd user_manual_latex && latexmk -pdf "Regumetrica user manual.tex"`          |
+| Clean    | `latexmk -C` (everything, incl. PDF) or `latexmk -c` (keep PDF)               |
+
+SyncTeX: `Ctrl+Click` in PDF jumps to source; `Ctrl+Alt+J` in source jumps to PDF.
+
+See `user_manual_latex/LATEX_VSCODE_SETUP.md` for first-time install, MiKTeX on-the-fly
+package downloads, and troubleshooting.

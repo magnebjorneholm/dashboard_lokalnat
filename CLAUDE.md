@@ -25,6 +25,15 @@ Read `ARCHITECTURE.md` at the start of every conversation for full project conte
 - Skip tests for pure UI/cosmetic changes.
 - Stick to what's requested. Don't flag unrelated issues unless asked.
 
+## User manual (LaTeX)
+
+LaTeX source for the user manual PDF lives in `user_manual_latex/`. Toolchain (MiKTeX + `latexmk` + VS Code **LaTeX Workshop**) is wired up via `user_manual_latex/latexmkrc` and the `latex-workshop.*` keys in `.vscode/settings.json`.
+
+- **Build in VS Code:** open `user_manual_latex/Regumetrica user manual.tex`, press **Ctrl+Alt+B**. Preview with **Ctrl+Alt+V**.
+- **Build from terminal:** `cd user_manual_latex && latexmk -pdf "Regumetrica user manual.tex"`
+- **Output:** `user_manual_latex/build/Regumetrica user manual.pdf` (gitignored).
+- See `user_manual_latex/LATEX_VSCODE_SETUP.md` for first-time setup, SyncTeX usage, and troubleshooting.
+
 ## Key conventions
 
 - `None` in `ui_config` = "use baseline value". Non-None = user adjustment.
