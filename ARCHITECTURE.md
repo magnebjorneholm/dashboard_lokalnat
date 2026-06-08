@@ -109,6 +109,7 @@ dashboard_lokalnat/
 |   |-- 2_case_setup.py           # Case Setup: select modules/sections
 |   |-- 3_specification.py        # Specification: configure parameters (tabs M1-M7)
 |   |-- 4_revenue_frame.py        # Revenue Frame: display results, export
+|   |-- 5_new_benchmarking.py     # New benchmarking model (standalone add-on analysis)
 |
 |-- config/                       # Constants, metadata, domain configuration (no Streamlit)
 |   |-- case_definition.py        # Dataclasses: CaseDefinition, PreDeaConfig, DeaConfig, etc.
@@ -140,6 +141,7 @@ dashboard_lokalnat/
 |   |   |-- addons/
 |   |       |-- benchmarking.py           # render_dea_spec()
 |   |       |-- mini_run_output.py        # Inline DEA/StoNED mini-run results in Configure
+|   |       |-- new_benchmarking_spec.py  # Config panel for the new-benchmarking add-on (page 5)
 |   |
 |   |-- results/                  # Output renderers per module
 |   |   |-- m1_asset_base_output.py       # NUAV, category breakdown
@@ -149,6 +151,7 @@ dashboard_lokalnat/
 |   |   |-- m3_incentive_output.py        # Quality/incentive adjustments
 |   |   |-- m5_efficiency_output.py       # Efficiency requirements
 |   |   |-- _efficiency_charts.py        # Shared efficiency chart helpers
+|   |   |-- new_benchmarking_output.py   # New-benchmarking per-company view (page 5)
 |   |
 |   |-- utils/                    # Streamlit-dependent frontend utilities
 |       |-- state_manager.py      # Session state: init, get/set, config references
@@ -191,6 +194,16 @@ dashboard_lokalnat/
 |   |
 |   |-- efficiency/               # M5: Efficiency requirement
 |   |   |-- efficiency_requirement.py        # DEA potential -> annual requirement
+|   |
+|   |-- new_benchmarking/         # Add-on: Ei's proposed new benchmarking model (isolated)
+|   |   |-- config.py                         # NewBenchmarkingConfig (parameters)
+|   |   |-- capex_environment.py              # consolidated förläggningsmiljö + KENT rerun
+|   |   |-- opex_components.py                # losses@common price + selected non-controllable
+|   |   |-- totex.py                          # build new TOTEX (opex + adjusted capex)
+|   |   |-- model.py                          # run_new_benchmarking(): new vs current (EIs_DEA)
+|   |   |-- cable_length/                     # ledningslängd per firm (new DEA output)
+|   |   |-- environment_capex_adjustment/     # jordkabel förläggningsmiljö correction
+|   |   |-- station_capex_adjustment/         # nätstation förläggningsmiljö correction
 |   |
 |   |-- revenue_frame_assembly.py            # Cross-cutting: final revenue frame assembly
 |
@@ -681,6 +694,7 @@ All files in `calculations/` are pure functions with no UI dependencies.
 | frontier/dea_calculations.py                | DEA via PuLP (input-oriented, CRS)         |
 | incentive/incentive_calculations.py         | Quality/netloss/load incentive adjustments |
 | efficiency/efficiency_requirement.py        | DEA potential -> annual efficiency req      |
+| new_benchmarking/ (model, totex, ...)       | Add-on: new TOTEX -> DEA vs current (EIs_DEA) |
 | revenue_frame_assembly.py                   | Assemble revenue frame from all components |
 
 ### Key Calculation Details

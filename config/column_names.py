@@ -130,6 +130,30 @@ COL_MWH_LOW = "MWhl"
 COL_MWH_HIGH = "MWhh"
 
 # =============================================================================
+# New benchmarking model (calculations/new_benchmarking) — add-on, isolated
+# =============================================================================
+# TOTEX building blocks (all annual, tkr, to mirror the current TOTEX definition
+# controllable_cost_average + capital_cost_2024).
+COL_TOTEX_NEW = "totex_new"                              # single DEA input in the new model
+COL_OPEX_NEW = "opex_new"                                # controllable + losses@common price + selected non-ctrl
+COL_LOSS_VALUED = "loss_valued_common_price"            # nf_obs · k_nf · e_in, annual avg (tkr)
+COL_NONCTRL_SELECTED = "non_controllable_selected"      # grid sub/conn + feed-in + capacity reserve, annual avg (tkr)
+COL_CAPITAL_COST_ENV_ADJ = "capital_cost_2024_env_adjusted"  # capital_cost_2024 after förläggningsmiljö correction
+COL_CABLE_LENGTH_KM = "cable_length_km"                  # physical line length per company (new DEA output)
+
+# Per-model DEA / efficiency results (new model vs current model, compared side by side).
+COL_DEA_EFFICIENCY_NEW = "dea_efficiency_new"
+COL_DEA_EFFICIENCY_CURRENT = "dea_efficiency_current"
+COL_POTENTIAL_NEW = "potential_new"
+COL_POTENTIAL_CURRENT = "potential_current"
+COL_IS_OUTLIER_NEW = "is_outlier_new"
+COL_IS_OUTLIER_CURRENT = "is_outlier_current"
+COL_EFF_REQ_NEW = "efficiency_requirement_annual_new"
+COL_EFF_REQ_CURRENT = "efficiency_requirement_annual_current"
+COL_EFF_REQ_DELTA = "efficiency_requirement_annual_delta"   # new − current
+COL_EFFICIENCY_DELTA = "dea_efficiency_delta"               # new − current
+
+# =============================================================================
 # Rename dictionaries for data_loaders/
 # Swedish file column → English canonical name
 # =============================================================================

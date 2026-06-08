@@ -2,17 +2,17 @@
 run_example.py — demonstrate and sanity-check the environment capex adjustment.
 
 Run directly from anywhere:
-    ./venv/Scripts/python.exe new_benchmarking_model/environment_capex_adjustment/run_example.py
+    ./venv/Scripts/python.exe calculations/new_benchmarking/environment_capex_adjustment/run_example.py
 """
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import pandas as pd  # noqa: E402
 
-from new_benchmarking_model.environment_capex_adjustment import (  # noqa: E402
+from calculations.new_benchmarking.environment_capex_adjustment import (  # noqa: E402
     run_environment_adjustment,
     load_jordkabel_components,
     calibrate,

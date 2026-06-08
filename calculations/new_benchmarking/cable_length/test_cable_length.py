@@ -2,7 +2,7 @@
 Correctness tests for the cable-length (ledningslängd) module.
 
 Run:
-    ./venv/Scripts/python.exe -m pytest new_benchmarking_model/cable_length/test_cable_length.py -v
+    ./venv/Scripts/python.exe -m pytest calculations/new_benchmarking/cable_length/test_cable_length.py -v
 """
 
 import sys
@@ -11,9 +11,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from new_benchmarking_model.cable_length import (
+from calculations.new_benchmarking.cable_length import (
     load_cable_components,
     classify_ledningstyp,
     classify_voltage_level,

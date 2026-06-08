@@ -353,6 +353,11 @@ revenue_frame = st.Page(
     title="4. Compute revenue frame and save",
 )
 
+new_benchmarking = st.Page(
+    "pages/5_new_benchmarking.py",
+    title="5. New benchmarking model",
+)
+
 
 # =============================================================================
 # MAIN
@@ -374,14 +379,14 @@ if check_auth():
 
     render_sidebar()
 
-    pg = st.navigation([case_manager, case_setup, specification, revenue_frame])
+    pg = st.navigation([case_manager, case_setup, specification, revenue_frame, new_benchmarking])
     pg.run()
 
 else:
     # Register ALL pages to prevent "Page not found" on refresh
     # (URL may still point to a protected page after auth fails)
     pg = st.navigation(
-        [login_page, case_manager, case_setup, specification, revenue_frame],
+        [login_page, case_manager, case_setup, specification, revenue_frame, new_benchmarking],
         position="hidden",
     )
     # Redirect to login if user landed on a protected page

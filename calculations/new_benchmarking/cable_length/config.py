@@ -19,9 +19,9 @@ Data model (capbase_a):
 from pathlib import Path
 
 # ── Paths ───────────────────────────────────────────────────────────────────
-# repo root = three levels up from this file:
-#   .../dashboard_lokalnat/new_benchmarking_model/cable_length/config.py
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# repo root = four levels up from this file:
+#   .../dashboard_lokalnat/calculations/new_benchmarking/cable_length/config.py
+REPO_ROOT = Path(__file__).resolve().parents[3]
 CAPBASE_PATH = REPO_ROOT / "data" / "rab_and_capex" / "capbase_a.parquet"
 
 # ── Ledningstyp codes (axis 1) ──────────────────────────────────────────────

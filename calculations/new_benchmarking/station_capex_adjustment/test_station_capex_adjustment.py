@@ -2,7 +2,7 @@
 Correctness tests for the station capex adjustment.
 
 Run:
-    ./venv/Scripts/python.exe -m pytest new_benchmarking_model/station_capex_adjustment/test_station_capex_adjustment.py -v
+    ./venv/Scripts/python.exe -m pytest calculations/new_benchmarking/station_capex_adjustment/test_station_capex_adjustment.py -v
 """
 
 import sys
@@ -12,9 +12,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from new_benchmarking_model.station_capex_adjustment import (
+from calculations.new_benchmarking.station_capex_adjustment import (
     load_station_components,
     calibrate,
     apply_environment_adjustment,
