@@ -18,17 +18,19 @@ Mycket viktig upptäckt under utforskning: **appen använder redan `st.navigatio
 |---|---|---|
 | `st.switch_page(login_page)` | Programmatisk navigation från knapp/callback | Internlogik, t.ex. logout som hoppar tillbaka till landningssidan |
 | `st.page_link(...)` | Snyggt formaterad länk-widget | Inbäddade länkar i text |
-| `st.navigation(position="top")` | Inbyggd top-nav-meny | **Huvudmekanism** för att navigera mellan landningssidor och in i verktyget |
+| `st.navigation(position="sidebar")` | Inbyggd sidebar-meny | **Huvudmekanism** för att navigera mellan landningssidor och in i verktyget |
 
 Alla tre lever inom **samma Streamlit-process** — ingen extern redirect, inga subdomäner.
 
 **Visuellt — så här blir det:**
 
-- **Publik/oautentiserad:** Top-nav (`position="top"`), **ingen sidebar**, marknadsförings-layout. Top-nav-länken längst till höger heter "Sign in" och leder till login-sidan.
-- **Inloggad användare på landningssidan:** Samma top-nav som publik, **men** "Sign in"-länken byts dynamiskt till "Open tool" som leder direkt till `case_manager` (ingen reauth — Firebase-cookien är fortfarande giltig). *Inga aggressiva CTA-knappar i hero* — landningssidan förblir informativ.
-- **Inne i dashboarden:** Befintlig sidebar med företagsväljare + logout, linjärt flöde. Oförändrat.
+Navigeringen ligger **konsekvent i sidebaren** i alla lägen — ingen top-nav. Sidebaren är alltid synlig; det som ändras är vad den innehåller.
 
-Övergången är abrupt och tydlig: när användaren klickar "Sign in" / "Open tool" *byter hela layouten skepnad*. Det signalerar tydligt "nu är du i produkten".
+- **Publik/oautentiserad:** Sidebar med landningssidornas navigeringslänkar (Home / User Manual / Meet the Team / Contact) + "Sign in" längst ned, marknadsförings-layout i huvudytan. Ingen företagsväljare.
+- **Inloggad användare på landningssidan:** Samma sidebar-navigering, **men** "Sign in"-länken byts dynamiskt till "Open tool" som leder direkt till `case_manager` (ingen reauth — Firebase-cookien är fortfarande giltig). *Inga aggressiva CTA-knappar i hero* — landningssidan förblir informativ.
+- **Inne i dashboarden:** Samma sidebar, men nu med den befintliga företagsväljaren + logout (`render_sidebar()`) under navigeringslänkarna. Linjärt flöde. Oförändrat förutom att den ligger bredvid navigeringen.
+
+Övergången är mjuk och konsekvent: sidebaren följer med hela vägen, och företagsväljare + logout *tillkommer* när användaren går in i verktyget. Layouten byter aldrig skepnad — det är samma navigeringsmönster överallt.
 
 **Alternativ jag valde bort:**
 - *Auto-redirect inloggade besökare till dashboarden* — du ville uttryckligen att landningssidan ska visas även för inloggade.
@@ -70,9 +72,9 @@ Inventering av [streamlit_app.py](streamlit_app.py):
 | Företagsnamns-cachers | 43-105 | Oförändrad. |
 | `try_restore_auth_from_cookie()` | 100-152 | Oförändrad. |
 | `try_restore_case_from_cookie()`, `_sync_case_cookie()` | ~155-215 | Oförändrad (körs bara när autentiserad). |
-| `render_sidebar()` | 217-324 | Oförändrad. **Logout-callback** ([rad 308-324](streamlit_app.py#L308-L324)) ändras: efter `sign_out()` → `st.switch_page(landing_home)` istället för nuvarande implicit rerun till login. |
+| `render_sidebar()` | 217-324 | Oförändrad — körs bara på app-sidor och lägger sitt innehåll under sidebar-navigeringen. **Logout-callback** ([rad 308-324](streamlit_app.py#L308-L324)) ändras: efter `sign_out()` → `st.switch_page(landing_home)` istället för nuvarande implicit rerun till login. |
 | `st.Page()`-definitioner | 331-354 | **Utökas** med 4 nya landningssidor. |
-| Huvud `if check_auth(): ... else: ...` | 364-391 | **`else`-grenen byggs om** för att exponera landningssidor istället för att tvinga login. **`if`-grenen** får dynamisk "Open tool"-länk i top-nav när landningssida visas för inloggad användare. |
+| Huvud `if check_auth(): ... else: ...` | 364-391 | **`else`-grenen byggs om** för att exponera landningssidor istället för att tvinga login. **`if`-grenen** får dynamisk "Open tool"-länk i sidebar-navigeringen när landningssida visas för inloggad användare. |
 
 Inget innehåll behöver flyttas till någon annan fil.
 
@@ -98,16 +100,16 @@ dashboard_lokalnat/
 ├── static/                          # NY (om saknas) — Streamlit static serving är redan på
 │   └── regumetrica_user_manual.pdf  # Kopierad/byggd från user_manual_latex/build/
 └── frontend/common/
-    └── landing_styling.py           # NY: hjälpare som döljer sidebar + tillämpar landningssidans CSS
+    └── landing_styling.py           # NY: hjälpare som tillämpar landningssidans CSS (sidebaren behålls för navigering)
 ```
 
 ### Innehåll per fil
 
 **`landing_pages/home.py`** — startsidan
-- `apply_landing_styling()` överst (döljer sidebar)
+- `apply_landing_styling()` överst (landningssidans CSS; sidebaren behålls för navigering)
 - Hero: stor rubrik "Regumetrica", tagline ("Web-based tool for computing scenario-based revenue frames")
 - Intro-stycke: 2-3 meningar om vad plattformen gör för svenska elnätsföretag
-- Ingen aggressiv CTA-knapp (per ditt val). Användare som vill in i verktyget använder top-nav.
+- Ingen aggressiv CTA-knapp (per ditt val). Användare som vill in i verktyget använder sidebar-navigeringen.
 - Eventuellt: 3-4 nyckelfunktioner i st.columns
 
 **`landing_pages/user_manual.py`** — användarmanual
@@ -128,21 +130,8 @@ dashboard_lokalnat/
 - Kontaktinformation (email, eventuellt formulär via `st.form` som mailar via en backend-funktion — kan börja som ren info-sida)
 
 **`frontend/common/landing_styling.py`** (NY)
-```python
-import streamlit as st
 
-def apply_landing_styling() -> None:
-    """Hide sidebar, apply landing-page CSS. Call at top of each landing page."""
-    st.markdown("""
-        <style>
-            [data-testid="stSidebar"] { display: none !important; }
-            [data-testid="stSidebarCollapsedControl"] { display: none !important; }
-            .block-container { max-width: 1100px; padding-top: 3rem; }
-        </style>
-    """, unsafe_allow_html=True)
-```
-
-Mönstret är hämtat från [pages/login.py](pages/login.py) som redan döljer sidebar via CSS.
+En liten funktion `apply_landing_styling()` som injicerar landningssidans CSS via `st.markdown(..., unsafe_allow_html=True)` — i praktiken en centrerad, bredbegränsad huvudyta (`max-width` ~1100px, lite extra toppadding). Anropas överst på varje landningssida. CSS-mönstret är hämtat från [pages/login.py](pages/login.py), men till skillnad från login döljer den *inte* sidebaren, eftersom navigeringen bor där.
 
 **`landing_pages/__init__.py`** — tom, gör mappen till ett paket.
 
@@ -150,78 +139,25 @@ Mönstret är hämtat från [pages/login.py](pages/login.py) som redan döljer s
 
 **1. Nya `st.Page()`-definitioner** efter nuvarande [rad 354](streamlit_app.py#L354):
 
-```python
-landing_home = st.Page("landing_pages/home.py", title="Home", icon="🏠", default=True)
-landing_user_manual = st.Page("landing_pages/user_manual.py", title="User Manual", icon="📖")
-landing_team = st.Page("landing_pages/team.py", title="Meet the Team", icon="👥")
-landing_contact = st.Page("landing_pages/contact.py", title="Contact", icon="✉️")
-```
+Fyra nya `st.Page`-objekt registreras, ett per landningssida (`home`, `user_manual`, `team`, `contact`), var och en med titel och ikon i samma stil som de befintliga sidobjekten. `home` markeras som `default=True` så att den blir startsidan.
 
-**2. Huvudgreningen** ([rad 360-391](streamlit_app.py#L360-L391)) skrivs om:
+**2. Huvudgreningen** ([rad 360-391](streamlit_app.py#L360-L391)) skrivs om. Navigeringen ligger i sidebaren (`position="sidebar"`, vilket också är default) i båda grenarna. Två sidlistor definieras: `LANDING_PAGES` (de fyra landningssidorna) och `APP_PAGES` (de befintliga dashboard-sidorna).
 
-```python
-try_restore_auth_from_cookie()
+**Inloggad gren (`check_auth()` sann):**
+- Befintlig cookie-/case-återställning körs som idag (`set_auth_cookie`, `try_restore_case_from_cookie`, `_sync_case_cookie`).
+- En dynamisk `tool_link` (ett `st.Page` mot `case_manager`-filen, titel "Open tool", eget `url_path`) skapas och läggs sist i landningssidornas lista.
+- `st.navigation(position="sidebar")` får två grupper: landningssidorna + "Open tool" som synlig meny, och app-sidorna som en registrerad men separat grupp.
+- `render_sidebar()` (företagsväljare + logout) anropas **bara** när den valda sidan är en app-sida eller "Open tool" — så att innehållet hamnar under navigeringslänkarna enbart inne i verktyget.
 
-LANDING_PAGES = [landing_home, landing_user_manual, landing_team, landing_contact]
-APP_PAGES = [case_manager, case_setup, specification, revenue_frame]
+**Publik gren (`else`):**
+- `st.navigation(position="sidebar")` exponerar landningssidorna + `login_page` ("Sign in"). App-sidorna registreras i en skyddad grupp enbart för att undvika "page not found".
+- Om en besökare landar på en skyddad app-URL (t.ex. ett bokmärke) → `st.switch_page(login_page)` skickar dem till login. Annars renderas den valda sidan.
 
-if check_auth():
-    pending_token = st.session_state.pop("_pending_auth_cookie", None)
-    if pending_token:
-        set_auth_cookie(pending_token)
-    try_restore_case_from_cookie()
-    _sync_case_cookie()
+**Anmärkning om `tool_link`:** Eftersom `st.Page` med samma sökväg två gånger kan ge bekymmer registrerar vi en separat `tool_link` med eget `url_path`. Den pekar mot samma fil som `case_manager` men visas som ett separat navigeringsobjekt i sidebaren med titeln "Open tool".
 
-    # Dynamisk "tool"-länk i top-nav: leder direkt till case_manager (ingen reauth)
-    tool_link = st.Page(
-        "pages/1_create_and_select_case.py",
-        title="Open tool",
-        icon="🚀",
-        url_path="open_tool",  # undvik kollision med samma sidobjekt i APP_PAGES
-    )
+**Anmärkning om sidebar-innehållet:** `st.navigation(position="sidebar")` renderar själv navigeringslänkarna högst upp i sidebaren. `render_sidebar()` (företagsväljare + logout) anropas bara på app-sidor och lägger sitt innehåll *under* dessa länkar. På landningssidorna består sidebaren alltså enbart av navigeringen.
 
-    pg = st.navigation(
-        {
-            "": LANDING_PAGES + [tool_link],
-            "_app_": APP_PAGES,
-        },
-        position="top",
-    )
-
-    # Sidebar visas BARA i app-sidor, inte i landningssidor
-    if pg in APP_PAGES or pg == tool_link:
-        render_sidebar()
-
-    pg.run()
-
-else:
-    # Publik: top-nav med landningssidor + "Sign in"
-    public_pages = LANDING_PAGES + [login_page]
-    pg = st.navigation(
-        {
-            "": public_pages,
-            "_protected_": APP_PAGES,  # registrerade för att undvika "page not found"
-        },
-        position="top",
-    )
-    if pg in APP_PAGES:
-        st.switch_page(login_page)  # bokmärkt skyddad URL → login
-    else:
-        pg.run()
-```
-
-**Anmärkning om `tool_link`:** Eftersom `st.Page` med samma sökväg två gånger kan ge bekymmer registrerar vi en separat `tool_link` med eget `url_path`. Den pekar mot samma fil som `case_manager` men visas som ett separat top-nav-objekt med titeln "Open tool".
-
-**3. Logout-callback** ([rad 308-324](streamlit_app.py#L308-L324)) — `st.switch_page(landing_home)` läggs till efter `sign_out()`:
-
-```python
-if st.button("Yes, log out", type="primary", use_container_width=True):
-    st.session_state["_logging_out"] = True
-    auth_manager = initialize_firebase_auth()
-    auth_manager.sign_out()
-    st.session_state["user_reid"] = None
-    st.switch_page("landing_pages/home.py")  # NYTT
-```
+**3. Logout-callback** ([rad 308-324](streamlit_app.py#L308-L324)) — den befintliga logout-logiken (sätt `_logging_out`, `sign_out()`, nollställ `user_reid`) behålls oförändrad. Enda tillägget är ett avslutande `st.switch_page("landing_pages/home.py")` efter `sign_out()`, så att användaren landar på landningssidans Home istället för dagens implicita rerun till login.
 
 **4. `login_page`-objektet** (rad 331-334) — login-sidans titel ändras från "Login" till "Sign in" för konsistens med top-nav-etiketten.
 
@@ -256,19 +192,19 @@ LaTeX-källan ([user_manual_latex/Regumetrica user manual.tex](user_manual_latex
 
 1. `./venv/Scripts/python.exe -m streamlit run streamlit_app.py`
 2. **Publik bruk (utloggad)**:
-   - Öppna `http://localhost:8501/` → landningssidan (home) visas, ingen sidebar, top-nav med Home / User Manual / Meet the Team / Contact / Sign in.
+   - Öppna `http://localhost:8501/` → landningssidan (home) visas, sidebar-navigering med Home / User Manual / Meet the Team / Contact / Sign in. Ingen företagsväljare i sidebaren.
    - Klicka mellan landningssidorna → varje sida renderar utan att kicka till login.
    - Klicka "Sign in" → login-sidan visas.
    - Försök öppna `http://localhost:8501/case_manager` direkt → ska redirecta till login.
 3. **Logga in**:
-   - Efter lyckad login → top-nav byter "Sign in" mot "Open tool", landar i `case_manager` (befintligt beteende).
-   - Klicka "Open tool" i top-nav → går direkt till `case_manager` med sidebar synlig.
+   - Efter lyckad login → sidebar-navigeringen byter "Sign in" mot "Open tool", landar i `case_manager` (befintligt beteende).
+   - Klicka "Open tool" i sidebaren → går direkt till `case_manager` med företagsväljare + logout synliga i sidebaren under navigeringen.
 4. **Inloggad besöker landningssidan**:
-   - Klicka "Home" i top-nav → landningssidan visas, **ingen reauth**, ingen aggressiv CTA, top-nav visar "Open tool".
+   - Klicka "Home" i sidebaren → landningssidan visas, **ingen reauth**, ingen aggressiv CTA, sidebaren visar "Open tool" och ingen företagsväljare.
 5. **Logga ut**:
    - I sidebar i `case_manager`: klicka Log out → bekräfta → hamnar på landningssidans Home.
 6. **Återvändande användare (giltig cookie, ny tab)**:
-   - Öppna `http://localhost:8501/` → cookie restaurerar auth → landningssidans Home visas, top-nav visar "Open tool".
+   - Öppna `http://localhost:8501/` → cookie restaurerar auth → landningssidans Home visas, sidebaren visar "Open tool".
 7. **User Manual PDF**:
    - Öppna User Manual → klicka nedladdningslänk → PDF laddas ned från `/app/static/regumetrica_user_manual.pdf`.
 8. **Tester**:
