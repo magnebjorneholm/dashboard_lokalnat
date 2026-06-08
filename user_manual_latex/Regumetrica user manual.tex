@@ -1,0 +1,714 @@
+\input{preamble_paper.tex}
+\graphicspath{ {../graphs/} }
+\makeatletter
+\def\input@path{ {../graphs/} }
+\makeatother
+\begin{document}
+	\title{Regumetrica \linebreak \emph{Beta version} \linebreak User manual \linebreak Version 1.0 \emph{}  \\} 
+	\author{\href{https://www.regumetrica.com/um}{www.regumetrica.com/um} }
+	\maketitle
+    \begin{center}
+ \emph{} \\
+\begin{comment}
+\href{https://www.eriklundin.org/research}{Click here to download the latest version} \\ \emph{} 
+\end{comment}
+	\end{center}
+	\begin{singlespace}
+	
+\end{singlespace}
+\setcounter{page}{1}
+\doublespacing
+%\linenumber
+
+\tableofcontents
+
+\newpage
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+Regumetrica simulates counterfactual revenue frames for electricity distribution networks in Sweden, based on a wide range of regulatory specifications. The current version computes revenue frames for the ongoing regulatory period, 2024–2027.
+
+To get started, create an account at \href{https://www.regumetrica.com/newuser}{www.regumetrica.com/newuser}. You will need a valid email address, which will also serve as your username [could we verify email addresses by sending a confirmation link?]. During registration, you will be asked to indicate your primary concession area of interest. Concession areas are the smallest geographical units for which revenue frames are determined. You can change your preferred concession area at any time. Several accounts may be connected to the same concession area. Each area has both a name and an identification number assigned by the regulator.
+
+After logging in, you enter the main environment by opening a \emph{case}. A case is a workspace that contains all assumptions for a specific regulatory simulation. Each case represents one set of assumptions and therefore produces one revenue frame. Cases must be named; by default, they are labeled consecutively ("Case 1," "Case 2," etc.), but you can also assign custom names. Initially, all regulatory assumptions are set according to the current regulatory model.
+
+Once you have adjusted the assumptions to your preferred levels, the model is run. Simulations usually complete within a few seconds, though more complex configurations may take longer. Regumetrica then provides downloadable data detailing the revenue frame for the selected concession area, along with all underlying calculation components. In addition to data downloads, results can also be displayed graphically, for example as bar charts decomposing different components of the revenue frame. After running a model, you may choose to save the case. At present, each user can store up to 10 saved cases.
+
+\subsection*{Model Components}
+The regulatory model is organized into \emph{Base modules} and \emph{Add-on modules}. Base modules represent the core components of the revenue frame calculation: Regulatory asset base valuation, Depreciation, Cost of capital, Operating expenditures, Efficiency incentive, and Model outputs. Each base module contains \emph{Parameters} and \emph{Variables}:
+
+\begin{itemize}
+  \item \emph{Parameters} are fixed values that define the structural relationships within the regulatory model. They capture assumptions or policy choices that apply uniformly across regulated entities. For example, the regulatory \emph{WACC} (Weighted Average Cost of Capital) determines the allowed rate of return on capital and is itself derived from a set of \emph{sub-parameters}, such as the risk-free rate of return. Another example of a parameter is the \emph{economic lifetime} assigned to a specific asset category, which determines the rate of capital depreciation over time. 
+
+  \item \emph{Variables} are measurable inputs that vary across regulated entities. They correspond to real-world data, such as asset quantities, operating costs, or energy delivered, that the model uses to calculate revenue frames. Most variables are reported to the regulator through the KENT excel reporting template. Regumetrica users have the option of adjusting such variables manually, or to upload standardized KENT excel sheets. 
+\end{itemize}
+
+\emph{Add-on modules} extend the base regulatory model. They are designed to either explore regulatory scenarios that fall outside the scope of the current regulatory framework, or to facilitate the computation of revenue frames for specific strategic choices made by the regulated entity. An example of an add-on module exploring alternative regulatory scenarios is the \emph{Benchmarking} module. This module can compute efficiency scores using the currently employed Data Envelopment Analysis (DEA) model, as well as Stochastic Frontier Analysis (SFA), and Stochastic Nonparametric Envelopment of Data (StoNED). An example of an add-on module for understanding the consequences of strategic choices is the \emph{Merger} module, in which revenue frames are computed conditional on that two or more concession areas are merged into one area. The \emph{Merger} module builds on assumptions of economies of scale in operating expenditures derived from previous studies. Add-on modules are described in Section \ref{sec:addon-modules}.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Regulatory asset base valuation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Parameters}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Regulatory asset base valuation}
+\label{tab:asset-scaling}
+\begin{tabular}{@{}p{9cm}cl@{}}
+\toprule
+\textbf{Description} & \textbf{Value} & \textbf{Parameter-ID} \\
+\midrule
+\multicolumn{3}{l}{\textit{1.1 General asset valuation parameters}} \\
+General scaling factor for asset valuation\tnote{a} & 1.00 & 1.1.1 \\
+\midrule
+\multicolumn{3}{l}{\textit{1.2  Asset type specific valuation parameters}} \\
+Scaling factor for andra markarbeten och byggnader, linjekoncession & 1.00 & 1.2.1 \\
+Scaling factor for annan ledning, linjekoncession & 1.00 & 1.2.2 \\
+Scaling factor for annan ledning, områdeskoncession & 1.00 & 1.2.3 \\
+Scaling factor for annan luftledning, linjekoncession & 1.00 & 1.2.4 \\
+Scaling factor for it-system & 1.00 & 1.2.5 \\
+Scaling factor for kabelskåp & 1.00 & 1.2.6 \\
+Scaling factor for ledning med en spänning om 220 kv eller mer, med undantag för luftledning, linjekoncession & 1.00 & 1.2.7 \\
+Scaling factor for luftledning med en spänning om 220 kv eller mer, linjekoncession & 1.00 & 1.2.8 \\
+Scaling factor for luftledning, områdeskoncession & 1.00 & 1.2.9 \\
+Scaling factor for markarbeten och byggnader med anknytning till ett ledningsnät med en spänning om 220 kv eller mer, linjekoncession & 1.00 & 1.2.10 \\
+Scaling factor for markarbeten och byggnader, områdeskoncession & 1.00 & 1.2.11 \\
+Scaling factor for mätare & 1.00 & 1.2.12 \\
+Scaling factor for nätstation & 1.00 & 1.2.13 \\
+Scaling factor for shuntreaktor & 1.00 & 1.2.14 \\
+Scaling factor for styr- och kontrollutrustning & 1.00 & 1.2.15 \\
+Scaling factor for ställverk utan sekundärapparater & 1.00 & 1.2.16 \\
+Scaling factor for transformator & 1.00 & 1.2.17 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item[a] Scaling factors are applied multiplicatively to asset norm values from Bilaga 6.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+\subsection{Variables}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Input variables: Regulatory asset base valuation}
+\label{tab:rab-variables}
+\begin{tabular}{@{}p{9cm}l@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+\multicolumn{2}{l}{\textit{10.2--10.18 Asset quantities by type}} \\
+Andra markarbeten och byggnader, linjekoncession & 10.2 \\
+Annan ledning, linjekoncession & 10.3 \\
+Annan ledning, områdeskoncession & 10.4 \\
+Annan luftledning, linjekoncession & 10.5 \\
+It-system & 10.6 \\
+Kabelskåp & 10.7 \\
+Ledning med en spänning om 220 kV eller mer, med undantag för luftledning, linjekoncession & 10.8 \\
+Luftledning med en spänning om 220 kV eller mer, linjekoncession & 10.9 \\
+Luftledning, områdeskoncession & 10.10 \\
+Markarbeten och byggnader med anknytning till ett ledningsnät med en spänning om 220 kV eller mer, linjekoncession & 10.11 \\
+Markarbeten och byggnader, områdeskoncession & 10.12 \\
+Mätare & 10.13 \\
+Nätstation & 10.14 \\
+Shuntreaktor & 10.15 \\
+Styr- och kontrollutrustning & 10.16 \\
+Ställverk utan sekundärapparater & 10.17 \\
+Transformator & 10.18 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Asset quantities are sourced from the KENT reporting template. Units vary by asset type.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Output variables: Regulatory asset base valuation}
+\label{tab:rab-output-variables}
+\begin{tabular}{@{}p{9cm}l@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+Total asset value for all asset types & 11.1 \\
+\midrule
+\multicolumn{2}{l}{\textit{11.2--11.18 Asset values by type}} \\
+Andra markarbeten och byggnader, linjekoncession & 11.2 \\
+Annan ledning, linjekoncession & 11.3 \\
+Annan ledning, områdeskoncession & 11.4 \\
+Annan luftledning, linjekoncession & 11.5 \\
+It-system & 11.6 \\
+Kabelskåp & 11.7 \\
+Ledning med en spänning om 220 kV eller mer, med undantag för luftledning, linjekoncession & 11.8 \\
+Luftledning med en spänning om 220 kV eller mer, linjekoncession & 11.9 \\
+Luftledning, områdeskoncession & 11.10 \\
+Markarbeten och byggnader med anknytning till ett ledningsnät med en spänning om 220 kV eller mer, linjekoncession & 11.11 \\
+Markarbeten och byggnader, områdeskoncession & 11.12 \\
+Mätare & 11.13 \\
+Nätstation & 11.14 \\
+Shuntreaktor & 11.15 \\
+Styr- och kontrollutrustning & 11.16 \\
+Ställverk utan sekundärapparater & 11.17 \\
+Transformator & 11.18 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Asset values in kr. Values represent assets before depreciation. Tail component values depend on the age of each specific component and cannot be adjusted directly; upload a modified KENT file to change tail values.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Depreciation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Parameters}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Ordinary and tail asset lifetimes}
+\label{tab:asset-lifetimes}
+\begin{tabular}{@{}p{7cm}ccl@{}}
+\toprule
+\textbf{Description} & \multicolumn{2}{c}{\textbf{Value}} & \textbf{Parameter-ID} \\
+\midrule
+\textit{2.1 Asset lifetime parameters (years)} & \textbf{Ordinary}\tnote{a} & \textbf{Tail}\tnote{b} & \\
+Andra markarbeten och byggnader, linjekoncession & 100 & 24 & 2.1.1; 2.1.2 \\
+Annan ledning, linjekoncession & 100 & 24 & 2.2.1; 2.2.2 \\
+Annan ledning, områdeskoncession & 100 & 24 & 2.3.1; 2.3.2 \\
+Annan luftledning, linjekoncession & 100 & 24 & 2.4.1; 2.4.2 \\
+It-system & 20 & 4 & 2.5.1; 2.5.2 \\
+Kabelskåp & 60 & 14 & 2.6.1; 2.6.2 \\
+Ledning med en spänning om 220 kv eller mer, med undantag för luftledning, linjekoncession & 80 & 20 & 2.7.1; 2.7.2 \\
+Luftledning med en spänning om 220 kv eller mer, linjekoncession & 120 & 30 & 2.8.1; 2.8.2 \\
+Luftledning, områdeskoncession & 80 & 20 & 2.9.1; 2.9.2 \\
+Markarbeten och byggnader med anknytning till ett ledningsnät med en spänning om 220 kv eller mer, linjekoncession & 80 & 20 & 2.10.1; 2.10.2 \\
+Markarbeten och byggnader, områdeskoncession & 100 & 24 & 2.11.1; 2.11.2 \\
+Mätare & 20 & 4 & 2.12.1; 2.12.2 \\
+Nätstation & 80 & 20 & 2.13.1; 2.13.2 \\
+Shuntreaktor & 80 & 20 & 2.14.1; 2.14.2 \\
+Styr- och kontrollutrustning & 30 & 6 & 2.15.1; 2.15.2 \\
+Ställverk utan sekundärapparater & 80 & 20 & 2.16.1; 2.16.2 \\
+Transformator & 100 & 24 & 2.17.1; 2.17.2 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item[a] Ordinary lifetime applies to assets that have not yet reached full depreciation.
+\item[b] Tail lifetime applies to assets that remain in service beyond their ordinary economic lifetime.
+\item Parameter-IDs ending with .1 refer to ordinary lifetime; those ending with .2 refer to tail lifetime.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+\subsection{Variables}
+
+Input variables: 10.X-10.X above, plus the existing tail components that are either existing or from KENT-data.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Output variables: Depreciation cost}
+\label{tab:depreciation-variables}
+\begin{tabular}{@{}p{9cm}l@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+Total depreciation cost for all asset types & 20.1.1; 20.1.2 \\
+\midrule
+\multicolumn{2}{l}{\textit{20.2--20.18 Cost of depreciation by asset type (ordinary and tail)}} \\
+Andra markarbeten och byggnader, linjekoncession & 20.2.1; 20.2.2 \\
+Annan ledning, linjekoncession & 20.3.1; 20.3.2 \\
+Annan ledning, områdeskoncession & 20.4.1; 20.4.2 \\
+Annan luftledning, linjekoncession & 20.5.1; 20.5.2 \\
+It-system & 20.6.1; 20.6.2 \\
+Kabelskåp & 20.7.1; 20.7.2 \\
+Ledning med en spänning om 220 kV eller mer, med undantag för luftledning, linjekoncession & 20.8.1; 20.8.2 \\
+Luftledning med en spänning om 220 kV eller mer, linjekoncession & 20.9.1; 20.9.2 \\
+Luftledning, områdeskoncession & 20.10.1; 20.10.2 \\
+Markarbeten och byggnader med anknytning till ett ledningsnät med en spänning om 220 kV eller mer, linjekoncession & 20.11.1; 20.11.2 \\
+Markarbeten och byggnader, områdeskoncession & 20.12.1; 20.12.2 \\
+Mätare & 20.13.1; 20.13.2 \\
+Nätstation & 20.14.1; 20.14.2 \\
+Shuntreaktor & 20.15.1; 20.15.2 \\
+Styr- och kontrollutrustning & 20.16.1; 20.16.2 \\
+Ställverk utan sekundärapparater & 20.17.1; 20.17.2 \\
+Transformator & 20.18.1; 20.18.2 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item All values in kr. Variable-IDs ending with .1 refer to ordinary depreciation; those ending with .2 refer to tail depreciation. Depreciation is calculated using linear depreciation over the asset lifetime.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Cost of capital}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Parameters}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Weighted Average Cost of Capital (WACC)}
+\label{tab:wacc-parameters-reformed}
+\begin{tabular}{@{}lcll@{}}
+\toprule
+\textbf{Description} & \textbf{Value} & \textbf{Determined by} & \textbf{Parameter-ID} \\
+\midrule
+\multicolumn{4}{l}{\textit{3.1 Base parameters}} \\
+Debt ratio\tnote{a} & 0.36 & & 3.1.1 \\
+Asset beta\tnote{b} & 0.37 & & 3.1.2 \\
+Risk-free rate\tnote{c} & 0.0287 & & 3.1.3 \\
+Market risk premium & 0.0668 & & 3.1.4 \\
+Credit risk premium & 0.0114 & & 3.1.5 \\
+Tax rate & 0.206 & & 3.1.6 \\
+Inflation, CPIF forecast & 0.0202 & & 3.1.7 \\
+\midrule
+\multicolumn{4}{l}{\textit{3.2 Endogenously determined parameters}} \\
+Equity beta\tnote{d} & 0.54 & Asset beta, Debt ratio, Tax rate & 3.2.1 \\
+Nominal cost of equity after tax & 0.0645 & Risk-free rate, Equity beta, Market risk premium & 3.2.2 \\
+Nominal cost of debt after tax & 0.0318 & Risk-free rate, Credit risk premium, Tax rate & 3.2.3 \\
+Nominal WACC before tax & 0.0664 & All parameters above & 3.2.4 \\
+Real WACC before tax & 0.0453 & Nominal WACC before tax, Inflation & 3.2.5 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item[a] Debt ratio $g$ represents the share of debt in total capital.
+\item[b] Asset beta $\beta_A$ measures systematic risk of unlevered assets.
+\item[c] Based on 10-year Swedish government bond yields.
+\item[d] Equity beta computed as $\beta_E = \beta_A \cdot (1 + (1-\tau) \cdot g/(1-g))$.
+\item When endogenously determined parameter values are altered, those changes override modifications to sub-parameters.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+\subsection{Variables}
+
+Input variables: 10.X-10.X above, plus the existing tail components that are either existing or from KENT-data.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Output variables: Capital cost}
+\label{tab:capital-cost-variables}
+\begin{tabular}{@{}p{9cm}l@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+Total capital cost for all asset types & 30.1.1; 30.1.2 \\
+\midrule
+\multicolumn{2}{l}{\textit{30.2--30.18 Capital cost by asset type (ordinary and tail)}} \\
+Andra markarbeten och byggnader, linjekoncession & 30.2.1; 30.2.2 \\
+Annan ledning, linjekoncession & 30.3.1; 30.3.2 \\
+Annan ledning, områdeskoncession & 30.4.1; 30.4.2 \\
+Annan luftledning, linjekoncession & 30.5.1; 30.5.2 \\
+It-system & 30.6.1; 30.6.2 \\
+Kabelskåp & 30.7.1; 30.7.2 \\
+Ledning med en spänning om 220 kV eller mer, med undantag för luftledning, linjekoncession & 30.8.1; 30.8.2 \\
+Luftledning med en spänning om 220 kV eller mer, linjekoncession & 30.9.1; 30.9.2 \\
+Luftledning, områdeskoncession & 30.10.1; 30.10.2 \\
+Markarbeten och byggnader med anknytning till ett ledningsnät med en spänning om 220 kV eller mer, linjekoncession & 30.11.1; 30.11.2 \\
+Markarbeten och byggnader, områdeskoncession & 30.12.1; 30.12.2 \\
+Mätare & 30.13.1; 30.13.2 \\
+Nätstation & 30.14.1; 30.14.2 \\
+Shuntreaktor & 30.15.1; 30.15.2 \\
+Styr- och kontrollutrustning & 30.16.1; 30.16.2 \\
+Ställverk utan sekundärapparater & 30.17.1; 30.17.2 \\
+Transformator & 30.18.1; 30.18.2 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item All values in kr. Variable-IDs ending with .1 refer to ordinary capital cost; those ending with .2 refer to tail capital cost. Capital cost is computed as WACC $\times$ regulatory asset base.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+\subsection{Adjustment of cost of capital}
+
+Adjustment of the WACC are made with respect to network losses, utilization rate, and interruptions.
+Where norm values vary across firms, they are treated as variables. For a full description of these incentives, see Appendix X.
+
+\subsubsection{Parameters}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Cost of capital adjustment}
+\label{tab:wacc-adj-parameters}
+\begin{tabular}{@{}lrrl@{}}
+\toprule
+\textbf{Description} & \multicolumn{2}{c}{\textbf{Value}} & \textbf{Parameter-ID} \\
+\midrule
+\multicolumn{4}{l}{\textit{3.3 Overall adjustment}} \\
+Max total adjustment (share of WACC)\tnote{a} & \multicolumn{2}{c}{0.333} & 3.3.1 \\
+\midrule
+\multicolumn{4}{l}{\textit{3.4 Network loss adjustment}} \\
+Loss incentive scaling parameter & \multicolumn{2}{c}{1.00} & 3.4.1 \\
+Network loss incentive sharing factor\tnote{b} & \multicolumn{2}{c}{0.75} & 3.4.2 \\
+Average network loss cost (kr/MWh) & \multicolumn{2}{c}{734} & 3.4.3 \\
+\midrule
+\multicolumn{4}{l}{\textit{3.5 Utilization rate adjustment}} \\
+Utilization rate incentive scaling parameter & \multicolumn{2}{c}{1.00} & 3.5.1 \\
+\midrule
+\multicolumn{4}{l}{\textit{3.6 Interruption adjustment}} \\
+Cost scaling parameter applied to ILE and ILEffekt & \multicolumn{2}{c}{1.00} & 3.6.1 \\
+CPI 2024\tnote{c} & \multicolumn{2}{c}{1.28} & 3.6.2 \\
+CPI 2025 & \multicolumn{2}{c}{1.31} & 3.6.3 \\
+CPI 2026 & \multicolumn{2}{c}{1.33} & 3.6.4 \\
+CPI 2027 & \multicolumn{2}{c}{1.36} & 3.6.5 \\
+CEMI4 correction factor\tnote{d} & \multicolumn{2}{c}{0.25} & 3.6.6 \\
+\midrule
+& \textbf{Unplanned} & \textbf{Planned} & \\
+\multicolumn{4}{l}{\textbf{Interruption energy cost -- ILE (kr/kWh)}\tnote{e}} \\
+Household & 5.84 & 4.98 & 3.6.7, 3.6.8 \\
+Agriculture & 34.35 & 14.10 & 3.6.9, 3.6.10 \\
+Trade/Services & 175.06 & 79.31 & 3.6.11, 3.6.12 \\
+Industry & 159.96 & 76.00 & 3.6.13, 3.6.14 \\
+Public sector & 96.97 & 43.70 & 3.6.15, 3.6.16 \\
+Boundary points & 96.01 & 45.16 & 3.6.17, 3.6.18 \\
+\midrule
+\multicolumn{4}{l}{\textbf{Interruption power cost -- ILEffekt (kr/kW)}\tnote{e}} \\
+Household & 1.95 & 1.85 & 3.6.19, 3.6.20 \\
+Agriculture & 9.78 & 1.72 & 3.6.21, 3.6.22 \\
+Trade/Services & 17.78 & 5.94 & 3.6.23, 3.6.24 \\
+Industry & 70.75 & 20.71 & 3.6.25, 3.6.26 \\
+Public sector & 7.65 & 0.92 & 3.6.27, 3.6.28 \\
+Boundary points & 22.18 & 7.08 & 3.6.29, 3.6.30 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item[a] Each sub-incentive is capped at $\pm 1/3$ of regulatory return; total adjustment also capped at $1/3$.
+\item[b] Share of network loss savings/costs passed to the network operator.
+\item[c] Consumer price index relative to 2017 base year, used to inflate interruption costs.
+\item[d] Maximum share of quality adjustment that can be reduced due to CEMI4 correction.
+\item[e] Interruption costs in 2017 SEK, derived from willingness-to-pay studies.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+\subsubsection{Variables}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Input variables: Adjustment of cost of capital}
+\label{tab:wacc-adj-variables}
+\begin{tabular}{@{}p{8cm}cccc@{}}
+\toprule
+\textbf{Description} & \multicolumn{4}{l}{\textbf{Variable-ID}} \\
+\midrule
+\multicolumn{5}{l}{\textit{30.2 Network loss adjustment}} \\
+Network loss norm level ($Nf_{norm}$) & \multicolumn{4}{l}{30.2.1} \\
+Network loss observed ($Nf_{utfall}$) & \multicolumn{4}{l}{30.2.2} \\
+Energy input ($E_{in}$) & \multicolumn{4}{l}{30.2.3} \\
+\midrule
+\multicolumn{5}{l}{\textit{30.3 Utilization rate adjustment}} \\
+Utilization rate norm level ($Ug_{norm}$) & \multicolumn{4}{l}{30.3.1} \\
+Utilization rate observed ($Ug_{utfall}$) & \multicolumn{4}{l}{30.3.2} \\
+Cost for upstream network ($k_{\text{överl.nät mm}}$) & \multicolumn{4}{l}{30.3.3} \\
+\midrule
+\multicolumn{5}{l}{\textit{30.4 Interruption adjustment}} \\
+Customers Experiencing Multiple (4) Interruptions, norm ($CEMI4_{norm}$) & \multicolumn{4}{l}{30.4.1} \\
+Customers Experiencing Multiple (4) Interruptions, observed ($CEMI4_{utfall}$) & \multicolumn{4}{l}{30.4.2} \\
+\\
+\multicolumn{5}{l}{\textbf{Annual average power ($\text{ÅME}^k$)}} \\
+Household & \multicolumn{4}{l}{30.4.3} \\
+Agriculture & \multicolumn{4}{l}{30.4.4} \\
+Trade/Services & \multicolumn{4}{l}{30.4.5} \\
+Industry & \multicolumn{4}{l}{30.4.6} \\
+Public sector & \multicolumn{4}{l}{30.4.7} \\
+Boundary points & \multicolumn{4}{l}{30.4.8} \\
+\midrule
+& \multicolumn{2}{c}{\textbf{Norm}} & \multicolumn{2}{c}{\textbf{Observed}} \\
+\cmidrule(lr){2-3} \cmidrule(l){4-5}
+& \textbf{Unplanned} & \textbf{Planned} & \textbf{Unplanned} & \textbf{Planned} \\
+\midrule
+\multicolumn{5}{l}{\textbf{Average Interruption Time (AIT)}} \\
+Household & 30.4.9 & 30.4.10 & 30.4.11 & 30.4.12 \\
+Agriculture & 30.4.13 & 30.4.14 & 30.4.15 & 30.4.16 \\
+Trade/Services & 30.4.17 & 30.4.18 & 30.4.19 & 30.4.20 \\
+Industry & 30.4.21 & 30.4.22 & 30.4.23 & 30.4.24 \\
+Public sector & 30.4.25 & 30.4.26 & 30.4.27 & 30.4.28 \\
+Boundary points & 30.4.29 & 30.4.30 & 30.4.31 & 30.4.32 \\
+\midrule
+\multicolumn{5}{l}{\textbf{Average Interruption Frequency (AIF)}} \\
+Household & 30.4.33 & 30.4.34 & 30.4.35 & 30.4.36 \\
+Agriculture & 30.4.37 & 30.4.38 & 30.4.39 & 30.4.40 \\
+Trade/Services & 30.4.41 & 30.4.42 & 30.4.43 & 30.4.44 \\
+Industry & 30.4.45 & 30.4.46 & 30.4.47 & 30.4.48 \\
+Public sector & 30.4.49 & 30.4.50 & 30.4.51 & 30.4.52 \\
+Boundary points & 30.4.53 & 30.4.54 & 30.4.55 & 30.4.56 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item All variables vary by firm and year. Units: $Nf$ and $Ug$ are shares (0--1); $E_{in}$ in MWh; $k_{\text{överl.nät mm}}$ in kr; $CEMI4$ is a share (0--1); $\text{ÅME}^k$ in kW; AIT in hours; AIF in count.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Output variables: Adjustment of cost of capital}
+\label{tab:wacc-adj-output-variables}
+\begin{tabular}{@{}p{8cm}c@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+\multicolumn{2}{l}{\textit{30.2 Network loss adjustment}} \\
+Network loss adjustment before cap & 30.2.4 \\
+Network loss adjustment after cap & 30.2.5 \\
+\midrule
+\multicolumn{2}{l}{\textit{30.3 Utilization rate adjustment}} \\
+Utilization rate incentive before cap & 30.3.4 \\
+Utilization rate incentive after cap & 30.3.5 \\
+\midrule
+\multicolumn{2}{l}{\textit{30.4 Interruption adjustment}} \\
+Interruption adjustment before CEMI4 correction & 30.4.57 \\
+Interruption adjustment after CEMI4 correction & 30.4.58 \\
+Interruption adjustment after CEMI4 correction and cap & 30.4.59 \\
+\midrule
+\multicolumn{2}{l}{\textit{30.5 Total adjustment}} \\
+Total adjustment after individual caps but before aggregate cap & 30.5.1 \\
+Total adjustment after aggregate cap & 30.5.2 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item All variables vary by firm and year. Units: kr. Positive values indicate revenue increases; negative values indicate revenue decreases.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Operating expenditures}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Parameters}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Operating expenditures}
+\label{tab:opex-parameters}
+\begin{tabular}{@{}lrl@{}}
+\toprule
+\textbf{Description} & \textbf{Value} & \textbf{Parameter-ID} \\
+\midrule
+\multicolumn{3}{l}{\textit{4.1 General scaling parameters}} \\
+Scaling factor adjustable OPEX\tnote{a} & 1.00 & 4.1.1 \\
+Scaling factor flexibility services & 1.00 & 4.1.2 \\
+Scaling factor non-adjustable OPEX\tnote{b} & 1.00 & 4.1.3 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item[a] Adjustable OPEX is subject to efficiency requirements from DEA benchmarking.
+\item[b] Non-adjustable OPEX includes costs outside the network operator's direct control.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+\subsection{Variables}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Input variables: OPEX}
+\label{tab:opex-variables}
+\begin{tabular}{@{}p{9cm}l@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+\multicolumn{2}{l}{\textit{40.1 Adjustable OPEX}} \\
+Adjusted OPEX ($OPEX_p$) & 40.1.1 \\
+Flexibility service cost & 40.1.2 \\
+\midrule
+\multicolumn{2}{l}{\textit{40.2 Non-adjustable OPEX}} \\
+Total non-adjustable costs (prognosis) & 40.2.1 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item All values in kr. Variables vary by firm and year. Adjustable OPEX is based on 4-year historical averages (2018--2021); non-adjustable OPEX is based on forecasted values.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Efficiency incentive}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Parameters}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Data Envelopment Analysis}
+\label{tab:dea-parameters}
+\begin{tabular}{@{}p{8cm}ll@{}}
+\toprule
+\textbf{Description} & \textbf{Value} & \textbf{Parameter-ID} \\
+\midrule
+\multicolumn{3}{l}{\textit{5.1 Outlier identification}} \\
+Outlier threshold (IQRs above Q3)\tnote{a} & 2.00 & 5.1.1 \\
+\\
+\multicolumn{3}{l}{\textit{5.2 Efficiency requirement conversion}} \\
+Maximum efficiency potential cap\tnote{b} & 0.30 & 5.2.1 \\
+Realization time (years)\tnote{c} & 8 & 5.2.2 \\
+Customer sharing factor\tnote{d} & 0.50 & 5.2.3 \\
+\\
+\multicolumn{3}{l}{\textit{5.3 Efficiency requirement bounds}} \\
+Minimum annual efficiency requirement & 0.0100 & 5.3.1 \\
+\\
+\multicolumn{3}{l}{\textit{5.4 Cost base application}} \\
+Apply efficiency requirement on TOTEX & No (OPEX only) & 5.4.1 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item[a] Firms with efficiency scores exceeding Q3 + 2$\times$IQR are excluded as outliers.
+\item[b] Efficiency potential is capped at 30\% regardless of DEA score.
+\item[c] Period over which efficiency improvements are expected to be realized.
+\item[d] Share of efficiency gains passed through to customers vs. retained by operator.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+\subsection{Variables}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Input variables: Data Envelopment Analysis}
+\label{tab:dea-input-variables}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+\multicolumn{2}{l}{\textit{50.1 Input cost variables}} \\
+Adjustable OPEX ($OPEX_p$)\tnote{a} & 40.1.1 \\
+CAPEX ($CAPEX$)\tnote{a} & 30.6.1 \\
+\midrule
+\multicolumn{2}{l}{\textit{50.2 Exogenous environmental variables}} \\
+Number of subscriptions (\textit{Abonnemang}) & 50.2.1 \\
+Number of substations (\textit{Nätstationer}) & 50.2.2 \\
+Energy delivered, low voltage ($E_{LS}$) & 50.2.3 \\
+Energy delivered, high voltage ($E_{HS}$) & 50.2.4 \\
+Maximum power from upstream network ($P_{max}$) & 50.2.5 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item[a] Cross-references to variables defined in other modules.
+\item All variables vary by firm and are based on 4-year averages (2018--2021). Units: $OPEX_p$ and $CAPEX$ in tkr; Energy in MWh; Power in MW.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{Output variables: Data Envelopment Analysis}
+\label{tab:dea-output-variables}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+\multicolumn{2}{l}{\textit{50.3 Derived efficiency measures}} \\
+Efficiency score (\textit{Effektivitet})\tnote{a} & 50.3.1 \\
+Super-efficiency score (\textit{Supereffektivitet})\tnote{b} & 50.3.2 \\
+Efficiency potential (\textit{Effektiviseringspotential})\tnote{c} & 50.3.3 \\
+Applied efficiency potential (\textit{Justerad potential})\tnote{d} & 50.3.4 \\
+\midrule
+\multicolumn{2}{l}{\textit{50.4 Efficiency-adjusted costs}} \\
+OPEX Efficiency adjustment & 50.4.1 \\
+CAPEX Efficiency adjustment & 50.4.2 \\
+OPEX after efficiency adjustment & 50.4.3 \\
+CAPEX after efficiency adjustment & 50.4.4 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item[a] DEA efficiency score; 1.0 indicates full efficiency relative to frontier.
+\item[b] Super-efficiency allows scores above 1.0 for frontier firms.
+\item[c] Raw efficiency potential before applying caps and bounds.
+\item[d] Efficiency potential bounded between 0.08 and 0.30.
+\item All variables vary by firm and are based on 4-year averages (2018--2021). Efficiency-adjusted costs in kr.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Model outputs}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\emph{Here write more concisely about outputs}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Add-on modules}
+\label{sec:addon-modules}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Benchmarking module}
+
+\emph{Description of the Benchmarking module to be added here.}
+
+
+%\begin{comment}
+%%%%%%%%%%%%%%%%%%%%%%%%REFERENCES%%%%%%%%%%%%%%%%%%%
+\newpage
+\singlespacing
+\baselineskip=10pt
+\addcontentsline{toc}{section}{References}
+\bibliographystyle{aer}
+\bibliography{references_regumetrica}
+%%%%%%%%%%%%%%%%APPENDICES%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%
+
+
+%%%%%%%%%%%%%%%%%%%%    APPENDIX A: ADDITIONAL FIGURES   %%%%%%%%%%%%%%%%
+\newpage
+
+%\end{comment}
+
+\begin{subappendices}
+	\setcounter{figure}{0}
+	\renewcommand{\thefigure}{A\arabic{figure}}
+	\setcounter{table}{0}
+	\renewcommand{\thetable}{A\arabic{table}}
+	\addcontentsline{toc}{section}{Appendix A}
+	\section*{Appendix A: Additional tables and figures}
+
+
+    	\section*{Appendix B: }
+
+\end{subappendices}
+
+\end{document}

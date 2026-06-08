@@ -1,0 +1,173 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{amsfonts,amsmath,amssymb}
+\usepackage{amsthm}
+\usepackage[swedish, english]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{comment}
+\usepackage[counterclockwise]{rotating}
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{caption}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{curves}
+\usepackage{booktabs, dcolumn}
+\usepackage{url}
+\usepackage{multirow}
+\usepackage{threeparttable}
+\usepackage{longtable}
+%\usepackage{pstricks}
+\usepackage{lastpage}
+\usepackage{appendix}
+\usepackage{lscape}
+\usepackage{color,soul}
+\usepackage[dvipsnames]{xcolor}
+\usepackage[round,authoryear]{natbib}
+\oddsidemargin 0in
+\evensidemargin\oddsidemargin
+\setlength{\topmargin}{-0.5in}
+\setlength{\textheight}{9.5in}
+\setlength{\textwidth}{6.3in}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage[parfill]{parskip}
+\usepackage[pdftex,breaklinks,colorlinks,
+citecolor=blue,
+urlcolor=blue,
+anchorcolor=blue,
+allcolors=blue,
+linkcolor=black]{hyperref}
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\@figurepage}{\vspace{20pt}}{\clearpage}{}{}
+\patchcmd{\@tablepage}{\bigskip}{\clearpage}{}{}
+\makeatother
+
+
+%%%%%%%%%%%%%%%%%%THOMAS RELATED THINGS%%%%%%%%%%%%%%%%%
+\setcounter{MaxMatrixCols}{30}
+%TCIDATA{OutputFilter=latex2.dll}
+%TCIDATA{Version=5.50.0.2960}
+%TCIDATA{Codepage=1252}
+%TCIDATA{CSTFile=LaTeX article (bright).cst}
+%TCIDATA{Created=Thursday, November 06, 2008 11:22:05}
+%TCIDATA{LastRevised=Tuesday, March 08, 2016 16:18:15}
+%TCIDATA{<META NAME="GraphicsSave" CONTENT="32">}
+%TCIDATA{<META NAME="SaveForMode" CONTENT="1">}
+%TCIDATA{BibliographyScheme=Manual}
+%TCIDATA{<META NAME="DocumentShell" CONTENT="Articles\SW\Standard LaTeX Article (Harvard)">}
+%TCIDATA{Language=American English}
+%BeginMSIPreambleData
+\providecommand{\U}[1]{\protect\rule{.1in}{.1in}}
+%EndMSIPreambleData
+%\usepackage[pdftex,breaklinks,colorlinks,
+%citecolor=blue,
+%urlcolor=blue,
+%linkcolor=black]{hyperref}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{assumption}{Assumption}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+\usepackage{lineno}
+%\newenvironment{proof}[1][Proof]{\noindent\textbf{#1.} }{\ \rule{0.5em}{0.5em}}
+\geometry{left=2.5cm,right=2.5cm,top=3cm,bottom=3cm}
+
+
+%%%%%%%%%%%%%%%%ESTOUT RELATED THINGS%%%%%%%%%%%%%%%%%%%
+\newcommand{\sym}[1]{\rlap{#1}}% Thanks to David Carlisle
+
+\let\estinput=\input% define a new input command so that we can still flatten the document
+
+\newcommand{\estwide}[3]{
+		\vspace{.75ex}{
+			\begin{tabular*}
+			{\textwidth}{@{\hskip\tabcolsep\extracolsep\fill}l*{#2}{#3}}
+			\toprule
+			\estinput{#1}
+			\bottomrule
+			\addlinespace[.75ex]
+			\end{tabular*}
+			}
+		}	
+
+\newcommand{\estauto}[3]{
+		\vspace{.75ex}{
+			\begin{tabular}{l*{#2}{#3}}
+			\toprule
+			\estinput{#1}
+			\bottomrule
+			\addlinespace[.75ex]
+			\end{tabular}
+			}
+		}
+
+% Allow line breaks with \\ in specialcells
+	\newcommand{\specialcell}[2][c]{%
+	\begin{tabular}[#1]{@{}c@{}}#2\end{tabular}}
+
+% *****************************************************************
+% Custom subcaptions
+% *****************************************************************
+% Note/Source/Text after Tables
+\newcommand{\figtext}[1]{
+	\vspace{-0.5ex}
+	\captionsetup{justification=justified,font=footnotesize}
+	\caption*{\hspace{6pt}\hangindent=1.5em #1}
+	}
+\newcommand{\fignote}[1]{\figtext{{}~#1}}
+
+\newcommand{\figsource}[1]{\figtext{\emph{Source:~}~#1}}
+
+% Add significance note with \starnote
+\newcommand{\starnote}{\figtext{* p < 0.1, ** p < 0.05, *** p < 0.01. Standard errors in parentheses.}}
+
+% *****************************************************************
+% siunitx
+% *****************************************************************
+\usepackage{siunitx} % centering in tables
+	\sisetup{
+		detect-mode,
+		tight-spacing		= true,
+		group-digits		= false ,
+		input-signs		= ,
+		input-symbols		= ( ) [ ] - + *,
+		input-open-uncertainty	= ,
+		input-close-uncertainty	= ,
+		table-align-text-post	= false
+        }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\graphicspath{ {"/files/graphs/"} 
+
+%%%%%%%%%%WHEN PREPARING FOR SUBMISSION: 
+%SET FIGCAPS ON, BUT SET FIGCAPS OFF WHEN APPENDICES BEGIN 
+
+
+\makeatletter
+\def\input@path{{graphs/}}
+\makeatother
+
+
+\graphicspath{{graphs/}}
+
+
+
