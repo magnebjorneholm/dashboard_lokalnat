@@ -50,11 +50,16 @@ _STATION_METHOD_HELP = {
 
 
 def render_config_panel() -> NewBenchmarkingConfig:
-    """Render the fine-tuning controls and return a NewBenchmarkingConfig.
+    """Render the fine-tuning controls and return the *active* NewBenchmarkingConfig.
 
     Only three things are adjustable on top of the fixed main model: the common loss
     price, the placement-environment methods (cable + station), and which line types
     feed the cable-length output. All other fields keep their main-model defaults.
+
+    The DEA run is heavy, so it must not fire on every widget edit. The returned config
+    therefore reflects the last config the user committed via the "Run experiment" button
+    (or the main model before any run) — not the live widget values. Editing widgets only
+    marks pending changes; nothing recomputes until the button is clicked.
     """
     st.caption(
         "These settings fine-tune the main model. Everything else — TOTEX composition, "
@@ -101,9 +106,24 @@ def render_config_panel() -> NewBenchmarkingConfig:
         key="nb_cable_types",
     )
 
-    return NewBenchmarkingConfig(
+    pending = NewBenchmarkingConfig(
         k_nf={2024: k_nf, 2025: k_nf, 2026: k_nf, 2027: k_nf},
         cable_method=cable_method,
         station_method=station_method,
         cable_types=tuple(cable_types),
     )
+
+    # Active config = the last one the user ran (or the main model). Widgets above only
+    # build `pending`; the heavy DEA run fires only when the button commits it.
+    committed = st.session_state.get("nb_committed_cfg")
+    if committed is None:
+        committed = NewBenchmarkingConfig()
+
+    st.divider()
+    if pending.signature() != committed.signature():
+        st.caption("⚠ Unrun changes — click **Run experiment** to apply them.")
+    if st.button("Run experiment", type="primary", key="nb_run_experiment"):
+        st.session_state["nb_committed_cfg"] = pending
+        committed = pending
+
+    return committed

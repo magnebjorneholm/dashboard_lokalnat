@@ -219,10 +219,13 @@ dashboard_lokalnat/
 |   |-- rab_data.py               # RAB data (capbase_a.parquet, capcost_a.parquet)
 |   |-- incentive_data.py         # Incentive parameters
 |   |-- stoned_data.py            # StoNED precomputed efficiency data
+|   |-- new_benchmarking_data.py  # Loads the pre-computed new-benchmarking main-spec bundle
 |
 |-- scripts/                     # Utility scripts (offline data preparation)
-|   |-- generate_kent_from_capbase.py  # Generate KENT data from capbase
-|   |-- precompute_stoned.py           # Precompute StoNED efficiency results
+|   |-- generate_kent_from_capbase.py        # Generate KENT data from capbase
+|   |-- precompute_stoned.py                 # Precompute StoNED efficiency results
+|   |-- precompute_new_benchmarking.py       # Precompute the new-benchmarking main-spec bundle
+|   |-- generate_company_names.py            # Build data/reference/company_names.csv
 |
 |-- auth/
 |   |-- firebase_auth.py          # Firebase auth: login, registration, claims, dev mode
@@ -246,11 +249,15 @@ dashboard_lokalnat/
 |   |-- reference/                # Reference / mapping data
 |   |   |-- reconciliation_id_network_firm_dmu.csv  # ID mapping (REId <-> id_network <-> DMU)
 |   |   |-- avg_norm_value_by_category.parquet      # Per-category average normvalue
+|   |   |-- company_names.csv     # Curated names (REId, name_full, name_short)
 |   |-- stoned/                   # Pre-computed StoNED models
 |   |   |-- M1.parquet
 |   |   |-- M2.parquet
 |   |   |-- models.json           # Metadata for each StoNED model
 |   |   |-- STONED_EXPORT_SPEC.md
+|   |-- new_benchmarking/         # Pre-computed new-benchmarking main-spec bundle
+|   |   |-- *.parquet             # dea_new/dea_current/comparison/totex/inputs/env_*
+|   |   |-- manifest.json         # Config signature + output columns (validity token)
 |   |-- test/                     # Mini parquet versions for unit tests (3 companies)
 |   |   |-- capbase_a_mini.parquet
 |   |   |-- controllable_a_mini.parquet
@@ -263,7 +270,7 @@ dashboard_lokalnat/
 |   |-- shapefiles/               # Geographic shapefiles (municipality/county)
 |   |-- updated_shapefiles/       # Network operator area shapefiles
 |
-|-- tests/                        # pytest test suite (252 tests, ~65s)
+|-- tests/                        # pytest test suite (~260 tests, ~70s)
 |   |-- conftest.py               # Session-scoped fixtures
 |   |-- test_baseline_replication.py
 |   |-- test_kent_calculations.py
@@ -277,8 +284,8 @@ dashboard_lokalnat/
 |   |-- test_pipeline_integration.py
 |   |-- test_override_cascades.py    # Category override cascade tests
 |   |-- test_mini_run.py             # Mini-run (lightweight DEA/StoNED) tests
-|   |-- test_stoned_data.py          # StoNED data loading tests
 |   |-- test_result_snapshot.py      # Result snapshot extraction tests
+|   |-- test_new_benchmarking_precompute.py  # New-benchmarking bundle + freshness guard
 |
 |-- user_manual_latex/            # LaTeX source for the user manual PDF (see Section 19)
     |-- Regumetrica user manual.tex   # Root document (article, natbib)
@@ -797,6 +804,15 @@ Grunddata parquet loaders (used internally by `baseline_data.py`):
 **Variable columns:** nf_norm, nf_obs, e_in, ug_norm, ug_obs, k_upstream,
 cemi4_norm, cemi4_obs, aif_{a,o}_{1-6}_{norm,obs}, ait_{a,o}_{1-6}_{norm,obs}, ame_{1-6}
 
+### new_benchmarking_data.py
+
+`load_precomputed_main() -> NewBenchmarkingResult | None` -- loads the committed
+new-benchmarking main-spec bundle (`data/new_benchmarking/`, built by
+`scripts/precompute_new_benchmarking.py`) and reconstructs the result page 5 reads, so the
+fixed main model skips its live KENT+DEA run on cold start. Returns `None` (caller runs
+live) if the bundle is missing or its config signature no longer matches the current
+default. See Section 20.
+
 
 ## 15. File Dependencies (Import Map)
 
@@ -883,6 +899,7 @@ dependencies like `data_loaders` and `pipeline` for faster initial rendering.
 | data/reference/avg_norm_value_by_category.parquet    | Parquet | Per-category average normvalue                  |
 | data/adjustments/all_adjust_vars.csv                 | CSV     | All adjustable variables (48 cols)              |
 | data/stoned/M*.parquet, models.json                  | Parquet | Pre-computed StoNED efficiency models           |
+| data/new_benchmarking/*.parquet, manifest.json       | Parquet | Pre-computed new-benchmarking main-spec bundle  |
 | data/examples/                                       | Excel   | Example KENT / paverkbara upload files          |
 | data/shapefiles/                                     | SHP     | Geographic boundaries (municipality/county)     |
 | data/updated_shapefiles/                             | SHP     | Network operator area shapefiles                |
@@ -972,7 +989,7 @@ max_dep (max depreciation years).
 
 **Run:** `./venv/Scripts/python.exe -m pytest tests/ -v`
 **Coverage:** `./venv/Scripts/python.exe -m pytest tests/ -v --cov=calculations --cov=pipeline`
-**252 tests**, all green, ~65s total runtime.
+**~260 tests**, all green, ~70s total runtime.
 
 **Session-scoped fixtures** (loaded once in `tests/conftest.py`):
 - `baseline_data` -- Full BaselineData (all 148 companies)
@@ -986,8 +1003,9 @@ max_dep (max depreciation years).
 - `test_cost_aggregation.py` -- Verifies grunddata aggregation matches SDF sheets
 - `test_override_cascades.py` -- OPEX/flex/non-adj scaling and override cascade through pipeline
 - `test_mini_run.py` -- Mini-run (lightweight DEA/StoNED) tests
-- `test_stoned_data.py` -- StoNED data loading tests
 - `test_result_snapshot.py` -- Result snapshot extraction tests
+- `test_new_benchmarking_precompute.py` -- New-benchmarking bundle shape + freshness guard
+  (recomputes the main spec live and asserts it matches the committed bundle)
 
 **Known:** Company 886 has ~354 tkr rounding difference in capital_cost_2024 (KENT vs DM).
 
@@ -1020,3 +1038,54 @@ SyncTeX: `Ctrl+Click` in PDF jumps to source; `Ctrl+Alt+J` in source jumps to PD
 
 See `user_manual_latex/LATEX_VSCODE_SETUP.md` for first-time install, MiKTeX on-the-fly
 package downloads, and troubleshooting.
+
+
+## 20. New Benchmarking Add-on (page 5)
+
+A standalone analysis of Ei's proposed new benchmarking model (TOTEX-based DEA),
+**decoupled** from the case/revenue-frame pipeline. It answers: "how would the company be
+affected by the new model alone, all else equal?" It calls `run_new_benchmarking()`
+directly and never builds a `CaseDefinition`.
+
+### Backend (`calculations/new_benchmarking/`)
+
+`run_new_benchmarking(cfg) -> NewBenchmarkingResult` builds a new TOTEX per company and
+runs one DEA pass, comparing against the current model (read directly from EIs_DEA, not
+recomputed — the firm's actual "föregående värden"):
+
+- **TOTEX** = `controllable_cost_average` (reused from baseline, apples-to-apples)
+  + network losses valued at a common price (`nf_obs · k_nf · e_in`)
+  + selected non-controllable categories (grid subscription/connection, feed-in, capacity
+  reserve) + förläggningsmiljö-adjusted `capital_cost_2024`. The adjusted capital cost
+  re-runs KENT on a capbase whose jordkabel (cat 3) and nätstation (cat 13) NUAV is
+  levelled to a reference environment (cable + station sub-packages).
+- **DEA**: single TOTEX input + base outputs (CU, MW, NS, MWhl, MWhh) + cable length.
+- `NewBenchmarkingConfig` holds every choice; `cfg.signature()` is its stable identity,
+  used both as the @st.cache_data key and as the pre-compute bundle's validity token.
+
+### Pre-computed main spec
+
+The fixed main spec (`NewBenchmarkingConfig()`) is expensive (148-company KENT re-run +
+DEA) yet identical for every user, and `@st.cache_data` is wiped on each redeploy. So it
+is pre-computed offline (`scripts/precompute_new_benchmarking.py`) into
+`data/new_benchmarking/` and loaded at runtime (`data_loaders/new_benchmarking_data.py`,
+`load_precomputed_main()`), which reconstructs the `NewBenchmarkingResult`. Guarded by the
+config-signature token plus `test_new_benchmarking_precompute.py`, which recomputes the
+spec live and fails if the committed bundle has drifted. Only the default spec is
+pre-computed; Experiment-panel tweaks still run live (cached per signature).
+**Re-run the script whenever the main spec, the calculation code, or the source data
+changes.**
+
+### Frontend
+
+- `pages/5_new_benchmarking.py` -- model description, then the Experiment expander, then
+  the results. The Experiment panel's "Run experiment" button commits a config to session
+  state; the heavy DEA fires only on click (editing widgets just marks pending changes).
+- `frontend/modules/addons/new_benchmarking_spec.py` -- `render_config_panel()`: the few
+  adjustable fields (common loss price, cable/station method, line types) + the run button.
+- `frontend/results/new_benchmarking_output.py` -- per-company view: **Sector overview**
+  (neutral-coloured Δ-requirement / Δ-efficiency histograms + efficiency distribution with
+  truncation zones, the firm marked by its curated short name) and **Your company**
+  (5-KPI row — score, requirement, raw/truncated potential, rank — plus a TOTEX bridge
+  waterfall from the current-model TOTEX to the new one: additions red, the
+  förläggningsmiljö capex cut green, opening/closing totals blue).

@@ -107,16 +107,14 @@ st.markdown(f"**Company:** {_company_name(user_reid)} ({user_reid})")
 # Model-diff (top).
 _render_model_diff()
 
-# Reserve the results area; it is filled below, after the experiment panel is evaluated,
-# so the controls execute last but still display beneath the results.
-results_area = st.container()
-
-# Experiment panel (bottom): fine-tuning of the main model.
+# Experiment panel, right after the model description. The heavy DEA run fires only via
+# the panel's "Run experiment" button (see render_config_panel); editing widgets merely
+# marks pending changes.
 with st.expander("Experiment — fine-tune the model", expanded=False):
     active_cfg = render_config_panel()
     indicator_area = st.container()
 
-# Main model = reference reading; active model = main model unless the user tweaked it.
+# Main model = reference reading; active model = main model unless the user ran a tweak.
 main_cfg = NewBenchmarkingConfig()
 main_sig = _signature(main_cfg)
 active_sig = _signature(active_cfg)
@@ -126,7 +124,8 @@ active_sig = _signature(active_cfg)
 main_result = load_precomputed_main() or _run_cached(main_sig, main_cfg)
 active_result = main_result if active_sig == main_sig else _run_cached(active_sig, active_cfg)
 
-# Secondary indicator: how far the tweak moved the requirement vs. the main model.
+# Secondary indicator, inside the expander next to the Run button: how far the tweak
+# moved the requirement vs. the main model.
 if active_sig != main_sig:
     a = _user_eff_req(active_result, user_reid)
     m = _user_eff_req(main_result, user_reid)
@@ -134,6 +133,5 @@ if active_sig != main_sig:
         with indicator_area:
             st.caption(f"ⓘ Your tweak changed the requirement by {format_pp(a - m)} vs. the main model.")
 
-# Render the results (active model vs. current) in their reserved spot above the panel.
-with results_area:
-    render_company_view(active_result, user_reid, active_result.config, _company_short(user_reid))
+# Results below the panel.
+render_company_view(active_result, user_reid, active_result.config, _company_short(user_reid))
