@@ -91,7 +91,7 @@ def test_conservation(components, calib, method):
 
 def test_itemized_zeroes_surcharge_and_keeps_base(components, calib):
     """itemized removes the surcharge rows in full and leaves base rows untouched."""
-    res = apply_environment_adjustment(components, calib, method=C.METHOD_ITEMIZED)
+    res = apply_environment_adjustment(components, calib, method=C.METHOD_EXACT)
     comp = res.components
     tat = comp[comp[C.COL_ENV] == C.TATORT]
     base = comp[comp[C.COL_ENV] == C.BASE]
@@ -105,20 +105,20 @@ def test_methods_agree_at_sector_level(components, calib):
     for method in C.METHODS:
         res = apply_environment_adjustment(components, calib, method=method)
         totals[method] = res.per_company[C.COL_DEDUCTION].sum()
-    base = totals[C.METHOD_ITEMIZED]
+    base = totals[C.METHOD_EXACT]
     for method, t in totals.items():
         assert abs(t - base) / base < 0.01
 
 
 def test_override_percent(components, calib):
     res = apply_environment_adjustment(
-        components, calib, method=C.METHOD_PERCENT, override_percent={C.TATORT: 0.0}
+        components, calib, method=C.METHOD_SCHABLON_PERCENT, override_percent={C.TATORT: 0.0}
     )
     assert res.components[C.COL_DEDUCTION].abs().max() == pytest.approx(0.0, abs=1e-6)
 
 
 def test_reduction_factor_consistent(components, calib):
-    res = apply_environment_adjustment(components, calib, method=C.METHOD_ITEMIZED)
+    res = apply_environment_adjustment(components, calib, method=C.METHOD_EXACT)
     pc = res.per_company
     recomputed = pc[C.COL_ADJ_VALUE] / pc[C.COL_VALUE]
     assert np.allclose(pc[C.COL_REDUCTION_FACTOR], recomputed, atol=1e-9)

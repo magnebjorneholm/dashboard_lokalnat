@@ -8,7 +8,7 @@ Typical use:
 
     from new_benchmarking_model.environment_capex_adjustment import run_environment_adjustment
 
-    result = run_environment_adjustment(method="per_type")
+    result = run_environment_adjustment(method="exact")
     result.per_company           # REId, original/adjusted value, effective_pct, reduction_factor
     result.calibration.coverage  # per-environment premium + reliability diagnostics
 """
@@ -23,7 +23,7 @@ from .adjustment import apply_environment_adjustment, EnvironmentAdjustmentResul
 
 def run_environment_adjustment(
     capbase_path=None,
-    method: str = C.METHOD_PER_TYPE,
+    method: str = C.METHOD_EXACT,
     override_percent: dict | None = None,
 ) -> EnvironmentAdjustmentResult:
     """Load capbase_a, calibrate the premium, and apply the correction. One call."""

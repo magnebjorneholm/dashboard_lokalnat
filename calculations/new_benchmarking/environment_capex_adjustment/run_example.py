@@ -53,9 +53,9 @@ def main() -> None:
 
     # Per-company effect under the precise method
     print("\n" + "=" * 78)
-    print("TOP 10 companies by effective deduction (method = per_type)")
+    print("TOP 10 companies by effective deduction (method = exact)")
     print("=" * 78)
-    res = run_environment_adjustment(method=C.METHOD_PER_TYPE)
+    res = run_environment_adjustment(method=C.METHOD_EXACT)
     pc = res.per_company.sort_values(C.COL_EFFECTIVE_PCT, ascending=False).head(10).copy()
     pc["value_mn"] = (pc[C.COL_VALUE] / 1e6).map(lambda x: f"{x:,.0f}")
     pc["deduction_mn"] = (pc[C.COL_DEDUCTION] / 1e6).map(lambda x: f"{x:,.0f}")

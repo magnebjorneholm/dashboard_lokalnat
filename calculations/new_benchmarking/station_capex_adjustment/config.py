@@ -46,9 +46,9 @@ REFERENCE_ENV = BASE
 ADJUSTABLE_ENVS = (TATORT,)
 
 # ── Adjustment methods ──────────────────────────────────────────────────────
-METHOD_ITEMIZED = "itemized"   # exact: remove the tätort surcharge rows in full (precise)
-METHOD_PERCENT = "percent"     # schablon: flat % haircut on the whole station base (Ei-style)
-METHODS = (METHOD_ITEMIZED, METHOD_PERCENT)
+METHOD_EXACT = "exact"                        # exact: remove the tätort surcharge rows in full (precise)
+METHOD_SCHABLON_PERCENT = "schablon_percent"  # schablon: flat % haircut on the whole station base (Ei-style)
+METHODS = (METHOD_EXACT, METHOD_SCHABLON_PERCENT)
 
 # ── Source column fragments in capbase_a (resolved by substring) ─────────────
 # capbase_a stores some column names with non-UTF8 bytes (e.g. "normvärde"),

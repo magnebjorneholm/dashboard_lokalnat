@@ -10,7 +10,7 @@ Typical use:
 
     from new_benchmarking_model.station_capex_adjustment import run_station_adjustment
 
-    result = run_station_adjustment(method="itemized")
+    result = run_station_adjustment(method="exact")
     result.per_company           # REId, original/adjusted value, effective_pct, reduction_factor
     result.calibration.coverage  # tätort premium + reliability diagnostics
 """
@@ -25,7 +25,7 @@ from .adjustment import apply_environment_adjustment, EnvironmentAdjustmentResul
 
 def run_station_adjustment(
     capbase_path=None,
-    method: str = C.METHOD_ITEMIZED,
+    method: str = C.METHOD_EXACT,
     override_percent: dict | None = None,
 ) -> EnvironmentAdjustmentResult:
     """Load capbase_a, calibrate the tätort premium, and apply the correction. One call."""

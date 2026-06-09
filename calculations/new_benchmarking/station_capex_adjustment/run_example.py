@@ -54,9 +54,9 @@ def main() -> None:
 
     # Per-company effect under the exact method
     print("\n" + "=" * 78)
-    print("TOP 10 companies by effective deduction (method = itemized)")
+    print("TOP 10 companies by effective deduction (method = exact)")
     print("=" * 78)
-    res = run_station_adjustment(method=C.METHOD_ITEMIZED)
+    res = run_station_adjustment(method=C.METHOD_EXACT)
     pc = res.per_company.sort_values(C.COL_EFFECTIVE_PCT, ascending=False).head(10).copy()
     pc["value_mn"] = (pc[C.COL_VALUE] / 1e6).map(lambda x: f"{x:,.0f}")
     pc["deduction_mn"] = (pc[C.COL_DEDUCTION] / 1e6).map(lambda x: f"{x:,.0f}")
@@ -67,7 +67,7 @@ def main() -> None:
 
     # Distribution of the per-company deduction (itemized)
     print("\n" + "=" * 78)
-    print("DISTRIBUTION of per-company effective deduction (method = itemized)")
+    print("DISTRIBUTION of per-company effective deduction (method = exact)")
     print("=" * 78)
     print((res.per_company[C.COL_EFFECTIVE_PCT] * 100).describe().round(2).to_string())
     zero = (res.per_company[C.COL_EFFECTIVE_PCT] == 0).mean()

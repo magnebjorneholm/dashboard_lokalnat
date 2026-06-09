@@ -62,12 +62,12 @@ The premium is observed, so calibration just summarises it:
 (Regenerate with `run_example.py`.)
 
 ### 4. Adjustment (`adjustment.py`) — two methods + override
-- **`itemized`** (default, exact, per-company): remove the `City- och tätortstillägg` rows
+- **`exact`** (default, per-company): remove the `City- och tätortstillägg` rows
   in full (`deduction = their value`); base rows untouched. `reduction_factor` varies by
   company (here 0.77–1.00).
-- **`percent`** (schablon, Ei-style): `deduction = value × percent[tatort]`, a flat haircut
+- **`schablon_percent`** (Ei-style): `deduction = value × percent[tatort]`, a flat haircut
   across the whole station base. Matches Ei's "schablonavdrag i procent" wording and reproduces
-  the `itemized` total sector-wide; per company it discards the company-specific tätort share.
+  the `exact` total sector-wide; per company it discards the company-specific tätort share.
   Pass `override_percent={"tatort": 0.10}` to substitute Ei's official figure when published.
 
 Deductions are clipped to `[0, value]` in magnitude, sign-preserving, so a disposal
@@ -97,13 +97,13 @@ Multiply the station capital-cost component that enters the DEA/TOTEX input by
   assumes the tätort premium is the same share of anskaffningsvärde as of normvärde —
   reasonable but not verifiable from this data.
 - **Ei's official schablon % is not yet published**, so `percent` is a data-grounded
-  reconstruction. Prefer `itemized` (exact); use `override_percent` once Ei's number exists.
+  reconstruction. Prefer `exact`; use `override_percent` once Ei's number exists.
 
 ## Usage
 ```python
 from new_benchmarking_model.station_capex_adjustment import run_station_adjustment
 
-res = run_station_adjustment(method="itemized")
+res = run_station_adjustment(method="exact")
 res.per_company            # one row per company
 res.calibration.coverage   # premium + reliability diagnostics
 ```

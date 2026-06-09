@@ -30,10 +30,10 @@ REFERENCE_ENV = LB_NORMAL
 ADJUSTABLE_ENVS = (CITY, TATORT, LB_SVAR)
 
 # ── Adjustment methods ──────────────────────────────────────────────────────
-METHOD_PER_TYPE = "per_type"        # exact re-pricing per cable type (most precise)
-METHOD_SEK_PER_KM = "sek_per_km"    # one additive SEK/km premium per environment
-METHOD_PERCENT = "percent"          # one percent-of-value deduction per environment
-METHODS = (METHOD_PER_TYPE, METHOD_SEK_PER_KM, METHOD_PERCENT)
+METHOD_EXACT = "exact"                        # exact re-pricing per cable type (most precise)
+METHOD_SCHABLON_PER_KM = "schablon_per_km"    # one additive SEK/km premium per environment
+METHOD_SCHABLON_PERCENT = "schablon_percent"  # one percent-of-value deduction per environment
+METHODS = (METHOD_EXACT, METHOD_SCHABLON_PER_KM, METHOD_SCHABLON_PERCENT)
 
 # ── Source column fragments in capbase_a (resolved by substring) ─────────────
 # capbase_a stores some column names with non-UTF8 bytes (e.g. "normvärde"),

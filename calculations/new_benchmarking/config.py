@@ -39,9 +39,10 @@ DEFAULT_NONCTRL_CATEGORIES: Tuple[str, ...] = (
 )
 
 # New-model base outputs (before optionally appending cable length).
-# MWhh (gränspunkt) is deliberately omitted for now — it is deferred together with the
-# "kostnad till övergripande nät" work, per the project owner.
-NEW_MODEL_BASE_OUTPUTS: Tuple[str, ...] = ("CU", "MW", "NS", "MWhl")
+# MWhh is plain delivered energy at high voltage. Only the *adjustment* of MWhh to include
+# levererad energi i gränspunkt is deferred (together with the "kostnad till övergripande
+# nät" work, per the project owner) — plain MWhh is part of the main model.
+NEW_MODEL_BASE_OUTPUTS: Tuple[str, ...] = ("CU", "MW", "NS", "MWhl", "MWhh")
 
 
 @dataclass
@@ -60,9 +61,9 @@ class NewBenchmarkingConfig:
     non_controllable_categories: Tuple[str, ...] = DEFAULT_NONCTRL_CATEGORIES
 
     # ── Förläggningsmiljö capex correction ───────────────────────────────────
-    cable_method: str = env_C.METHOD_PER_TYPE          # per_type | sek_per_km | percent
+    cable_method: str = env_C.METHOD_EXACT             # exact | schablon_per_km | schablon_percent
     cable_override_percent: Optional[dict] = None
-    station_method: str = station_C.METHOD_ITEMIZED    # itemized | percent
+    station_method: str = station_C.METHOD_EXACT       # exact | schablon_percent
     station_override_percent: Optional[dict] = None
 
     # ── DEA outputs: cable length (ledningslängd) ────────────────────────────

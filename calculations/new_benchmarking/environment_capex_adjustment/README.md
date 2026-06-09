@@ -54,11 +54,11 @@ form is the more faithful schablon; for **landsbygd svår** the *ratio* is more 
 re-pricing avoids having to choose.
 
 ### 4. Adjustment (`adjustment.py`) — three methods + override
-- **`per_type`** (default, most precise): re-price each component at the landsbygd-normal
+- **`exact`** (default, most precise): re-price each component at the landsbygd-normal
   unit price for its own `techspec × volt`. Types without a landsbygd-normal reference
-  (≈6–12 % of city/tätort km) fall back to the `sek_per_km` schablon.
-- **`sek_per_km`**: `deduction = km × sek_per_km[env]`.
-- **`percent`**: `deduction = value × percent[env]`. Matches Ei's wording. Pass
+  (≈6–12 % of city/tätort km) fall back to the `schablon_per_km` method.
+- **`schablon_per_km`**: `deduction = km × sek_per_km[env]`.
+- **`schablon_percent`**: `deduction = value × percent[env]`. Matches Ei's wording. Pass
   `override_percent={"city": 0.6, ...}` to substitute Ei's official figures when published.
 
 Deductions are clipped to `[0, value]`: the correction only levels expensive environments
@@ -94,7 +94,7 @@ is unchanged.
 ```python
 from new_benchmarking_model.environment_capex_adjustment import run_environment_adjustment
 
-res = run_environment_adjustment(method="per_type")
+res = run_environment_adjustment(method="exact")
 res.per_company            # one row per company
 res.calibration.coverage   # premium + reliability per environment
 ```

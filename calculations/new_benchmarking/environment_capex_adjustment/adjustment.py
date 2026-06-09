@@ -3,16 +3,16 @@ adjustment.py — apply the placement-environment correction to each company's j
 
 The correction levels every cable down to the landsbygd-normal cost level. Three methods:
 
-  per_type    Re-price each component at the landsbygd-normal unit price for its OWN
-              cable type (techspec × volt): adjusted = ref_price × km. Most precise.
-              Components whose type has no landsbygd-normal reference fall back to the
-              sek_per_km schablon for their environment.
+  exact             Re-price each component at the landsbygd-normal unit price for its OWN
+                    cable type (techspec × volt): adjusted = ref_price × km. Most precise.
+                    Components whose type has no landsbygd-normal reference fall back to the
+                    schablon_per_km method for their environment.
 
-  sek_per_km  deduction = km × sek_per_km[env]. One additive premium per environment.
+  schablon_per_km   deduction = km × sek_per_km[env]. One additive premium per environment.
 
-  percent     deduction = value × percent[env]. One percent per environment. An optional
-              `override_percent` dict (e.g. Ei's published figures) replaces the
-              calibrated percentages.
+  schablon_percent  deduction = value × percent[env]. One percent per environment. An optional
+                    `override_percent` dict (e.g. Ei's published figures) replaces the
+                    calibrated percentages.
 
 Reference ("landsbygd normal") and OTHER cables (sjökabel/optokabel/unlabelled) are
 never adjusted. Deductions are clipped to [0, value] so no component goes negative.
@@ -62,18 +62,18 @@ def _component_deductions(
     unit = components[C.COL_UNIT_PRICE].to_numpy()
     adjustable = env.isin(C.ADJUSTABLE_ENVS).to_numpy()
 
-    if method == C.METHOD_PERCENT:
+    if method == C.METHOD_SCHABLON_PERCENT:
         rates = dict(calib.percent)
         if override_percent:
             rates.update(override_percent)
         rate = env.map(rates).fillna(0.0).to_numpy()
         ded = value * rate
 
-    elif method == C.METHOD_SEK_PER_KM:
+    elif method == C.METHOD_SCHABLON_PER_KM:
         per_km = env.map(calib.sek_per_km).fillna(0.0).to_numpy()
         ded = np.sign(value) * km * per_km
 
-    elif method == C.METHOD_PER_TYPE:
+    elif method == C.METHOD_EXACT:
         merged = components.merge(
             calib.ref_price, on=[C.COL_TECHSPEC, C.COL_VOLT], how="left"
         )
@@ -105,7 +105,7 @@ def _component_deductions(
 def apply_environment_adjustment(
     components: pd.DataFrame,
     calib: EnvironmentCalibration,
-    method: str = C.METHOD_PER_TYPE,
+    method: str = C.METHOD_EXACT,
     override_percent: dict | None = None,
 ) -> EnvironmentAdjustmentResult:
     """Apply the environment correction and aggregate to company level."""

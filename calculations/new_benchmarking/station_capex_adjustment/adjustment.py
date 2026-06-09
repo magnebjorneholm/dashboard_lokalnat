@@ -4,15 +4,15 @@ adjustment.py — apply the placement-environment correction to each company's n
 The correction levels every company's station base down to the "outside tätort" cost
 level by removing the City-/tätort surcharge. Two methods:
 
-  itemized   Exact, per-company: remove the "City- och tätortstillägg nätstation" rows
-             in full (deduction = their value). Base rows are untouched. This uses the
-             actual booked premium, so reduction_factor varies company by company.
+  exact             Per-company: remove the "City- och tätortstillägg nätstation" rows
+                    in full (deduction = their value). Base rows are untouched. This uses the
+                    actual booked premium, so reduction_factor varies company by company.
 
-  percent    Schablon, Ei-style: deduction = value × percent[TATORT], applied as a flat
-             haircut across the WHOLE station base. An optional `override_percent` dict
-             (e.g. Ei's published figure) replaces the calibrated percentage. At the
-             sector level this matches `itemized`; per company it discards the
-             company-specific tätort share.
+  schablon_percent  Schablon, Ei-style: deduction = value × percent[TATORT], applied as a flat
+                    haircut across the WHOLE station base. An optional `override_percent` dict
+                    (e.g. Ei's published figure) replaces the calibrated percentage. At the
+                    sector level this matches `exact`; per company it discards the
+                    company-specific tätort share.
 
 Deductions are clipped to [0, value] in magnitude, sign-preserving, so a disposal
 (negative value) is never flipped or over-credited. The result is a per-company station
@@ -59,11 +59,11 @@ def _component_deductions(
     value = components[C.COL_VALUE].to_numpy()
     is_tatort = (env == C.TATORT).to_numpy()
 
-    if method == C.METHOD_ITEMIZED:
+    if method == C.METHOD_EXACT:
         # remove the tätort surcharge rows in full; everything else untouched
         ded = np.where(is_tatort, value, 0.0)
 
-    elif method == C.METHOD_PERCENT:
+    elif method == C.METHOD_SCHABLON_PERCENT:
         rate = float(calib.percent.get(C.TATORT, 0.0))
         if override_percent and C.TATORT in override_percent:
             rate = float(override_percent[C.TATORT])
@@ -81,7 +81,7 @@ def _component_deductions(
 def apply_environment_adjustment(
     components: pd.DataFrame,
     calib: StationCalibration,
-    method: str = C.METHOD_ITEMIZED,
+    method: str = C.METHOD_EXACT,
     override_percent: dict | None = None,
 ) -> EnvironmentAdjustmentResult:
     """Apply the environment correction and aggregate to company level."""

@@ -66,15 +66,15 @@ def render_config_panel() -> NewBenchmarkingConfig:
             cable_method = st.selectbox(
                 "Metod kabel",
                 options=list(env_C.METHODS),
-                index=list(env_C.METHODS).index(env_C.METHOD_PER_TYPE),
-                help="per_type = exakt omprissättning, sek_per_km/percent = schabloner.",
+                index=list(env_C.METHODS).index(env_C.METHOD_EXACT),
+                help="exact = exakt omprissättning, schablon_per_km/schablon_percent = schabloner.",
                 key="nb_cable_method",
             )
             station_method = st.selectbox(
                 "Metod station",
                 options=list(st_C.METHODS),
-                index=list(st_C.METHODS).index(st_C.METHOD_ITEMIZED),
-                help="itemized = ta bort tätortstillägg exakt, percent = schablon.",
+                index=list(st_C.METHODS).index(st_C.METHOD_EXACT),
+                help="exact = ta bort tätortstillägg exakt, schablon_percent = schablon.",
                 key="nb_station_method",
             )
 
