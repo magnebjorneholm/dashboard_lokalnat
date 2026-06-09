@@ -315,7 +315,9 @@ def _render_authenticated_sidebar():
                 auth_manager = initialize_firebase_auth()
                 auth_manager.sign_out()
                 st.session_state["user_reid"] = None
-                st.rerun()
+                delete_case_cookie()
+                # Land on the public landing page instead of the login screen.
+                st.switch_page("landing_pages/home.py")
         with col2:
             if st.button("Cancel", use_container_width=True):
                 st.rerun()
@@ -328,35 +330,31 @@ def _render_authenticated_sidebar():
 # NAVIGATION
 # =============================================================================
 
-login_page = st.Page(
-    "pages/login.py",
-    title="Login",
-)
+# --- Public landing pages ---
+landing_home = st.Page("landing_pages/home.py", title="Home", default=True)
+landing_user_manual = st.Page("landing_pages/user_manual.py", title="User Manual")
+landing_team = st.Page("landing_pages/team.py", title="Meet the Team")
+landing_contact = st.Page("landing_pages/contact.py", title="Contact")
+LANDING_PAGES = [landing_home, landing_user_manual, landing_team, landing_contact]
 
-case_manager = st.Page(
-    "pages/1_create_and_select_case.py",
-    title="1. Create and select case",
-)
+login_page = st.Page("pages/login.py", title="Sign in")
 
-case_setup = st.Page(
-    "pages/2_case_setup.py",
-    title="2. Select modules to modify",
-)
-
-specification = st.Page(
-    "pages/3_specification.py",
-    title="3. Configure selected modules",
-)
-
-revenue_frame = st.Page(
-    "pages/4_revenue_frame.py",
-    title="4. Compute revenue frame and save",
-)
-
-new_benchmarking = st.Page(
-    "pages/5_new_benchmarking.py",
-    title="5. New benchmarking model",
-)
+# --- Revenue cap tool pages (protected) ---
+# Defined once from a single spec, built both as visible objects (for the
+# authenticated nav) and as hidden objects (registered in the public view so
+# that bookmarked tool URLs redirect to login instead of showing Streamlit's
+# built-in "page not found").
+_TOOL_PAGE_SPECS = [
+    ("pages/1_create_and_select_case.py", "1. Create and select case"),
+    ("pages/2_case_setup.py", "2. Select modules to modify"),
+    ("pages/3_specification.py", "3. Configure selected modules"),
+    ("pages/4_revenue_frame.py", "4. Compute revenue frame and save"),
+    ("pages/5_new_benchmarking.py", "5. New benchmarking model"),
+]
+APP_PAGES = [st.Page(path, title=title) for path, title in _TOOL_PAGE_SPECS]
+APP_PAGES_HIDDEN = [
+    st.Page(path, title=title, visibility="hidden") for path, title in _TOOL_PAGE_SPECS
+]
 
 
 # =============================================================================
@@ -377,20 +375,29 @@ if check_auth():
     # Keep case cookie in sync when user switches/creates/resets cases
     _sync_case_cookie()
 
-    render_sidebar()
+    # Sidebar navigation: landing pages stay reachable; the revenue cap tool
+    # is grouped separately. Both are visible since the user is authenticated.
+    pg = st.navigation({
+        "Regumetrica": LANDING_PAGES,
+        "Revenue cap tool": APP_PAGES,
+    })
 
-    pg = st.navigation([case_manager, case_setup, specification, revenue_frame, new_benchmarking])
+    # Company selector + logout belong to the tool only — not the landing pages.
+    if pg in APP_PAGES:
+        render_sidebar()
+
     pg.run()
 
 else:
-    # Register ALL pages to prevent "Page not found" on refresh
-    # (URL may still point to a protected page after auth fails)
+    # Public view: landing pages + "Sign in" are visible in the sidebar.
+    # Protected tool pages are registered as hidden so that a bookmarked tool
+    # URL redirects to login instead of triggering "page not found".
     pg = st.navigation(
-        [login_page, case_manager, case_setup, specification, revenue_frame, new_benchmarking],
-        position="hidden",
+        LANDING_PAGES + [login_page] + APP_PAGES_HIDDEN,
+        position="sidebar",
     )
-    # Redirect to login if user landed on a protected page
-    if pg != login_page:
+    # Redirect to login if a logged-out visitor landed on a protected page.
+    if pg in APP_PAGES_HIDDEN:
         st.switch_page(login_page)
     else:
         pg.run()

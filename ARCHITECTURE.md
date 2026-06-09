@@ -352,28 +352,37 @@ Layer 6: AUTH / FIRESTORE
 ## 5. Page Flow & Navigation
 
 ```
-Unauthenticated                Authenticated
----------------                -------------
-pages/login.py    --auth-->    pages/1_create_and_select_case.py  (Create & Select)
-                                       |
-                                       v
-                               pages/2_case_setup.py              (Case Setup)
-                                       |
-                                       v
-                               pages/3_specification.py           (Specification)
-                                       |
-                                  [Compute] (on page 4)
-                                       |
-                                       v
-                               pages/4_revenue_frame.py           (Revenue Frame)
+Public (unauthenticated)            Authenticated
+------------------------            -------------
+landing_pages/home.py               landing_pages/* (same landing pages)
+landing_pages/user_manual.py                |
+landing_pages/team.py               Revenue cap tool (sidebar group):
+landing_pages/contact.py            pages/1_create_and_select_case.py  (Create & Select)
+pages/login.py ("Sign in") --auth->         |
+                                            v
+(protected pages registered          pages/2_case_setup.py              (Case Setup)
+ hidden -> redirect to login)               |
+                                            v
+                                     pages/3_specification.py           (Specification)
+                                            |
+                                       [Compute] (on page 4)
+                                            |
+                                            v
+                                     pages/4_revenue_frame.py           (Revenue Frame)
 ```
 
 **Entrypoint:** `streamlit_app.py`
 - Configures page (`st.set_page_config`)
 - Applies styling
 - Initializes session state
-- Auth guard: `check_auth()` -> shows login OR app navigation
-- Sidebar: Company selector + Compute + Revert/New case + stale results indicator
+- Auth guard: `check_auth()` decides navigation
+  - **Public:** sidebar nav exposes `landing_pages/*` + "Sign in"; protected tool
+    pages are registered hidden (`visibility="hidden"`) so bookmarked tool URLs
+    redirect to login instead of 404'ing.
+  - **Authenticated:** sidebar nav with two groups — landing pages and the
+    "Revenue cap tool" steps. `render_sidebar()` (company selector + logout) runs
+    only on tool pages. Logout returns to `landing_pages/home.py`.
+- Sidebar (tool pages only): Company selector + Compute + Revert/New case + stale results indicator
 
 
 ## 6. Module Architecture (M1-M7)
