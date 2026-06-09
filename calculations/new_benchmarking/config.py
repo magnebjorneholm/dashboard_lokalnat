@@ -84,3 +84,24 @@ class NewBenchmarkingConfig:
             return self.k_nf
         from config.incentive_parameters import K_NF
         return dict(K_NF)
+
+    def signature(self) -> tuple:
+        """Stable, hashable identity of this configuration.
+
+        Two configs with the same signature produce the same NewBenchmarkingResult, so
+        it is used both as the @st.cache_data key (pages/5_new_benchmarking.py) and as
+        the validity token for the pre-computed main-spec bundle
+        (data_loaders/new_benchmarking_data.py). repr(signature()) is the on-disk form.
+        """
+        def _od(d):  # ordered, hashable view of an optional dict
+            return tuple(sorted(d.items())) if d else None
+        return (
+            _od(self.resolved_k_nf()),
+            self.include_controllable, self.include_losses, self.include_capex,
+            tuple(self.non_controllable_categories),
+            self.cable_method, _od(self.cable_override_percent),
+            self.station_method, _od(self.station_override_percent),
+            self.include_cable_length, tuple(self.cable_types), self.split_by_voltage,
+            self.rts, tuple(self.new_base_outputs),
+            tuple(sorted(self.eff_req_params.items())),
+        )

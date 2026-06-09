@@ -19,7 +19,10 @@ from frontend.modules.addons.new_benchmarking_spec import render_config_panel
 from frontend.results.new_benchmarking_output import render_company_view
 from calculations.new_benchmarking import run_new_benchmarking, NewBenchmarkingConfig
 from calculations.new_benchmarking.model import NewBenchmarkingResult
-from config.column_names import COL_REID, COL_EFF_REQ_ANNUAL, COL_COMPANY_NAME
+from data_loaders.new_benchmarking_data import load_precomputed_main
+from config.column_names import (
+    COL_REID, COL_EFF_REQ_ANNUAL, COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT,
+)
 from config.formatting import format_pp
 
 init_session_state()
@@ -32,18 +35,7 @@ init_session_state()
 # ---------------------------------------------------------------------------
 
 def _signature(cfg: NewBenchmarkingConfig) -> tuple:
-    def _od(d):  # ordered, hashable view of an optional dict
-        return tuple(sorted(d.items())) if d else None
-    return (
-        _od(cfg.resolved_k_nf()),
-        cfg.include_controllable, cfg.include_losses, cfg.include_capex,
-        tuple(cfg.non_controllable_categories),
-        cfg.cable_method, _od(cfg.cable_override_percent),
-        cfg.station_method, _od(cfg.station_override_percent),
-        cfg.include_cable_length, tuple(cfg.cable_types), cfg.split_by_voltage,
-        cfg.rts, tuple(cfg.new_base_outputs),
-        tuple(sorted(cfg.eff_req_params.items())),
-    )
+    return cfg.signature()
 
 
 @st.cache_data(show_spinner="Running the new benchmarking model for all 148 companies…")
@@ -62,6 +54,18 @@ def _company_name(reid: str) -> str:
         return reid
 
 
+@st.cache_data(ttl=3600)
+def _company_short(reid: str) -> str:
+    """Curated short name for tight chart markers; falls back to the REId."""
+    try:
+        from data_loaders.baseline_data import load_baseline_data
+        df = load_baseline_data().df_all_companies
+        m = df[df[COL_REID] == reid]
+        return str(m.iloc[0][COL_COMPANY_NAME_SHORT]) if not m.empty else reid
+    except Exception:
+        return reid
+
+
 def _user_eff_req(result: NewBenchmarkingResult, reid: str):
     """User company's annual efficiency requirement under the new model, or None."""
     df = result.dea_new
@@ -75,10 +79,11 @@ def _user_eff_req(result: NewBenchmarkingResult, reid: str):
 def _render_model_diff() -> None:
     """Short, factual summary of what the new model changes vs. the current one.
 
-    Placeholder — the final description is authored by the project owner.
+    Always shown at the top of the page. Placeholder — the final description is
+    authored by the project owner.
     """
-    with st.expander("What this model changes vs. the current one"):
-        st.caption("_Placeholder — a short, factual description of the model changes goes here._")
+    st.markdown("**What this model changes vs. the current one**")
+    st.caption("_Placeholder — a short, factual description of the model changes goes here._")
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +121,9 @@ main_cfg = NewBenchmarkingConfig()
 main_sig = _signature(main_cfg)
 active_sig = _signature(active_cfg)
 
-main_result = _run_cached(main_sig, main_cfg)
+# The main spec is fixed, so prefer the committed pre-computed bundle (instant, survives
+# redeploys); fall back to a live run only if it is missing or its signature has drifted.
+main_result = load_precomputed_main() or _run_cached(main_sig, main_cfg)
 active_result = main_result if active_sig == main_sig else _run_cached(active_sig, active_cfg)
 
 # Secondary indicator: how far the tweak moved the requirement vs. the main model.
@@ -129,4 +136,4 @@ if active_sig != main_sig:
 
 # Render the results (active model vs. current) in their reserved spot above the panel.
 with results_area:
-    render_company_view(active_result, user_reid, active_result.config)
+    render_company_view(active_result, user_reid, active_result.config, _company_short(user_reid))
