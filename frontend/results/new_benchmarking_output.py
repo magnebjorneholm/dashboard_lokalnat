@@ -6,7 +6,7 @@ Layout (locked, see new_benchmarking_model/revisionsplan.md §5–§6):
   1. Sector overview — KPI row + Δ-requirement / Δ-efficiency histograms + efficiency
      distribution with truncation zones (all 148 companies, the selected firm marked).
   2. Your company — KPI row (score, requirement, raw/truncated potential, rank) plus a
-     TOTEX waterfall placeholder.
+     TOTEX bridge waterfall (current model → new model).
 
 The headline metric is the efficiency-requirement change (NEW model vs CURRENT/EIs_DEA),
 since efficiency *scores* live on each model's own frontier and are only secondary context.
@@ -28,8 +28,9 @@ from config.colors import get_plotly_template_safe
 from config.formatting import format_percent, format_pp
 from config.column_names import (
     COL_REID, COL_DEA_EFFICIENCY, COL_DEA_POTENTIAL, COL_IS_OUTLIER,
-    COL_EFF_REQ_ANNUAL,
-    COL_EFF_REQ_DELTA, COL_EFFICIENCY_DELTA,
+    COL_EFF_REQ_ANNUAL, COL_EFF_REQ_DELTA, COL_EFFICIENCY_DELTA,
+    COL_TOTEX_NEW, COL_CONTROLLABLE_AVG, COL_CAPITAL_COST_2024,
+    COL_LOSS_VALUED, COL_NONCTRL_SELECTED, COL_CAPITAL_COST_ENV_ADJ,
 )
 from calculations.new_benchmarking.config import NewBenchmarkingConfig
 from calculations.new_benchmarking.model import NewBenchmarkingResult
@@ -335,10 +336,82 @@ def _render_company_section(
         f"Outlier: **{'Yes' if is_outlier_new else 'No'}**"
     )
 
-    _render_totex_placeholder()
+    _render_totex_waterfall(result.totex, user_reid)
 
 
-def _render_totex_placeholder() -> None:
-    """Pure placeholder — the TOTEX waterfall is built in a later version."""
+def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
+    """Bridge from the current-model TOTEX to the new-model TOTEX.
+
+    A horizontal waterfall that starts and ends on a blue total bar (current → new),
+    with the new ingredients in between: additions (network losses, selected
+    non-controllable) in red, the placement-environment capex cut in green. Controllable
+    cost is shared by both models, so it sits inside the unchanged opening total.
+    """
     st.markdown("**New model TOTEX**")
-    st.caption("_TOTEX waterfall coming in a later version._")
+
+    def g(col):
+        return _val(totex, user_reid, col)
+
+    controllable = g(COL_CONTROLLABLE_AVG)
+    old_capex = g(COL_CAPITAL_COST_2024)
+    losses = g(COL_LOSS_VALUED)
+    nonctrl = g(COL_NONCTRL_SELECTED)
+    new_capex = g(COL_CAPITAL_COST_ENV_ADJ)
+    new_totex = g(COL_TOTEX_NEW)
+
+    if None in (controllable, old_capex, losses, nonctrl, new_capex, new_totex):
+        st.info("No TOTEX data for the selected company.")
+        return
+
+    old_totex = controllable + old_capex
+    env_cut = new_capex - old_capex  # negative — the förläggningsmiljö reduction
+
+    # Opening bar must be "absolute" (it sets the starting total); a "total" first bar
+    # would compute the cumulative of nothing = 0 and render invisible. The closing bar
+    # is "total" (cumulative). Both absolute/total bars are styled by `totals` (blue).
+    rows = [
+        ("Current model TOTEX",       old_totex,  "absolute"),
+        ("Network losses",            losses,     "relative"),
+        ("Selected non-controllable", nonctrl,    "relative"),
+        ("Environment capex cut",     env_cut,    "relative"),
+        ("New model TOTEX",           new_totex,  "total"),
+    ]
+    labels = [r[0] for r in rows]
+    values = [r[1] / 1e3 for r in rows]  # tkr → MSEK
+    measures = [r[2] for r in rows]
+    hover = [
+        f"<b>{l}</b><br>{v:,.1f} MSEK" if m != "relative" else f"<b>{l}</b><br>{v:+,.1f} MSEK"
+        for l, v, m in zip(labels, values, measures)
+    ]
+    text = [
+        f"{v:,.1f}" if m != "relative" else (f"{v:+,.1f}" if abs(v) > 0.05 else "±0")
+        for v, m in zip(values, measures)
+    ]
+
+    layout_kwargs, template = get_plotly_template_safe()
+    fig = go.Figure(go.Waterfall(
+        orientation="h",
+        y=labels, x=values, measure=measures,
+        textposition="outside", text=text,
+        textfont=dict(size=11, family="Inter, sans-serif"),
+        connector=dict(line=dict(color=COLORS["bg_muted"], width=1, dash="dot")),
+        increasing=dict(marker=dict(color=COLORS["error"])),    # additions raise cost → red
+        decreasing=dict(marker=dict(color=COLORS["success"])),  # cut lowers cost → green
+        totals=dict(marker=dict(color=COLORS["primary"])),      # current / new TOTEX → blue
+        hovertext=hover, hovertemplate="%{hovertext}<extra></extra>",
+    ))
+    fig.update_layout(
+        **layout_kwargs, template=template,
+        margin=dict(l=10, r=80, t=10, b=40),
+        height=max(300, len(labels) * 52), dragmode=False,
+        xaxis=dict(title="MSEK", fixedrange=True, showgrid=False, zeroline=True,
+                   zerolinecolor=COLORS["bg_muted"], linecolor=COLORS["bg_muted"]),
+        yaxis=dict(fixedrange=True, showgrid=True, gridcolor=COLORS["bg_muted"],
+                   tickson="boundaries", automargin=True, autorange="reversed"),
+    )
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="nb_totex_waterfall")
+    st.caption(
+        "From the current benchmarking TOTEX to the new one: network losses (valued at a "
+        "common price) and selected non-controllable costs are added; the placement-"
+        "environment correction lowers capital cost. Controllable cost is unchanged."
+    )

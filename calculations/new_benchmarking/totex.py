@@ -15,7 +15,7 @@ import pandas as pd
 
 from config.column_names import (
     COL_REID, COL_CONTROLLABLE_AVG, COL_LOSS_VALUED, COL_NONCTRL_SELECTED,
-    COL_CAPITAL_COST_ENV_ADJ, COL_OPEX_NEW, COL_TOTEX_NEW,
+    COL_CAPITAL_COST_ENV_ADJ, COL_OPEX_NEW, COL_TOTEX_NEW, COL_CAPITAL_COST_2024,
 )
 from calculations.new_benchmarking.config import NewBenchmarkingConfig
 
@@ -31,13 +31,16 @@ def build_totex(
     opex_new and totex_new per company.
 
     Args:
-        baseline_df: 148-row frame with REId and controllable_cost_average.
+        baseline_df: 148-row frame with REId, controllable_cost_average and the
+            unadjusted capital_cost_2024 (carried through for the bridge waterfall).
         opex_components_df: from build_opex_components (REId, loss_valued, non_ctrl_selected).
         capital_cost_df: from compute_env_adjusted_capital_cost (REId, capital_cost_2024_env_adjusted).
 
-    Returns one row per REId with the components and the totals.
+    Returns one row per REId with the components and the totals. capital_cost_2024 (the
+    unadjusted current-model capital cost) is kept alongside the env-adjusted one so the UI
+    can bridge from the current TOTEX to the new TOTEX without re-reading baseline.
     """
-    df = baseline_df[[COL_REID, COL_CONTROLLABLE_AVG]].copy()
+    df = baseline_df[[COL_REID, COL_CONTROLLABLE_AVG, COL_CAPITAL_COST_2024]].copy()
     df = df.merge(opex_components_df, on=COL_REID, how="left")
     df = df.merge(capital_cost_df, on=COL_REID, how="left")
 
