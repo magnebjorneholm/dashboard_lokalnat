@@ -23,7 +23,7 @@ from auth.cookie_session import (
     get_auth_cookie, set_auth_cookie, delete_auth_cookie,
     get_case_cookie, set_case_cookie, delete_case_cookie,
 )
-from config.column_names import COL_COMPANY_NAME
+from config.column_names import COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT, COL_DISPLAY_NAME
 
 # Page configuration
 st.set_page_config(
@@ -50,9 +50,11 @@ def _get_company_list() -> list:
     try:
         from data_loaders.baseline_data import load_baseline_data
         baseline = load_baseline_data()
-        df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
-        df["display"] = df[COL_COMPANY_NAME] + " (" + df["REId"] + ")"
-        return df.sort_values(COL_COMPANY_NAME).to_dict('records')
+        df = baseline.df_all_companies[
+            ["REId", COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT, COL_DISPLAY_NAME]
+        ].copy()
+        df["display"] = df[COL_DISPLAY_NAME]
+        return df.sort_values(COL_COMPANY_NAME_SHORT).to_dict('records')
     except Exception:
         return []
 
@@ -63,8 +65,8 @@ def get_company_name_lookup() -> dict:
     try:
         from data_loaders.baseline_data import load_baseline_data
         baseline = load_baseline_data()
-        df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
-        return dict(zip(df["REId"], df[COL_COMPANY_NAME]))
+        df = baseline.df_all_companies[["REId", COL_COMPANY_NAME_SHORT]].copy()
+        return dict(zip(df["REId"], df[COL_COMPANY_NAME_SHORT]))
     except Exception:
         return {}
 

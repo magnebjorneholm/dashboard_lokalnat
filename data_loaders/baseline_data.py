@@ -15,7 +15,7 @@ from pathlib import Path
 import streamlit as st
 
 from config.column_names import (
-    COL_REID, COL_DMU, COL_COMPANY_NAME,
+    COL_REID, COL_DMU, COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT, COL_DISPLAY_NAME,
     COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
     COL_RETURN_2024, COL_RETURN_2025, COL_RETURN_2026, COL_RETURN_2027,
     COL_RETURN_PERIOD, COL_TOTEX,
@@ -304,6 +304,23 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     return df
 
 
+def _load_company_names(data_path: Optional[str] = None) -> pd.DataFrame:
+    """
+    Load curated company names (full + short) keyed on REId.
+
+    Source: data/reference/company_names.csv (see scripts/generate_company_names.py).
+
+    Returns:
+        DataFrame with columns [REId, company_name, company_name_short].
+    """
+    data_file = _find_data_file("reference/company_names.csv", data_path)
+    df = pd.read_csv(data_file)
+    return df.rename(columns={
+        "name_full": COL_COMPANY_NAME,
+        "name_short": COL_COMPANY_NAME_SHORT,
+    })[["REId", COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT]]
+
+
 @st.cache_data(ttl=3600, show_spinner="Loading baseline data...")
 def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     """
@@ -324,6 +341,20 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     print("Loading Data_modeller.xlsx...")
     df_all_companies = _load_data_modeller(data_path)
     print(f"  Loaded {len(df_all_companies)} companies")
+
+    # 1b. Override names with the curated list (full + short), keyed on REId.
+    #     Falls back to the Excel name where a REId is missing from the list.
+    company_names = _load_company_names(data_path)
+    excel_name = df_all_companies[COL_COMPANY_NAME]
+    df_all_companies = df_all_companies.drop(columns=[COL_COMPANY_NAME])
+    df_all_companies = df_all_companies.merge(company_names, on="REId", how="left")
+    df_all_companies[COL_COMPANY_NAME] = df_all_companies[COL_COMPANY_NAME].fillna(excel_name)
+    df_all_companies[COL_COMPANY_NAME_SHORT] = df_all_companies[COL_COMPANY_NAME_SHORT].fillna(
+        df_all_companies[COL_COMPANY_NAME]
+    )
+    df_all_companies[COL_DISPLAY_NAME] = (
+        df_all_companies[COL_COMPANY_NAME_SHORT] + " (" + df_all_companies["REId"] + ")"
+    )
 
     # 2. Load EIs_DEA.xlsx
     print("Loading EIs_DEA.xlsx...")

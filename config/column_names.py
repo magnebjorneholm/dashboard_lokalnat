@@ -15,6 +15,8 @@ COL_REID = "REId"
 COL_DMU = "DMU"
 COL_ID_NETWORK = "id_network"
 COL_COMPANY_NAME = "company_name"  # was: Företag
+COL_COMPANY_NAME_SHORT = "company_name_short"  # curated short name, from data/reference/company_names.csv
+COL_DISPLAY_NAME = "display_name"  # "Kortnamn (REId)" — built at the load boundary
 
 # =============================================================================
 # Capital costs (from capcost_a.parquet / KENT calculations)
