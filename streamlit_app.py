@@ -1,8 +1,16 @@
 """
 Regumetrica Streamlit Application.
 
-Entry point for the frontend application.
-Handles authentication guard and navigation.
+Entry point. A two-zone controller:
+
+  ZON 1 — Landing (public): native top-nav (Home / Tools / Team), no sidebar,
+          its own look (frontend/common/landing_shell.py). Sign in happens in a
+          dialog (frontend/common/auth_dialog.py).
+  ZON 2 — Tool (authenticated): the "Revenue cap tool" pages with the locked
+          sidebar + company selector + logout, exactly as before.
+
+A successful login reruns the app; check_auth() then routes into zone 2.
+See landing_pages/FRONTEND_FILES.md for the full architecture.
 """
 
 import streamlit as st
@@ -14,72 +22,29 @@ from frontend.utils.state_manager import (
     get_auth_role,
     get_auth_reid,
     get_auth_email,
-    is_regulator,
     get_user_reid,
 )
-from frontend.common.styling import apply_styling
+from frontend.utils.company_directory import get_company_records, get_company_display
+from frontend.common.styling import apply_base_styling, apply_tool_chrome
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
 from auth.cookie_session import (
     get_auth_cookie, set_auth_cookie, delete_auth_cookie,
     get_case_cookie, set_case_cookie, delete_case_cookie,
 )
-from config.column_names import COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT, COL_DISPLAY_NAME
 
 # Page configuration
 st.set_page_config(
     page_title="Regumetrica",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Apply custom styling (fonts, refinements)
-apply_styling()
+# Base styling (fonts + branding) applies to both zones.
+apply_base_styling()
 
 # Initialize state
 init_session_state()
-
-
-# =============================================================================
-# COMPANY NAME LOOKUP
-# =============================================================================
-
-@st.cache_data(ttl=3600)
-def _get_company_list() -> list:
-    """Retrieve list of all company REIds with display names."""
-    try:
-        from data_loaders.baseline_data import load_baseline_data
-        baseline = load_baseline_data()
-        df = baseline.df_all_companies[
-            ["REId", COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT, COL_DISPLAY_NAME]
-        ].copy()
-        df["display"] = df[COL_DISPLAY_NAME]
-        return df.sort_values(COL_COMPANY_NAME_SHORT).to_dict('records')
-    except Exception:
-        return []
-
-
-@st.cache_data(ttl=3600)
-def get_company_name_lookup() -> dict:
-    """Build REId -> Company name lookup from baseline data."""
-    try:
-        from data_loaders.baseline_data import load_baseline_data
-        baseline = load_baseline_data()
-        df = baseline.df_all_companies[["REId", COL_COMPANY_NAME_SHORT]].copy()
-        return dict(zip(df["REId"], df[COL_COMPANY_NAME_SHORT]))
-    except Exception:
-        return {}
-
-
-def get_company_display(reid: str) -> str:
-    """Get display string: 'Company Name (REId)' or just REId if lookup fails."""
-    if not reid:
-        return "None"
-    lookup = get_company_name_lookup()
-    company_name = lookup.get(reid)
-    if company_name:
-        return f"{company_name} ({reid})"
-    return reid
 
 
 # =============================================================================
@@ -87,30 +52,21 @@ def get_company_display(reid: str) -> str:
 # =============================================================================
 
 def check_auth() -> bool:
-    """
-    Check if user is authorized to access the app.
-
-    Returns True if:
-    - Dev mode is enabled (skip_auth = true in secrets)
-    - User is logged in via Firebase
-    """
+    """True if the user may access the tool zone (dev mode or logged in)."""
     if is_dev_mode():
         return True
     return is_authenticated()
 
 
 def try_restore_auth_from_cookie() -> bool:
-    """Attempt to restore auth session from browser cookie.
+    """Restore auth session from the browser cookie after a page refresh.
 
-    Reads Firebase refresh token from cookie, exchanges it for a new
-    ID token, verifies claims, and restores session state.
-
-    Returns True if auth was successfully restored.
+    Reads the Firebase refresh token, exchanges it for a new ID token, verifies
+    claims, and restores session state. Returns True if auth was restored.
     """
     if st.session_state.get("_logging_out"):
         delete_auth_cookie()
         # Only clear the flag once the browser has actually removed the cookie.
-        # Until then, keep blocking cookie-based auth restoration.
         if not get_auth_cookie():
             st.session_state.pop("_logging_out", None)
         return False
@@ -177,10 +133,8 @@ def try_restore_case_from_cookie() -> None:
         case = load_case(user_reid, case_id)
         if case:
             apply_case_to_session(case, st.session_state)
-            # Mark as already synced so _sync_case_cookie doesn't re-write
             st.session_state["_case_cookie_synced"] = case_id
         else:
-            # Case was deleted or belongs to a different user — clean up
             delete_case_cookie()
     except Exception:
         # Storage unavailable — don't block the app
@@ -188,11 +142,7 @@ def try_restore_case_from_cookie() -> None:
 
 
 def _sync_case_cookie() -> None:
-    """Keep the case cookie in sync with ``session_state["case_id"]``.
-
-    Called on every authenticated render. Only writes a cookie when the
-    active case actually changes, tracked via ``_case_cookie_synced``.
-    """
+    """Keep the case cookie in sync with ``session_state["case_id"]``."""
     case_id = st.session_state.get("case_id")
     last_synced = st.session_state.get("_case_cookie_synced")
 
@@ -208,38 +158,26 @@ def _sync_case_cookie() -> None:
 
 
 # =============================================================================
-# SIDEBAR ACTIONS
+# SIDEBAR (tool zone only)
 # =============================================================================
 
-def _render_sidebar_actions():
-    """Render case management controls in sidebar (placeholder, buttons moved to Revenue Frame)."""
-    pass
-
-
 def render_sidebar():
-    """Render sidebar with company selection based on auth state."""
+    """Render the tool-zone sidebar: company selection + logout."""
     with st.sidebar:
         st.header("Regumetrica")
 
-        # Dev mode indicator
         if is_dev_mode():
             st.caption("Dev Mode (auth bypassed)")
             _render_dev_mode_selector()
-
         elif is_authenticated():
             _render_authenticated_sidebar()
-
         else:
             st.warning("Not logged in")
 
-        # Action buttons (always visible when company is selected)
-        if get_user_reid():
-            _render_sidebar_actions()
-
 
 def _render_dev_mode_selector():
-    """Render company selector for dev mode."""
-    companies = _get_company_list()
+    """Company selector for dev mode."""
+    companies = get_company_records()
     if not companies:
         companies = [{"REId": "REL00886", "display": "Test Company (REL00886)"}]
 
@@ -256,7 +194,7 @@ def _render_dev_mode_selector():
         "Select Company",
         options=options,
         index=default_idx,
-        key="company_selector"
+        key="company_selector",
     )
 
     if selected_display:
@@ -266,7 +204,7 @@ def _render_dev_mode_selector():
 
 
 def _render_authenticated_sidebar():
-    """Render sidebar for authenticated users."""
+    """Sidebar for authenticated users: company context + logout."""
     email = get_auth_email()
     role = get_auth_role()
     reid = get_auth_reid()
@@ -277,8 +215,7 @@ def _render_authenticated_sidebar():
         st.caption("Regulator access")
         st.divider()
 
-        companies = _get_company_list()
-
+        companies = get_company_records()
         if companies:
             options = [c["display"] for c in companies]
             reid_lookup = {c["display"]: c["REId"] for c in companies}
@@ -286,66 +223,56 @@ def _render_authenticated_sidebar():
             selected_display = st.selectbox(
                 "Select Company to Analyze",
                 options=options,
-                key="regulator_company_selector"
+                key="regulator_company_selector",
             )
-
             if selected_display:
                 selected_reid = reid_lookup.get(selected_display)
                 if selected_reid:
                     set_user_reid(selected_reid)
 
-            current_reid = st.session_state.get('user_reid')
+            current_reid = st.session_state.get("user_reid")
             st.caption(f"Analyzing: {get_company_display(current_reid)}")
-
     else:
-        company_display = get_company_display(reid)
-        st.caption(f"Company: {company_display}")
-
+        st.caption(f"Company: {get_company_display(reid)}")
         if reid and st.session_state.get("user_reid") != reid:
             set_user_reid(reid)
 
     st.divider()
 
-    # Logout button with confirmation dialog
     @st.dialog("Log out")
     def _confirm_logout():
         st.write("Are you sure you want to log out? Any unsaved changes will be lost.")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Yes, log out", type="primary", use_container_width=True):
+            if st.button("Yes, log out", type="primary", width="stretch"):
                 st.session_state["_logging_out"] = True
                 auth_manager = initialize_firebase_auth()
                 auth_manager.sign_out()
                 st.session_state["user_reid"] = None
                 delete_case_cookie()
-                # Land on the public landing page instead of the login screen.
-                st.switch_page("landing_pages/home.py")
+                # Auth is now cleared; the rerun lands on the public landing zone.
+                st.rerun()
         with col2:
-            if st.button("Cancel", use_container_width=True):
+            if st.button("Cancel", width="stretch"):
                 st.rerun()
 
-    if st.button("Log out", use_container_width=True):
+    if st.button("Log out", width="stretch"):
         _confirm_logout()
 
 
 # =============================================================================
-# NAVIGATION
+# NAVIGATION REGISTRY
 # =============================================================================
 
-# --- Public landing pages ---
+# --- Zon 1: public landing pages (native top-nav) ---
 landing_home = st.Page("landing_pages/home.py", title="Home", default=True)
-landing_user_manual = st.Page("landing_pages/user_manual.py", title="User Manual")
-landing_team = st.Page("landing_pages/team.py", title="Meet the Team")
-landing_contact = st.Page("landing_pages/contact.py", title="Contact")
-LANDING_PAGES = [landing_home, landing_user_manual, landing_team, landing_contact]
+landing_tools = st.Page("landing_pages/tools.py", title="Tools")
+landing_team = st.Page("landing_pages/team.py", title="Team")
+LANDING_PAGES = [landing_home, landing_tools, landing_team]
 
-login_page = st.Page("pages/login.py", title="Sign in")
-
-# --- Revenue cap tool pages (protected) ---
-# Defined once from a single spec, built both as visible objects (for the
-# authenticated nav) and as hidden objects (registered in the public view so
-# that bookmarked tool URLs redirect to login instead of showing Streamlit's
-# built-in "page not found").
+# --- Zon 2: revenue cap tool pages (protected) ---
+# Defined once; built as visible objects for the authenticated nav and as hidden
+# objects so bookmarked tool URLs redirect to the landing page instead of 404.
 _TOOL_PAGE_SPECS = [
     ("pages/1_create_and_select_case.py", "1. Create and select case"),
     ("pages/2_case_setup.py", "2. Select modules to modify"),
@@ -363,43 +290,32 @@ APP_PAGES_HIDDEN = [
 # MAIN
 # =============================================================================
 
-# Restore auth from cookie if session was lost (page refresh)
+# Restore auth from cookie if the session was lost (page refresh).
 try_restore_auth_from_cookie()
 
 if check_auth():
-    # Set pending auth cookie (deferred from login to ensure JS renders)
+    # ZON 2 — the tool.
+    apply_tool_chrome()
+
+    # Set pending auth cookie (deferred from the sign-in dialog so JS renders).
     pending_token = st.session_state.pop("_pending_auth_cookie", None)
     if pending_token:
         set_auth_cookie(pending_token)
 
-    # Restore last saved case on page refresh (once per session)
+    # Restore last saved case on refresh (once) + keep the case cookie in sync.
     try_restore_case_from_cookie()
-    # Keep case cookie in sync when user switches/creates/resets cases
     _sync_case_cookie()
 
-    # Sidebar navigation: landing pages stay reachable; the revenue cap tool
-    # is grouped separately. Both are visible since the user is authenticated.
-    pg = st.navigation({
-        "Regumetrica": LANDING_PAGES,
-        "Revenue cap tool": APP_PAGES,
-    })
-
-    # Company selector + logout belong to the tool only — not the landing pages.
-    if pg in APP_PAGES:
-        render_sidebar()
-
+    pg = st.navigation({"Revenue cap tool": APP_PAGES})
+    render_sidebar()
     pg.run()
 
 else:
-    # Public view: landing pages + "Sign in" are visible in the sidebar.
-    # Protected tool pages are registered as hidden so that a bookmarked tool
-    # URL redirects to login instead of triggering "page not found".
-    pg = st.navigation(
-        LANDING_PAGES + [login_page] + APP_PAGES_HIDDEN,
-        position="sidebar",
-    )
-    # Redirect to login if a logged-out visitor landed on a protected page.
+    # ZON 1 — the landing zone. Native top-nav; no sidebar.
+    # Protected tool pages are registered hidden so bookmarked URLs redirect to
+    # the landing home (which carries the Sign in CTA) instead of 404'ing.
+    pg = st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN, position="top")
     if pg in APP_PAGES_HIDDEN:
-        st.switch_page(login_page)
+        st.switch_page(landing_home)
     else:
         pg.run()

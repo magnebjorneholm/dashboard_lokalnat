@@ -21,7 +21,7 @@ login-sida med dolt sidofält finns inte längre.
 | Fil | Roll |
 |---|---|
 | `frontend/common/auth_dialog.py` *(ny)* | `auth_dialog()` + formulär-renderarna (login/register/reset/verify). Importerar `auth.firebase_auth` (lägre lager — ok). |
-| `frontend/common/landing_shell.py` *(ny)* | Topp-navbaren innehåller Sign in-knappen som anropar `auth_dialog()`. |
+| `frontend/common/landing_shell.py` *(ny)* | Renderar Sign in-CTA:n (knapp som anropar `auth_dialog()`) i sidinnehållet. Den native topp-navbaren byggs av `st.navigation(position="top")`, inte här. |
 | `streamlit_app.py` | Logout bor i zon 2:s `render_sidebar` (som idag). Zon 1 har ingen logout — man är ju utloggad där. |
 
 Formulärlogiken flyttas från (numera retirerade) `pages/login.py` —
@@ -31,18 +31,21 @@ anpassas, inte skrivs om från noll.
 
 ---
 
-## Sign in-knappen (i navbaren)
+## Sign in-CTA:n
 
-Renderas av `apply_landing_shell()` på varje landningssida:
+Den native topp-navbaren byggs av `st.navigation(position="top")` och kan bara
+innehålla *sidor*. Sign in öppnar en dialog (ingen sida), så CTA:n renderas av
+`apply_landing_shell()` i sidinnehållet — som en prominent hero-knapp och/eller
+en fast knapp högt upp:
 
 ```python
-# inuti landningens topp-navbar
+# i apply_landing_shell(), på varje landningssida
 if st.button("Sign in", type="primary"):
     auth_dialog()        # öppnar modalen ovanpå landningen
 ```
 
-Inget togglande Sign in ↔ Log out behövs (till skillnad från den tidigare
-sidofälts-idén): är man inloggad är man i zon 2, där sidofältet har logout.
+Inget togglande Sign in ↔ Log out behövs: är man inloggad är man i zon 2, där
+sidofältet har logout.
 
 ---
 

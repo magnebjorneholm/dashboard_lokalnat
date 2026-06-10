@@ -99,12 +99,18 @@ This bypasses authentication and lets you use the app freely.
 ```
 dashboard_lokalnat/
 |
-|-- streamlit_app.py              # Entrypoint: auth guard, sidebar, navigation
+|-- streamlit_app.py              # Entrypoint: two-zone controller (public landing vs authenticated tool)
 |-- requirements.txt              # Python dependencies
 |-- .streamlit/config.toml        # Streamlit config (theme, port 8501)
+|-- static/                       # Statically served assets (enableStaticServing)
+|   |-- regumetrica_user_manual.pdf  # User manual PDF (offered on the Tools landing page)
 |
-|-- pages/                        # Streamlit multi-page app
-|   |-- login.py                  # Authentication (Firebase)
+|-- landing_pages/                # ZON 1: public landing (native top-nav, no sidebar)
+|   |-- home.py                   # Hero, tagline, intro, Sign in CTA
+|   |-- tools.py                  # Overview of the tools + user-manual PDF download
+|   |-- team.py                   # Team + contact (merged)
+|
+|-- pages/                        # ZON 2: authenticated revenue-cap tool (sidebar nav)
 |   |-- 1_create_and_select_case.py  # Create/load/delete/duplicate/compare cases
 |   |-- 2_case_setup.py           # Case Setup: select modules/sections
 |   |-- 3_specification.py        # Specification: configure parameters (tabs M1-M7)
@@ -126,7 +132,9 @@ dashboard_lokalnat/
 |-- frontend/                     # Streamlit-dependent UI code ONLY
 |   |-- common/                   # Shared Streamlit components
 |   |   |-- parameter_input.py    # Reusable input component with baseline comparison
-|   |   |-- styling.py            # CSS injection, font loading (re-exports from config.colors)
+|   |   |-- styling.py            # apply_base_styling() (both zones) + apply_tool_chrome() (tool sidebar); re-exports colors
+|   |   |-- auth_dialog.py        # Sign-in dialog (login/register/reset/verify) for the landing zone
+|   |   |-- landing_shell.py      # apply_landing_shell(): landing theme (faded bg) + Sign in CTA + footer
 |   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
 |   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
 |   |
@@ -155,6 +163,7 @@ dashboard_lokalnat/
 |   |
 |   |-- utils/                    # Streamlit-dependent frontend utilities
 |       |-- state_manager.py      # Session state: init, get/set, config references
+|       |-- company_directory.py  # Company list / name lookups (sidebar selectors + registration)
 |       |-- case_storage.py       # Save/load cases (Firestore/local JSON)
 |       |-- case_actions.py       # Extracted do_save_case(), run_calculation()
 |       |-- result_snapshot.py    # Lightweight KPI extraction for case comparison
@@ -304,18 +313,19 @@ Dependencies flow strictly downward. Lower layers NEVER import from higher layer
 
 ```
 Layer 1: PAGES (top)
-    streamlit_app.py, pages/login.py,
-    pages/1_create_and_select_case.py, pages/2_case_setup.py,
-    pages/3_specification.py, pages/4_revenue_frame.py
+    streamlit_app.py (two-zone controller),
+    landing_pages/{home,tools,team}.py,
+    pages/1_create_and_select_case.py .. pages/5_new_benchmarking.py
         |
         | imports
         v
 Layer 2: FRONTEND (Streamlit-dependent only)
     Left side: FRONTEND UTILS
-        state_manager.py, case_storage.py, case_actions.py,
-        result_snapshot.py, export_button.py
+        state_manager.py, company_directory.py, case_storage.py,
+        case_actions.py, result_snapshot.py, export_button.py
     Right side: FRONTEND COMMON + MODULES
-        parameter_input.py, styling.py, save_bar.py, case_comparison.py,
+        parameter_input.py, styling.py, auth_dialog.py, landing_shell.py,
+        save_bar.py, case_comparison.py,
         m1_asset_base.py .. m5_efficiency.py, benchmarking.py
         |
         | imports
@@ -358,38 +368,46 @@ Layer 6: AUTH / FIRESTORE
 
 ## 5. Page Flow & Navigation
 
+Two zones, decided by `check_auth()` on every run. They do not share chrome.
+
 ```
-Public (unauthenticated)            Authenticated
-------------------------            -------------
-landing_pages/home.py               landing_pages/* (same landing pages)
-landing_pages/user_manual.py                |
-landing_pages/team.py               Revenue cap tool (sidebar group):
-landing_pages/contact.py            pages/1_create_and_select_case.py  (Create & Select)
-pages/login.py ("Sign in") --auth->         |
-                                            v
-(protected pages registered          pages/2_case_setup.py              (Case Setup)
- hidden -> redirect to login)               |
-                                            v
-                                     pages/3_specification.py           (Specification)
-                                            |
-                                       [Compute] (on page 4)
-                                            |
-                                            v
-                                     pages/4_revenue_frame.py           (Revenue Frame)
+ZON 1 — Landing (public)             ZON 2 — Tool (authenticated)
+------------------------             ----------------------------
+native top-nav (position="top"):     sidebar nav, group "Revenue cap tool":
+landing_pages/home.py   (Home)       pages/1_create_and_select_case.py  (Create & Select)
+landing_pages/tools.py  (Tools)              |
+landing_pages/team.py   (Team)               v
+        |                            pages/2_case_setup.py              (Case Setup)
+   [Sign in CTA]                             |
+        | auth_dialog() (st.dialog)          v
+        |  success -> st.rerun() ----> pages/3_specification.py          (Specification)
+        |  (app scope) swaps zone            |
+        v                               [Compute] (on page 4)
+(no sidebar; faded bg theme)                 |
+                                             v
+(protected pages registered           pages/4_revenue_frame.py          (Revenue Frame)
+ hidden -> redirect to landing_home)         |
+                                             v
+                                      pages/5_new_benchmarking.py        (New benchmarking)
 ```
 
-**Entrypoint:** `streamlit_app.py`
-- Configures page (`st.set_page_config`)
-- Applies styling
-- Initializes session state
-- Auth guard: `check_auth()` decides navigation
-  - **Public:** sidebar nav exposes `landing_pages/*` + "Sign in"; protected tool
-    pages are registered hidden (`visibility="hidden"`) so bookmarked tool URLs
-    redirect to login instead of 404'ing.
-  - **Authenticated:** sidebar nav with two groups — landing pages and the
-    "Revenue cap tool" steps. `render_sidebar()` (company selector + logout) runs
-    only on tool pages. Logout returns to `landing_pages/home.py`.
-- Sidebar (tool pages only): Company selector + Compute + Revert/New case + stale results indicator
+**Entrypoint:** `streamlit_app.py` — a two-zone controller.
+- Configures page (`st.set_page_config`); `apply_base_styling()` (fonts +
+  branding) applies to both zones.
+- Initializes session state; restores auth/case from cookies on refresh.
+- Auth guard: `check_auth()` (dev mode OR logged in) decides the zone.
+  - **Zon 1 (public):** `st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN,
+    position="top")` — native top-nav, no sidebar. Each landing page calls
+    `apply_landing_shell()` (theme + Sign in CTA). Sign in opens `auth_dialog()`;
+    a verified login does `st.rerun()` (app scope), which closes the dialog and
+    re-routes into Zon 2. Protected tool pages are registered hidden so
+    bookmarked tool URLs redirect to `landing_home` instead of 404'ing.
+  - **Zon 2 (authenticated):** `apply_tool_chrome()` (locked sidebar + Nordic
+    Energy refinements) + `st.navigation({"Revenue cap tool": APP_PAGES})`.
+    `render_sidebar()` (company selector + logout) renders here only. Logout
+    clears auth and reruns → lands back on the public landing zone.
+- Sidebar (Zon 2 only): Company selector + logout. Compute + Revert/New case +
+  stale-results indicator live on the tool pages.
 
 
 ## 6. Module Architecture (M1-M7)
@@ -610,7 +628,7 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 
 **Flow:**
 1. `streamlit_app.py` -> `try_restore_auth_from_cookie()` -> `check_auth()` -> dev mode OR Firebase
-2. Login via `pages/login.py` (email/password)
+2. Login via the sign-in dialog (`frontend/common/auth_dialog.py`, email/password)
 3. Custom claims: `{REId: "REL00886", role: "company"}`
 4. Session state: `auth_email`, `auth_role`, `auth_reid`, `auth_uid`, `auth_token`
 
@@ -618,11 +636,15 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 
 Authentication survives page refreshes via a browser cookie storing the Firebase refresh token.
 
-**Files:** `auth/cookie_session.py` (helpers), `streamlit_app.py` (restore), `pages/login.py` (save)
+**Files:** `auth/cookie_session.py` (helpers), `streamlit_app.py` (restore + deferred save),
+`frontend/common/auth_dialog.py` (defers the token on login)
 
 **Flow on login:**
 1. Firebase `sign_in` → returns `refreshToken`
-2. `set_auth_cookie(refreshToken)` → JavaScript sets cookie (`regumetrica_auth`, 30-day expiry)
+2. The sign-in dialog stashes it in `st.session_state["_pending_auth_cookie"]` and
+   reruns; `streamlit_app.py` then calls `set_auth_cookie(refreshToken)` once the
+   auth check passes (so the JS cookie component renders cleanly) →
+   sets cookie (`regumetrica_auth`, 30-day expiry)
 
 **Flow on page refresh:**
 1. `st.session_state` is wiped (new websocket)
@@ -819,8 +841,17 @@ default. See Section 20.
 ```
 streamlit_app.py
     |-- frontend.utils.state_manager      (init, get/set functions)
-    |-- frontend.common.styling           (apply_styling)
+    |-- frontend.utils.company_directory  (get_company_records, get_company_display)
+    |-- frontend.common.styling           (apply_base_styling, apply_tool_chrome)
     |-- auth.firebase_auth                (is_dev_mode, initialize_firebase_auth)
+    |-- auth.cookie_session               (auth + case cookie helpers)
+
+landing_pages/{home,tools,team}.py        (ZON 1)
+    |-- frontend.common.landing_shell     (apply_landing_shell, landing_footer)
+          |-- frontend.common.auth_dialog (auth_dialog: login/register/reset/verify)
+          |     |-- frontend.utils.company_directory (get_company_options)
+          |     |-- frontend.utils.state_manager     (set_user_reid)
+          |     |-- auth.firebase_auth               (initialize_firebase_auth)
 
 pages/1_create_and_select_case.py
     |-- frontend.utils.state_manager     (init, get/set, reset_case)

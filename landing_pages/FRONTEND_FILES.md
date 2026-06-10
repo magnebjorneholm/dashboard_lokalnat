@@ -15,13 +15,16 @@ kontext kring landningssidornas frontend.
 
 ## Låsta beslut
 
-1. **Top navbar**, flersidig landning via `st.page_link` (riktiga URL:er per
-   sektion, men visuellt en egen topp-navbar — inget Streamlit-sidofält).
-2. **`pages/login.py` retireras helt** — `auth_dialog()` sköter all inloggning.
-3. **`contact.py` slås in i `team.py`** (Team + kontakt på en sida).
-4. Faded `login_pic.jpg`-bakgrunden återanvänds som landningstema (utan
+1. **Native topp-nav** via `st.navigation(..., position="top")` (inte ett eget
+   `st.page_link`-bygge, inte Streamlit-sidofältet).
+2. **Sektioner:** `Home` (hero), `Tools` (introduktion till alla verktyg),
+   `Team` (team + kontakt). Tre nav-poster.
+3. **`pages/login.py` retireras helt** — `auth_dialog()` sköter all inloggning.
+4. **`contact.py` slås in i `team.py`**; **`user_manual.py` → `tools.py`**
+   (manual-PDF:en bäddas in på Tools-sidan).
+5. Faded `login_pic.jpg`-bakgrunden återanvänds som landningstema (utan
    sidofälts-krock).
-5. Efter login: **bara tools** i sidofältet — inga landningssidor kvar där.
+6. Efter login: **bara tools** i sidofältet — inga landningssidor kvar där.
 
 ---
 
@@ -30,8 +33,8 @@ kontext kring landningssidornas frontend.
 ```
 ZON 1 — Landning (publik)            ZON 2 — Verktyget (bakom login)
 ────────────────────────            ──────────────────────────────
-• inget Streamlit-sidofält          • sidofält + Nordic Energy (som idag)
-• egen topp-navbar (st.page_link)   • BARA "Revenue cap tool" (1–5)
+• native topp-nav (position=top)    • sidofält + Nordic Energy (som idag)
+• inget Streamlit-sidofält          • BARA "Revenue cap tool" (1–5)
 • faded login_pic-bakgrund          • render_sidebar(): företagsväljare + logout
 • Sign in-CTA → auth_dialog()                 ▲
 • egna designregler                           │ sign-in (dialog, scope="app" rerun)
@@ -53,22 +56,22 @@ if check_auth():
     # ZON 2 — verktyget (i princip oförändrat)
     apply_tool_chrome()              # sidofälts-lås + Nordic Energy-finputs
     ... cookie/case-sync ...
-    pg = st.navigation({"Revenue cap tool": APP_PAGES})   # inga landningssidor
+    pg = st.navigation({"Revenue cap tool": APP_PAGES})   # sidofält, inga landningssidor
     render_sidebar()                 # företagsväljare + logout
     pg.run()
 else:
-    # ZON 1 — landningen (sidofältslös)
-    pg = st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN, position="hidden")
+    # ZON 1 — landningen, native topp-nav
+    pg = st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN, position="top")
     if pg in APP_PAGES_HIDDEN:
         st.switch_page(landing_home) # deep-link till skyddad sida → landningen
     else:
         pg.run()                     # varje landningssida kallar apply_landing_shell()
 ```
 
-`position="hidden"` släcker Streamlits sidofälts-nav i zon 1; landningssidorna
-ritar sin egen topp-navbar istället. Skyddade tool-sidor registreras fortfarande
-dolt så att bokmärkta URL:er inte 404:ar — de bouncar nu till `landing_home`
-(inte till en login-sida, den finns inte längre).
+`position="top"` ger en native topp-navbar för landningssektionerna och inget
+sidofält. Skyddade tool-sidor registreras fortfarande dolt (`visibility="hidden"`)
+så att bokmärkta URL:er inte 404:ar — de bouncar nu till `landing_home` (inte
+till en login-sida, den finns inte längre). Dolda sidor syns inte i topp-navet.
 
 ---
 
@@ -78,17 +81,18 @@ dolt så att bokmärkta URL:er inte 404:ar — de bouncar nu till `landing_home`
 
 | Fil | Roll |
 |---|---|
-| `landing_pages/home.py` | Hero, tagline, intro, feature-sektioner, Sign in-CTA |
-| `landing_pages/user_manual.py` | Beskrivning + PDF-nedladdning |
-| `landing_pages/team.py` | Team **+ kontakt** (sammanslagna) |
-| ~~`landing_pages/contact.py`~~ | **Tas bort** — innehåll flyttas till `team.py` |
+| `landing_pages/home.py` | **Home** — hero, tagline, intro, Sign in-CTA |
+| `landing_pages/tools.py` *(ersätter `user_manual.py`)* | **Tools** — introduktion till alla verktyg + inbäddad manual-PDF-nedladdning |
+| `landing_pages/team.py` | **Team** — team **+ kontakt** (sammanslagna) |
+| ~~`landing_pages/contact.py`~~ | **Tas bort** — innehåll → `team.py` |
+| ~~`landing_pages/user_manual.py`~~ | **Tas bort / döps om** → `tools.py` |
 
 ### Att skapa
 
 | Fil | Roll |
 |---|---|
-| `frontend/common/landing_shell.py` | `apply_landing_shell()` — landningstema (full-bredd, **inget** sidofält, faded `login_pic`-bakgrund) + topp-navbar (`st.page_link` per sektion + Sign in-knapp) + footer. Anropas överst på varje landningssida. |
-| `frontend/common/auth_dialog.py` | `auth_dialog()` + omflyttade formulär-renderare (login/register/reset/verify). Öppnas av Sign in-knappen. Se `auth_dialog_forslag.md`. |
+| `frontend/common/landing_shell.py` | `apply_landing_shell()` — landningstema (full-bredd, **inget** sidofält, faded `login_pic`-bakgrund) + **Sign in-CTA** (knapp som öppnar `auth_dialog()`) + footer. Anropas överst på varje landningssida. *Bygger inte navbaren — det gör `st.navigation(position="top")`.* |
+| `frontend/common/auth_dialog.py` | `auth_dialog()` + omflyttade formulär-renderare (login/register/reset/verify). Se `auth_dialog_forslag.md`. |
 | `static/regumetrica_user_manual.pdf` | Asset; kopieras från `user_manual_latex/build/Regumetrica user manual.pdf` (serveras via `enableStaticServing`). |
 
 ### Att ändra
@@ -111,13 +115,13 @@ dolt så att bokmärkta URL:er inte 404:ar — de bouncar nu till `landing_home`
 
 ---
 
-## Landningens navbar (`st.page_link`)
+## Topp-navbar & Sign in
 
-`st.page_link` användes inte tidigare i projektet — nu blir den verktyget för
-topp-navbaren. `apply_landing_shell()` ritar en horisontell rad med en
-`st.page_link` per sektion + en primär Sign in-**knapp** (som anropar
-`auth_dialog()`, inte en page_link). Riktiga, deep-linkbara URL:er per sektion,
-men utseendet är en egen navbar — det som får zon 1 att läsa som en *sajt*.
+`st.navigation(LANDING_PAGES, position="top")` ritar den native topp-navbaren med
+en post per sektion (Home / Tools / Team). Den kan bara innehålla *sidor* — så
+**Sign in** (som öppnar en dialog, inte navigerar till en sida) renderas av
+`apply_landing_shell()` som en prominent CTA i sidinnehållet (t.ex. hero + en
+fast knapp högt upp), inte som en nav-post.
 
 ---
 
@@ -156,11 +160,10 @@ från en sida till dialogen.
 
 ---
 
-## Öppna punkter
-- Landningens exakta innehåll/sektioner (hero-copy, features, team-text).
-- Navbar-utseende: rena `st.page_link` vs egen CSS-stylad rad.
-- Om verktygszonen ska ha en väg *tillbaka* till landningen (t.ex. logo-länk),
-  eller om logout → `landing_home` räcker.
+## Öppna punkter (uppskjutna)
+- Landningens faktiska copy (hero-text, tools-beskrivningar, team-text).
+- Om verktygszonen ska ha en väg *tillbaka* till landningen (logo-länk), eller
+  om logout → `landing_home` räcker. *(Uppskjutet — beslutas senare.)*
 
 ## Se även
 - `auth_dialog_forslag.md` — auth-dialogen i detalj (struktur, pseudokod,
