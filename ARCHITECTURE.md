@@ -134,7 +134,7 @@ dashboard_lokalnat/
 |   |   |-- parameter_input.py    # Reusable input component with baseline comparison
 |   |   |-- styling.py            # apply_base_styling() (both zones) + apply_tool_chrome() (tool sidebar); re-exports colors
 |   |   |-- auth_dialog.py        # Sign-in dialog (login/register/reset/verify) for the landing zone
-|   |   |-- landing_shell.py      # apply_landing_shell(): landing theme (faded bg) + Sign in CTA + footer
+|   |   |-- landing_shell.py      # Landing theme (faded bg) + brand/Sign-in header + shared helpers (landing_cards/heading/footer)
 |   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
 |   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
 |   |
