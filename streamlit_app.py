@@ -270,17 +270,23 @@ landing_tools = st.Page("landing_pages/tools.py", title="Tools")
 landing_team = st.Page("landing_pages/team.py", title="Team")
 LANDING_PAGES = [landing_home, landing_tools, landing_team]
 
-# --- Zon 2: revenue cap tool pages (protected) ---
+# --- Zon 2: tool pages (protected) ---
 # Defined once; built as visible objects for the authenticated nav and as hidden
 # objects so bookmarked tool URLs redirect to the landing page instead of 404.
-_TOOL_PAGE_SPECS = [
+# The revenue-cap pages form one grouped "folder"; standalone tools sit beside it.
+_REVENUE_CAP_SPECS = [
     ("pages/1_create_and_select_case.py", "1. Create and select case"),
     ("pages/2_case_setup.py", "2. Select modules to modify"),
     ("pages/3_specification.py", "3. Configure selected modules"),
     ("pages/4_revenue_frame.py", "4. Compute revenue frame and save"),
-    ("pages/5_new_benchmarking.py", "5. New benchmarking model"),
 ]
-APP_PAGES = [st.Page(path, title=title) for path, title in _TOOL_PAGE_SPECS]
+_STANDALONE_TOOL_SPECS = [
+    ("pages/5_new_benchmarking.py", "New benchmarking model"),
+]
+_TOOL_PAGE_SPECS = _REVENUE_CAP_SPECS + _STANDALONE_TOOL_SPECS
+
+REVENUE_CAP_PAGES = [st.Page(path, title=title) for path, title in _REVENUE_CAP_SPECS]
+STANDALONE_PAGES = [st.Page(path, title=title) for path, title in _STANDALONE_TOOL_SPECS]
 APP_PAGES_HIDDEN = [
     st.Page(path, title=title, visibility="hidden") for path, title in _TOOL_PAGE_SPECS
 ]
@@ -306,7 +312,10 @@ if check_auth():
     try_restore_case_from_cookie()
     _sync_case_cookie()
 
-    pg = st.navigation({"Revenue cap tool": APP_PAGES})
+    pg = st.navigation({
+        "Revenue cap tool": REVENUE_CAP_PAGES,
+        "Standalone tools": STANDALONE_PAGES,
+    })
     render_sidebar()
     pg.run()
 

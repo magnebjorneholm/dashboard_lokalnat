@@ -373,22 +373,25 @@ Two zones, decided by `check_auth()` on every run. They do not share chrome.
 ```
 ZON 1 — Landing (public)             ZON 2 — Tool (authenticated)
 ------------------------             ----------------------------
-native top-nav (position="top"):     sidebar nav, group "Revenue cap tool":
-landing_pages/home.py   (Home)       pages/1_create_and_select_case.py  (Create & Select)
-landing_pages/tools.py  (Tools)              |
-landing_pages/team.py   (Team)               v
-        |                            pages/2_case_setup.py              (Case Setup)
-   [Sign in CTA]                             |
-        | auth_dialog() (st.dialog)          v
-        |  success -> st.rerun() ----> pages/3_specification.py          (Specification)
-        |  (app scope) swaps zone            |
-        v                               [Compute] (on page 4)
+native top-nav (position="top"):     sidebar nav, two groups:
+landing_pages/home.py   (Home)
+landing_pages/tools.py  (Tools)      group "Revenue cap tool":
+landing_pages/team.py   (Team)         pages/1_create_and_select_case.py  (Create & Select)
+        |                                    |
+   [Sign in CTA]                             v
+        | auth_dialog() (st.dialog)    pages/2_case_setup.py              (Case Setup)
+        |  success -> st.rerun()             |
+        |  (app scope) swaps zone            v
+        v                              pages/3_specification.py          (Specification)
 (no sidebar; faded bg theme)                 |
-                                             v
-(protected pages registered           pages/4_revenue_frame.py          (Revenue Frame)
- hidden -> redirect to landing_home)         |
-                                             v
-                                      pages/5_new_benchmarking.py        (New benchmarking)
+                                        [Compute] (on page 4)
+(protected pages registered                 |
+ hidden -> redirect to landing_home)         v
+                                       pages/4_revenue_frame.py          (Revenue Frame)
+
+                                     group "Standalone tools":
+                                       pages/5_new_benchmarking.py        (New benchmarking model)
+                                         — decoupled add-on, not part of the 1 → 4 flow
 ```
 
 **Entrypoint:** `streamlit_app.py` — a two-zone controller.
@@ -403,7 +406,10 @@ landing_pages/team.py   (Team)               v
     re-routes into Zon 2. Protected tool pages are registered hidden so
     bookmarked tool URLs redirect to `landing_home` instead of 404'ing.
   - **Zon 2 (authenticated):** `apply_tool_chrome()` (locked sidebar + Nordic
-    Energy refinements) + `st.navigation({"Revenue cap tool": APP_PAGES})`.
+    Energy refinements) + a two-group `st.navigation`: "Revenue cap tool"
+    (pages 1–4) and "Standalone tools" (the New benchmarking page). Pages are
+    built from `_TOOL_PAGE_SPECS` (= `_REVENUE_CAP_SPECS` + `_STANDALONE_TOOL_SPECS`);
+    the same specs build `APP_PAGES_HIDDEN` for the Zon 1 redirect guard.
     `render_sidebar()` (company selector + logout) renders here only. Logout
     clears auth and reruns → lands back on the public landing zone.
 - Sidebar (Zon 2 only): Company selector + logout. Compute + Revert/New case +
