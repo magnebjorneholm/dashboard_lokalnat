@@ -44,6 +44,7 @@ Processen i fyra steg (de fyra blocken i grafen nedan):
 | `opex_components.py` | OPEX-sidan: `compute_loss_valued()`, `compute_non_controllable_selected()`, `build_opex_components()`. |
 | `capex_environment.py` | Capbase→kapitalkostnad: `compute_env_adjusted_capital_cost()`, `build_adjusted_capbase()`, `EnvCapexResult`. |
 | `totex.py` | `build_totex()` — sätter ihop `opex_new` och `totex_new`. |
+| `efficiency_requirement_two_sided.py` | `calculate_two_sided_requirement()` — signerat gap till `E₇₅`, tvåsidigt utfall (steg 4). |
 | `environment_capex_adjustment/` | Jordkabel (cat 3): `config.py`, `data.py` (`classify_env`), `calibration.py` (`calibrate`), `adjustment.py` (`apply_environment_adjustment`). |
 | `station_capex_adjustment/` | Nätstation (cat 13): samma form som ovan, parallellt paket. |
 | `cable_length/` | Ledningslängd (DEA-output): `load_cable_components()`, `aggregate_cable_length_per_firm()`. |
@@ -55,7 +56,6 @@ Processen i fyra steg (de fyra blocken i grafen nedan):
 | `calculations/capex/kent_calculations.py` | `run_kent_calculations_batch()` — KENT steg 5–8 (capbase → `capital_cost_2024`). |
 | `calculations/capex/wacc_calculations.py` | `BASELINE_WACC`. |
 | `calculations/frontier/dea_calculations.py` | `run_dea_analysis()` — super-eff DEA + IQR-outliers. |
-| `calculations/efficiency/efficiency_requirement.py` | `calculate_eff_req_for_dataframe()` + `DEFAULT_EFF_REQ_PARAMS`. |
 | `config/column_names.py` | Alla `COL_*`-konstanter (kolumnnamn är engelska). |
 | `config/incentive_parameters.py` | `K_NF` (gemensamt förlustpris per år). |
 
@@ -117,10 +117,10 @@ flowchart TD
     end
 
     %% ── STEG 4: Effektivitet → krav ────────────────────────────
-    subgraph S4["4 ─ Effektivitet → effektiviseringskrav"]
+    subgraph S4["4 ─ Effektivitet → effektiviseringskrav (tvåsidig)"]
         direction TB
-        eff_req_calc["calculate_eff_req_for_dataframe<br/>trunkering [min,max] · Ei:s formel<br/>customer_sharing · realization_time"]
-        eff_req_annual["efficiency_requirement_annual (ny modell)"]
+        eff_req_calc["calculate_two_sided_requirement<br/>E₇₅ = 75:e pct (excl. outliers)<br/>signerat gap · clip ±0.30 · s=0.25"]
+        eff_req_annual["efficiency_requirement_annual (signerad)<br/>+ dea_reference_e75"]
     end
 
     %% ── Nuvarande modell + jämförelse ──────────────────────────
@@ -281,25 +281,29 @@ DEA-specen för nya modellen:
 
 ---
 
-## Steg 4 — Effektivitet → effektiviseringskrav
+## Steg 4 — Effektivitet → effektiviseringskrav (tvåsidig)
 
-**Fil:** `calculations/efficiency/efficiency_requirement.py`
-**Funktion:** `calculate_eff_req_for_dataframe(dea_new, **cfg.eff_req_params)` (`model.py:126`)
+**Fil:** `calculations/new_benchmarking/efficiency_requirement_two_sided.py`
+**Funktion:** `calculate_two_sided_requirement(dea_new, **cfg-fält)` (`model.py:126`)
 
-Ei:s metod (`calculate_eff_req_from_potential`, parametrar i `DEFAULT_EFF_REQ_PARAMS`):
+Ei:s nya inriktning: referensen flyttas från **fronten** till **tredje kvartilen**, och
+utfallet blir **signerat** (avdrag *eller* tillägg). Den gamla front-/endast-avdrag-metoden
+(`calculations/efficiency/efficiency_requirement.py`) lever kvar — men bara i intäktsrams-
+pipelinen (M5), inte här. Tolkning: `new_benchmarking_model/tolkning-overgang-effektiviseringsincitament.md`.
 
-- **Outlier:** fast krav `outlier_req` (default 1 %).
-- **Annars:** trunkera `potential` till `[truncation_min, truncation_max]`
-  (`truncation_max=0.30`; `truncation_min` ≈ 16,24 % härleds så att lågpotential-bolag
-  får samma minimikrav som outliers), sedan
+- `E₇₅` = 75:e percentilen av `dea_efficiency` (capped, `min(θ,1)`) **exklusive outliers**.
+- Signerat gap `g = E₇₅ − E_i`, kapat symmetriskt till `[−0.30, +0.30]`.
   ```
-  total_eff      = potential · customer_sharing · (supervision_period / realization_time)
-  eff_req_yearly = (1 + total_eff)^(1/supervision_period) − 1
+  utfall_period = clip(E₇₅ − E_i, ±0.30) · sharing · (supervision_period / realization_time)
+  årligt_utfall = (1 + utfall_period)^(1/supervision_period) − 1
   ```
-  Default: `customer_sharing=0.50`, `realization_time=8`, `supervision_period=4`
-  → max ≈ 1,82 %/år, min = 1,0 %/år.
+  Default: `sharing=0.50`, `realization_time=8`, `supervision_period=4` → `s = 0.25`;
+  max avdrag = **+1,82 %/år** (= legacy-taket), tillägg `< 0`.
+- **Inget golv, ingen fast outlier-regel.** Full täckning vid `E₇₅` (gap 0). Outliers
+  exkluderas ur percentilen men får ett utfall som vilket frontbolag som helst (capped till
+  `E_i = 1.0` → samma belöning).
 
-**Ut:** kolumnen `efficiency_requirement_annual` på `dea_new`.
+**Ut:** signerad kolumn `efficiency_requirement_annual` + konstant `dea_reference_e75` (`E₇₅`) på `dea_new`.
 
 ---
 
@@ -329,7 +333,7 @@ Ei:s metod (`calculate_eff_req_from_potential`, parametrar i `DEFAULT_EFF_REQ_PA
 | `split_by_voltage` | `False` | En längd-output per spänningsnivå. |
 | `rts` | `crs` | DEA returns-to-scale. |
 | `new_base_outputs` | CU, MW, NS, MWhl, MWhh | DEA-basoutputs. |
-| `eff_req_params` | `DEFAULT_EFF_REQ_PARAMS` | Ei:s kravparametrar. |
+| `reference_percentile` / `gap_cap` / `sharing` / `realization_time` / `supervision_period` | 75 / 0.30 / 0.50 / 8 / 4 | Tvåsidiga kravparametrar (steg 4); `s = sharing · 4/8 = 0.25`. |
 
 `cfg.signature()` (`config.py:88`) är den stabila, hashbara identiteten. Två configs med
 samma signatur ger samma `NewBenchmarkingResult` → används som cache-nyckel **och** som
@@ -376,5 +380,5 @@ identiskt för alla användare, och `@st.cache_data` nollställs vid varje omdep
 | Fel/oväntad TOTEX-nivå | `totex.py` (switchar), `opex_components.py` (förlust/icke-påverkbar), `capex_environment.py` (capex). |
 | Fel kapitalkostnad | `capex_environment.py` (deduktioner) → `kent_calculations.py` (steg 5–8). |
 | Fel/avvikande effektivitet | `model.py:112–126` (DEA-spec), `dea_calculations.py` (motor, outliers). |
-| Fel effektiviseringskrav | `efficiency_requirement.py` (trunkering/formel), `cfg.eff_req_params`. |
+| Fel effektiviseringskrav | `efficiency_requirement_two_sided.py` (`E₇₅`/gap/clip), `cfg.gap_cap` m.fl. |
 | Resultat ändras inte trots ny config | Cache/förberäkning: `signature()`, `load_precomputed_main()`, kör om precompute-skriptet. |

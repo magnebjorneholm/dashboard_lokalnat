@@ -32,7 +32,9 @@ from config.column_names import (
     COL_EFF_REQ_DELTA, COL_EFFICIENCY_DELTA,
 )
 from calculations.frontier.dea_calculations import run_dea_analysis
-from calculations.efficiency.efficiency_requirement import calculate_eff_req_for_dataframe
+from calculations.new_benchmarking.efficiency_requirement_two_sided import (
+    calculate_two_sided_requirement,
+)
 
 from calculations.new_benchmarking.config import NewBenchmarkingConfig
 from calculations.new_benchmarking.capex_environment import (
@@ -123,7 +125,14 @@ def run_new_benchmarking(
         new_outputs += cable_cols
 
     dea_new = run_dea_analysis(new_df, {"inputs": [COL_TOTEX_NEW], "outputs": new_outputs, "rts": cfg.rts})
-    dea_new = calculate_eff_req_for_dataframe(dea_new, **cfg.eff_req_params)
+    dea_new = calculate_two_sided_requirement(
+        dea_new,
+        reference_percentile=cfg.reference_percentile,
+        gap_cap=cfg.gap_cap,
+        sharing=cfg.sharing,
+        realization_time=cfg.realization_time,
+        supervision_period=cfg.supervision_period,
+    )
 
     # 3. Current model = Ei's published baseline (EIs_DEA.xlsx), read directly — the firm's
     #    actual "föregående värden". No recomputation: efficiency, potential, outlier flag

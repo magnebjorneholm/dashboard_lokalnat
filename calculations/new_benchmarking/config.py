@@ -12,10 +12,9 @@ the current model can be compared on the same footing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
-from calculations.efficiency.efficiency_requirement import DEFAULT_EFF_REQ_PARAMS
 from calculations.new_benchmarking.cable_length import config as cable_C
 from calculations.new_benchmarking.environment_capex_adjustment import config as env_C
 from calculations.new_benchmarking.station_capex_adjustment import config as station_C
@@ -75,8 +74,15 @@ class NewBenchmarkingConfig:
     rts: str = "crs"                        # 'crs' | 'vrs'
     new_base_outputs: Tuple[str, ...] = NEW_MODEL_BASE_OUTPUTS
 
-    # ── Efficiency-requirement parameters (Ei's method) ──────────────────────
-    eff_req_params: Dict = field(default_factory=lambda: dict(DEFAULT_EFF_REQ_PARAMS))
+    # ── Efficiency-requirement: two-sided third-quartile mechanic ────────────
+    # The new model's requirement is a signed gap to the third quartile (E75), not the
+    # legacy gap to the frontier. See efficiency_requirement_two_sided.py for the full
+    # spec. s = sharing × supervision_period/realization_time = 0.50 × 4/8 = 0.25.
+    reference_percentile: float = 75.0      # third quartile: threshold + reference value
+    gap_cap: float = 0.30                    # symmetric cap on the signed gap (= legacy max)
+    sharing: float = 0.50                    # customer sharing
+    realization_time: int = 8                # years to realise the full gap
+    supervision_period: int = 4              # years in the supervision period
 
     def resolved_k_nf(self) -> Dict[int, float]:
         """Per-year common price for network losses, falling back to baseline K_NF."""
@@ -103,5 +109,6 @@ class NewBenchmarkingConfig:
             self.station_method, _od(self.station_override_percent),
             self.include_cable_length, tuple(self.cable_types), self.split_by_voltage,
             self.rts, tuple(self.new_base_outputs),
-            tuple(sorted(self.eff_req_params.items())),
+            self.reference_percentile, self.gap_cap, self.sharing,
+            self.realization_time, self.supervision_period,
         )

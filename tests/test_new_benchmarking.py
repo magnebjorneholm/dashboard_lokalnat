@@ -24,6 +24,9 @@ from calculations.new_benchmarking.opex_components import (
     compute_loss_valued, compute_non_controllable_selected,
 )
 from calculations.efficiency.efficiency_requirement import get_max_eff_req
+from calculations.new_benchmarking.efficiency_requirement_two_sided import (
+    two_sided_requirement_from_gap,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -139,13 +142,24 @@ def test_totex_components_present_and_consistent(nb_result):
 
 def test_eff_req_within_bounds(nb_result):
     c = nb_result.comparison
-    hi = get_max_eff_req()
-    # New model: we compute eff-req via Ei's method → bounded [outlier_req, max].
-    assert (c[COL_EFF_REQ_NEW] >= 0.01 - 1e-9).all()
+    cfg = nb_result.config
+    # New model: signed two-sided requirement, bounded by the gap cap — a deduction up to
+    # +1.82 %/yr and (since the gap is clipped symmetrically) a reward floor at the negative
+    # of that band. Rewards (negative values) are expected, not floored at +1%.
+    bound_kwargs = dict(
+        gap_cap=cfg.gap_cap, sharing=cfg.sharing,
+        realization_time=cfg.realization_time, supervision_period=cfg.supervision_period,
+    )
+    lo = two_sided_requirement_from_gap(-cfg.gap_cap, **bound_kwargs)
+    hi = two_sided_requirement_from_gap(cfg.gap_cap, **bound_kwargs)
+    assert (c[COL_EFF_REQ_NEW] >= lo - 1e-9).all()
     assert (c[COL_EFF_REQ_NEW] <= hi + 1e-9).all()
+    # The whole point of the change: at least some efficient firms cross into a reward.
+    assert (c[COL_EFF_REQ_NEW] < 0).any()
     # Current model: read straight from EIs_DEA (Ei's published Effkrav_proc) → within [0, max].
+    cur_hi = get_max_eff_req()
     assert (c[COL_EFF_REQ_CURRENT] >= -1e-9).all()
-    assert (c[COL_EFF_REQ_CURRENT] <= hi + 1e-9).all()
+    assert (c[COL_EFF_REQ_CURRENT] <= cur_hi + 1e-9).all()
 
 
 def test_model_change_has_effect(nb_result):

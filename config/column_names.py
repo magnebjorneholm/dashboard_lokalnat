@@ -142,6 +142,7 @@ COL_LOSS_VALUED = "loss_valued_common_price"            # nf_obs · k_nf · e_in
 COL_NONCTRL_SELECTED = "non_controllable_selected"      # grid sub/conn + feed-in + capacity reserve, annual avg (tkr)
 COL_CAPITAL_COST_ENV_ADJ = "capital_cost_2024_env_adjusted"  # capital_cost_2024 after förläggningsmiljö correction
 COL_CABLE_LENGTH_KM = "cable_length_km"                  # physical line length per company (new DEA output)
+COL_DEA_REFERENCE = "dea_reference_e75"                  # E75 reference (third quartile, excl. outliers) — two-sided model
 
 # Per-model DEA / efficiency results (new model vs current model, compared side by side).
 COL_DEA_EFFICIENCY_NEW = "dea_efficiency_new"

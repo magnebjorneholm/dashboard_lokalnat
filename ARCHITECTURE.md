@@ -1104,6 +1104,14 @@ recomputed — the firm's actual "föregående värden"):
   re-runs KENT on a capbase whose jordkabel (cat 3) and nätstation (cat 13) NUAV is
   levelled to a reference environment (cable + station sub-packages).
 - **DEA**: single TOTEX input + base outputs (CU, MW, NS, MWhl, MWhh) + cable length.
+- **Efficiency requirement** (`efficiency_requirement_two_sided.py`): the firm's annual
+  outcome is a *signed* gap to the third quartile, replacing the legacy front-reference /
+  deduction-only mechanic (which still drives the revenue-cap pipeline, M5, untouched).
+  `E75` = the 75th-percentile efficiency over non-outliers; `outcome = annualize(clip(E75 −
+  E_i, ±0.30) × 0.50 × 4/8)` → a deduction below the benchmark (>0), full coverage at it, a
+  reward above (<0). No floor, no fixed outlier requirement; outliers are excluded from the
+  percentile but still scored. See
+  `new_benchmarking_model/tolkning-overgang-effektiviseringsincitament.md` for the interpretation.
 - `NewBenchmarkingConfig` holds every choice; `cfg.signature()` is its stable identity,
   used both as the @st.cache_data key and as the pre-compute bundle's validity token.
 
@@ -1127,9 +1135,13 @@ changes.**
   state; the heavy DEA fires only on click (editing widgets just marks pending changes).
 - `frontend/modules/addons/new_benchmarking_spec.py` -- `render_config_panel()`: the few
   adjustable fields (common loss price, cable/station method, line types) + the run button.
-- `frontend/results/new_benchmarking_output.py` -- per-company view: **Sector overview**
-  (neutral-coloured Δ-requirement / Δ-efficiency histograms + efficiency distribution with
-  truncation zones, the firm marked by its curated short name) and **Your company**
-  (5-KPI row — score, requirement, raw/truncated potential, rank — plus a TOTEX bridge
-  waterfall from the current-model TOTEX to the new one: additions red, the
-  förläggningsmiljö capex cut green, opening/closing totals blue).
+- `frontend/results/new_benchmarking_output.py` -- per-company view, firm-first: **Your
+  company** (a signed-outcome verdict — green reward / amber deduction / blue full coverage
+  — plus KPIs: outcome with its swing vs the current published requirement, efficiency +
+  rank, the third-quartile benchmark E75, and distance from it), **Sector & position** (the
+  position chart — efficiency histogram with the E75 pivot splitting deduction/reward zones
+  and the model's transfer curve overlaid, the firm and the reference peer marked — plus a
+  diverging outcome distribution and deduction/coverage/reward counts), and the **TOTEX
+  bridge** waterfall (current → new TOTEX: additions red, the förläggningsmiljö capex cut
+  green, totals blue). The two-sided visuals live in `frontend/results/_two_sided_charts.py`
+  (not the M5-shared `_efficiency_charts.py`).
