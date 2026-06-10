@@ -80,13 +80,11 @@ def render_metric_row(
 # PAGE HEADER
 # =============================================================================
 
-st.title("Regumetrica")
-
 case_name = get_case_name()
 if case_name:
-    st.subheader(f"Results: {case_name}")
+    st.title(f"Results: {case_name}")
 else:
-    st.subheader("Results")
+    st.title("Results")
 
 from frontend.utils.case_actions import run_calculation, do_save_case
 

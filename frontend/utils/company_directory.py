@@ -50,12 +50,31 @@ def get_company_name_lookup() -> Dict[str, str]:
         return {}
 
 
+@st.cache_data(ttl=3600)
+def get_company_full_name_lookup() -> Dict[str, str]:
+    """REId -> full company name (e.g. 'Ellevio AB')."""
+    try:
+        from data_loaders.baseline_data import load_baseline_data
+        baseline = load_baseline_data()
+        df = baseline.df_all_companies[["REId", COL_COMPANY_NAME]].copy()
+        return dict(zip(df["REId"], df[COL_COMPANY_NAME]))
+    except Exception:
+        return {}
+
+
 def get_company_display(reid: str) -> str:
     """Display string 'Short (REId)', or the bare REId if lookup fails."""
     if not reid:
         return "None"
     name = get_company_name_lookup().get(reid)
     return f"{name} ({reid})" if name else reid
+
+
+def get_company_full_name(reid: str) -> str:
+    """Full company name for `reid` (for greetings); falls back to display/REId."""
+    if not reid:
+        return ""
+    return get_company_full_name_lookup().get(reid) or get_company_display(reid)
 
 
 def get_company_options() -> List[Tuple[str, str]]:

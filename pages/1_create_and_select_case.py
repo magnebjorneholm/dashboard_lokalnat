@@ -19,6 +19,7 @@ from frontend.utils.state_manager import (
     init_session_state,
     reset_case,
     get_user_reid,
+    get_auth_role,
     get_case_id,
     get_case_name,
     get_case_notes,
@@ -27,6 +28,7 @@ from frontend.utils.state_manager import (
     set_saved_cases_count,
     DEFAULT_UI_CONFIG,
 )
+from frontend.utils.company_directory import get_company_full_name
 from frontend.utils.case_storage import (
     SavedCase,
     list_cases,
@@ -194,11 +196,23 @@ def _confirm_edit_dialog(case: SavedCase):
 # PAGE CONTENT
 # =============================================================================
 
-st.title("Regumetrica")
+user_reid = get_user_reid()
+role = get_auth_role()
+
+# Front-door greeting (role-aware). The company name carries the brand here, so
+# it appears once — on the way in — rather than on every page.
+if role == "regulator":
+    st.title("Welcome to Regumetrica")
+    if user_reid:
+        st.caption(f"Analysing {get_company_full_name(user_reid)}")
+elif user_reid:
+    st.title(f"Welcome, {get_company_full_name(user_reid)}, to Regumetrica")
+else:
+    st.title("Welcome to Regumetrica")
+
 st.subheader("1. Create and select case")
 
 # Check company selection
-user_reid = get_user_reid()
 if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")
     st.stop()

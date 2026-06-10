@@ -13,6 +13,5 @@ from frontend.utils.state_manager import init_session_state
 
 init_session_state()
 
-st.title("Regumetrica")
-st.subheader("Placeholder")
+st.title("Placeholder")
 st.caption("Placeholder for a future standalone tool. Nothing here yet.")

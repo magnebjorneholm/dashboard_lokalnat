@@ -35,13 +35,11 @@ init_session_state()
 # PAGE HEADER
 # =============================================================================
 
-st.title("Regumetrica")
-
 case_name = get_case_name()
 if case_name:
-    st.subheader(f"Specification: {case_name}")
+    st.title(f"Specification: {case_name}")
 else:
-    st.subheader("Specification")
+    st.title("Specification")
 
 from frontend.common.save_bar import render_save_bar
 render_save_bar()

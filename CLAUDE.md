@@ -9,6 +9,10 @@ Entrypoint: `streamlit_app.py` (Streamlit, Python 3.11).
 
 Read `ARCHITECTURE.md` at the start of every conversation for full project context.
 
+**Do not read `MIGRATION_PRINCIPER.md`** — it is a scratch/working note, not authoritative
+project context. Skip it unless the user explicitly asks you to open it. (A `Read` deny rule
+in `.claude/settings.json` also blocks the Read tool for this file.)
+
 
 ## Language
 
@@ -111,8 +115,6 @@ When building or modifying UI, think before coding:
   and navigation.
 - **Subtle polish:** Hover states, focus rings, and smooth transitions (CSS only, ≤200ms)
   convey quality. Never add decorative animations, overlays, or visual effects.
-- **Restraint is the aesthetic:** When in doubt, remove rather than add. White space,
-  consistent alignment, and typographic hierarchy do the heavy lifting.
 
 ## Update ARCHITECTURE.md
 

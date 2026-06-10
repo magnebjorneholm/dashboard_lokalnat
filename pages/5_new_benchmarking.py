@@ -21,7 +21,7 @@ from calculations.new_benchmarking import run_new_benchmarking, NewBenchmarkingC
 from calculations.new_benchmarking.model import NewBenchmarkingResult
 from data_loaders.new_benchmarking_data import load_precomputed_main
 from config.column_names import (
-    COL_REID, COL_EFF_REQ_ANNUAL, COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT,
+    COL_REID, COL_EFF_REQ_ANNUAL, COL_COMPANY_NAME_SHORT,
 )
 from config.formatting import format_pp
 
@@ -41,17 +41,6 @@ def _signature(cfg: NewBenchmarkingConfig) -> tuple:
 @st.cache_data(show_spinner="Running the new benchmarking model for all 148 companies...")
 def _run_cached(signature: tuple, _cfg: NewBenchmarkingConfig) -> NewBenchmarkingResult:
     return run_new_benchmarking(_cfg)
-
-
-@st.cache_data(ttl=3600)
-def _company_name(reid: str) -> str:
-    try:
-        from data_loaders.baseline_data import load_baseline_data
-        df = load_baseline_data().df_all_companies
-        m = df[df[COL_REID] == reid]
-        return str(m.iloc[0][COL_COMPANY_NAME]) if not m.empty else reid
-    except Exception:
-        return reid
 
 
 @st.cache_data(ttl=3600)
@@ -90,8 +79,7 @@ def _render_model_diff() -> None:
 # Page
 # ---------------------------------------------------------------------------
 
-st.title("Regumetrica")
-st.subheader("New benchmarking model")
+st.title("New benchmarking model")
 st.caption(
     "Isolated analysis of Ei's proposed benchmarking model (TOTEX-based DEA), "
     "independent of the revenue frame. Shows the effect of the new model on its own, "
@@ -102,8 +90,6 @@ user_reid = get_user_reid()
 if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")
     st.stop()
-
-st.markdown(f"**Company:** {_company_name(user_reid)} ({user_reid})")
 
 # Model-diff (top).
 _render_model_diff()

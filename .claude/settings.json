@@ -10,7 +10,10 @@
     ],
     "deny": [
       "Bash(rm -rf *)",
-      "Bash(git push --force *)"
+      "Bash(git push --force *)",
+      "Read(MIGRATION_PRINCIPER.md)",
+      "Read(./MIGRATION_PRINCIPER.md)",
+      "Read(//**/MIGRATION_PRINCIPER.md)"
     ]
   }
 }

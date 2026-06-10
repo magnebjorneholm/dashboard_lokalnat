@@ -164,8 +164,6 @@ def _sync_case_cookie() -> None:
 def render_sidebar():
     """Render the tool-zone sidebar: company selection + logout."""
     with st.sidebar:
-        st.header("Regumetrica")
-
         if is_dev_mode():
             st.caption("Dev Mode (auth bypassed)")
             _render_dev_mode_selector()

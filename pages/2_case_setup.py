@@ -35,13 +35,11 @@ if st.session_state.get("_toast_message"):
 # PAGE CONTENT
 # =============================================================================
 
-st.title("Regumetrica")
-
 case_name = get_case_name()
 if case_name:
-    st.subheader(f"Case Setup: {case_name}")
+    st.title(f"Case Setup: {case_name}")
 else:
-    st.subheader("Case Setup")
+    st.title("Case Setup")
 
 # Check company selection
 user_reid = get_user_reid()
