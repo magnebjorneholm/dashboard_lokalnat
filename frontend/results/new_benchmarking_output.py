@@ -129,8 +129,8 @@ def render_company_view(
 def _render_sector_overview(result, user_reid, params, new_eff, cur_eff, new_req, cur_req, user_label="Your firm") -> None:
     st.markdown("#### Sector overview")
     st.caption(
-        "How the efficiency requirement shifts across all 148 companies under the new model, "
-        "versus their current published values. Your company is marked."
+        "Efficiency-requirement change across all 148 companies under the new model, "
+        "against their current published values. Your company is marked."
     )
 
     comp = result.comparison
@@ -253,7 +253,7 @@ def _render_zone_breakdown(dea_new: pd.DataFrame, params: dict) -> None:
     floored = int((scores > eff_floor).sum())
     active = n - capped - floored
     st.caption(
-        f"Truncation zones — "
+        f"Truncation zones. "
         f"Capped: {capped} ({capped / n:.0%}) · "
         f"Active: {active} ({active / n:.0%}) · "
         f"Floored: {floored} ({floored / n:.0%})"
@@ -332,7 +332,7 @@ def _render_company_section(
         )
 
     st.caption(
-        "Values are the new model; arrows show the change vs. the current published model.  ·  "
+        "Values are the new model; arrows show the change vs. the current published model. "
         f"Outlier: **{'Yes' if is_outlier_new else 'No'}**"
     )
 

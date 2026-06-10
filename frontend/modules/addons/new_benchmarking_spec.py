@@ -30,8 +30,8 @@ _CABLE_METHOD_LABELS = {
 }
 _CABLE_METHOD_HELP = {
     env_C.METHOD_EXACT:
-        "Re-prices each cable type down to the landsbygd-normal level — most precise. "
-        "Types without a reference price fall back to the per-km schablon.",
+        "Re-prices each cable type down to the landsbygd-normal level. Most precise of the "
+        "three methods. Types without a reference price fall back to the per-km schablon.",
     env_C.METHOD_SCHABLON_PER_KM:
         "Deducts a flat premium (kr/km) per placement environment.",
     env_C.METHOD_SCHABLON_PERCENT:
@@ -43,7 +43,7 @@ _STATION_METHOD_LABELS = {
 }
 _STATION_METHOD_HELP = {
     st_C.METHOD_EXACT:
-        "Removes the City/tätort station surcharge in full — exact, per company.",
+        "Removes the City/tätort station surcharge in full. Exact, per company.",
     st_C.METHOD_SCHABLON_PERCENT:
         "Deducts a flat percentage across the whole station base (Ei's schablon).",
 }
@@ -62,8 +62,8 @@ def render_config_panel() -> NewBenchmarkingConfig:
     marks pending changes; nothing recomputes until the button is clicked.
     """
     st.caption(
-        "These settings fine-tune the main model. Everything else — TOTEX composition, "
-        "outputs and returns to scale — is fixed at the main-model specification."
+        "These settings adjust the main model. Everything else is fixed at the main-model "
+        "specification: TOTEX composition, outputs and returns to scale."
     )
 
     # ── Common loss price (price-area correction) ───────────────────────────
@@ -121,7 +121,7 @@ def render_config_panel() -> NewBenchmarkingConfig:
 
     st.divider()
     if pending.signature() != committed.signature():
-        st.caption("⚠ Unrun changes — click **Run experiment** to apply them.")
+        st.caption("⚠ Pending changes. Click **Run experiment** to apply them.")
     if st.button("Run experiment", type="primary", key="nb_run_experiment"):
         st.session_state["nb_committed_cfg"] = pending
         committed = pending

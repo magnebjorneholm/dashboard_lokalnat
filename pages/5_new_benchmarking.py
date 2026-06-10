@@ -38,7 +38,7 @@ def _signature(cfg: NewBenchmarkingConfig) -> tuple:
     return cfg.signature()
 
 
-@st.cache_data(show_spinner="Running the new benchmarking model for all 148 companies…")
+@st.cache_data(show_spinner="Running the new benchmarking model for all 148 companies...")
 def _run_cached(signature: tuple, _cfg: NewBenchmarkingConfig) -> NewBenchmarkingResult:
     return run_new_benchmarking(_cfg)
 
@@ -83,7 +83,7 @@ def _render_model_diff() -> None:
     authored by the project owner.
     """
     st.markdown("**What this model changes vs. the current one**")
-    st.caption("_Placeholder — a short, factual description of the model changes goes here._")
+    st.caption("_Placeholder. A short, factual description of the model changes goes here._")
 
 
 # ---------------------------------------------------------------------------
@@ -93,8 +93,9 @@ def _render_model_diff() -> None:
 st.title("Regumetrica")
 st.subheader("New benchmarking model")
 st.caption(
-    "How would the company be affected by Ei's proposed new benchmarking model "
-    "(TOTEX-based DEA) alone, all else equal? A standalone analysis, separate from the revenue frame."
+    "Isolated analysis of Ei's proposed benchmarking model (TOTEX-based DEA), "
+    "independent of the revenue frame. Shows the effect of the new model on its own, "
+    "holding everything else constant."
 )
 
 user_reid = get_user_reid()
@@ -110,7 +111,7 @@ _render_model_diff()
 # Experiment panel, right after the model description. The heavy DEA run fires only via
 # the panel's "Run experiment" button (see render_config_panel); editing widgets merely
 # marks pending changes.
-with st.expander("Experiment — fine-tune the model", expanded=False):
+with st.expander("Experiment: adjust the model", expanded=False):
     active_cfg = render_config_panel()
     indicator_area = st.container()
 
@@ -131,7 +132,7 @@ if active_sig != main_sig:
     m = _user_eff_req(main_result, user_reid)
     if a is not None and m is not None:
         with indicator_area:
-            st.caption(f"ⓘ Your tweak changed the requirement by {format_pp(a - m)} vs. the main model.")
+            st.caption(f"ⓘ Your adjustment changed the requirement by {format_pp(a - m)} vs. the main model.")
 
 # Results below the panel.
 render_company_view(active_result, user_reid, active_result.config, _company_short(user_reid))
