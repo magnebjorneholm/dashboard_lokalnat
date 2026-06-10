@@ -42,6 +42,21 @@ LaTeX source for the user manual PDF lives in `user_manual_latex/`. Toolchain (M
 - `calculations/` is pure logic — no UI or Streamlit imports allowed.
 - Dependencies flow strictly downward (see ARCHITECTURE.md layer diagram).
 
+### Design for the target, not the legacy (scoped)
+
+When reworking a feature, prefer the clean design over patching around the old
+version's quirks — but scope it to the layer you're changing.
+
+- Reuse stable lower layers (auth, pipeline, state, config) as the sound
+  contracts they are, not as "limitations" to discard.
+- Heuristic: drop what exists only because of how the code grew; keep what
+  exists because it's correct.
+- For a non-trivial retire/replace or any cross-layer change, agree the scope
+  with the user first. In autonomous runs (no user to ask), take the smallest
+  change that works rather than blocking.
+- Example: replacing `login.py` with the sign-in dialog warranted a discussion —
+  reusing `auth_manager` / `state_manager` did not.
+
 ## Visual identity — "Nordic Energy"
 
 Clean Scandinavian finance dashboard. Communicates precision, regulatory authority,
