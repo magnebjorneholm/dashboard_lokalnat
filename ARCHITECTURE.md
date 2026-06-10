@@ -1078,6 +1078,12 @@ A standalone analysis of Ei's proposed new benchmarking model (TOTEX-based DEA),
 affected by the new model alone, all else equal?" It calls `run_new_benchmarking()`
 directly and never builds a `CaseDefinition`.
 
+> **Dependency map:** `new_benchmarking_model/dependency_graph.md` is a README-style,
+> Claude-readable walkthrough of the whole chain (capbase -> capital cost -> TOTEX -> DEA
+> -> efficiency requirement): a Mermaid graph plus step-by-step prose with file/line refs,
+> data sources, config switches and gotchas. Point new conversations there before touching
+> `calculations/new_benchmarking/`.
+
 ### Backend (`calculations/new_benchmarking/`)
 
 `run_new_benchmarking(cfg) -> NewBenchmarkingResult` builds a new TOTEX per company and
