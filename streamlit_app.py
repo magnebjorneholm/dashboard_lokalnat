@@ -282,6 +282,7 @@ _REVENUE_CAP_SPECS = [
 ]
 _STANDALONE_TOOL_SPECS = [
     ("pages/5_new_benchmarking.py", "New benchmarking model"),
+    ("pages/6_placeholder.py", "Placeholder"),
 ]
 _TOOL_PAGE_SPECS = _REVENUE_CAP_SPECS + _STANDALONE_TOOL_SPECS
 

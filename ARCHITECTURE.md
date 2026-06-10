@@ -110,12 +110,13 @@ dashboard_lokalnat/
 |   |-- tools.py                  # Overview of the tools + user-manual PDF download
 |   |-- team.py                   # Team + contact (merged)
 |
-|-- pages/                        # ZON 2: authenticated revenue-cap tool (sidebar nav)
+|-- pages/                        # ZON 2: authenticated tool pages (sidebar nav, two groups)
 |   |-- 1_create_and_select_case.py  # Create/load/delete/duplicate/compare cases
 |   |-- 2_case_setup.py           # Case Setup: select modules/sections
 |   |-- 3_specification.py        # Specification: configure parameters (tabs M1-M7)
 |   |-- 4_revenue_frame.py        # Revenue Frame: display results, export
 |   |-- 5_new_benchmarking.py     # New benchmarking model (standalone add-on analysis)
+|   |-- 6_placeholder.py          # Placeholder — empty standalone-tool stub for future work
 |
 |-- config/                       # Constants, metadata, domain configuration (no Streamlit)
 |   |-- case_definition.py        # Dataclasses: CaseDefinition, PreDeaConfig, DeaConfig, etc.
@@ -389,9 +390,9 @@ landing_pages/team.py   (Team)         pages/1_create_and_select_case.py  (Creat
  hidden -> redirect to landing_home)         v
                                        pages/4_revenue_frame.py          (Revenue Frame)
 
-                                     group "Standalone tools":
+                                     group "Standalone tools":  (decoupled, not part of 1 → 4)
                                        pages/5_new_benchmarking.py        (New benchmarking model)
-                                         — decoupled add-on, not part of the 1 → 4 flow
+                                       pages/6_placeholder.py             (Placeholder — empty stub)
 ```
 
 **Entrypoint:** `streamlit_app.py` — a two-zone controller.
