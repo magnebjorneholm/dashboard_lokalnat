@@ -8,6 +8,13 @@ The end result: you press one button (or save the file) and VS Code builds your
 PDF, handles the bibliography automatically, and shows the output next to your
 source with click-to-jump between PDF and code.
 
+> **This repo's layout.** Manuals live one folder per tool at
+> `user_manual_latex/manuals/<slug>/main.tex`, sharing `user_manual_latex/shared/`
+> (`preamble.tex`, `references.bib`). Open a tool's `main.tex` and build as below,
+> or run `./build.sh` (from `user_manual_latex/`) to build every manual and publish
+> each PDF to `static/manuals/<slug>.pdf`. `latexmkrc` sets `$do_cd = 1` so the
+> relative paths in each `main.tex` resolve from any working directory.
+
 ---
 
 ## The three pieces

@@ -7,6 +7,9 @@
 \usepackage{comment}
 \usepackage[counterclockwise]{rotating}
 \usepackage{float}
+% Load xcolor (with its options) before tikz: tikz pulls in xcolor itself with no
+% options, so a later [dvipsnames] request would trigger an option clash.
+\usepackage[dvipsnames]{xcolor}
 \usepackage{tikz}
 \usepackage{caption}
 \usepackage{graphicx}
@@ -22,7 +25,6 @@
 \usepackage{appendix}
 \usepackage{lscape}
 \usepackage{color,soul}
-\usepackage[dvipsnames]{xcolor}
 \usepackage[round,authoryear]{natbib}
 \oddsidemargin 0in
 \evensidemargin\oddsidemargin
@@ -162,12 +164,14 @@ linkcolor=black]{hyperref}
 %SET FIGCAPS ON, BUT SET FIGCAPS OFF WHEN APPENDICES BEGIN 
 
 
+% Graphs live at the repo root in graphs/. Manuals sit at
+% user_manual_latex/manuals/<slug>/, so the repo graphs/ is three levels up.
 \makeatletter
-\def\input@path{{graphs/}}
+\def\input@path{{../../../graphs/}}
 \makeatother
 
 
-\graphicspath{{graphs/}}
+\graphicspath{{../../../graphs/}}
 
 
 

@@ -3,7 +3,7 @@
 ## Project
 
 Regumetrica — regulatory analysis of Swedish electricity distribution companies (revenue cap calculation).
-Entrypoint: `streamlit_app.py` (Streamlit, Python 3.11).
+Entrypoint: `streamlit_app.py` (Streamlit, Python 3.12).
 
 ## Startup
 
@@ -22,20 +22,24 @@ in `.claude/settings.json` also blocks the Read tool for this file.)
 
 ## Workflow
 
+- Environment is managed with [`uv`](https://docs.astral.sh/uv/). The venv lives in `.venv/`
+  (create with `uv venv --python 3.12`, install with `uv pip install -r requirements.txt`).
 - Run tests after changes to `calculations/`, `pipeline/`, or `data_loaders/`:
   ```
-  ./venv/Scripts/python.exe -m pytest tests/ -v
+  uv run pytest tests/ -v
   ```
+  (Equivalent without uv: `.venv/bin/python -m pytest tests/ -v`.)
 - Skip tests for pure UI/cosmetic changes.
 - Stick to what's requested. Don't flag unrelated issues unless asked.
 
 ## User manual (LaTeX)
 
-LaTeX source for the user manual PDF lives in `user_manual_latex/`. Toolchain (MiKTeX + `latexmk` + VS Code **LaTeX Workshop**) is wired up via `user_manual_latex/latexmkrc` and the `latex-workshop.*` keys in `.vscode/settings.json`.
+Each tool ships its own user manual. The LaTeX sources live in `user_manual_latex/`, one folder per tool: `user_manual_latex/manuals/<slug>/main.tex`. All manuals share `user_manual_latex/shared/` (`preamble.tex`, `references.bib`). Toolchain (MacTeX + `latexmk` + VS Code **LaTeX Workshop**) is wired up via `user_manual_latex/latexmkrc` and the `latex-workshop.*` keys in `.vscode/settings.json`. Install MacTeX with `brew install --cask mactex` (or the smaller `brew install --cask basictex`); `latexmk` ships with it.
 
-- **Build in VS Code:** open `user_manual_latex/Regumetrica user manual.tex`, press **Ctrl+Alt+B**. Preview with **Ctrl+Alt+V**.
-- **Build from terminal:** `cd user_manual_latex && latexmk -pdf "Regumetrica user manual.tex"`
-- **Output:** `user_manual_latex/build/Regumetrica user manual.pdf` (gitignored).
+- **Add a manual:** `cp -r user_manual_latex/manuals/_template user_manual_latex/manuals/<slug>`, edit `main.tex`, then build. Serve it in the app with `manual_download_button("<slug>")` (see `frontend/common/manuals.py`).
+- **Build all (terminal):** `cd user_manual_latex && ./build.sh` — builds every manual and publishes each PDF to `static/manuals/<slug>.pdf` (the path the app serves). Build one: `./build.sh <slug>`.
+- **Build in VS Code:** open the tool's `manuals/<slug>/main.tex`, press **Ctrl+Alt+B**. Preview with **Ctrl+Alt+V**. (This writes only to `manuals/<slug>/build/`; run `build.sh` to publish into `static/manuals/`.)
+- **Output:** `user_manual_latex/manuals/<slug>/build/main.pdf` (gitignored); published copy at `static/manuals/<slug>.pdf` (committed).
 - See `user_manual_latex/LATEX_VSCODE_SETUP.md` for first-time setup, SyncTeX usage, and troubleshooting.
 
 ## Key conventions

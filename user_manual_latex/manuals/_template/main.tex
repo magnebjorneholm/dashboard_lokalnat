@@ -1,0 +1,37 @@
+% Template for a new tool user manual.
+%
+% To add a manual for a new tool:
+%   1. Copy this folder:  cp -r manuals/_template manuals/<your_tool_slug>
+%   2. Edit the \title below and write the content.
+%   3. Build:  ./build.sh            (or ./build.sh <your_tool_slug> for just this one)
+%      The PDF lands in static/manuals/<your_tool_slug>.pdf, which the app serves.
+%   4. Wire the slug into the tool's landing page via manual_bytes("<your_tool_slug>").
+%
+% Paths are relative to this main.tex and identical for every manual because all
+% manuals sit at the same depth (manuals/<slug>/main.tex). latexmk chdir's here
+% before building (see ../../latexmkrc), so they resolve from the terminal,
+% build.sh and VS Code alike.
+\input{../../shared/preamble.tex}
+\graphicspath{ {../../../graphs/} }
+\makeatletter
+\def\input@path{ {../../../graphs/} }
+\makeatother
+\begin{document}
+	\title{Regumetrica \linebreak \emph{Beta version} \linebreak <Tool name> user manual \linebreak Version 1.0 \\}
+	\author{\href{https://www.regumetrica.com/um}{www.regumetrica.com/um}}
+	\maketitle
+\setcounter{page}{1}
+\doublespacing
+
+\tableofcontents
+\newpage
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+% Write the manual for this tool here.
+
+% Bibliography is optional — remove these two lines if the manual cites nothing.
+\bibliographystyle{aer}
+\bibliography{references}
+
+\end{document}

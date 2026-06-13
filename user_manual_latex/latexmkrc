@@ -1,3 +1,15 @@
 $pdf_mode = 1;
-$out_dir = 'build';
-ensure_path('BIBINPUTS', '..');
+$out_dir  = 'build';
+
+# Every manual lives at manuals/<slug>/main.tex (uniform depth). $do_cd makes
+# latexmk chdir into that directory before building, so the relative paths in
+# each main.tex (../../shared, ../../../graphs) resolve identically whether the
+# build is launched from the terminal, build.sh, or VS Code. Each manual then
+# gets its own build/ subdirectory (already gitignored).
+$do_cd = 1;
+
+# The shared bibliography lives at ../../shared/references.bib, but bibtex runs
+# with its cwd inside build/ and can't reach it by a relative path. It is found
+# via an absolute BIBINPUTS instead — set by build.sh (terminal) and by the
+# latex-workshop "env" key in .vscode/settings.json (VS Code). main.tex uses
+# \bibliography{references}.
