@@ -39,18 +39,37 @@ _CSS = """
     backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px); z-index:0;
 }
 [data-testid="stAppViewContainer"] > div{ position:relative; z-index:1; }
-[data-testid="stHeader"]{ background:transparent; }
+
+/* === Frozen top bar ===
+   The native top-nav lives in stHeader (sticky, top:0). Make it a solid,
+   opaque bar that stays above all content while the page scrolls beneath it,
+   carry the brand wordmark on its left via ::before, and pin the Sign-in CTA
+   into its right (see .st-key-rm_signin). */
+[data-testid="stHeader"]{
+    background:rgba(248,250,252,0.88);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--rm-border);
+    z-index:1000;
+}
+[data-testid="stTopNav"]{ display:flex; align-items:center; }
+[data-testid="stTopNav"]::before{
+    content:"⚡ Regumetrica"; font-weight:700; font-size:1.18rem;
+    letter-spacing:-0.01em; color:var(--rm-text); white-space:nowrap;
+    margin-right:1.4rem;
+}
+/* Sign-in CTA pinned into the frozen top bar */
+.st-key-rm_signin{
+    position:fixed; top:.5rem; right:1.1rem; width:auto !important; z-index:1001;
+}
 
 /* Hide tool chrome (no sidebar in the landing zone) */
 [data-testid="stSidebar"],
 [data-testid="collapsedControl"]{ display:none !important; }
 
-/* Centered, width-limited content column */
-.main .block-container{ max-width:1080px; padding-top:1.4rem; padding-bottom:4rem; }
+/* Centered, width-limited content column (top padding clears the frozen bar) */
+.main .block-container{ max-width:1080px; padding-top:4.5rem; padding-bottom:4rem; }
 
-/* === Header === */
-.rm-brand{ font-weight:700; font-size:1.3rem; letter-spacing:-0.01em; color:var(--rm-text);
-    display:flex; align-items:center; gap:.45rem; white-space:nowrap; }
+/* === Page links (in-content, e.g. "Explore the tools →") === */
 [data-testid="stPageLink"] a{ padding:.3rem .2rem !important; border-radius:6px;
     transition:color .15s ease; }
 [data-testid="stPageLink"] a p{ color:var(--rm-text2) !important; font-weight:500 !important;
@@ -137,21 +156,19 @@ def _inject_theme() -> None:
 
 
 def apply_landing_shell() -> None:
-    """Inject the landing theme and render the brand + Sign in CTA row.
+    """Inject the landing theme and pin the Sign in CTA into the frozen top bar.
 
-    Section navigation (Home / Tools / Team) is the native top-nav rendered by
-    streamlit_app.py via st.navigation(position="top").
+    The brand wordmark and the section navigation (Home / Tools / Team) live in
+    the native top bar (stHeader): the nav is rendered by streamlit_app.py via
+    st.navigation(position="top"), the brand is drawn by CSS (stTopNav::before).
+    The Sign in button is a real widget — it is pinned to the bar's right via the
+    ``.st-key-rm_signin`` container class.
     """
     _inject_theme()
 
-    left, right = st.columns([4, 1], vertical_alignment="center")
-    with left:
-        st.markdown('<div class="rm-brand">⚡ Regumetrica</div>', unsafe_allow_html=True)
-    with right:
-        if st.button("Sign in", type="primary", width="stretch"):
+    with st.container(key="rm_signin"):
+        if st.button("Sign in", type="primary"):
             auth_dialog()
-
-    st.divider()
 
 
 def landing_heading(title: str, eyebrow: Optional[str] = None, level: int = 2) -> None:
