@@ -138,12 +138,15 @@ _CSS = """
 
 @st.cache_data
 def _bg_data_uri() -> Optional[str]:
-    """Base64 data URI for the landing background image, or None if missing."""
+    """Base64 data URI for the landing background image, or None if missing.
+
+    The asset lives in ``static/`` (with the repo root kept as a fallback).
+    """
     for name in ("login_pic.jpg", "login_pic.jpeg", "login_pic.png"):
-        path = Path(name)
-        if path.exists():
-            mime = "png" if path.suffix == ".png" else "jpeg"
-            return f"data:image/{mime};base64,{base64.b64encode(path.read_bytes()).decode()}"
+        for path in (Path("static") / name, Path(name)):
+            if path.exists():
+                mime = "png" if path.suffix == ".png" else "jpeg"
+                return f"data:image/{mime};base64,{base64.b64encode(path.read_bytes()).decode()}"
     return None
 
 
