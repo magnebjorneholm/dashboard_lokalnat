@@ -100,7 +100,8 @@ _CSS = """
 /* === Card grid === */
 .rm-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:1rem;
     margin:.4rem 0 1.4rem; }
-.rm-card{ background:var(--rm-card); border:1px solid var(--rm-border); border-radius:14px;
+.rm-card{ position:relative; display:flex; flex-direction:column;
+    background:var(--rm-card); border:1px solid var(--rm-border); border-radius:14px;
     padding:1.4rem; box-shadow:0 1px 2px rgba(15,23,42,.04);
     transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .rm-card:hover{ transform:translateY(-3px); box-shadow:0 12px 30px rgba(15,23,42,.10);
@@ -110,6 +111,19 @@ _CSS = """
     color:var(--rm-primary); margin-bottom:.3rem; }
 .rm-card-title{ font-weight:600; font-size:1.06rem; color:var(--rm-text); margin-bottom:.32rem; }
 .rm-card-body{ color:var(--rm-text2); font-size:.92rem; line-height:1.5; }
+/* Status pill (top-right) — shown only for non-default statuses */
+.rm-card-status{ position:absolute; top:1.1rem; right:1.1rem; font-size:.68rem; font-weight:700;
+    letter-spacing:.04em; text-transform:uppercase; padding:.16rem .55rem; border-radius:999px; }
+.rm-card-status.beta{ color:var(--rm-warning); background:var(--rm-warning-bg); }
+.rm-card-status.coming_soon{ color:var(--rm-muted); background:var(--rm-border); }
+/* Coming-soon cards are dimmed and don't lift on hover (not usable yet) */
+.rm-card--soon{ opacity:.72; }
+.rm-card--soon:hover{ transform:none; box-shadow:0 1px 2px rgba(15,23,42,.04);
+    border-color:var(--rm-border); }
+/* Manual link (card footer), pinned to the bottom so cards align */
+.rm-card-link{ margin-top:auto; padding-top:.9rem; font-size:.86rem; font-weight:600;
+    color:var(--rm-primary); text-decoration:none; display:inline-flex; align-items:center; gap:.3rem; }
+.rm-card-link:hover{ text-decoration:underline; }
 
 /* Landing button + dialog polish */
 [data-testid="stMain"] [data-testid="stBaseButton-primary"]{ border-radius:8px; }
@@ -145,6 +159,8 @@ def _inject_theme() -> None:
         --rm-card:{COLORS['bg_card']};
         --rm-border:{COLORS['bg_muted']};
         --rm-teal:{CHART_COLORS[1]};
+        --rm-warning:{COLORS['warning']};
+        --rm-warning-bg:{COLORS['warning_light']};
     }}
     [data-testid="stAppViewContainer"] {{
         {bg_rule}
@@ -183,18 +199,30 @@ def landing_heading(title: str, eyebrow: Optional[str] = None, level: int = 2) -
 def landing_cards(items: List[Dict[str, str]]) -> None:
     """Responsive grid of cards.
 
-    Each item: ``{title, body, icon?, eyebrow?}``.
+    Each item: ``{title, body, icon?, eyebrow?, status?, manual_url?, manual_label?}``.
+    ``status`` (e.g. ``"beta"``, ``"coming_soon"``) renders a pill top-right;
+    ``manual_url`` renders a manual link pinned to the card's footer.
     """
     cards = []
     for it in items:
         parts = []
+        if it.get("status"):
+            label = it["status"].replace("_", " ")
+            parts.append(f'<div class="rm-card-status {it["status"]}">{label}</div>')
         if it.get("icon"):
             parts.append(f'<div class="rm-card-icon">{it["icon"]}</div>')
         if it.get("eyebrow"):
             parts.append(f'<div class="rm-card-eyebrow">{it["eyebrow"]}</div>')
         parts.append(f'<div class="rm-card-title">{it["title"]}</div>')
         parts.append(f'<div class="rm-card-body">{it["body"]}</div>')
-        cards.append(f'<div class="rm-card">{"".join(parts)}</div>')
+        if it.get("manual_url"):
+            label = it.get("manual_label", "Manual (PDF)")
+            parts.append(
+                f'<a class="rm-card-link" href="{it["manual_url"]}" target="_blank">'
+                f'{label} ↗</a>'
+            )
+        card_class = "rm-card rm-card--soon" if it.get("status") == "coming_soon" else "rm-card"
+        cards.append(f'<div class="{card_class}">{"".join(parts)}</div>')
     st.markdown(f'<div class="rm-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 

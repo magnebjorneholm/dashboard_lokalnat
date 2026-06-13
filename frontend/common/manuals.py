@@ -5,6 +5,12 @@ Each tool ships its own manual. The LaTeX sources live in
 which publishes one PDF per tool to ``static/manuals/<slug>.pdf``. This module is the
 single place the app reads those PDFs from — a landing page just calls
 ``manual_bytes("<slug>")`` (or renders a download with :func:`manual_download_button`).
+
+Naming rule (must hold or a manual link silently disappears): the LaTeX folder name,
+the published ``static/manuals/<slug>.pdf`` filename, and the registry's ``manual_slug``
+(``config/tools_registry.py``) must all be the same ``<slug>``. build.sh couples the
+first two (published name = folder basename); ``tests/test_tools_registry.py`` guards
+the link to the registry.
 """
 
 from pathlib import Path
