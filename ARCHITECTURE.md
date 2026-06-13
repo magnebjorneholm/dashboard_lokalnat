@@ -102,12 +102,13 @@ dashboard_lokalnat/
 |-- streamlit_app.py              # Entrypoint: two-zone controller (public landing vs authenticated tool)
 |-- requirements.txt              # Python dependencies
 |-- .streamlit/config.toml        # Streamlit config (theme, port 8501)
-|-- static/                       # Statically served assets (enableStaticServing)
-|   |-- regumetrica_user_manual.pdf  # User manual PDF (offered on the Tools landing page)
+|-- static/                       # Statically served assets (enableStaticServing; served at app/static/)
+|   |-- manuals/<slug>.pdf            # Per-tool manual PDFs (published by user_manual_latex/build.sh)
+|   |-- login_pic.jpg                 # Landing background photo (inlined as a data URI)
 |
 |-- landing_pages/                # ZON 1: public landing (native top-nav, no sidebar)
 |   |-- home.py                   # Hero, tagline, intro, Sign in CTA
-|   |-- tools.py                  # Overview of the tools + user-manual PDF download
+|   |-- tools.py                  # Registry-driven tools index (per-tool card + manual link)
 |   |-- team.py                   # Team + contact (merged)
 |
 |-- pages/                        # ZON 2: authenticated tool pages (sidebar nav, two groups)
@@ -128,6 +129,7 @@ dashboard_lokalnat/
 |   |-- formatting.py             # Formatting: tkr, percent, delta (European conventions)
 |   |-- time_codes.py             # Half-year timecodes (229=2024H1, etc.)
 |   |-- incentive_parameters.py   # KPI, K_NF, AIT/AIF costs, caps, SNI labels
+|   |-- tools_registry.py         # ToolSpec + TOOLS: single source of truth for the tools (drives the landing index)
 |   |-- config_adapter.py         # UI config -> CaseDefinition (only bridge frontend->backend)
 |
 |-- frontend/                     # Streamlit-dependent UI code ONLY
@@ -135,7 +137,8 @@ dashboard_lokalnat/
 |   |   |-- parameter_input.py    # Reusable input component with baseline comparison
 |   |   |-- styling.py            # apply_base_styling() (both zones) + apply_tool_chrome() (tool sidebar); re-exports colors
 |   |   |-- auth_dialog.py        # Sign-in dialog (login/register/reset/verify) for the landing zone
-|   |   |-- landing_shell.py      # Landing theme (faded bg) + brand/Sign-in header + shared helpers (landing_cards/heading/footer)
+|   |   |-- landing_shell.py      # Landing theme (faded bg) + frozen top bar (brand via CSS + pinned Sign-in) + shared helpers (landing_cards/heading/footer)
+|   |   |-- manuals.py            # Reads published per-tool manual PDFs (static/manuals/<slug>.pdf)
 |   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
 |   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
 |   |
@@ -296,14 +299,19 @@ dashboard_lokalnat/
 |   |-- test_mini_run.py             # Mini-run (lightweight DEA/StoNED) tests
 |   |-- test_result_snapshot.py      # Result snapshot extraction tests
 |   |-- test_new_benchmarking_precompute.py  # New-benchmarking bundle + freshness guard
+|   |-- test_tools_registry.py       # Tool registry <-> published-manual consistency
 |
-|-- user_manual_latex/            # LaTeX source for the user manual PDF (see Section 19)
-    |-- Regumetrica user manual.tex   # Root document (article, natbib)
-    |-- preamble_paper.tex            # Packages, geometry, theorem envs, hyperref
-    |-- references_regumetrica.bib    # Bibliography
-    |-- latexmkrc                     # latexmk config: $out_dir=build, BIBINPUTS=..
-    |-- LATEX_VSCODE_SETUP.md         # Setup guide (MiKTeX + LaTeX Workshop)
-    |-- build/                        # PDF + temp artifacts (gitignored)
+|-- user_manual_latex/            # LaTeX sources for the per-tool manual PDFs (see Section 19)
+    |-- build.sh                      # Build all (or one) manual(s) -> publish to static/manuals/<slug>.pdf
+    |-- latexmkrc                     # latexmk config: $out_dir=build
+    |-- LATEX_VSCODE_SETUP.md         # Setup guide (MacTeX + LaTeX Workshop)
+    |-- shared/                       # preamble.tex + references.bib shared by every manual
+    |-- manuals/                      # One folder per tool; folder name == manual slug
+        |-- _template/main.tex            # Starting point for a new tool's manual (skipped by build.sh)
+        |-- regumetrica_user_manual/main.tex  # Revenue cap tool
+        |-- new_benchmarking_model/main.tex   # New benchmarking model
+        |-- placeholder/main.tex              # Placeholder
+        |-- <slug>/build/main.pdf             # Build artifacts per manual (gitignored)
 ```
 
 
@@ -326,7 +334,7 @@ Layer 2: FRONTEND (Streamlit-dependent only)
         case_actions.py, result_snapshot.py, export_button.py
     Right side: FRONTEND COMMON + MODULES
         parameter_input.py, styling.py, auth_dialog.py, landing_shell.py,
-        save_bar.py, case_comparison.py,
+        manuals.py, save_bar.py, case_comparison.py,
         m1_asset_base.py .. m5_efficiency.py, benchmarking.py
         |
         | imports
@@ -339,7 +347,7 @@ Layer 2b: VISUALIZATION (Streamlit-free)
 Layer 3: CONFIG (constants, metadata, domain configuration)
     case_definition.py, column_names.py, glossary.py,
     module_registry.py, asset_categories.py, colors.py, formatting.py,
-    time_codes.py, incentive_parameters.py, config_adapter.py
+    time_codes.py, incentive_parameters.py, tools_registry.py, config_adapter.py
         |
         | imports
         v
@@ -402,7 +410,8 @@ landing_pages/team.py   (Team)         pages/1_create_and_select_case.py  (Creat
 - Auth guard: `check_auth()` (dev mode OR logged in) decides the zone.
   - **Zon 1 (public):** `st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN,
     position="top")` — native top-nav, no sidebar. Each landing page calls
-    `apply_landing_shell()` (theme + Sign in CTA). Sign in opens `auth_dialog()`;
+    `apply_landing_shell()` (theme + a frozen top bar: the native nav styled
+    opaque, brand via CSS, Sign in pinned into it). Sign in opens `auth_dialog()`;
     a verified login does `st.rerun()` (app scope), which closes the dialog and
     re-routes into Zon 2. Protected tool pages are registered hidden so
     bookmarked tool URLs redirect to `landing_home` instead of 404'ing.
@@ -854,11 +863,13 @@ streamlit_app.py
     |-- auth.cookie_session               (auth + case cookie helpers)
 
 landing_pages/{home,tools,team}.py        (ZON 1)
-    |-- frontend.common.landing_shell     (apply_landing_shell, landing_footer)
+    |-- frontend.common.landing_shell     (apply_landing_shell, landing_cards, landing_heading, landing_footer)
           |-- frontend.common.auth_dialog (auth_dialog: login/register/reset/verify)
           |     |-- frontend.utils.company_directory (get_company_options)
           |     |-- frontend.utils.state_manager     (set_user_reid)
           |     |-- auth.firebase_auth               (initialize_firebase_auth)
+    |-- config.tools_registry             (tools.py: tools_for, ToolSpec)
+    |-- frontend.common.manuals           (tools.py: manual_path)
 
 pages/1_create_and_select_case.py
     |-- frontend.utils.state_manager     (init, get/set, reset_case)
@@ -1048,34 +1059,43 @@ max_dep (max depreciation years).
 **Known:** Company 886 has ~354 tkr rounding difference in capital_cost_2024 (KENT vs DM).
 
 
-## 19. User Manual (LaTeX)
+## 19. User Manuals (LaTeX) & the tool registry
 
-The user manual is authored in LaTeX and is independent of the Python application.
+Each tool ships its own manual, authored in LaTeX and independent of the Python
+application. The tools themselves are described centrally by the **tool registry**.
 
-**Source:** `user_manual_latex/Regumetrica user manual.tex` (article class, natbib bibliography via `aer.bst`).
-**Output:** `user_manual_latex/build/Regumetrica user manual.pdf` (gitignored under root `build/` rule).
+### Tool registry (`config/tools_registry.py`)
 
-### Toolchain
+`ToolSpec` (frozen dataclass) + the `TOOLS` list are the Streamlit-free single
+source of truth for the tools: `key`, `name`, `branch` (`revenue_cap` /
+`standalone`), `summary`, `icon`, `status` (`available` / `beta` / `coming_soon`),
+`manual_slug`, `public`, `page_path`. `tools_for(branch)` drives the Tools landing
+page ([landing_pages/tools.py](landing_pages/tools.py)); being pure data it ports
+directly to the future React landing.
 
-- **MiKTeX** provides `pdflatex`, `bibtex`, and `latexmk` — must be on PATH.
-- **VS Code extension:** `James-Yu.latex-workshop`.
-- **Build config:** `user_manual_latex/latexmkrc` — sets `$pdf_mode = 1`, `$out_dir = 'build'`,
-  and `ensure_path('BIBINPUTS', '..')` so `bibtex` can find the `.bib` from inside `build/`.
-- **Editor config:** `latex-workshop.*` keys in `.vscode/settings.json` point the PDF viewer
-  at `build/` and select the `latexmk` recipe.
+### Manuals: source -> published
 
-### Building
+| Location | Role |
+|----------|------|
+| `user_manual_latex/manuals/<slug>/main.tex` | **Source** (one folder per tool; `shared/` holds the common preamble + `references.bib`) |
+| `user_manual_latex/manuals/<slug>/build/main.pdf` | Build artifact (gitignored) |
+| `static/manuals/<slug>.pdf` | **Published** PDF the app serves (committed) |
 
-| Method   | Command                                                                       |
-|----------|-------------------------------------------------------------------------------|
-| VS Code  | Open the `.tex`, press **Ctrl+Alt+B** (build), **Ctrl+Alt+V** (preview tab).  |
-| Terminal | `cd user_manual_latex && latexmk -pdf "Regumetrica user manual.tex"`          |
-| Clean    | `latexmk -C` (everything, incl. PDF) or `latexmk -c` (keep PDF)               |
+`user_manual_latex/build.sh` is the bridge: `./build.sh` builds every manual (or
+`./build.sh <slug>` just one), runs `latexmk -r latexmkrc`, and copies
+`build/main.pdf` -> `static/manuals/<slug>.pdf`. The app reads the published PDFs
+via `frontend/common/manuals.py` (`manual_bytes` / `manual_path`); the landing
+serves them as static `<a href="app/static/manuals/<slug>.pdf">` links.
 
-SyncTeX: `Ctrl+Click` in PDF jumps to source; `Ctrl+Alt+J` in source jumps to PDF.
+**Naming rule:** the LaTeX folder name, the published `static/manuals/<slug>.pdf`
+filename, and the registry's `manual_slug` must all be the same `<slug>`, or the
+manual link silently disappears. build.sh couples the first two; the registry is
+linked to the build output and guarded by `tests/test_tools_registry.py` (every
+`available` tool has a published PDF; no orphan PDFs). The one deliberate
+divergence is `revenue_cap` (key) -> `regumetrica_user_manual` (manual_slug).
 
-See `user_manual_latex/LATEX_VSCODE_SETUP.md` for first-time install, MiKTeX on-the-fly
-package downloads, and troubleshooting.
+Requires a LaTeX toolchain (MacTeX/BasicTeX) on PATH; VS Code uses the
+`James-Yu.latex-workshop` extension. See `user_manual_latex/LATEX_VSCODE_SETUP.md`.
 
 
 ## 20. New Benchmarking Add-on (page 5)
