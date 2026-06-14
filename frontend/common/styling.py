@@ -97,6 +97,9 @@ def _base_css() -> str:
         /* === BRANDING === */
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden; }
+
+        /* Hide the anchor-link icon Streamlit adds on hover over headings */
+        [data-testid="stHeaderActionElements"] { display: none; }
     </style>
     """
 
