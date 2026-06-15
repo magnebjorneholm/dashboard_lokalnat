@@ -8,12 +8,14 @@ Implements Ei's baseline specification: CRS, input-oriented, IQR outlier detecti
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, List
-import pulp
 
 from config.column_names import (
     COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_DEA_POTENTIAL, COL_IS_OUTLIER,
     COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
+)
+from calculations.frontier.outliers import (
+    detect_outliers_iterative, super_eff_scores,
 )
 
 
@@ -78,55 +80,43 @@ def run_dea_analysis(
     inputs = df[input_cols].values
     outputs = df[output_cols].values
 
-    # STEP 1: First run - Super-efficiency DEA
-    eff1 = _run_super_efficiency_dea(inputs, outputs, rts)
-    df["supereff1"] = eff1
+    # Outlier detection (super-eff + IQR) and cleaned re-solve, via the shared
+    # routine. `outlier_max_rounds` controls iteration: 1 = Ei's single
+    # identification round (the regulatory baseline); None = iterate until no
+    # new outliers appear. Default keeps the pipeline on Ei's method.
+    max_rounds = model_spec.get('outlier_max_rounds', 1)
+    res = detect_outliers_iterative(
+        inputs, outputs, rts,
+        q_lower=outlier_params['q_lower'],
+        q_upper=outlier_params['q_upper'],
+        multiplier=outlier_params['multiplier'],
+        max_rounds=max_rounds,
+    )
 
-    # STEP 2: Identify outliers
-    theta_valid = [e for e in eff1 if isinstance(e, (int, float)) and not np.isnan(e)]
-    q_low = np.percentile(theta_valid, outlier_params['q_lower'])
-    q_high = np.percentile(theta_valid, outlier_params['q_upper'])
-    iqr = q_high - q_low
-    threshold = q_high + outlier_params['multiplier'] * iqr
+    df[COL_IS_OUTLIER] = res.is_outlier
 
-    df[COL_IS_OUTLIER] = [
-        e > threshold if isinstance(e, (int, float)) else True
-        for e in eff1
-    ]
-
-    # STEP 3: Second run - Exclude outliers from reference set
-    df_clean = df[~df[COL_IS_OUTLIER]].reset_index(drop=True)
-    inputs_clean = df_clean[input_cols].values
-    outputs_clean = df_clean[output_cols].values
-    eff2 = _run_super_efficiency_dea(inputs_clean, outputs_clean, rts)
-
-    # STEP 4: Calculate results
+    # Outliers report their flag-time super-eff score and potential 1.0;
+    # survivors report their score against the cleaned reference set.
     result_efficiency = []
     result_super_efficiency = []
     result_potential = []
-
-    j = 0
-    for i, is_outlier in enumerate(df[COL_IS_OUTLIER]):
-        if is_outlier:
-            # For outliers: use first run
-            result_efficiency.append(min(eff1[i], 1) if isinstance(eff1[i], (int, float)) else np.nan)
-            result_super_efficiency.append(eff1[i] if isinstance(eff1[i], (int, float)) else np.nan)
+    for i in range(len(df)):
+        if res.is_outlier[i]:
+            theta = res.flag_scores[i]
+            result_efficiency.append(min(theta, 1) if np.isfinite(theta) else np.nan)
+            result_super_efficiency.append(theta if np.isfinite(theta) else np.nan)
             result_potential.append(1.0)
         else:
-            # For non-outliers: use second run
-            theta = eff2[j]
-            if isinstance(theta, (int, float)) and not np.isnan(theta):
+            theta = res.final_scores[i]
+            if np.isfinite(theta):
                 efficiency = min(theta, 1)
-                potential = 1 - efficiency
-
                 result_efficiency.append(efficiency)
                 result_super_efficiency.append(theta)
-                result_potential.append(potential)
+                result_potential.append(1 - efficiency)
             else:
                 result_efficiency.append(np.nan)
                 result_super_efficiency.append(np.nan)
                 result_potential.append(np.nan)
-            j += 1
 
     df[COL_DEA_EFFICIENCY] = result_efficiency
     df[COL_DEA_SUPER_EFF] = result_super_efficiency
@@ -147,73 +137,16 @@ def _run_super_efficiency_dea(
     outputs: np.ndarray,
     rts: str
 ) -> List:
-    """
-    Run super-efficiency DEA.
+    """Backward-compatible super-efficiency DEA over the full sample.
 
-    For each company i, an LP model is solved where the company is excluded from the reference set.
-
-    Args:
-        inputs: numpy array with inputs (n_companies * n_inputs)
-        outputs: numpy array with outputs (n_companies * n_outputs)
-        rts: 'crs' or 'vrs'
-
-    Returns:
-        List with super-efficiency scores (or "OUTLIER" if optimization fails)
+    Thin wrapper around ``calculations.frontier.outliers.super_eff_scores`` (the
+    single source of truth for the LP). Each company is scored leave-one-out
+    against all others. Returns a list of scores, with ``"OUTLIER"`` where the
+    LP fails or data is missing (preserving the legacy return contract).
     """
     n = len(inputs)
-    eff = []
-
-    for i in range(n):
-        # Check for missing data
-        if np.any(np.isnan(inputs[i])) or np.any(np.isnan(outputs[i])):
-            eff.append("OUTLIER")
-            continue
-
-        # Create LP problem
-        model = pulp.LpProblem(name=f"DEA_SUPER_DMU_{i}", sense=pulp.LpMinimize)
-
-        # Decision variable: theta (efficiency score)
-        theta = pulp.LpVariable("theta", lowBound=0)
-
-        # Decision variables: lambdas for ALL companies (not n-1)
-        lambdas = [pulp.LpVariable(f"lambda_{j}", lowBound=0) for j in range(n)]
-
-        # Objective: minimize theta (input-oriented)
-        model += theta
-
-        # Output constraints: sum(lambda_j * y_j) >= y_0 (exclude company i)
-        for r in range(outputs.shape[1]):
-            model += (
-                pulp.lpSum(lambdas[j] * outputs[j][r] for j in range(n) if j != i)
-                >= outputs[i][r]
-            )
-
-        # Input constraints: sum(lambda_j * x_j) <= theta * x_0 (exclude company i)
-        for k in range(inputs.shape[1]):
-            model += (
-                pulp.lpSum(lambdas[j] * inputs[j][k] for j in range(n) if j != i)
-                <= theta * inputs[i][k]
-            )
-
-        # RTS constraint
-        if rts == "vrs":
-            # Variable Returns to Scale: sum(lambda_j) = 1 (exclude company i)
-            model += pulp.lpSum(lambdas[j] for j in range(n) if j != i) == 1
-        # else: CRS has no constraint
-
-        # Solve problem
-        try:
-            model.solve(pulp.PULP_CBC_CMD(msg=0))
-            score = pulp.value(theta)
-
-            if score is None or np.isnan(score):
-                score = "OUTLIER"
-        except:
-            score = "OUTLIER"
-
-        eff.append(score)
-
-    return eff
+    scores = super_eff_scores(inputs, outputs, rts, np.ones(n, dtype=bool))
+    return [s if np.isfinite(s) else "OUTLIER" for s in scores]
 
 
 # Baseline DEA specification (Ei's model)
