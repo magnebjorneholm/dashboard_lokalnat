@@ -17,6 +17,7 @@ import pandas as pd
 
 from config.column_names import (
     COL_REID, COL_DEA_EFFICIENCY, COL_TOTEX_NEW, COL_EFF_REQ_DELTA,
+    COL_APPLICATION_BASE_NEW, COL_KR_CURRENT, COL_KR_NEW,
 )
 from calculations.new_benchmarking import run_new_benchmarking, NewBenchmarkingConfig
 from data_loaders.new_benchmarking_data import load_precomputed_main, MANIFEST_JSON
@@ -54,6 +55,10 @@ class TestBundleShape:
         assert COL_TOTEX_NEW in precomputed.totex.columns
         assert COL_EFF_REQ_DELTA in precomputed.comparison.columns
 
+    def test_cost_impact_columns(self, precomputed):
+        for col in (COL_APPLICATION_BASE_NEW, COL_KR_CURRENT, COL_KR_NEW):
+            assert col in precomputed.totex.columns
+
     def test_env_per_company_present(self, precomputed):
         assert not precomputed.env_capex.cable_adjustment.per_company.empty
         assert not precomputed.env_capex.station_adjustment.per_company.empty
@@ -80,3 +85,11 @@ class TestBundleFreshness:
     def test_eff_req_delta_matches(self, precomputed, live):
         pc, lv = _aligned(precomputed.comparison, live.comparison, COL_EFF_REQ_DELTA)
         pd.testing.assert_series_equal(pc, lv, atol=1e-6, check_names=False)
+
+    def test_kr_new_matches(self, precomputed, live):
+        pc, lv = _aligned(precomputed.totex, live.totex, COL_KR_NEW)
+        pd.testing.assert_series_equal(pc, lv, rtol=1e-6, check_names=False)
+
+    def test_kr_current_matches(self, precomputed, live):
+        pc, lv = _aligned(precomputed.totex, live.totex, COL_KR_CURRENT)
+        pd.testing.assert_series_equal(pc, lv, rtol=1e-6, check_names=False)

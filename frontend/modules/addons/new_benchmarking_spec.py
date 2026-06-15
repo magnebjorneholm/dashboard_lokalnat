@@ -1,9 +1,9 @@
 """
-new_benchmarking_spec.py — fine-tuning controls for the new benchmarking model add-on.
+new_benchmarking_spec.py - fine-tuning controls for the new benchmarking model add-on.
 
 Renders the (few) parameters a user may adjust on top of the fixed "main model" and
-returns a fully-formed NewBenchmarkingConfig. Everything not exposed here — TOTEX
-composition, outputs, returns to scale — is fixed at the main-model reference reading
+returns a fully-formed NewBenchmarkingConfig. Everything not exposed here - TOTEX
+composition, outputs, returns to scale - is fixed at the main-model reference reading
 (see calculations/new_benchmarking/config.py).
 
 This add-on is standalone (its own page) and does NOT flow through the case/ui_config
@@ -60,7 +60,7 @@ def render_config_panel() -> NewBenchmarkingConfig:
 
     The DEA run is heavy, so it must not fire on every widget edit. The returned config
     therefore reflects the last config the user committed via the "Run experiment" button
-    (or the main model before any run) — not the live widget values. Editing widgets only
+    (or the main model before any run) - not the live widget values. Editing widgets only
     marks pending changes; nothing recomputes until the button is clicked.
     """
     st.caption(

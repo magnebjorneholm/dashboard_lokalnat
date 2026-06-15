@@ -6,6 +6,18 @@
 > testas ett i taget. Block I (steg 1 och 2) är grunden och bör göras först;
 > resten är frontend och kan tas i valfri ordning efter det.
 
+## Status (uppdaterad)
+
+**Klart:** Block I (steg 1-2: kr-baser + precompute + tester), steg 4 (verdikt-hero med
+från/till i % och kr, färgad på kr-swingen, divergens-text; av-duplicerade KPI-nivåer),
+steg 6 (KPI-tooltips), steg 7 (reset-knapp + K_NF-dedup), bolagsrubrik (del av steg 3), och
+em-dash-städning av UI-filerna (steg 9). Hela testsviten grön (284 passed, 2 skipped).
+
+**Kvar / pausat:** panelflytten (steg 3-resten: flytta Experiment-expandern under resultatet)
+och visualiseringarna (steg 5 + TOTEX-breakdown steg 8), pausade i väntan på omtänk kring
+`new_benchmarking_model/visuals.md`. Modellbeskrivningen (`_render_model_diff()` placeholder
+på sidan 5) är fortfarande tom (medvetet uppskjuten).
+
 ## Låsta beslut (referens)
 
 - **Två kostnadsbaser, det är kärnan i reformen:**

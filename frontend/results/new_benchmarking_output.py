@@ -1,17 +1,17 @@
 """
-new_benchmarking_output.py — render the new-benchmarking result for one company.
+new_benchmarking_output.py - render the new-benchmarking result for one company.
 
 Built for the two-sided third-quartile mechanic (not the legacy front-reference model):
-the headline is the firm's *signed outcome* under the new model — a deduction if it is
+the headline is the firm's *signed outcome* under the new model - a deduction if it is
 less efficient than the third-quartile benchmark E75, a reward if more efficient, full
 cost coverage at the benchmark.
 
-Layout (firm-first — the user's answer comes before the sector context):
-  1. Your company  — verdict hero (deduction / coverage / reward) + supporting KPIs.
-  2. Sector & position — counts + the position chart (efficiency histogram with the E75
+Layout (firm-first - the user's answer comes before the sector context):
+  1. Your company  - verdict hero (deduction / coverage / reward) + supporting KPIs.
+  2. Sector & position - counts + the position chart (efficiency histogram with the E75
      pivot, deduction/reward zones and the model's transfer curve) + the outcome
      distribution, the firm marked in both.
-  3. New model TOTEX — bridge waterfall from the current-model TOTEX to the new one.
+  3. New model TOTEX - bridge waterfall from the current-model TOTEX to the new one.
 
 The two-sided visuals live in frontend/results/_two_sided_charts.py (NOT the M5-shared
 _efficiency_charts.py). The current model (EIs_DEA) is used only as the comparison point
@@ -28,11 +28,12 @@ import streamlit as st
 
 from frontend.common.styling import COLORS
 from config.colors import get_plotly_template_safe
-from config.formatting import format_percent, format_pp
+from config.formatting import format_percent, format_pp, format_tkr, format_delta
 from config.column_names import (
     COL_REID, COL_DEA_EFFICIENCY, COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL, COL_DEA_REFERENCE,
     COL_TOTEX_NEW, COL_CONTROLLABLE_AVG, COL_CAPITAL_COST_2024,
     COL_LOSS_VALUED, COL_NONCTRL_SELECTED, COL_CAPITAL_COST_ENV_ADJ,
+    COL_KR_CURRENT, COL_KR_NEW,
 )
 from calculations.new_benchmarking.config import NewBenchmarkingConfig
 from calculations.new_benchmarking.model import NewBenchmarkingResult
@@ -118,9 +119,11 @@ def render_company_view(
     new_eff = _val(dea_new, user_reid, COL_DEA_EFFICIENCY)
     new_out = _val(dea_new, user_reid, COL_EFF_REQ_ANNUAL)      # signed outcome
     cur_req = _val(dea_cur, user_reid, COL_EFF_REQ_ANNUAL)      # current published requirement
+    kr_cur = _val(result.totex, user_reid, COL_KR_CURRENT)      # current eff-req in tkr (OPEX base)
+    kr_new = _val(result.totex, user_reid, COL_KR_NEW)          # new outcome in tkr (TOTEX base)
     is_outlier_new = _flag(dea_new, user_reid, COL_IS_OUTLIER)
 
-    _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req, is_outlier_new)
+    _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req, kr_cur, kr_new, is_outlier_new)
     st.divider()
     _render_sector_and_position(result, user_reid, cfg, e75, new_eff, new_out, user_label)
     st.divider()
@@ -131,57 +134,110 @@ def render_company_view(
 # 1. Verdict (firm-first)
 # ---------------------------------------------------------------------------
 
-def _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req, is_outlier) -> None:
-    st.markdown("#### Your company under the new model")
+def _render_transition_hero(cur_req, new_out, kr_cur, kr_new) -> None:
+    """From/to hero: how the requirement changes, current to new.
 
-    kind = outcome_kind(new_out)
-    if kind == KIND_REWARD:
-        st.success(
-            f"**Reward of {format_percent(abs(new_out))}/yr** — more efficient than the "
-            "third-quartile benchmark, so the new model raises the revenue cap."
+    Coloured by the kronor swing (the firm's actual money impact, since the two models
+    apply their % to different bases), and surfacing the OPEX→TOTEX divergence in words
+    when percent and kronor point different ways (the majority of companies).
+    """
+    if None in (cur_req, new_out, kr_cur, kr_new):
+        st.info("No outcome available for this company.")
+        return
+
+    new_kind = outcome_kind(new_out)
+    swing_pct = new_out - cur_req
+    swing_kr = kr_new - kr_cur
+    money_better = swing_kr < -_EPS
+    money_worse = swing_kr > _EPS
+
+    if new_kind == KIND_REWARD:
+        new_phrase = (
+            f"a reward of {format_percent(abs(new_out))}/yr "
+            f"({format_tkr(abs(kr_new))} added to the cap over the period)"
         )
-    elif kind == KIND_DEDUCTION:
-        st.warning(
-            f"**Deduction of {format_percent(new_out)}/yr** — less efficient than the "
-            "third-quartile benchmark, so the new model lowers the revenue cap."
-        )
-    elif kind == KIND_COVERAGE:
-        st.info(
-            "**Full cost coverage** — right at the third-quartile benchmark; the new model "
-            "leaves the revenue cap unchanged."
+    elif new_kind == KIND_DEDUCTION:
+        new_phrase = (
+            f"a deduction of {format_percent(new_out)}/yr "
+            f"({format_tkr(kr_new)} over the period)"
         )
     else:
-        st.info("No outcome available for this company.")
+        new_phrase = "full cost coverage (no change to the cap)"
 
-    swing = (new_out - cur_req) if (new_out is not None and cur_req is not None) else None
-    gap = (new_eff - e75) if (new_eff is not None and e75 is not None) else None  # + = reward side
+    headline = (
+        "Lower cost under the new model" if money_better
+        else "Higher cost under the new model" if money_worse
+        else "About the same cost under the new model"
+    )
+    body = (
+        f"Your efficiency requirement goes from a deduction of {format_percent(cur_req)}/yr "
+        f"({format_tkr(kr_cur)} over the period) to {new_phrase}."
+    )
+
+    # Divergence: percent improves but kronor worsens, or vice versa (52% of companies).
+    pct_better = swing_pct < -_EPS
+    if (pct_better and money_worse) or (swing_pct > _EPS and money_better):
+        body += (
+            f" Note that the requirement {'falls' if pct_better else 'rises'} in percentage "
+            f"terms, but the amount in kronor {'rises' if money_worse else 'falls'} because "
+            "the new model applies it to your full TOTEX instead of only OPEX."
+        )
+
+    msg = f"**{headline}**\n\n{body}"
+    (st.success if money_better else st.warning if money_worse else st.info)(msg)
+
+
+def _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req,
+                    kr_cur, kr_new, is_outlier) -> None:
+    st.markdown("#### Your company under the new model")
+
+    _render_transition_hero(cur_req, new_out, kr_cur, kr_new)
+
+    swing_pct = (new_out - cur_req) if (new_out is not None and cur_req is not None) else None
+    swing_kr = (kr_new - kr_cur) if (kr_new is not None and kr_cur is not None) else None
     new_rank = _rank(dea_new, user_reid)
     n_total = int(dea_new[COL_DEA_EFFICIENCY].notna().sum())
 
+    # KPI levels (no longer a restatement of the hero): the two requirements side by side
+    # on their respective bases, the change in kronor, and the efficiency score. E₇₅ and
+    # the distance to it live in the position chart below.
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric(
-            "Outcome (new model)",
-            f"{new_out * 100:+.2f}%" if new_out is not None else "–",
-            # The swing vs today: a lower outcome (more reward / less deduction) is better
-            # for the firm, so a decrease reads as positive — hence delta_color="inverse".
-            delta=format_pp(swing) if swing is not None and abs(swing) > _EPS else None,
-            delta_color="inverse",
+            "Current requirement",
+            f"{cur_req * 100:+.2f}%/yr" if cur_req is not None else "–",
+            help="Today's published efficiency requirement (annual %). The kronor figure is "
+                 "the 4-year period sum, applied to the OPEX (controllable) cost base.",
         )
-        st.caption("vs current published requirement")
+        st.caption(format_tkr(kr_cur) if kr_cur is not None else "")
     with c2:
-        st.metric("Efficiency score", f"{new_eff:.3f}" if new_eff is not None else "–")
-        st.caption(f"Rank {_ordinal(new_rank)} / {n_total}" if new_rank else "")
+        st.metric(
+            "New outcome",
+            f"{new_out * 100:+.2f}%/yr" if new_out is not None else "–",
+            help="Two-sided outcome under the new model (annual %); negative is a reward. The "
+                 "kronor figure is the 4-year period sum, applied to the full TOTEX cost base.",
+        )
+        st.caption(format_tkr(kr_new) if kr_new is not None else "")
     with c3:
-        st.metric("Third-quartile benchmark", f"{e75:.3f}" if e75 is not None else "–")
-        st.caption("E₇₅ — the reference peer")
+        st.metric(
+            "Change in kronor",
+            format_delta(swing_kr) if swing_kr is not None else "–",
+            help="New minus current, in kronor over the period. Positive means a larger cost "
+                 "under the new model. The percentage-point change is shown below.",
+        )
+        st.caption(f"{format_pp(swing_pct)} in the requirement" if swing_pct is not None else "")
     with c4:
-        st.metric("Distance from benchmark", f"{gap:+.3f}" if gap is not None else "–")
-        st.caption("efficiency − E₇₅  (+ = reward side)")
+        st.metric(
+            "Efficiency score",
+            f"{new_eff:.3f}" if new_eff is not None else "–",
+            help="New-model DEA efficiency (0 to 1, where 1 is the frontier). Rank is among "
+                 "the 148 companies.",
+        )
+        st.caption(f"Rank {_ordinal(new_rank)} / {n_total}" if new_rank else "")
 
     if is_outlier:
         st.caption(
-            "This company is a DEA outlier — excluded from the benchmark percentile, but "
+            "This company is a DEA outlier, excluded from the benchmark percentile but "
             "still scored and given an outcome like any other frontier firm."
         )
 
@@ -219,7 +275,7 @@ def _render_sector_and_position(result, user_reid, cfg, e75, new_eff, new_out, u
 
 
 # ---------------------------------------------------------------------------
-# 3. New model TOTEX bridge (mechanic-agnostic — kept as-is)
+# 3. New model TOTEX bridge (mechanic-agnostic - kept as-is)
 # ---------------------------------------------------------------------------
 
 def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
@@ -247,7 +303,7 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
         return
 
     old_totex = controllable + old_capex
-    env_cut = new_capex - old_capex  # negative — the förläggningsmiljö reduction
+    env_cut = new_capex - old_capex  # negative - the förläggningsmiljö reduction
 
     # Opening bar must be "absolute" (it sets the starting total); a "total" first bar would
     # compute the cumulative of nothing = 0 and render invisible. The closing bar is "total"

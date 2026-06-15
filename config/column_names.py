@@ -156,6 +156,19 @@ COL_EFF_REQ_CURRENT = "efficiency_requirement_annual_current"
 COL_EFF_REQ_DELTA = "efficiency_requirement_annual_delta"   # new − current
 COL_EFFICIENCY_DELTA = "dea_efficiency_delta"               # new − current
 
+# Cost impact (efficiency requirement applied to a cost base → tkr over the 4-year
+# supervision period). The two models apply their % to DIFFERENT bases, which is the
+# point of the reform: current → OPEX (controllable, lagged), new → full uncorrected
+# TOTEX (all cost posts). Both bases are annual; the kr figures are the 4-year period
+# sum with the same compounding mechanic as the revenue-cap pipeline
+# (calculations/opex/controllable_cost_calculations.py).
+COL_LOSS_ACTUAL = "loss_actual"                             # actual losses (purchased + own), annual avg (tkr)
+COL_CAPEX_PERIOD_UNADJ = "capital_cost_period_unadjusted"   # capcost_network: unadjusted capital cost, period sum 2024-2027 (tkr)
+COL_OPEX_BASE_CURRENT = "opex_base_current"                 # controllable + neon/4, annual (current-model application base)
+COL_APPLICATION_BASE_NEW = "application_base_new"           # full uncorrected TOTEX, annual (new-model application base)
+COL_KR_CURRENT = "efficiency_kr_current_period"             # current eff-req in tkr, 4-year period sum (OPEX base)
+COL_KR_NEW = "efficiency_kr_new_period"                     # new outcome in tkr, 4-year period sum (TOTEX base); <0 = reward
+
 # =============================================================================
 # Rename dictionaries for data_loaders/
 # Swedish file column → English canonical name

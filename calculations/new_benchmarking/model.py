@@ -42,6 +42,7 @@ from calculations.new_benchmarking.capex_environment import (
 )
 from calculations.new_benchmarking.opex_components import build_opex_components
 from calculations.new_benchmarking.totex import build_totex
+from calculations.new_benchmarking.cost_impact import build_cost_impact
 from calculations.new_benchmarking.cable_length import (
     load_cable_components, aggregate_cable_length_per_firm, C as cable_C,
 )
@@ -141,7 +142,13 @@ def run_new_benchmarking(
         [COL_REID, COL_DEA_EFFICIENCY, COL_DEA_POTENTIAL, COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL]
     ].copy()
 
-    # 4. Comparison table
+    # 4. Cost impact: each model's efficiency requirement in tkr (current on the OPEX
+    #    base, new on the full uncorrected TOTEX base). Merged onto the totex frame so
+    #    the UI reads bases and kr from one place.
+    cost_impact = build_cost_impact(baseline_data, totex, dea_new, dea_current)
+    totex = totex.merge(cost_impact, on=COL_REID, how="left")
+
+    # 5. Comparison table
     comparison = _build_comparison(dea_new, dea_current)
 
     return NewBenchmarkingResult(

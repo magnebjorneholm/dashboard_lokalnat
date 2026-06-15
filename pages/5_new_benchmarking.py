@@ -1,5 +1,5 @@
 """
-Page 5 — New benchmarking model (isolated add-on).
+Page 5 - New benchmarking model (isolated add-on).
 
 Standalone analysis of Ei's proposed new benchmarking model. The main model runs
 immediately on load (no run button); an optional "Experiment" panel lets the user
@@ -30,7 +30,7 @@ init_session_state()
 
 
 # ---------------------------------------------------------------------------
-# Cached run — keyed on a config signature; baseline data is loaded internally
+# Cached run - keyed on a config signature; baseline data is loaded internally
 # (and itself cached). The cfg is passed underscore-prefixed so Streamlit does not
 # try to hash it.
 # ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ def _user_eff_req(result: NewBenchmarkingResult, reid: str):
 def _render_model_diff() -> None:
     """Short, factual summary of what the new model changes vs. the current one.
 
-    Always shown at the top of the page. Placeholder — the final description is
+    Always shown at the top of the page. Placeholder - the final description is
     authored by the project owner.
     """
     st.markdown("**What this model changes vs. the current one**")

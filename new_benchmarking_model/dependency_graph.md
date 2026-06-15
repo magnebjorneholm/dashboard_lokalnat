@@ -45,6 +45,7 @@ Processen i fyra steg (de fyra blocken i grafen nedan):
 | `capex_environment.py` | Capbase→kapitalkostnad: `compute_env_adjusted_capital_cost()`, `build_adjusted_capbase()`, `EnvCapexResult`. |
 | `totex.py` | `build_totex()` — sätter ihop `opex_new` och `totex_new`. |
 | `efficiency_requirement_two_sided.py` | `calculate_two_sided_requirement()` — signerat gap till `E₇₅`, tvåsidigt utfall (steg 4). |
+| `cost_impact.py` | Effektiviseringskrav till kronor: `period_efficiency_amount()` (compounding som pipelinen), `build_cost_impact()`. Nuvarande på OPEX-bas, ny på full okorrigerad TOTEX-bas (steg 5). |
 | `environment_capex_adjustment/` | Jordkabel (cat 3): `config.py`, `data.py` (`classify_env`), `calibration.py` (`calibrate`), `adjustment.py` (`apply_environment_adjustment`). |
 | `station_capex_adjustment/` | Nätstation (cat 13): samma form som ovan, parallellt paket. |
 | `cable_length/` | Ledningslängd (DEA-output): `load_cable_components()`, `aggregate_cable_length_per_firm()`. |
@@ -319,6 +320,33 @@ pipelinen (M5), inte här. Tolkning: `new_benchmarking_model/tolkning-overgang-e
 
 ---
 
+## Steg 5 - Effektiviseringskrav till kronor
+
+**Fil:** `calculations/new_benchmarking/cost_impact.py`. Procenten omvandlas till kronor
+genom att appliceras på en kostnadsbas över den 4-åriga tillsynsperioden. De två modellerna
+applicerar på **olika baser** (det är poängen med reformen, se
+`docs/ei_to_markdown/outputs/tillampningsmetod-effektiviseringsincitament.md`):
+
+- **Nuvarande modell:** OPEX-bas = `controllable_cost_average` + `neon/4`.
+- **Nya modellen:** full **okorrigerad** TOTEX = controllable + neon/4 + faktiska nätförluster
+  (`network_loss_purchased + network_loss_own_production`) + valda icke-påverkbara +
+  okorrigerad kapitalkostnad (`capcost_a.capcost_network / 4`, periodsumma 2024-2027).
+
+Benchmarking-korrektionerna (gemensamt förlustpris, förläggningsmiljöjusterad capex) sätter
+**procenten** men aldrig **kronbasen** (Ei: incitamentet tillämpas på de okorrigerade värdena).
+
+`period_efficiency_amount(eff, årsbas)` återanvänder pipelinens compounding-mekanik exakt
+(`eff × årsbas × (1+eff)^(t-1)`, summerat över 4 år), verifierat byte-för-byte mot
+`calculations/opex/controllable_cost_calculations.py` i testet. `build_cost_impact()` merger
+in baserna och de två periodsummorna i `totex`-framen: `COL_OPEX_BASE_CURRENT`,
+`COL_APPLICATION_BASE_NEW`, `COL_KR_CURRENT`, `COL_KR_NEW`.
+
+> **Huvudinsikt:** eftersom nya procenten slår på en mycket större bas kan utfallet *falla i
+> procent men stiga i kronor*, sant för ~52 % av bolagen. UI:t färgar därför verdikten på
+> kr-swingen och förklarar divergensen i text.
+
+---
+
 ## `NewBenchmarkingConfig` — reglagen (`config.py:48`)
 
 | Fält | Default | Effekt |
@@ -381,4 +409,5 @@ identiskt för alla användare, och `@st.cache_data` nollställs vid varje omdep
 | Fel kapitalkostnad | `capex_environment.py` (deduktioner) → `kent_calculations.py` (steg 5–8). |
 | Fel/avvikande effektivitet | `model.py:112–126` (DEA-spec), `dea_calculations.py` (motor, outliers). |
 | Fel effektiviseringskrav | `efficiency_requirement_two_sided.py` (`E₇₅`/gap/clip), `cfg.gap_cap` m.fl. |
+| Fel kr-belopp / fel bas | `cost_impact.py` (baserna, `period_efficiency_amount`); jämför mot pipelinens `controllable_cost_calculations.py`. |
 | Resultat ändras inte trots ny config | Cache/förberäkning: `signature()`, `load_precomputed_main()`, kör om precompute-skriptet. |

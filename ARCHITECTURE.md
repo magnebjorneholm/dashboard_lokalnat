@@ -152,7 +152,7 @@ dashboard_lokalnat/
 |   |   |   |-- m5_efficiency.py          # render_efficiency_params()
 |   |   |-- addons/
 |   |       |-- benchmarking.py           # render_dea_spec()
-|   |       |-- mini_run_output.py        # Inline DEA/StoNED mini-run results in Configure
+|   |       |-- mini_run_output.py        # Inline DEA mini-run results in Configure
 |   |       |-- new_benchmarking_spec.py  # Config panel for the new-benchmarking add-on (page 5)
 |   |
 |   |-- results/                  # Output renderers per module
@@ -179,7 +179,7 @@ dashboard_lokalnat/
 |   |-- post_dea_capex_helpers.py # Helper functions for post-DEA
 |   |-- result_helpers.py         # Shared formatting/aggregation for result output modules
 |   |-- export_excel.py           # Excel generation from PipelineResult
-|   |-- mini_run.py              # Lightweight DEA/StoNED mini-run (used by addons)
+|   |-- mini_run.py              # Lightweight DEA mini-run (used by addons)
 |   |-- stages/
 |       |-- stage_outputs.py      # Frozen dataclasses per stage
 |       |-- baseline.py           # Stage 1: Convert BaselineData
@@ -213,6 +213,8 @@ dashboard_lokalnat/
 |   |   |-- capex_environment.py              # consolidated förläggningsmiljö + KENT rerun
 |   |   |-- opex_components.py                # losses@common price + selected non-controllable
 |   |   |-- totex.py                          # build new TOTEX (opex + adjusted capex)
+|   |   |-- efficiency_requirement_two_sided.py  # signed gap to E75 -> two-sided annual outcome
+|   |   |-- cost_impact.py                    # efficiency requirement -> tkr (current OPEX vs new TOTEX base)
 |   |   |-- model.py                          # run_new_benchmarking(): new vs current (EIs_DEA)
 |   |   |-- cable_length/                     # ledningslängd per firm (new DEA output)
 |   |   |-- environment_capex_adjustment/     # jordkabel förläggningsmiljö correction
@@ -231,12 +233,10 @@ dashboard_lokalnat/
 |   |-- cost_data.py              # Grunddata parquet loaders (used by baseline_data)
 |   |-- rab_data.py               # RAB data (capbase_a.parquet, capcost_a.parquet)
 |   |-- incentive_data.py         # Incentive parameters
-|   |-- stoned_data.py            # StoNED precomputed efficiency data
 |   |-- new_benchmarking_data.py  # Loads the pre-computed new-benchmarking main-spec bundle
 |
 |-- scripts/                     # Utility scripts (offline data preparation)
 |   |-- generate_kent_from_capbase.py        # Generate KENT data from capbase
-|   |-- precompute_stoned.py                 # Precompute StoNED efficiency results
 |   |-- precompute_new_benchmarking.py       # Precompute the new-benchmarking main-spec bundle
 |   |-- generate_company_names.py            # Build data/reference/company_names.csv
 |
@@ -263,11 +263,6 @@ dashboard_lokalnat/
 |   |   |-- reconciliation_id_network_firm_dmu.csv  # ID mapping (REId <-> id_network <-> DMU)
 |   |   |-- avg_norm_value_by_category.parquet      # Per-category average normvalue
 |   |   |-- company_names.csv     # Curated names (REId, name_full, name_short)
-|   |-- stoned/                   # Pre-computed StoNED models
-|   |   |-- M1.parquet
-|   |   |-- M2.parquet
-|   |   |-- models.json           # Metadata for each StoNED model
-|   |   |-- STONED_EXPORT_SPEC.md
 |   |-- new_benchmarking/         # Pre-computed new-benchmarking main-spec bundle
 |   |   |-- *.parquet             # dea_new/dea_current/comparison/totex/inputs/env_*
 |   |   |-- manifest.json         # Config signature + output columns (validity token)
@@ -296,9 +291,10 @@ dashboard_lokalnat/
 |   |-- test_revenue_frame.py
 |   |-- test_pipeline_integration.py
 |   |-- test_override_cascades.py    # Category override cascade tests
-|   |-- test_mini_run.py             # Mini-run (lightweight DEA/StoNED) tests
+|   |-- test_mini_run.py             # Mini-run (lightweight DEA) tests
 |   |-- test_result_snapshot.py      # Result snapshot extraction tests
 |   |-- test_new_benchmarking_precompute.py  # New-benchmarking bundle + freshness guard
+|   |-- test_new_benchmarking_cost_impact.py # kr quantification: pipeline-match + base/sign sanity
 |   |-- test_tools_registry.py       # Tool registry <-> published-manual consistency
 |
 |-- user_manual_latex/            # LaTeX sources for the per-tool manual PDFs (see Section 19)
@@ -692,7 +688,7 @@ case to Firestore to preserve work across sessions.
 
 - `CapbaseSource`: BASELINE, VAR_SCALED, KENT_UPLOAD
 - `CapexMethod`: BASELINE, PARAMETER_CHANGE
-- `EfficiencyMethod`: BASELINE, DEA, STONED
+- `EfficiencyMethod`: BASELINE, DEA
 - `ControllableMethod`: OPEX, TOTEX
 
 ### Config Dataclasses
@@ -709,7 +705,6 @@ case to Firestore to preserve work across sessions.
 **DeaConfig** (Stage 3):
 - method (EfficiencyMethod), inputs, outputs, rts ("crs"/"vrs")
 - orientation ("input"), q_lower (25.0), q_upper (75.0), multiplier (2.0)
-- stoned_model_id -- pre-computed StoNED model id (used when method == STONED)
 
 **IncentiveConfig** (nested in PostDeaConfig):
 - kpi, k_nf, sharing_netloss (0.75), adj_max_agg (1/3), adj_max_cemi4 (0.25)
@@ -947,7 +942,6 @@ dependencies like `data_loaders` and `pipeline` for faster initial rendering.
 | data/reference/company_names.csv                     | CSV     | Curated names: REId, name_full, name_short      |
 | data/reference/avg_norm_value_by_category.parquet    | Parquet | Per-category average normvalue                  |
 | data/adjustments/all_adjust_vars.csv                 | CSV     | All adjustable variables (48 cols)              |
-| data/stoned/M*.parquet, models.json                  | Parquet | Pre-computed StoNED efficiency models           |
 | data/new_benchmarking/*.parquet, manifest.json       | Parquet | Pre-computed new-benchmarking main-spec bundle  |
 | data/examples/                                       | Excel   | Example KENT / paverkbara upload files          |
 | data/shapefiles/                                     | SHP     | Geographic boundaries (municipality/county)     |
@@ -1051,10 +1045,12 @@ max_dep (max depreciation years).
 - `test_baseline_replication.py` -- Replicates facit values with hardcoded expected values
 - `test_cost_aggregation.py` -- Verifies grunddata aggregation matches SDF sheets
 - `test_override_cascades.py` -- OPEX/flex/non-adj scaling and override cascade through pipeline
-- `test_mini_run.py` -- Mini-run (lightweight DEA/StoNED) tests
+- `test_mini_run.py` -- Mini-run (lightweight DEA) tests
 - `test_result_snapshot.py` -- Result snapshot extraction tests
 - `test_new_benchmarking_precompute.py` -- New-benchmarking bundle shape + freshness guard
-  (recomputes the main spec live and asserts it matches the committed bundle)
+  (recomputes the main spec live and asserts it matches the committed bundle, incl. the kr columns)
+- `test_new_benchmarking_cost_impact.py` -- kr quantification: `period_efficiency_amount`
+  matches the revenue-cap pipeline's compounding exactly; application-base and sign sanity
 
 **Known:** Company 886 has ~354 tkr rounding difference in capital_cost_2024 (KENT vs DM).
 
@@ -1132,6 +1128,19 @@ recomputed — the firm's actual "föregående värden"):
   reward above (<0). No floor, no fixed outlier requirement; outliers are excluded from the
   percentile but still scored. See
   `new_benchmarking_model/tolkning-overgang-effektiviseringsincitament.md` for the interpretation.
+- **Cost impact in kronor** (`cost_impact.py`): the efficiency requirement is a percentage;
+  the kronor impact applies it to a cost base over the 4-year supervision period. Per Ei the
+  two models apply their % to *different* bases (the point of the reform, see
+  `docs/ei_to_markdown/outputs/tillampningsmetod-effektiviseringsincitament.md`): the current
+  model on **OPEX** (controllable + neon), the new model on the full **uncorrected TOTEX**
+  (controllable + neon + actual losses + selected non-controllable + unadjusted capital cost).
+  The benchmarking corrections (common-price losses, förläggningsmiljö capex) set the % but
+  never the kronor base. `period_efficiency_amount()` reuses the revenue-cap pipeline's
+  compounding mechanic exactly (asserted in tests), so the current figure matches the
+  pipeline. The bases and the two period-sum kr figures are merged onto the `totex` frame
+  (`COL_OPEX_BASE_CURRENT`, `COL_APPLICATION_BASE_NEW`, `COL_KR_CURRENT`, `COL_KR_NEW`).
+  Because the new % applies to a much larger base, an outcome can fall in % yet rise in
+  kronor - true for ~52% of companies, the model's headline insight.
 - `NewBenchmarkingConfig` holds every choice; `cfg.signature()` is its stable identity,
   used both as the @st.cache_data key and as the pre-compute bundle's validity token.
 
@@ -1150,18 +1159,23 @@ changes.**
 
 ### Frontend
 
-- `pages/5_new_benchmarking.py` -- model description, then the Experiment expander, then
-  the results. The Experiment panel's "Run experiment" button commits a config to session
-  state; the heavy DEA fires only on click (editing widgets just marks pending changes).
+- `pages/5_new_benchmarking.py` -- a company subheader (`get_company_display`), the model
+  description, the results, then the Experiment expander. The Experiment panel's "Run
+  experiment" button commits a config to session state; the heavy DEA fires only on click
+  (editing widgets just marks pending changes).
 - `frontend/modules/addons/new_benchmarking_spec.py` -- `render_config_panel()`: the few
-  adjustable fields (common loss price, cable/station method, line types) + the run button.
+  adjustable fields (common loss price defaulted from `K_NF`, cable/station method, line
+  types), a "Run experiment" button, and a "Reset to main model" button that clears the
+  committed config and widget keys.
 - `frontend/results/new_benchmarking_output.py` -- per-company view, firm-first: **Your
-  company** (a signed-outcome verdict — green reward / amber deduction / blue full coverage
-  — plus KPIs: outcome with its swing vs the current published requirement, efficiency +
-  rank, the third-quartile benchmark E75, and distance from it), **Sector & position** (the
-  position chart — efficiency histogram with the E75 pivot splitting deduction/reward zones
-  and the model's transfer curve overlaid, the firm and the reference peer marked — plus a
-  diverging outcome distribution and deduction/coverage/reward counts), and the **TOTEX
-  bridge** waterfall (current → new TOTEX: additions red, the förläggningsmiljö capex cut
+  company** (a from/to transition verdict: the requirement current -> new in both % and
+  kronor, coloured by the *kronor* swing - lower cost green, higher amber - with a
+  plain-language note when % and kronor diverge; plus KPI levels - current requirement, new
+  outcome, change in kronor, efficiency + rank - each with an explanatory `help` tooltip),
+  **Sector & position** (the position chart: efficiency histogram with the E75 pivot
+  splitting deduction/reward zones and the model's transfer curve overlaid, the firm and the
+  reference peer marked, plus a diverging outcome distribution and deduction/coverage/reward
+  counts; the E75 benchmark and the firm's distance to it live here), and the **TOTEX
+  bridge** waterfall (current -> new TOTEX: additions red, the förläggningsmiljö capex cut
   green, totals blue). The two-sided visuals live in `frontend/results/_two_sided_charts.py`
   (not the M5-shared `_efficiency_charts.py`).
