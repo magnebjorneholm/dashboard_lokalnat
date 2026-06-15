@@ -15,6 +15,7 @@ from __future__ import annotations
 import streamlit as st
 
 from frontend.utils.state_manager import init_session_state, get_user_reid
+from frontend.utils.company_directory import get_company_display
 from frontend.modules.addons.new_benchmarking_spec import render_config_panel
 from frontend.results.new_benchmarking_output import render_company_view
 from calculations.new_benchmarking import run_new_benchmarking, NewBenchmarkingConfig
@@ -90,6 +91,9 @@ user_reid = get_user_reid()
 if user_reid is None:
     st.warning("Select a company in the sidebar to continue.")
     st.stop()
+
+# Anchor the page to the selected company (short name + REId).
+st.subheader(get_company_display(user_reid))
 
 # Model-diff (top).
 _render_model_diff()

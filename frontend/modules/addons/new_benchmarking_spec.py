@@ -18,9 +18,11 @@ from calculations.new_benchmarking.config import NewBenchmarkingConfig
 from calculations.new_benchmarking.cable_length import C as cable_C
 from calculations.new_benchmarking.environment_capex_adjustment import config as env_C
 from calculations.new_benchmarking.station_capex_adjustment import config as st_C
+from config.incentive_parameters import K_NF
 
-# Common loss price (kr/MWh) at the main-model reference reading (same default as K_NF).
-BASELINE_K_NF = 753.44
+# Common loss price (kr/MWh) at the main-model reference reading. Derived from the
+# single source of truth K_NF so the panel default never drifts from the model.
+BASELINE_K_NF = float(next(iter(K_NF.values())))
 
 # Human-readable labels + per-method explanations for the placement-environment methods.
 _CABLE_METHOD_LABELS = {
@@ -70,7 +72,7 @@ def render_config_panel() -> NewBenchmarkingConfig:
     k_nf = st.number_input(
         "Common loss price (kr/MWh)",
         min_value=0.0, value=BASELINE_K_NF, step=10.0,
-        help="Network losses are valued as nf_obs · price · e_in. Main model: 753.44 kr/MWh.",
+        help=f"Network losses are valued as nf_obs · price · e_in. Main model: {BASELINE_K_NF:g} kr/MWh.",
         key="nb_k_nf",
     )
 
@@ -122,8 +124,22 @@ def render_config_panel() -> NewBenchmarkingConfig:
     st.divider()
     if pending.signature() != committed.signature():
         st.caption("⚠ Pending changes. Click **Run experiment** to apply them.")
-    if st.button("Run experiment", type="primary", key="nb_run_experiment"):
-        st.session_state["nb_committed_cfg"] = pending
-        committed = pending
+
+    main_cfg = NewBenchmarkingConfig()
+    experiment_active = committed.signature() != main_cfg.signature()
+
+    col_run, col_reset = st.columns(2)
+    with col_run:
+        if st.button("Run experiment", type="primary", key="nb_run_experiment"):
+            st.session_state["nb_committed_cfg"] = pending
+            committed = pending
+    with col_reset:
+        # Clears the committed config and the widget keys so the panel falls back to
+        # the main-model defaults on rerun. Disabled when already on the main model.
+        if st.button("Reset to main model", key="nb_reset", disabled=not experiment_active):
+            for k in ("nb_committed_cfg", "nb_k_nf", "nb_cable_method",
+                      "nb_station_method", "nb_cable_types"):
+                st.session_state.pop(k, None)
+            st.rerun()
 
     return committed
