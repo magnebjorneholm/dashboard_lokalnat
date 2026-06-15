@@ -5,6 +5,8 @@
 \makeatletter
 \def\input@path{ {../../../graphs/} }
 \makeatother
+% TikZ libraries used by the calculation-flow diagram in chapters/01_calculation.tex.
+\usetikzlibrary{arrows.meta, positioning}
 \begin{document}
 	\title{Regumetrica \linebreak \emph{Beta version} \linebreak New benchmarking model user manual \linebreak Version 1.0 \\}
 	\author{\href{https://www.regumetrica.com/um}{www.regumetrica.com/um}}
@@ -17,7 +19,18 @@
 
 \section*{Introduction}
 \addcontentsline{toc}{section}{Introduction}
-% TODO: document the New benchmarking model tool (Ei's proposed TOTEX-based DEA model).
+The New benchmarking model is a standalone tool for exploring Ei's proposed
+benchmarking model for Swedish electricity distribution networks --- a model in
+which efficiency is assessed on total expenditure (TOTEX) and the reference point
+moves from the efficiency frontier to the third quartile of the sector. The tool
+shows how a single company would be affected by the proposed model on its own,
+holding everything else equal; it does not alter the current revenue-frame
+calculation.
+
+This manual will grow to cover the full tool. The present version documents the
+calculation engine end to end.
+
+\input{chapters/01_calculation}
 
 \bibliographystyle{aer}
 \bibliography{references}
