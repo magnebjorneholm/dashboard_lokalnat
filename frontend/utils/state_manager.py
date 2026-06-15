@@ -89,12 +89,11 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "efficiency_override": None,  # float or None
     },
     "addon_benchmarking": {
-        "dea_method": "baseline",  # 'baseline', 'custom', or 'stoned'
+        "dea_method": "baseline",  # 'baseline' or 'custom'
         "dea_inputs": None,        # List[str] - input variable names
         "dea_outputs": None,       # List[str] - output variable names
         "dea_rts": "crs",          # 'crs' or 'vrs'
         "dea_orientation": "input",  # 'input' or 'output'
-        "stoned_model_id": None,   # str - selected pre-computed StoNED model
     },
 }
 
