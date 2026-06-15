@@ -153,7 +153,6 @@ dashboard_lokalnat/
 |   |   |-- addons/
 |   |       |-- benchmarking.py           # render_dea_spec()
 |   |       |-- mini_run_output.py        # Inline DEA mini-run results in Configure
-|   |       |-- new_benchmarking_spec.py  # Config panel for the new-benchmarking add-on (page 5)
 |   |
 |   |-- results/                  # Output renderers per module
 |   |   |-- m1_asset_base_output.py       # NUAV, category breakdown
@@ -163,7 +162,6 @@ dashboard_lokalnat/
 |   |   |-- m3_incentive_output.py        # Quality/incentive adjustments
 |   |   |-- m5_efficiency_output.py       # Efficiency requirements
 |   |   |-- _efficiency_charts.py        # Shared efficiency chart helpers
-|   |   |-- new_benchmarking_output.py   # New-benchmarking per-company view (page 5)
 |   |
 |   |-- utils/                    # Streamlit-dependent frontend utilities
 |       |-- state_manager.py      # Session state: init, get/set, config references
@@ -208,17 +206,7 @@ dashboard_lokalnat/
 |   |-- efficiency/               # M5: Efficiency requirement
 |   |   |-- efficiency_requirement.py        # DEA potential -> annual requirement
 |   |
-|   |-- new_benchmarking/         # Add-on: Ei's proposed new benchmarking model (isolated)
-|   |   |-- config.py                         # NewBenchmarkingConfig (parameters)
-|   |   |-- capex_environment.py              # consolidated förläggningsmiljö + KENT rerun
-|   |   |-- opex_components.py                # losses@common price + selected non-controllable
-|   |   |-- totex.py                          # build new TOTEX (opex + adjusted capex)
-|   |   |-- efficiency_requirement_two_sided.py  # signed gap to E75 -> two-sided annual outcome
-|   |   |-- cost_impact.py                    # efficiency requirement -> tkr (current OPEX vs new TOTEX base)
-|   |   |-- model.py                          # run_new_benchmarking(): new vs current (EIs_DEA)
-|   |   |-- cable_length/                     # ledningslängd per firm (new DEA output)
-|   |   |-- environment_capex_adjustment/     # jordkabel förläggningsmiljö correction
-|   |   |-- station_capex_adjustment/         # nätstation förläggningsmiljö correction
+|   |   (the new benchmarking add-on is its own vertical module: new_benchmarking_model/)
 |   |
 |   |-- revenue_frame_assembly.py            # Cross-cutting: final revenue frame assembly
 |
@@ -233,11 +221,37 @@ dashboard_lokalnat/
 |   |-- cost_data.py              # Grunddata parquet loaders (used by baseline_data)
 |   |-- rab_data.py               # RAB data (capbase_a.parquet, capcost_a.parquet)
 |   |-- incentive_data.py         # Incentive parameters
-|   |-- new_benchmarking_data.py  # Loads the pre-computed new-benchmarking main-spec bundle
+|   |   (new-benchmarking loading lives in new_benchmarking_model/data/)
+|
+|-- new_benchmarking_model/       # Vertical feature module: Ei's proposed new benchmarking
+|   |                             # model (TOTEX-based DEA), self-contained across layers
+|   |-- __init__.py               # Public API: run_new_benchmarking, NewBenchmarkingConfig
+|   |-- config.py                 # NewBenchmarkingConfig (parameters); cfg.signature()
+|   |-- model.py                  # run_new_benchmarking(): new vs current (EIs_DEA)
+|   |-- totex/                    # TOTEX build (pure calc, Streamlit-free)
+|   |   |-- totex.py                          # build new TOTEX (opex + adjusted capex)
+|   |   |-- opex_components.py                # losses@common price + selected non-controllable
+|   |   |-- capex_environment.py              # consolidated förläggningsmiljö + KENT rerun
+|   |-- efficiency/               # efficiency requirement + kr impact (pure calc)
+|   |   |-- efficiency_requirement_two_sided.py  # signed gap to E75 -> two-sided annual outcome
+|   |   |-- cost_impact.py                    # efficiency requirement -> tkr (current OPEX vs new TOTEX base)
+|   |-- components/               # parametrised DEA-input builders (pure calc)
+|   |   |-- cable_length/                     # ledningslängd per firm (new DEA output)
+|   |   |-- environment_capex_adjustment/     # jordkabel förläggningsmiljö correction
+|   |   |-- station_capex_adjustment/         # nätstation förläggningsmiljö correction
+|   |-- data/                     # feature IO + committed precomputed bundle
+|   |   |-- loader.py                         # load_precomputed_main() (runtime)
+|   |   |-- precompute.py                     # offline bundle builder (run manually)
+|   |   |-- precomputed/                      # *.parquet + manifest.json (committed)
+|   |-- ui/                       # ONLY Streamlit-dependent part of the module
+|   |   |-- page.py                           # render_page() (pages/5 is a thin shim)
+|   |   |-- company_view.py                   # per-company view (firm-first)
+|   |   |-- charts.py                         # two-sided position/bridge graph drawers
+|   |   |-- config_panel.py                   # render_config_panel() (Experiment panel)
+|   |-- docs/                     # dependency_graph.md + interpretation notes
 |
 |-- scripts/                     # Utility scripts (offline data preparation)
 |   |-- generate_kent_from_capbase.py        # Generate KENT data from capbase
-|   |-- precompute_new_benchmarking.py       # Precompute the new-benchmarking main-spec bundle
 |   |-- generate_company_names.py            # Build data/reference/company_names.csv
 |
 |-- auth/
@@ -263,9 +277,7 @@ dashboard_lokalnat/
 |   |   |-- reconciliation_id_network_firm_dmu.csv  # ID mapping (REId <-> id_network <-> DMU)
 |   |   |-- avg_norm_value_by_category.parquet      # Per-category average normvalue
 |   |   |-- company_names.csv     # Curated names (REId, name_full, name_short)
-|   |-- new_benchmarking/         # Pre-computed new-benchmarking main-spec bundle
-|   |   |-- *.parquet             # dea_new/dea_current/comparison/totex/inputs/env_*
-|   |   |-- manifest.json         # Config signature + output columns (validity token)
+|   |   (the new-benchmarking bundle now lives in new_benchmarking_model/data/precomputed/)
 |   |-- test/                     # Mini parquet versions for unit tests (3 companies)
 |   |   |-- capbase_a_mini.parquet
 |   |   |-- controllable_a_mini.parquet
@@ -369,6 +381,14 @@ Layer 5: CALCULATIONS + DATA LOADERS (bottom)
 Layer 6: AUTH / FIRESTORE
     firebase_auth.py, firebase_firestore.py
 ```
+
+**Vertical exception — `new_benchmarking_model/`:** the new benchmarking add-on is a
+self-contained feature module that spans layers internally instead of being split across
+them (see Section 20). It depends downward on config/, pipeline pieces it reuses
+(calculations.frontier.dea, data_loaders.baseline_data) and the same lower layers; nothing
+else imports *into* it except its thin page shim (`pages/5_new_benchmarking.py`). The
+horizontal-layer rule still holds inside it: everything outside `new_benchmarking_model/ui/`
+is Streamlit-free.
 
 
 ## 5. Page Flow & Navigation
@@ -743,8 +763,10 @@ All files in `calculations/` are pure functions with no UI dependencies.
 | frontier/dea_calculations.py                | DEA via PuLP (input-oriented, CRS)         |
 | incentive/incentive_calculations.py         | Quality/netloss/load incentive adjustments |
 | efficiency/efficiency_requirement.py        | DEA potential -> annual efficiency req      |
-| new_benchmarking/ (model, totex, ...)       | Add-on: new TOTEX -> DEA vs current (EIs_DEA) |
 | revenue_frame_assembly.py                   | Assemble revenue frame from all components |
+
+The new benchmarking add-on is no longer under `calculations/`; it is its own vertical
+module, `new_benchmarking_model/` (see Section 20).
 
 ### Key Calculation Details
 
@@ -837,12 +859,13 @@ Grunddata parquet loaders (used internally by `baseline_data.py`):
 **Variable columns:** nf_norm, nf_obs, e_in, ug_norm, ug_obs, k_upstream,
 cemi4_norm, cemi4_obs, aif_{a,o}_{1-6}_{norm,obs}, ait_{a,o}_{1-6}_{norm,obs}, ame_{1-6}
 
-### new_benchmarking_data.py
+### new_benchmarking_model/data/loader.py
 
-`load_precomputed_main() -> NewBenchmarkingResult | None` -- loads the committed
-new-benchmarking main-spec bundle (`data/new_benchmarking/`, built by
-`scripts/precompute_new_benchmarking.py`) and reconstructs the result page 5 reads, so the
-fixed main model skips its live KENT+DEA run on cold start. Returns `None` (caller runs
+The new-benchmarking add-on loads its own data inside its module (not via `data_loaders/`).
+`load_precomputed_main() -> NewBenchmarkingResult | None` loads the committed
+new-benchmarking main-spec bundle (`new_benchmarking_model/data/precomputed/`, built by
+`new_benchmarking_model/data/precompute.py`) and reconstructs the result page 5 reads, so
+the fixed main model skips its live KENT+DEA run on cold start. Returns `None` (caller runs
 live) if the bundle is missing or its config signature no longer matches the current
 default. See Section 20.
 
@@ -942,7 +965,7 @@ dependencies like `data_loaders` and `pipeline` for faster initial rendering.
 | data/reference/company_names.csv                     | CSV     | Curated names: REId, name_full, name_short      |
 | data/reference/avg_norm_value_by_category.parquet    | Parquet | Per-category average normvalue                  |
 | data/adjustments/all_adjust_vars.csv                 | CSV     | All adjustable variables (48 cols)              |
-| data/new_benchmarking/*.parquet, manifest.json       | Parquet | Pre-computed new-benchmarking main-spec bundle  |
+| new_benchmarking_model/data/precomputed/*.parquet, manifest.json | Parquet | Pre-computed new-benchmarking main-spec bundle (lives in its feature module) |
 | data/examples/                                       | Excel   | Example KENT / paverkbara upload files          |
 | data/shapefiles/                                     | SHP     | Geographic boundaries (municipality/county)     |
 | data/updated_shapefiles/                             | SHP     | Network operator area shapefiles                |
@@ -1101,13 +1124,22 @@ A standalone analysis of Ei's proposed new benchmarking model (TOTEX-based DEA),
 affected by the new model alone, all else equal?" It calls `run_new_benchmarking()`
 directly and never builds a `CaseDefinition`.
 
-> **Dependency map:** `new_benchmarking_model/dependency_graph.md` is a README-style,
+It is packaged as a **self-contained vertical module** at the repo root,
+`new_benchmarking_model/`, rather than split across `calculations/`, `frontend/`,
+`data_loaders/` and `scripts/`. Layout: `config.py` + `model.py` (entry point), `totex/`
+(TOTEX build), `efficiency/` (two-sided requirement + kr impact), `components/` (DEA-input
+builders: cable_length, environment/station capex adjustments), `data/` (precompute builder,
+runtime loader, committed parquet bundle), `ui/` (the only Streamlit-dependent part: page +
+graph drawers), and `docs/`. The pure-calc rule still holds inside it: everything outside
+`ui/` is Streamlit-free.
+
+> **Dependency map:** `new_benchmarking_model/docs/dependency_graph.md` is a README-style,
 > Claude-readable walkthrough of the whole chain (capbase -> capital cost -> TOTEX -> DEA
 > -> efficiency requirement): a Mermaid graph plus step-by-step prose with file/line refs,
 > data sources, config switches and gotchas. Point new conversations there before touching
-> `calculations/new_benchmarking/`.
+> `new_benchmarking_model/`.
 
-### Backend (`calculations/new_benchmarking/`)
+### Backend (`new_benchmarking_model/`, `model.py` orchestrating `totex/` + `efficiency/` + `components/`)
 
 `run_new_benchmarking(cfg) -> NewBenchmarkingResult` builds a new TOTEX per company and
 runs one DEA pass, comparing against the current model (read directly from EIs_DEA, not
@@ -1120,15 +1152,15 @@ recomputed — the firm's actual "föregående värden"):
   re-runs KENT on a capbase whose jordkabel (cat 3) and nätstation (cat 13) NUAV is
   levelled to a reference environment (cable + station sub-packages).
 - **DEA**: single TOTEX input + base outputs (CU, MW, NS, MWhl, MWhh) + cable length.
-- **Efficiency requirement** (`efficiency_requirement_two_sided.py`): the firm's annual
+- **Efficiency requirement** (`efficiency/efficiency_requirement_two_sided.py`): the firm's annual
   outcome is a *signed* gap to the third quartile, replacing the legacy front-reference /
   deduction-only mechanic (which still drives the revenue-cap pipeline, M5, untouched).
   `E75` = the 75th-percentile efficiency over non-outliers; `outcome = annualize(clip(E75 −
   E_i, ±0.30) × 0.50 × 4/8)` → a deduction below the benchmark (>0), full coverage at it, a
   reward above (<0). No floor, no fixed outlier requirement; outliers are excluded from the
   percentile but still scored. See
-  `new_benchmarking_model/tolkning-overgang-effektiviseringsincitament.md` for the interpretation.
-- **Cost impact in kronor** (`cost_impact.py`): the efficiency requirement is a percentage;
+  `new_benchmarking_model/docs/tolkning-overgang-effektiviseringsincitament.md` for the interpretation.
+- **Cost impact in kronor** (`efficiency/cost_impact.py`): the efficiency requirement is a percentage;
   the kronor impact applies it to a cost base over the 4-year supervision period. Per Ei the
   two models apply their % to *different* bases (the point of the reform, see
   `docs/ei_to_markdown/outputs/tillampningsmetod-effektiviseringsincitament.md`): the current
@@ -1148,26 +1180,30 @@ recomputed — the firm's actual "föregående värden"):
 
 The fixed main spec (`NewBenchmarkingConfig()`) is expensive (148-company KENT re-run +
 DEA) yet identical for every user, and `@st.cache_data` is wiped on each redeploy. So it
-is pre-computed offline (`scripts/precompute_new_benchmarking.py`) into
-`data/new_benchmarking/` and loaded at runtime (`data_loaders/new_benchmarking_data.py`,
-`load_precomputed_main()`), which reconstructs the `NewBenchmarkingResult`. Guarded by the
+is pre-computed offline (`new_benchmarking_model/data/precompute.py`) into
+`new_benchmarking_model/data/precomputed/` and loaded at runtime
+(`new_benchmarking_model/data/loader.py`, `load_precomputed_main()`), which reconstructs the
+`NewBenchmarkingResult`. Guarded by the
 config-signature token plus `test_new_benchmarking_precompute.py`, which recomputes the
 spec live and fails if the committed bundle has drifted. Only the default spec is
 pre-computed; Experiment-panel tweaks still run live (cached per signature).
 **Re-run the script whenever the main spec, the calculation code, or the source data
 changes.**
 
-### Frontend
+### Frontend (`new_benchmarking_model/ui/`)
 
-- `pages/5_new_benchmarking.py` -- a company subheader (`get_company_display`), the model
+- `pages/5_new_benchmarking.py` -- a thin Streamlit shim; it just calls
+  `new_benchmarking_model.ui.page.render_page()` (the file stays under `pages/` for
+  Streamlit's navigation, registered in `streamlit_app.py`).
+- `ui/page.py` -- `render_page()`: a company subheader (`get_company_display`), the model
   description, the results, then the Experiment expander. The Experiment panel's "Run
   experiment" button commits a config to session state; the heavy DEA fires only on click
   (editing widgets just marks pending changes).
-- `frontend/modules/addons/new_benchmarking_spec.py` -- `render_config_panel()`: the few
+- `ui/config_panel.py` -- `render_config_panel()`: the few
   adjustable fields (common loss price defaulted from `K_NF`, cable/station method, line
   types), a "Run experiment" button, and a "Reset to main model" button that clears the
   committed config and widget keys.
-- `frontend/results/new_benchmarking_output.py` -- per-company view, firm-first: **Your
+- `ui/company_view.py` -- per-company view, firm-first: **Your
   company** (a from/to transition verdict: the requirement current -> new in both % and
   kronor, coloured by the *kronor* swing - lower cost green, higher amber - with a
   plain-language note when % and kronor diverge; plus KPI levels - current requirement, new
@@ -1177,5 +1213,5 @@ changes.**
   reference peer marked, plus a diverging outcome distribution and deduction/coverage/reward
   counts; the E75 benchmark and the firm's distance to it live here), and the **TOTEX
   bridge** waterfall (current -> new TOTEX: additions red, the förläggningsmiljö capex cut
-  green, totals blue). The two-sided visuals live in `frontend/results/_two_sided_charts.py`
-  (not the M5-shared `_efficiency_charts.py`).
+  green, totals blue). The two-sided visuals live in `ui/charts.py`
+  (not the M5-shared `frontend/results/_efficiency_charts.py`).

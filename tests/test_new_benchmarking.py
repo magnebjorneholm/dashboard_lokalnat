@@ -1,7 +1,7 @@
 """
 tests/test_new_benchmarking.py
 
-Tests for the new benchmarking model add-on (calculations/new_benchmarking):
+Tests for the new benchmarking model add-on (new_benchmarking_model):
 - opex_components: loss valuation + non-controllable selection (synthetic, fast)
 - capex_environment: förläggningsmiljö correction only lowers capital cost
 - model: end-to-end run, schema, and parameter propagation
@@ -19,12 +19,12 @@ from config.column_names import (
     COL_CAPITAL_COST_ENV_ADJ, COL_CABLE_LENGTH_KM, COL_CAPITAL_COST_2024,
     COL_EFF_REQ_NEW, COL_EFF_REQ_CURRENT, COL_EFF_REQ_DELTA,
 )
-from calculations.new_benchmarking import run_new_benchmarking, NewBenchmarkingConfig
-from calculations.new_benchmarking.opex_components import (
+from new_benchmarking_model import run_new_benchmarking, NewBenchmarkingConfig
+from new_benchmarking_model.totex.opex_components import (
     compute_loss_valued, compute_non_controllable_selected,
 )
 from calculations.efficiency.efficiency_requirement import get_max_eff_req
-from calculations.new_benchmarking.efficiency_requirement_two_sided import (
+from new_benchmarking_model.efficiency.efficiency_requirement_two_sided import (
     two_sided_requirement_from_gap,
 )
 

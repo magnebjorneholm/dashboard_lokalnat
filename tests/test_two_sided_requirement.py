@@ -2,7 +2,7 @@
 tests/test_two_sided_requirement.py
 
 Unit tests for the new-benchmarking two-sided efficiency mechanic
-(calculations/new_benchmarking/efficiency_requirement_two_sided.py).
+(new_benchmarking_model/efficiency/efficiency_requirement_two_sided.py).
 
 Pure math / cross-sectional — no data dependencies. The legacy front-reference method
 (calculations/efficiency/efficiency_requirement.py) is intentionally untouched and keeps
@@ -20,7 +20,7 @@ from config.column_names import (
     COL_EFF_REQ_ANNUAL,
     COL_DEA_REFERENCE,
 )
-from calculations.new_benchmarking.efficiency_requirement_two_sided import (
+from new_benchmarking_model.efficiency.efficiency_requirement_two_sided import (
     reference_efficiency,
     two_sided_requirement_from_gap,
     calculate_two_sided_requirement,

@@ -2,7 +2,7 @@
 tests/test_new_benchmarking_cost_impact.py
 
 Guards the kr quantification of the efficiency requirement for the new benchmarking
-add-on (calculations/new_benchmarking/cost_impact.py).
+add-on (new_benchmarking_model/efficiency/cost_impact.py).
 
 The central guarantee: period_efficiency_amount() reproduces the revenue-cap pipeline's
 period efficiency_total exactly, so the current-model kr (OPEX base) matches the pipeline
@@ -18,7 +18,7 @@ from config.column_names import (
     COL_EFFICIENCY_DEDUCTION, COL_OPEX_BASE_CURRENT, COL_APPLICATION_BASE_NEW,
     COL_KR_CURRENT, COL_KR_NEW,
 )
-from calculations.new_benchmarking.cost_impact import (
+from new_benchmarking_model.efficiency.cost_impact import (
     period_efficiency_amount, build_cost_impact, SUPERVISION_YEARS,
 )
 from calculations.opex.controllable_cost_calculations import calculate_controllable_with_eff_req
@@ -62,7 +62,7 @@ class TestBuildCostImpact:
     """build_cost_impact wires bases and kr together on the full company set."""
 
     def test_columns_and_signs(self, baseline_data):
-        from calculations.new_benchmarking import run_new_benchmarking, NewBenchmarkingConfig
+        from new_benchmarking_model import run_new_benchmarking, NewBenchmarkingConfig
         result = run_new_benchmarking(NewBenchmarkingConfig(), baseline_data=baseline_data)
         tx = result.totex
 

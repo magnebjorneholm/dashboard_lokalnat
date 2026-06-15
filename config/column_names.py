@@ -132,7 +132,7 @@ COL_MWH_LOW = "MWhl"
 COL_MWH_HIGH = "MWhh"
 
 # =============================================================================
-# New benchmarking model (calculations/new_benchmarking) — add-on, isolated
+# New benchmarking model (new_benchmarking_model) — add-on, isolated
 # =============================================================================
 # TOTEX building blocks (all annual, tkr, to mirror the current TOTEX definition
 # controllable_cost_average + capital_cost_2024).

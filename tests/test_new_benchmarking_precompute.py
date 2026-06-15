@@ -2,14 +2,14 @@
 tests/test_new_benchmarking_precompute.py
 
 Guards the pre-computed main-spec bundle for the new benchmarking model
-(data/new_benchmarking/, produced by scripts/precompute_new_benchmarking.py and loaded
-by data_loaders.new_benchmarking_data.load_precomputed_main).
+(new_benchmarking_model/data/precomputed/, produced by new_benchmarking_model/data/precompute.py and loaded
+by new_benchmarking_model.data.loader.load_precomputed_main).
 
 Two things are checked:
   1. The bundle loads and reconstructs a well-formed NewBenchmarkingResult.
   2. It still matches a live recomputation — the staleness guard. If this fails, the
      committed bundle has drifted from the code/data and must be regenerated:
-         ./venv/Scripts/python.exe scripts/precompute_new_benchmarking.py
+         uv run python new_benchmarking_model/data/precompute.py
 """
 
 import pytest
@@ -19,13 +19,13 @@ from config.column_names import (
     COL_REID, COL_DEA_EFFICIENCY, COL_TOTEX_NEW, COL_EFF_REQ_DELTA,
     COL_APPLICATION_BASE_NEW, COL_KR_CURRENT, COL_KR_NEW,
 )
-from calculations.new_benchmarking import run_new_benchmarking, NewBenchmarkingConfig
-from data_loaders.new_benchmarking_data import load_precomputed_main, MANIFEST_JSON
+from new_benchmarking_model import run_new_benchmarking, NewBenchmarkingConfig
+from new_benchmarking_model.data.loader import load_precomputed_main, MANIFEST_JSON
 
 
 pytestmark = pytest.mark.skipif(
     not MANIFEST_JSON.exists(),
-    reason="No pre-computed bundle (run scripts/precompute_new_benchmarking.py)",
+    reason="No pre-computed bundle (run new_benchmarking_model/data/precompute.py)",
 )
 
 
