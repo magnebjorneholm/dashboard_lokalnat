@@ -74,7 +74,7 @@ def load_cable_components(capbase_path=None) -> pd.DataFrame:
     Load all line components from capbase_a, classified onto both axes.
 
     Returns one row per line component with columns:
-        id_firm, id_network, subcat, ledningstyp, voltage_level, km
+        REId, subcat, ledningstyp, voltage_level, km
 
     Non-line rows (classify_ledningstyp -> None) and rows with km <= 0 are dropped,
     so every returned row carries a positive physical length in kilometres.
@@ -91,8 +91,7 @@ def load_cable_components(capbase_path=None) -> pd.DataFrame:
     src = raw[is_line]
 
     df = pd.DataFrame({
-        C.COL_ID_FIRM: src[C.COL_ID_FIRM].values,
-        C.COL_ID_NETWORK: src[C.COL_ID_NETWORK].values,
+        C.COL_REID: src[C.COL_SRC_REID].astype(str).values,
         C.COL_SUBCAT: src[C.COL_SUBCAT].astype(str).str.strip().values,
         C.COL_LEDNINGSTYP: ledningstyp[is_line].values,
         C.COL_VOLTAGE_LEVEL: src[C.COL_VOLT].map(classify_voltage_level).values,

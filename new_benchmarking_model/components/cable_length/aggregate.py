@@ -35,8 +35,8 @@ def aggregate_cable_length_per_firm(
     Returns
     -------
     A tidy DataFrame:
-        split_by_voltage=False : columns [id_firm, km_total]
-        split_by_voltage=True  : columns [id_firm, voltage_level, km_total]
+        split_by_voltage=False : columns [REId, km_total]
+        split_by_voltage=True  : columns [REId, voltage_level, km_total]
     Every company present in `components` after filtering appears exactly once
     (per voltage_level when split). km_total is the summed physical length [km].
     """
@@ -50,7 +50,7 @@ def aggregate_cable_length_per_firm(
             )
         components = components[components[C.COL_LEDNINGSTYP].isin(include_types)]
 
-    group_cols = [C.COL_ID_FIRM]
+    group_cols = [C.COL_REID]
     if split_by_voltage:
         group_cols.append(C.COL_VOLTAGE_LEVEL)
 
