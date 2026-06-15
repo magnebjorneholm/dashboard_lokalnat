@@ -290,7 +290,7 @@ DEA-specen för nya modellen:
 Ei:s nya inriktning: referensen flyttas från **fronten** till **tredje kvartilen**, och
 utfallet blir **signerat** (avdrag *eller* tillägg). Den gamla front-/endast-avdrag-metoden
 (`calculations/efficiency/efficiency_requirement.py`) lever kvar — men bara i intäktsrams-
-pipelinen (M5), inte här. Tolkning: `new_benchmarking_model/tolkning-overgang-effektiviseringsincitament.md`.
+pipelinen (M5), inte här. Tolkning: `new_benchmarking_model/docs/tolkning-overgang-effektiviseringsincitament.md`.
 
 - `E₇₅` = 75:e percentilen av `dea_efficiency` (capped, `min(θ,1)`) **exklusive outliers**.
 - Signerat gap `g = E₇₅ − E_i`, kapat symmetriskt till `[−0.30, +0.30]`.

@@ -9,7 +9,7 @@ package, precisely so the revenue-cap pipeline keeps using the legacy method unt
 is correct and must not change).
 
 The change vs. the legacy method
-(new_benchmarking_model/tolkning-overgang-effektiviseringsincitament.md §3, §7):
+(new_benchmarking_model/docs/tolkning-overgang-effektiviseringsincitament.md §3, §7):
 
     Legacy:  potential = 1 − E_i        gap to the frontier (≥ 0) → deduction only
     New:     gap       = E75 − E_i      gap to the third quartile → signed
