@@ -24,7 +24,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from frontend.common.styling import COLORS
-from config.colors import get_plotly_template_safe
+from config.colors import get_plotly_template_safe, CHART_COLORS
 from config.column_names import (
     COL_REID, COL_DEA_EFFICIENCY_NEW, COL_DEA_EFFICIENCY_CURRENT,
     COL_EFF_REQ_NEW, COL_EFF_REQ_CURRENT,
@@ -395,3 +395,468 @@ def render_requirement_scatter(
         scale=100.0, unit_label="%/yr", tickformat=".1f", hover_format="+.2f",
         shared_range=False, zero_line=True, key=key,
     )
+
+
+# ===========================================================================
+# Sector decomposition — the "Placeholder" chart group
+# ===========================================================================
+# Static, sector-level read of the committed analysis tables (channel isolation +
+# Shapley attribution). The four cost-component PLAYERS keep one colour each across the
+# waterfall, boxplots and quantile bars so a component is recognisable everywhere. All
+# figures work in percentage points (pp/yr) of the signed two-sided requirement; the
+# analysis tables already store the *_pp / phi_* columns in pp, so no ×100 here.
+
+# Ordered by mean |phi| dominance (matches the Shapley summary).
+PLAYER_KEYS = ("nonctrl", "capex_adj", "cable", "losses")
+PLAYER_LABELS = {
+    "nonctrl": "Non-controllable",
+    "capex_adj": "Capex levelling",
+    "cable": "Cable length",
+    "losses": "Network losses",
+}
+PLAYER_COLORS = {
+    "nonctrl": CHART_COLORS[0],    # blue
+    "capex_adj": CHART_COLORS[2],  # violet
+    "cable": CHART_COLORS[1],      # teal
+    "losses": CHART_COLORS[4],     # orange
+}
+_RESIDUAL_COLOR = CHART_COLORS[6]  # slate — the held-out mechanic/structural term
+# Faint two-phase bands behind the Shapley waterfall.
+_BAND_COMPUTE = "rgba(100, 116, 139, 0.10)"     # slate tint — how the requirement is computed
+_BAND_COMPONENTS = "rgba(37, 99, 235, 0.06)"    # primary tint — the cost components
+
+
+# ---------------------------------------------------------------------------
+# Fig 1 — channel tilt along urbanity (regression lines + scatter + boot-CI band)
+# ---------------------------------------------------------------------------
+
+def _slope_row(slopes: pd.DataFrame, fragment: str):
+    """(slope, boot_ci_low, boot_ci_high) for the channel whose label contains `fragment`."""
+    row = slopes[slopes["channel"].str.contains(fragment, case=False, na=False)]
+    if row.empty:
+        return None
+    r = row.iloc[0]
+    return float(r["slope"]), float(r["boot_ci_low"]), float(r["boot_ci_high"])
+
+
+def render_channel_regression(
+    channels: pd.DataFrame,
+    slopes: pd.DataFrame,
+    key: str = "nb_channel_reg",
+) -> None:
+    """Two opposing förläggningsmiljö channels projected on the urban axis.
+
+    Y = each channel's per-firm contribution to the requirement (pp; <0 = lowers the
+    requirement = favours the firm). The regression line uses the stored OLS slope drawn
+    through the point cloud's centroid; the band is the bootstrap slope CI pivoting at the
+    same centroid (a wedge — narrow at the centre, wide at the edges). Channel A (capex
+    levelling) tilts down (favours urban), channel B (cable length) tilts up (favours
+    rural); the net line (A + B) is their sum and sits ~flat near zero.
+    """
+    need = ["urbanity_index", "dA_pp", "dB_pp"]
+    if any(c not in channels.columns for c in need):
+        st.info("No channel data to plot.")
+        return
+    d = channels.dropna(subset=need).copy()
+    if d.empty:
+        st.info("No channel data to plot.")
+        return
+
+    x = d["urbanity_index"].to_numpy(dtype=float)
+    xbar = float(x.mean())
+    xs = np.array([x.min(), x.max()])
+
+    a = _slope_row(slopes, "capex-adj")
+    b = _slope_row(slopes, "cable-length")
+    if a is None or b is None:
+        st.info("No channel slopes to plot.")
+        return
+
+    series = [
+        # (key, y-array, label, color, slope, boot_ci or None for net)
+        ("A", d["dA_pp"].to_numpy(float), "Capex levelling", PLAYER_COLORS["capex_adj"], a[0], (a[1], a[2])),
+        ("B", d["dB_pp"].to_numpy(float), "Cable length", PLAYER_COLORS["cable"], b[0], (b[1], b[2])),
+        ("N", (d["dA_pp"] + d["dB_pp"]).to_numpy(float), "Net (A + B)", COLORS["text_secondary"],
+         a[0] + b[0], None),
+    ]
+
+    # Robust y-window: a handful of firms have extreme channel contributions (down to
+    # ~-1.9 pp) that would otherwise crush the lines, bands and bulk into a flat strip near
+    # zero. Clip to a readable window and disclose the off-scale count in the caption.
+    Y_LO, Y_HI = -0.4, 0.4
+
+    layout_kwargs, template = get_plotly_template_safe()
+    fig = go.Figure()
+    fig.add_hline(y=0, line_dash="dot", line_color=COLORS["text_muted"], line_width=1)
+
+    # Drawn in phases so the regression lines always sit on top of every cloud and band.
+    # Phase 1 — bootstrap-CI wedges (A and B only; the net has no stored CI).
+    for skey, y, label, color, slope, boot in series:
+        if boot is None:
+            continue
+        ybar = float(np.nanmean(y))
+        lo = ybar + boot[0] * (xs - xbar)
+        hi = ybar + boot[1] * (xs - xbar)
+        fig.add_trace(go.Scatter(x=xs, y=lo, mode="lines", line=dict(width=0),
+                                 hoverinfo="skip", showlegend=False))
+        fig.add_trace(go.Scatter(x=xs, y=hi, mode="lines", line=dict(width=0), fill="tonexty",
+                                 fillcolor=_rgba(color, 0.13), hoverinfo="skip", showlegend=False))
+
+    # Phase 2 — scatter points (A and B only; the net is a line, no third cloud).
+    for skey, y, label, color, slope, boot in series:
+        if boot is None:
+            continue
+        fig.add_trace(go.Scatter(
+            x=x, y=y, mode="markers",
+            marker=dict(color=color, size=5, opacity=0.35, line=dict(color="white", width=0.4)),
+            hoverinfo="skip", showlegend=False,
+        ))
+
+    # Phase 3 — regression lines, on top of the clouds.
+    for skey, y, label, color, slope, boot in series:
+        ybar = float(np.nanmean(y))
+        line_y = ybar + slope * (xs - xbar)
+        name = (f"{label}  (slope {slope:+.3f} [{boot[0]:+.2f}, {boot[1]:+.2f}])"
+                if boot is not None else f"{label}  (slope {slope:+.3f})")
+        fig.add_trace(go.Scatter(
+            x=xs, y=line_y, mode="lines", name=name,
+            line=dict(color=color, width=3, dash=("dash" if skey == "N" else "solid")),
+            hovertemplate=f"{label}<br>urbanity %{{x:.2f}} to %{{y:+.3f}} pp<extra></extra>",
+        ))
+
+    # Points (A and B) beyond the window, disclosed in the caption (no silent truncation).
+    ab = np.concatenate([d["dA_pp"].to_numpy(float), d["dB_pp"].to_numpy(float)])
+    n_off = int(((ab < Y_LO) | (ab > Y_HI)).sum())
+
+    fig.update_layout(
+        **layout_kwargs, template=template,
+        title=dict(text="Who the corrections favour — channel tilt along urbanity", font=dict(size=13)),
+        height=440, dragmode=False,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    font=dict(size=10)),
+        margin=dict(l=10, r=10, t=70, b=45),
+        xaxis=dict(title="Urbanity index  (0 = rural → urban)", fixedrange=True,
+                   showgrid=False, linecolor=COLORS["bg_muted"]),
+        yaxis=dict(title="Channel contribution (pp/yr)", range=[Y_LO, Y_HI], fixedrange=True,
+                   gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"], zeroline=False),
+    )
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
+    st.caption(
+        "Each point is a company; the line is the channel's regression on urbanity (drawn "
+        "from the stored slope, band = bootstrap CI). **Capex levelling** tilts down, "
+        "favouring urban firms; **cable length** tilts up, favouring rural firms. The dashed "
+        "**net** line (A + B) is roughly flat near zero: the two channels cancel along the "
+        "urban axis. The bootstrap bands are wide and cross zero, so read direction over "
+        "significance. The y-axis is clipped to ±0.4 pp/yr"
+        + (f"; {n_off} extreme points fall outside and are not shown." if n_off else ".")
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fig 2 — what explains the new mean requirement (Shapley waterfall, sector mean)
+# ---------------------------------------------------------------------------
+
+def render_shapley_waterfall(
+    shapley: pd.DataFrame, decomp: Optional[pd.DataFrame] = None,
+    key: str = "nb_shapley_waterfall",
+) -> None:
+    """Sector-mean bridge from today's requirement to the new outcome.
+
+    The four cost players' mean Shapley contributions net to ~0; the bulk of the shift is the
+    held-out residual. When the residual decomposition is supplied, the residual is split into
+    the mechanic switch (legacy front-reference to two-sided E75, the dominant term) and the
+    input-structure change (two separate DEA inputs to one summed TOTEX), anchored on the
+    recomputed legacy baseline C1 (the reconciliation against Ei's published figure is solver
+    noise and is dropped, so the bridge closes exactly). Without it, the residual is one bar.
+    """
+    need = ["v_full_pp", *[f"phi_{p}" for p in PLAYER_KEYS]]
+    if any(c not in shapley.columns for c in need):
+        st.info("No Shapley data to plot.")
+        return
+    d = shapley.dropna(subset=["v_full_pp"])
+    if d.empty:
+        st.info("No Shapley data to plot.")
+        return
+
+    phis = {p: float(d[f"phi_{p}"].mean()) for p in PLAYER_KEYS}
+    player_rows = [(PLAYER_LABELS[p], phis[p], "relative") for p in PLAYER_KEYS]
+
+    split_ok = decomp is not None and all(
+        c in decomp.columns for c in ("C1_legacy_2in", "phi_mechanic", "phi_input")
+    )
+    boundary = None
+    if split_ok:
+        dd = decomp.dropna(subset=["C1_legacy_2in", "phi_mechanic", "phi_input"])
+        c1 = float(dd["C1_legacy_2in"].mean())
+        mech = float(dd["phi_mechanic"].mean())
+        inp = float(dd["phi_input"].mean())
+        v_empty = c1 + mech + inp                  # mean v(∅), the two-sided baseline
+        v_full = v_empty + sum(phis.values())      # exact cumulative end
+        rows = [
+            ("Current requirement (legacy)", c1, "absolute"),
+            ("Mechanic: front-reference → two-sided", mech, "relative"),
+            ("Input structure: 2 inputs → 1 TOTEX", inp, "relative"),
+            ("Two-sided baseline", v_empty, "total"),
+            *player_rows,
+            ("New outcome", v_full, "total"),
+        ]
+        boundary = 3.5   # phases split after the subtotal (rows 0-3 vs 4-8)
+    else:
+        if any(c not in d.columns for c in ("residual_vs_current_pp", "v_empty_pp")):
+            st.info("No Shapley data to plot.")
+            return
+        resid = float(d["residual_vs_current_pp"].mean())
+        v_empty = float(d["v_empty_pp"].mean())
+        v_full = float(d["v_full_pp"].mean())
+        rows = [
+            ("Current requirement", v_empty - resid, "absolute"),
+            ("Mechanic + structure (residual)", resid, "relative"),
+            *player_rows,
+            ("New outcome", v_full, "total"),
+        ]
+
+    labels = [r[0] for r in rows]
+    values = [r[1] for r in rows]
+    measures = [r[2] for r in rows]
+    text = [f"{v:+.3f}" if m == "relative" else f"{v:.3f}" for v, m in zip(values, measures)]
+    hover = [
+        f"<b>{l}</b><br>{v:+.3f} pp/yr" if m == "relative" else f"<b>{l}</b><br>{v:.3f} pp/yr"
+        for l, v, m in zip(labels, values, measures)
+    ]
+
+    layout_kwargs, template = get_plotly_template_safe()
+    fig = go.Figure(go.Waterfall(
+        orientation="h", y=labels, x=values, measure=measures,
+        textposition="outside", text=text,
+        textfont=dict(size=11, family="Inter, sans-serif"),
+        connector=dict(line=dict(color=COLORS["bg_muted"], width=1, dash="dot")),
+        increasing=dict(marker=dict(color=COLORS["warning"])),   # req up = bigger deduction → amber
+        decreasing=dict(marker=dict(color=COLORS["success"])),   # req down = reward → green
+        totals=dict(marker=dict(color=COLORS["primary"])),       # start / subtotal / new → blue
+        hovertext=hover, hovertemplate="%{hovertext}<extra></extra>",
+    ))
+
+    # Two-phase bands (only with the residual split): how the requirement is computed
+    # (mechanic + input) vs the four cost components.
+    if boundary is not None:
+        end = len(rows) - 0.5
+        fig.add_hrect(y0=-0.5, y1=boundary, fillcolor=_BAND_COMPUTE, line_width=0, layer="below")
+        fig.add_hrect(y0=boundary, y1=end, fillcolor=_BAND_COMPONENTS, line_width=0, layer="below")
+        for y_pos, lab in ((1.5, "How the requirement is computed"),
+                           ((boundary + end) / 2, "Cost components")):
+            fig.add_annotation(
+                xref="paper", x=0.01, y=y_pos, yref="y", text=f"<b>{lab}</b>",
+                showarrow=False, xanchor="left", yanchor="middle",
+                font=dict(size=11, color=COLORS["text_secondary"]),
+            )
+
+    fig.update_layout(
+        **layout_kwargs, template=template,
+        title=dict(text="What explains the new mean requirement", font=dict(size=13)),
+        margin=dict(l=10, r=70, t=40, b=40),
+        height=max(300, len(labels) * 50), dragmode=False, showlegend=False,
+        xaxis=dict(title="Mean annual requirement (pp/yr)", fixedrange=True, showgrid=False,
+                   zeroline=True, zerolinecolor=COLORS["bg_muted"], linecolor=COLORS["bg_muted"]),
+        yaxis=dict(fixedrange=True, showgrid=True, gridcolor=COLORS["bg_muted"],
+                   tickson="boundaries", automargin=True, autorange="reversed"),
+    )
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
+    net_players = sum(phis.values())
+    if split_ok:
+        st.caption(
+            "Sector mean, from the recomputed legacy baseline to the new outcome. The shift is "
+            "overwhelmingly the **mechanic** switch (legacy front-reference to the two-sided E₇₅ "
+            "rule), with the **input-structure** change (two DEA inputs to one TOTEX) small. "
+            "Only past the two-sided baseline do the four cost components enter, and they net to "
+            f"{net_players:+.3f} pp/yr. Amber raises the requirement, green lowers it."
+        )
+    else:
+        st.caption(
+            "Sector mean, current model to new model. The **residual** (the two-sided E₇₅ "
+            "mechanic plus structural input differences, held out of the four players) accounts "
+            f"for almost the whole shift. The four cost components net to {net_players:+.3f} "
+            "pp/yr. Amber raises the requirement, green lowers it."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Fig 3a — small on average, large in redistribution (Shapley boxplots)
+# ---------------------------------------------------------------------------
+
+def render_shapley_boxplots(
+    shapley: pd.DataFrame, user_reid: str, user_label: str,
+    key: str = "nb_shapley_box",
+) -> None:
+    """One horizontal box per cost player over the signed Shapley contribution (pp).
+
+    Categories on the y-axis (more horizontal room for the spread). Every company is a faint
+    point jittered *inside* the box's footprint (drawn behind a translucent box so the median
+    (solid) and mean (dashed) lines stay crisp on top). The means sit near zero but the
+    spread is wide: each component redistributes the requirement between firms rather than
+    shifting everyone the same way.
+    """
+    if any(f"phi_{p}" not in shapley.columns for p in PLAYER_KEYS):
+        st.info("No Shapley data to plot.")
+        return
+
+    # Numeric y positions so the points can jitter inside each box; nonctrl on top.
+    n = len(PLAYER_KEYS)
+    y_pos = {p: (n - 1 - i) for i, p in enumerate(PLAYER_KEYS)}
+    box_width, jitter_w = 0.5, 0.20
+    rng = np.random.default_rng(0)   # deterministic jitter — points don't jump between reruns
+
+    layout_kwargs, template = get_plotly_template_safe()
+    fig = go.Figure()
+    fig.add_vline(x=0, line_dash="dot", line_color=COLORS["text_muted"], line_width=1)
+
+    vals_by_player = {
+        p: pd.to_numeric(shapley[f"phi_{p}"], errors="coerce").dropna().to_numpy()
+        for p in PLAYER_KEYS
+    }
+
+    # Layer 1 — the points, behind, jittered inside the box band, faint (box stays prominent).
+    for p in PLAYER_KEYS:
+        vals = vals_by_player[p]
+        yj = y_pos[p] + rng.uniform(-jitter_w, jitter_w, len(vals))
+        fig.add_trace(go.Scatter(
+            x=vals, y=yj, mode="markers",
+            marker=dict(color=PLAYER_COLORS[p], size=4, opacity=0.30, line=dict(width=0)),
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+
+    # Layer 2 — the box on top: translucent fill so points show through, opaque median + mean.
+    for p in PLAYER_KEYS:
+        vals = vals_by_player[p]
+        fig.add_trace(go.Box(
+            x=vals, y=np.full(len(vals), y_pos[p]), width=box_width, orientation="h",
+            line=dict(color=PLAYER_COLORS[p], width=1.5),
+            fillcolor=_rgba(PLAYER_COLORS[p], 0.16),
+            boxmean=True,                  # dashed mean line alongside the solid median
+            boxpoints=False,               # raw points are the separate layer above
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+
+    # Layer 3 — the user's firm, on top.
+    u = shapley[shapley["REId"] == user_reid]
+    if not u.empty:
+        ux, uy = [], []
+        for p in PLAYER_KEYS:
+            v = u[f"phi_{p}"].iloc[0]
+            if pd.notna(v):
+                ux.append(float(v))
+                uy.append(y_pos[p])
+        if ux:
+            fig.add_trace(go.Scatter(
+                x=ux, y=uy, mode="markers", name=user_label,
+                marker=dict(symbol="diamond", color=COLORS["text_primary"], size=11,
+                            line=dict(color="white", width=1.5)),
+                hoverinfo="skip",
+            ))
+
+    fig.update_layout(
+        **layout_kwargs, template=template,
+        title=dict(text="Small on average, large in redistribution", font=dict(size=13)),
+        height=460, dragmode=False, hovermode=False,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10)),
+        margin=dict(l=10, r=10, t=60, b=40),
+        xaxis=dict(title="Shapley contribution (pp/yr)", fixedrange=True,
+                   gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"], zeroline=False),
+        yaxis=dict(
+            fixedrange=True, showgrid=False, linecolor=COLORS["bg_muted"],
+            range=[-0.6, n - 0.4],
+            tickmode="array", tickvals=[y_pos[p] for p in PLAYER_KEYS],
+            ticktext=[PLAYER_LABELS[p] for p in PLAYER_KEYS],
+        ),
+    )
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
+    st.caption(
+        "Each box is one cost component's signed Shapley contribution across the 145 scored "
+        "companies (negative = lowers the requirement = favours the firm). The solid line is "
+        "the median, the dashed line the mean, and every company is a faint point inside the "
+        "box. The means sit near zero, but the spread is wide: the components reshuffle the "
+        "requirement between firms rather than moving everyone the same way. Your firm is the "
+        "diamond."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fig 3b — redistribution along urbanity (mean Shapley per urban quartile)
+# ---------------------------------------------------------------------------
+
+def render_shapley_by_urban_quantile(
+    shapley: pd.DataFrame, channels: pd.DataFrame, user_reid: str,
+    key: str = "nb_shapley_quantile",
+) -> None:
+    """Mean Shapley contribution per component, grouped by urban quartile (grouped bars).
+
+    Joins the per-firm Shapley contributions to urbanity_index and bins firms into four equal
+    urban quartiles (Q1 least urban to Q4 most). The x-axis is the urbanity axis (the
+    quartiles); each component is a bar in its own colour (matching the boxplot), so scanning
+    one colour across Q1 to Q4 reveals its redistribution gradient.
+    """
+    phi_cols = [f"phi_{p}" for p in PLAYER_KEYS]
+    if any(c not in shapley.columns for c in phi_cols) or "urbanity_index" not in channels.columns:
+        st.info("No data to plot.")
+        return
+
+    d = shapley[["REId", *phi_cols]].merge(
+        channels[["REId", "urbanity_index"]], on="REId", how="inner"
+    ).dropna(subset=["urbanity_index", *phi_cols])
+    if len(d) < 4:
+        st.info("No data to plot.")
+        return
+
+    # Rank-based quartiles so ties (many rural firms near 0) cannot collapse the bins.
+    q_labels = ["Q1 (least urban)", "Q2", "Q3", "Q4 (most urban)"]
+    d = d.copy()
+    d["_q"] = pd.qcut(d["urbanity_index"].rank(method="first"), 4, labels=q_labels)
+    agg = d.groupby("_q", observed=True)[phi_cols].mean()
+
+    user_q = None
+    u = d[d["REId"] == user_reid]
+    if not u.empty:
+        user_q = str(u["_q"].iloc[0])
+
+    layout_kwargs, template = get_plotly_template_safe()
+    fig = go.Figure()
+    fig.add_hline(y=0, line_dash="dot", line_color=COLORS["text_muted"], line_width=1)
+
+    # One bar per component (its boxplot colour); x = quartiles (the urbanity axis).
+    for p in PLAYER_KEYS:
+        ys = [float(agg.loc[ql, f"phi_{p}"]) if ql in agg.index else None for ql in q_labels]
+        fig.add_trace(go.Bar(
+            x=q_labels, y=ys, name=PLAYER_LABELS[p],
+            marker=dict(color=PLAYER_COLORS[p], opacity=0.72, line=dict(color="white", width=0.5)),
+            hoverinfo="skip",
+        ))
+
+    fig.update_layout(
+        **layout_kwargs, template=template, barmode="group",
+        title=dict(text="Redistribution along urbanity", font=dict(size=13)),
+        height=400, dragmode=False, hovermode=False, bargap=0.25, bargroupgap=0.05,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    font=dict(size=10), itemclick=False, itemdoubleclick=False),
+        margin=dict(l=10, r=10, t=60, b=40),
+        xaxis=dict(title="Urban quartile  (least → most urban)", fixedrange=True,
+                   showgrid=False, linecolor=COLORS["bg_muted"]),
+        yaxis=dict(title="Mean Shapley contribution (pp/yr)", fixedrange=True,
+                   gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"], zeroline=False),
+    )
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
+    caption = (
+        "Each company's Shapley contributions averaged within urban quartiles (negative = "
+        "favours the firm). The gradient across Q1→Q4 shows the direction of redistribution: "
+        "capex levelling turns more favourable toward urban firms, cable length toward rural."
+    )
+    if user_q:
+        caption += f" Your firm is in **{user_q}**."
+    st.caption(caption)
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    """'#RRGGBB' → 'rgba(r, g, b, alpha)' for translucent fills."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r}, {g}, {b}, {alpha})"

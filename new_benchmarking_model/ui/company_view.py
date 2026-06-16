@@ -47,9 +47,14 @@ from new_benchmarking_model.model import NewBenchmarkingResult
 from new_benchmarking_model.ui.charts import (
     render_position_chart, render_outcome_distribution,
     render_efficiency_scatter, render_requirement_scatter,
+    render_channel_regression, render_shapley_waterfall,
+    render_shapley_boxplots, render_shapley_by_urban_quantile,
     outcome_kind, KIND_REWARD, KIND_DEDUCTION,
 )
 from new_benchmarking_model.ui.chart_panel import ChartGroup, render_chart_panel
+from new_benchmarking_model.data.analysis_loader import (
+    load_channels, load_slopes, load_shapley, load_residual_decomp,
+)
 
 _EPS = 1e-5
 
@@ -499,8 +504,39 @@ def _group_totex_bridge(ctx: GroupContext) -> None:
     _render_totex_waterfall(ctx.result.totex, ctx.user_reid)
 
 
+def _group_placeholder(ctx: GroupContext) -> None:
+    """Sector-level decomposition of the new-model outcome (committed analysis tables).
+
+    These figures describe the MAIN model's structure and are identical for every user
+    (the firm is only highlighted): they are read from the precomputed analysis tables, not
+    recomputed per run, so an active experiment does not change them — we say so when one is
+    running, then always show the main-model analysis.
+    """
+    is_main = ctx.cfg.signature() == NewBenchmarkingConfig().signature()
+    if not is_main:
+        st.caption(
+            "ⓘ These figures reflect the **main model** — the analysis is precomputed and "
+            "not affected by experiment settings."
+        )
+
+    channels, slopes, shapley = load_channels(), load_slopes(), load_shapley()
+    if channels is None or slopes is None or shapley is None:
+        st.info("The decomposition analysis tables are not available.")
+        return
+    decomp = load_residual_decomp()   # optional; the waterfall falls back to one residual bar
+
+    render_channel_regression(channels, slopes)
+    st.divider()
+    render_shapley_waterfall(shapley, decomp)
+    st.divider()
+    render_shapley_boxplots(shapley, ctx.user_reid, ctx.user_label)
+    st.divider()
+    render_shapley_by_urban_quantile(shapley, channels, ctx.user_reid)
+
+
 CHART_GROUPS = [
     ChartGroup("efficiency_outcome", "Efficiency & outcome", _group_efficiency_outcome),
     ChartGroup("totex_bridge", "TOTEX bridge", _group_totex_bridge),
+    ChartGroup("placeholder", "Placeholder", _group_placeholder),
 ]
 

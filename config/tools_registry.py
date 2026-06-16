@@ -62,8 +62,9 @@ TOOLS: List[ToolSpec] = [
         status="available",
         summary=(
             "Explore Energimarknadsinspektionen's proposed TOTEX-based DEA "
-            "benchmarking model and how it would affect the network's efficiency "
-            "requirement — independent of the revenue-frame pipeline, all else equal."
+            "benchmarking model and how it would change a network's efficiency "
+            "requirement, now that a firm can be rewarded as well as penalised "
+            "relative to the sector, all else equal."
         ),
     ),
     ToolSpec(

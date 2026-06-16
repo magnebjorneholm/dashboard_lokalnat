@@ -35,9 +35,11 @@ st.markdown(
     <div class="rm-hero-title">Revenue-cap analysis<br>for the
         <span class="rm-accent">Swedish electricity grid</span></div>
     <div class="rm-hero-sub">
-        Regumetrica replicates Energimarknadsinspektionen's regulatory model for
-        all 148 distribution networks — adjust parameters, run the pipeline, and
-        compare against the baseline with full transparency.
+        Regumetrica turns Sweden's electricity-network regulation into a model you
+        can run. Replicate Energimarknadsinspektionen's revenue-cap calculation
+        component by component, change any assumption, and quantify the economic
+        impact. Built for the rules as they stand today, and for the reform now
+        reshaping them.
     </div>
     """,
     unsafe_allow_html=True,
@@ -56,12 +58,12 @@ with cta2:
 st.markdown(
     """
     <div class="rm-stats">
-        <div><div class="rm-stat-num">148</div>
-             <div class="rm-stat-label">distribution networks</div></div>
-        <div><div class="rm-stat-num">Ei</div>
-             <div class="rm-stat-label">revenue-cap model</div></div>
-        <div><div class="rm-stat-num">DEA</div>
-             <div class="rm-stat-label">+ TOTEX benchmarking</div></div>
+        <div><div class="rm-stat-num">Transparent</div>
+             <div class="rm-stat-label">every component of the model, no black box</div></div>
+        <div><div class="rm-stat-num">Counterfactual</div>
+             <div class="rm-stat-label">change any assumption, quantify the economic impact</div></div>
+        <div><div class="rm-stat-num">Reform-ready</div>
+             <div class="rm-stat-label">today's rules and the proposed 2028 regime</div></div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -71,15 +73,18 @@ st.write("")
 
 landing_heading("What you get", eyebrow="Why Regumetrica")
 landing_cards([
-    {"icon": "🎯", "title": "Regulatory precision",
-     "body": "Faithful replication of Ei's revenue-cap model — capital base, "
-             "WACC, operating expenditure, efficiency requirements and incentives."},
-    {"icon": "🔍", "title": "Case vs baseline",
-     "body": "Every adjustment is shown side by side with the baseline, so the "
-             "impact of each parameter change is always explicit."},
-    {"icon": "📊", "title": "Built for analysis",
-     "body": "DEA benchmarking, the proposed new TOTEX model, and exportable "
-             "results — designed for regulators and operators alike."},
+    {"eyebrow": "Replication", "title": "Faithful to Ei's model",
+     "body": "A component-by-component replica of the revenue-cap calculation: "
+             "capital base, cost of capital, operating expenditure, efficiency "
+             "requirement and incentives. Auditable, not a black box."},
+    {"eyebrow": "Scenarios", "title": "Every assumption is a dial",
+     "body": "Change a parameter or a company variable, run it, and see the effect "
+             "on the revenue frame side by side with the baseline. The impact of "
+             "each choice is always explicit."},
+    {"eyebrow": "Reform", "title": "Ready for what comes next",
+     "body": "The regulation is being rebuilt for the 2028 to 2031 period. "
+             "Regumetrica already models Ei's proposed direction, so you can see "
+             "what it would mean for a network before it takes effect."},
 ])
 
 
