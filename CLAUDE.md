@@ -49,6 +49,10 @@ Each tool ships its own user manual. The LaTeX sources live in `user_manual_late
 - Swedish column names only appear in `data_loaders/` (the load boundary).
 - `calculations/` is pure logic — no UI or Streamlit imports allowed.
 - Dependencies flow strictly downward (see ARCHITECTURE.md layer diagram).
+- **Charts:** Plotly `graph_objects` (`import plotly.graph_objects as go`) is the
+  drawing engine; Streamlit is the host/UI layer and renders figures with
+  `st.plotly_chart(...)`. This is the default convention — assume it whenever a new
+  chart is discussed (no `plotly.express`, Altair, Matplotlib, or `st.*_chart`).
 
 ### Design for the target, not the legacy (scoped)
 

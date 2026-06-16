@@ -1,5 +1,5 @@
 """
-new_benchmarking_output.py - render the new-benchmarking result for one company.
+company_view.py - render the new-benchmarking result for one company.
 
 Built for the two-sided third-quartile mechanic (not the legacy front-reference model):
 the headline is the firm's *signed outcome* under the new model - a deduction if it is
@@ -7,11 +7,14 @@ less efficient than the third-quartile benchmark E75, a reward if more efficient
 cost coverage at the benchmark.
 
 Layout (firm-first - the user's answer comes before the sector context):
-  1. Your company  - verdict hero (deduction / coverage / reward) + supporting KPIs.
-  2. Sector & position - counts + the position chart (efficiency histogram with the E75
-     pivot, deduction/reward zones and the model's transfer curve) + the outcome
-     distribution, the firm marked in both.
-  3. New model TOTEX - bridge waterfall from the current-model TOTEX to the new one.
+  - Verdict (pinned on top): hero (deduction / coverage / reward) + supporting KPIs.
+  - A horizontally-switched panel of thematic chart groups (see chart_panel.py), each
+    shown at the same vertical position:
+      * "Efficiency & outcome" - the position chart (efficiency histogram with the E75
+        pivot, deduction/reward zones and the model's transfer curve) + the outcome
+        distribution, the firm marked in both.
+      * "TOTEX bridge" - waterfall from the current-model TOTEX to the new one.
+    Add a theme by adding one entry to CHART_GROUPS (bottom of this file).
 
 The two-sided visuals live in new_benchmarking_model/ui/charts.py (NOT the M5-shared
 _efficiency_charts.py). The current model (EIs_DEA) is used only as the comparison point
@@ -20,6 +23,7 @@ for the outcome swing, not as a second mechanic to display.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional
 
 import pandas as pd
@@ -32,15 +36,17 @@ from config.formatting import format_percent, format_pp, format_tkr, format_delt
 from config.column_names import (
     COL_REID, COL_DEA_EFFICIENCY, COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL, COL_DEA_REFERENCE,
     COL_TOTEX_NEW, COL_CONTROLLABLE_AVG, COL_CAPITAL_COST_2024,
-    COL_LOSS_VALUED, COL_NONCTRL_SELECTED, COL_CAPITAL_COST_ENV_ADJ,
+    COL_LOSS_VALUED, COL_LOSS_ACTUAL, COL_NONCTRL_SELECTED, COL_CAPITAL_COST_ENV_ADJ,
     COL_KR_CURRENT, COL_KR_NEW,
 )
 from new_benchmarking_model.config import NewBenchmarkingConfig
 from new_benchmarking_model.model import NewBenchmarkingResult
 from new_benchmarking_model.ui.charts import (
     render_position_chart, render_outcome_distribution,
-    outcome_kind, KIND_REWARD, KIND_DEDUCTION, KIND_COVERAGE,
+    render_efficiency_scatter, render_requirement_scatter,
+    outcome_kind, KIND_REWARD, KIND_DEDUCTION,
 )
+from new_benchmarking_model.ui.chart_panel import ChartGroup, render_chart_panel
 
 _EPS = 1e-5
 
@@ -99,6 +105,22 @@ def _peer_label(dea_new: pd.DataFrame, e75: Optional[float]) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Group context — everything a thematic chart group needs for one company
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class GroupContext:
+    """Shared state handed to every thematic chart group (see CHART_GROUPS)."""
+    result: NewBenchmarkingResult
+    user_reid: str
+    cfg: NewBenchmarkingConfig
+    user_label: str
+    e75: Optional[float]
+    new_eff: Optional[float]
+    new_out: Optional[float]
+
+
+# ---------------------------------------------------------------------------
 # Main render
 # ---------------------------------------------------------------------------
 
@@ -108,7 +130,7 @@ def render_company_view(
     cfg: NewBenchmarkingConfig,
     user_label: str = "Your firm",
 ) -> None:
-    """Full view: verdict → sector & position → TOTEX bridge.
+    """Full view: verdict pinned on top, then the thematic chart panel.
 
     user_label is the curated short company name used to mark the selected firm.
     """
@@ -123,11 +145,16 @@ def render_company_view(
     kr_new = _val(result.totex, user_reid, COL_KR_NEW)          # new outcome in tkr (TOTEX base)
     is_outlier_new = _flag(dea_new, user_reid, COL_IS_OUTLIER)
 
+    # Verdict stays pinned on top — the firm's answer, always visible.
     _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req, kr_cur, kr_new, is_outlier_new)
     st.divider()
-    _render_sector_and_position(result, user_reid, cfg, e75, new_eff, new_out, user_label)
-    st.divider()
-    _render_totex_waterfall(result.totex, user_reid)
+
+    # Everything else is grouped thematically and switched horizontally (see chart_panel).
+    ctx = GroupContext(
+        result=result, user_reid=user_reid, cfg=cfg, user_label=user_label,
+        e75=e75, new_eff=new_eff, new_out=new_out,
+    )
+    render_chart_panel(CHART_GROUPS, ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -247,8 +274,6 @@ def _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req,
 # ---------------------------------------------------------------------------
 
 def _render_sector_and_position(result, user_reid, cfg, e75, new_eff, new_out, user_label) -> None:
-    st.markdown("#### Sector & your position")
-
     dea_new = result.dea_new
     outcomes = dea_new[COL_EFF_REQ_ANNUAL]
     kinds = outcomes.map(outcome_kind)
@@ -275,45 +300,68 @@ def _render_sector_and_position(result, user_reid, cfg, e75, new_eff, new_out, u
 
 
 # ---------------------------------------------------------------------------
-# 3. New model TOTEX bridge (mechanic-agnostic - kept as-is)
+# 3. New model TOTEX bridge — two-phase (scope, then corrections)
 # ---------------------------------------------------------------------------
 
+# Full-width bands behind the two phases of the bridge.
+_BAND_SCOPE = "rgba(37, 99, 235, 0.13)"    # primary tint — scope (new cost posts)
+_BAND_CORRECTION = "rgba(217, 119, 6, 0.15)"  # amber tint — benchmarking corrections
+
+
 def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
-    """Bridge from the current-model TOTEX to the new-model TOTEX.
+    """Two-phase bridge from the old (legacy-scope) TOTEX to the new DEA TOTEX.
 
-    A horizontal waterfall that starts and ends on a blue total bar (current → new), with
-    the new ingredients in between: additions (network losses, selected non-controllable)
-    in red, the placement-environment capex cut in green. Controllable cost is shared by
-    both models, so it sits inside the unchanged opening total.
+    Old TOTEX is controllable + unadjusted capital cost. The journey to the new DEA input
+    is split into two phases that are kept visually separate (subtle background bands plus
+    an intermediate subtotal bar), so "what the new model measures" and "how it corrects
+    what it measures" never blur together:
+
+      Scope        — cost posts the new model brings into the DEA input that the old did
+                     not: network losses at their actual cost, selected non-controllable.
+      Corrections  — the benchmarking adjustments to those posts: losses revalued to a
+                     common price; capital cost levelled for placement environment.
+
+    Each new post enters the scope phase at its *uncorrected* value, then the correction
+    phase adjusts it — which is exactly what isolates scope from correction. Everything is
+    exact and reconstructed from the totex frame:
+
+        old + losses_actual + non_ctrl + (losses_common − losses_actual)
+            + (capex_env_adj − capex_unadj)  ==  totex_new.
+
+    The placement-environment correction is shown as one bar here; the exact cable/station
+    split (a per-asset KENT re-run, not derivable from this frame) comes in a later step.
     """
-    st.markdown("#### New model TOTEX")
-
     def g(col):
         return _val(totex, user_reid, col)
 
     controllable = g(COL_CONTROLLABLE_AVG)
-    old_capex = g(COL_CAPITAL_COST_2024)
-    losses = g(COL_LOSS_VALUED)
+    capex_unadj = g(COL_CAPITAL_COST_2024)
+    loss_actual = g(COL_LOSS_ACTUAL)
+    loss_common = g(COL_LOSS_VALUED)
     nonctrl = g(COL_NONCTRL_SELECTED)
-    new_capex = g(COL_CAPITAL_COST_ENV_ADJ)
+    capex_env = g(COL_CAPITAL_COST_ENV_ADJ)
     new_totex = g(COL_TOTEX_NEW)
 
-    if None in (controllable, old_capex, losses, nonctrl, new_capex, new_totex):
+    if None in (controllable, capex_unadj, loss_actual, loss_common, nonctrl, capex_env, new_totex):
         st.info("No TOTEX data for the selected company.")
         return
 
-    old_totex = controllable + old_capex
-    env_cut = new_capex - old_capex  # negative - the förläggningsmiljö reduction
+    old_totex = controllable + capex_unadj
+    subtotal = old_totex + loss_actual + nonctrl   # end of the scope phase (uncorrected)
+    loss_reval = loss_common - loss_actual          # correction: common price vs actual
+    capex_corr = capex_env - capex_unadj            # correction: placement environment
 
-    # Opening bar must be "absolute" (it sets the starting total); a "total" first bar would
-    # compute the cumulative of nothing = 0 and render invisible. The closing bar is "total"
-    # (cumulative). Both absolute/total bars are styled by `totals` (blue).
+    # Opening bar is "absolute" (it sets the starting total); the two "total" bars (the
+    # scope subtotal and the final TOTEX) show the running cumulative. Order top→bottom
+    # reads as the journey (y-axis is reversed below).
     rows = [
-        ("Current model TOTEX",       old_totex,  "absolute"),
-        ("Network losses",            losses,     "relative"),
-        ("Selected non-controllable", nonctrl,    "relative"),
-        ("Environment capex cut",     env_cut,    "relative"),
-        ("New model TOTEX",           new_totex,  "total"),
+        ("Old TOTEX",                       old_totex,   "absolute"),
+        ("Network losses (actual)",         loss_actual, "relative"),
+        ("Non-controllable",                nonctrl,     "relative"),
+        ("New-scope TOTEX (uncorrected)",   subtotal,    "total"),
+        ("Losses → common price",           loss_reval,  "relative"),
+        ("Capex placement-environment",     capex_corr,  "relative"),
+        ("New TOTEX (DEA)",                 new_totex,   "total"),
     ]
     labels = [r[0] for r in rows]
     values = [r[1] / 1e3 for r in rows]  # tkr → MSEK
@@ -335,10 +383,24 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
         textfont=dict(size=11, family="Inter, sans-serif"),
         connector=dict(line=dict(color=COLORS["bg_muted"], width=1, dash="dot")),
         increasing=dict(marker=dict(color=COLORS["error"])),    # additions raise cost → red
-        decreasing=dict(marker=dict(color=COLORS["success"])),  # cut lowers cost → green
-        totals=dict(marker=dict(color=COLORS["primary"])),      # current / new TOTEX → blue
+        decreasing=dict(marker=dict(color=COLORS["success"])),  # cuts lower cost → green
+        totals=dict(marker=dict(color=COLORS["primary"])),      # old / subtotal / new → blue
         hovertext=hover, hovertemplate="%{hovertext}<extra></extra>",
     ))
+
+    # Phase bands (numeric y maps to category index): scope spans rows 0–3 (the opening Old
+    # TOTEX, the two scope additions, and the uncorrected subtotal they build), corrections
+    # spans rows 4–6 (the two corrections plus the final TOTEX they land on). The floating
+    # relative bars sit far to the right, so the phase labels go in the empty left of the plot.
+    fig.add_hrect(y0=-0.5, y1=3.5, fillcolor=_BAND_SCOPE, line_width=0, layer="below")
+    fig.add_hrect(y0=3.5, y1=6.5, fillcolor=_BAND_CORRECTION, line_width=0, layer="below")
+    for y_pos, label in ((1.5, "Scope"), (5.0, "Corrections")):
+        fig.add_annotation(
+            xref="paper", x=0.01, y=y_pos, yref="y", text=f"<b>{label}</b>",
+            showarrow=False, xanchor="left", yanchor="middle",
+            font=dict(size=12, color=COLORS["text_secondary"]),
+        )
+
     fig.update_layout(
         **layout_kwargs, template=template,
         margin=dict(l=10, r=80, t=10, b=40),
@@ -350,7 +412,52 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="nb_totex_waterfall")
     st.caption(
-        "From the current benchmarking TOTEX to the new one: network losses (valued at a "
-        "common price) and selected non-controllable costs are added; the placement-"
-        "environment correction lowers capital cost. Controllable cost is unchanged."
+        "From the old TOTEX (controllable + unadjusted capital cost) to the new DEA TOTEX, "
+        "in two phases. **Scope** (blue band) adds the cost posts the new model measures but "
+        "the old did not — network losses at their actual cost and selected non-controllable "
+        "costs. **Corrections** (amber band) then apply the benchmarking adjustments: losses "
+        "revalued to a common price, and capital cost levelled for placement environment."
     )
+
+
+# ---------------------------------------------------------------------------
+# Thematic chart groups (registry)
+# ---------------------------------------------------------------------------
+# The horizontal panel below the verdict is built from this list. Each group is a theme
+# rendered at the same vertical position; the panel (chart_panel.render_chart_panel) owns
+# the horizontal switcher. Add a theme by adding one ChartGroup entry — e.g. a future
+# "New vs current" group with scatter plots of efficiency and the requirement.
+
+
+def _group_efficiency_outcome(ctx: GroupContext) -> None:
+    """Efficiency histogram + signed-outcome distribution (firm marked in both), then the
+    two narrower new-vs-current scatters side by side."""
+    _render_sector_and_position(
+        ctx.result, ctx.user_reid, ctx.cfg, ctx.e75, ctx.new_eff, ctx.new_out, ctx.user_label
+    )
+
+    st.markdown("###### New vs current, company by company")
+    left, right = st.columns(2)
+    with left:
+        render_efficiency_scatter(ctx.result.comparison, ctx.user_reid, ctx.user_label)
+    with right:
+        render_requirement_scatter(ctx.result.comparison, ctx.user_reid, ctx.user_label)
+    st.caption(
+        "Each point is a company: new model (vertical) against current model (horizontal); "
+        "the dotted line is no change. Left — efficiency: above the line means more efficient "
+        "under the new model. Right — efficiency requirement (%/yr): below the line is a "
+        "smaller requirement, and below zero is a reward (only the new model can go negative). "
+        "Your company is highlighted."
+    )
+
+
+def _group_totex_bridge(ctx: GroupContext) -> None:
+    """Waterfall bridging the current-model TOTEX to the new-model TOTEX."""
+    _render_totex_waterfall(ctx.result.totex, ctx.user_reid)
+
+
+CHART_GROUPS = [
+    ChartGroup("efficiency_outcome", "Efficiency & outcome", _group_efficiency_outcome),
+    ChartGroup("totex_bridge", "TOTEX bridge", _group_totex_bridge),
+]
+

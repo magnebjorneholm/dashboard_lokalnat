@@ -25,6 +25,10 @@ import streamlit as st
 
 from frontend.common.styling import COLORS
 from config.colors import get_plotly_template_safe
+from config.column_names import (
+    COL_REID, COL_DEA_EFFICIENCY_NEW, COL_DEA_EFFICIENCY_CURRENT,
+    COL_EFF_REQ_NEW, COL_EFF_REQ_CURRENT,
+)
 from new_benchmarking_model.config import NewBenchmarkingConfig
 from new_benchmarking_model.efficiency.efficiency_requirement_two_sided import (
     two_sided_requirement_from_gap,
@@ -228,3 +232,166 @@ def render_outcome_distribution(
                    gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"]),
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
+
+
+# ---------------------------------------------------------------------------
+# Comparison scatters — new (y) vs current (x), one point per company
+# ---------------------------------------------------------------------------
+# Narrower than the histograms, so the two are meant to sit side by side. Both share the
+# same machinery: a y = x identity line ("no change"), the crowd in subtle grey, and the
+# user's firm highlighted. A point off the diagonal is a company the new model moves.
+
+
+def _comparison_scatter(
+    comparison: pd.DataFrame,
+    user_reid: str,
+    user_label: str,
+    *,
+    col_current: str,
+    col_new: str,
+    title: str,
+    scale: float = 1.0,
+    unit_label: str = "",
+    tickformat: str = ".2f",
+    hover_format: Optional[str] = None,
+    shared_range: bool = True,
+    zero_line: bool = False,
+    key: str,
+) -> None:
+    """Scatter of each company's new (y) vs current (x) value with a y=x reference line.
+
+    scale rescales both axes (e.g. 100 to show decimals as %); unit_label is appended to
+    the axis titles and hover. shared_range ties both axes to one common range (true 45°
+    diagonal, right when the two quantities live on the same natural scale); set it False
+    when the two sides occupy very different ranges, so each axis fits its own data instead
+    of one side stretching the other. zero_line draws a faint y=0 line (for the signed
+    requirement, below which the new model is a reward).
+    """
+    if col_current not in comparison.columns or col_new not in comparison.columns:
+        st.info("No comparison data to plot.")
+        return
+    d = comparison[[COL_REID, col_current, col_new]].dropna(subset=[col_current, col_new])
+    if d.empty:
+        st.info("No comparison data to plot.")
+        return
+
+    hover_format = hover_format or tickformat
+    x = d[col_current].to_numpy(dtype=float) * scale
+    y = d[col_new].to_numpy(dtype=float) * scale
+    reids = d[COL_REID].tolist()
+
+    from frontend.utils.company_directory import get_company_name_lookup
+    lookup = get_company_name_lookup()
+    names = [lookup.get(r, r) for r in reids]
+    is_user = np.array([r == user_reid for r in reids])
+
+    # Axis ranges. Shared → one range for both (diagonal stays at 45°). Independent → each
+    # axis fits its own data, so a one-sided spread (e.g. signed new vs deduction-only
+    # current) does not stretch the other axis.
+    def _padded(arr, frac):
+        lo, hi = float(np.min(arr)), float(np.max(arr))
+        span = (hi - lo) or abs(hi) or 1.0
+        return [lo - span * frac, hi + span * frac]
+
+    if shared_range:
+        both = np.concatenate([x, y])
+        x_range = y_range = _padded(both, 0.05)
+    else:
+        x_range, y_range = _padded(x, 0.08), _padded(y, 0.08)
+    diag = [min(x_range[0], y_range[0]), max(x_range[1], y_range[1])]
+
+    # Pre-format hover values ourselves (name + current + new) and pass them via customdata,
+    # so display never depends on plotly's inline number format.
+    unit = f" {unit_label}" if unit_label else ""
+
+    def _fmt(v: float) -> str:
+        return f"{v:{hover_format}}{unit}"
+
+    hover = (
+        "<b>%{customdata[0]}</b>"
+        "<br>Current: %{customdata[1]}"
+        "<br>New: %{customdata[2]}<extra></extra>"
+    )
+    cd = [[names[i], _fmt(float(x[i])), _fmt(float(y[i]))] for i in range(len(names))]
+
+    layout_kwargs, template = get_plotly_template_safe()
+    fig = go.Figure()
+
+    # y = x identity line — "no change" reference.
+    fig.add_trace(go.Scatter(
+        x=diag, y=diag, mode="lines",
+        line=dict(color=COLORS["bg_muted"], width=1, dash="dot"),
+        hoverinfo="skip", showlegend=False,
+    ))
+    if zero_line:
+        fig.add_hline(y=0, line_dash="dot", line_color=COLORS["text_muted"], line_width=1)
+
+    # The crowd — subtle grey.
+    fig.add_trace(go.Scatter(
+        x=x[~is_user], y=y[~is_user], mode="markers",
+        marker=dict(color=COLORS["text_muted"], size=6, opacity=0.5,
+                    line=dict(color="white", width=0.5)),
+        customdata=[cd[i] for i in range(len(cd)) if not is_user[i]],
+        hovertemplate=hover, showlegend=False,
+    ))
+
+    # The user's firm — primary, larger, labelled.
+    if is_user.any():
+        ui = int(np.flatnonzero(is_user)[0])
+        ux, uy = float(x[ui]), float(y[ui])
+        fig.add_trace(go.Scatter(
+            x=[ux], y=[uy], mode="markers",
+            marker=dict(color=COLORS["primary"], size=12, line=dict(color="white", width=1.5)),
+            customdata=[[user_label, _fmt(ux), _fmt(uy)]], hovertemplate=hover, showlegend=False,
+        ))
+        fig.add_annotation(
+            x=ux, y=uy, text=f"<b>{user_label}</b>", showarrow=True,
+            arrowwidth=1, arrowcolor=COLORS["text_secondary"], ax=18, ay=-18,
+            font=dict(size=10, color=COLORS["text_primary"]),
+            bgcolor="rgba(255,255,255,0.9)", borderpad=2,
+        )
+
+    axis = dict(fixedrange=True, tickformat=tickformat,
+                gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"], zeroline=False)
+    title_unit = f" ({unit_label})" if unit_label else ""
+    fig.update_layout(
+        **layout_kwargs, template=template,
+        title=dict(text=title, font=dict(size=13)),
+        height=360, dragmode=False, showlegend=False,
+        margin=dict(l=10, r=10, t=40, b=40),
+        xaxis={**axis, "range": x_range, "title": f"Current{title_unit}"},
+        yaxis={**axis, "range": y_range, "title": f"New{title_unit}"},
+    )
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
+
+
+def render_efficiency_scatter(
+    comparison: pd.DataFrame, user_reid: str, user_label: str,
+    key: str = "nb_eff_scatter",
+) -> None:
+    """New vs current DEA efficiency per company (above the line = more efficient now)."""
+    _comparison_scatter(
+        comparison, user_reid, user_label,
+        col_current=COL_DEA_EFFICIENCY_CURRENT, col_new=COL_DEA_EFFICIENCY_NEW,
+        title="Efficiency: new vs current",
+        tickformat=".2f", hover_format=".3f", key=key,
+    )
+
+
+def render_requirement_scatter(
+    comparison: pd.DataFrame, user_reid: str, user_label: str,
+    key: str = "nb_req_scatter",
+) -> None:
+    """New vs current efficiency requirement (%/yr) per company.
+
+    Below the identity line = a smaller requirement under the new model; below the y=0
+    line = a reward (only the new model can be negative — the current model is
+    deduction-only).
+    """
+    _comparison_scatter(
+        comparison, user_reid, user_label,
+        col_current=COL_EFF_REQ_CURRENT, col_new=COL_EFF_REQ_NEW,
+        title="Requirement: new vs current",
+        scale=100.0, unit_label="%/yr", tickformat=".1f", hover_format="+.2f",
+        shared_range=False, zero_line=True, key=key,
+    )
