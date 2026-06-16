@@ -231,12 +231,32 @@ bolagen) men `mean φ ≈ 0` med jämn split 78/67 → den **omfördelar** snara
 Tecknen är konsistenta med steg 3: capex_adj missgynnar de flesta men gynnar den urbana
 delmängden; cable gynnar de rurala hög-km-bolagen.
 
-**Begränsningar.** **Resttermen `v(∅) − nuvarande = −0.443 pp` (median) är stor** och hålls
-medvetet utanför spelarna — den fångar mekanikbytet (tvåsidig E75 vs legacy front-referens)
-och strukturella input-skillnader. En stor del av skillnaden mellan ny och nuvarande modell
-ligger alltså *utanför* de fyra kostnadskomponenterna. Shapley är en rättvis fördelning
-**given** värdefunktionen (spelardefinitioner + baslinjeval) — ett modelleringsval, inte en
-kausal policy-kontrafaktisk.
+**Begränsningar.** Shapley är en rättvis fördelning **given** värdefunktionen
+(spelardefinitioner + baslinjeval) — ett modelleringsval, inte en kausal policy-kontrafaktisk.
+
+### Restterm-dekomposition ([s5_shapley.py](s5_shapley.py), samma fil)
+
+Resttermen `v(∅) − nuvarande` (median −0.443 pp) hålls utanför spelarna. Den splittras med en
+2×2 (mekanik × input-struktur) + 2-faktors-Shapley, plus en reconciliation-term:
+
+| Term | median pp | tolkning |
+|---|---|---|
+| **φ_mekanik** (legacy front-ref → tvåsidig) | **−0.375** | dominerar |
+| **φ_input** (2 separata DEA-inputs → 1 TOTEX) | −0.095 | liten |
+| **reconciliation** (vår omräknade legacy C1 vs Ei publicerad) | **+0.000** | ≈ noll |
+
+Output: [out/s5_residual_decomp.csv](out/s5_residual_decomp.csv). Hörn: C1=2-input+legacy
+(≈ nuvarande), C2=2-input+tvåsidig, C3=1-input+legacy, C4=1-input+tvåsidig (=`v(∅)`).
+`φ_mekanik=½[(C2−C1)+(C4−C3)]`, `φ_input=½[(C3−C1)+(C4−C2)]`; summan + reconciliation =
+resttermen (alla cross-checks exakta, 0.00). Konsekvent tvingad exkludering över alla hörn.
+
+**Två fynd.** (1) **reconciliation ≈ 0** (median |.| = 0.000): vår legacy (2-input DEA +
+front-referens-mekanik) reproducerar Ei:s *publicerade* krav i princip exakt → resttermen är
+ren mekanik + input, ingen publikationsgap-kontaminering. (2) **Resttermen är överväldigande
+mekanikbytet, inte basstrukturen:** ~0.375 av 0.443 pp är hur kravet beräknas (front-referens
+→ tvåsidig E75), bara ~0.095 är input-aggregeringen (2 inputs → 1 TOTEX). φ_mekanik < 0 =
+tvåsidig sänker kravet relativt legacy vid medianen. Mekanikbytet buntar hela legacy-paketet
+(front-referens + trunkering + 1 %-golv), per design.
 
 ---
 
@@ -310,6 +330,9 @@ LOO: `req_full_pp`; AOI: `req_base_pp`. Per spelare (`losses`/`nonctrl`/`capex_a
 
 ### `s5_shapley_summary.csv` — per spelare (4 rader)
 `mean_phi_pp`, `mean_abs_phi_pp` (pp), `share_dominant` (andel), `n_favoured(phi<0)`, `n_penalised(phi>0)` (antal bolag).
+
+### `s5_residual_decomp.csv` — restterm-dekomposition, per REId (145)
+`phi_mechanic` (legacy→tvåsidig, pp), `phi_input` (2 inputs→1 TOTEX, pp), `reconciliation` (C1 vs Ei publicerad, pp), `interaction` (diagnostik, pp), `residual_total` (=`v(∅)−publicerad`, pp); samt hörnvärdena `C1_legacy_2in`, `C4_twosided_1in`, `published` (pp). φ<0 = sänker kravet. De tre exkluderade är NaN.
 
 ---
 
