@@ -238,6 +238,56 @@ kausal policy-kontrafaktisk.
 
 ---
 
+## Output-scheman ([out/](out/))
+
+Enheter genomgående: **kostnader = årliga tkr** (utom `kr_*` = 4-årig periodsumma i tkr,
+signerad, `<0` = belöning); **`req_*` = signerat årsdecimal** (×100 = pp/år); **`*_pp` /
+`d*_pp` / `phi_*` / lutningar = procentenheter (pp)**; **`*_pct` / `*_share` / index /
+`eff*` = andel/index 0–1**; **`cable_ded` / `station_ded` = SEK på NUAV-kapitalbasen**
+(annan storhet än `capex_cut`, se konventionsavsnittet).
+
+### `analysis_df.csv` — spine, en rad per REId (148)
+| Grupp | Kolumner | Enhet |
+|---|---|---|
+| Id | `REId`, `name_short` | — |
+| TOTEX-delar | `controllable`, `loss_valued`, `nonctrl_selected`, `capex_unadj`, `capex_adj`, `opex_new`, `totex_new`, `totex_unadj`, `application_base_new` | årlig tkr |
+| Capex-korr | `capex_cut` (tkr), `capex_cut_pct` (andel), `cable_ded`/`station_ded` (SEK), `cable_eff_pct`/`station_eff_pct` (andel) | se ovan |
+| Utfall ny | `eff_new` (0–1), `rank_new` (1=bäst), `req_new_pct` (decimal), `kr_new` (tkr, 4 år), `e75` (0–1), `gap`=`e75−eff_new`, `kind` (reward/deduction/coverage) | se ovan |
+| Utfall nuv | `eff_cur`, `rank_cur`, `req_cur_pct`, `kr_cur` | se ovan |
+| Deltan | `d_eff`, `d_rank`, `d_req_pp` (pp), `d_kr` (tkr) | se ovan |
+| DEA-outputs | `CU`, `MW`, `NS`, `MWhl`, `MWhh` (Ei:s outputmått), `cable_length_km` (km) | — |
+| Urban (steg 2) | `jordkabel_km`/`luftledning_km`/`city_km`/`tatort_km`/`lb_km` (km), `density_cu_km` (kund/km), `jordkabel_share`/`luftledning_share`/`urbanity_index`/`jordkabel_landsbygd_share` (andel/index) | — |
+
+De tre DEA-exkluderade bolagen har NaN i alla utfallskolumner; `capex_cut_pct` är NaN för
+REL00024 (`capex_unadj=0`). Kostnads- och urban-kolumner är ifyllda för alla 148.
+
+### `s2_urban_corr.csv` / `s2_urban_corr_spearman.csv` — korrelationsmatris (5×5)
+Pearson resp. Spearman mellan `density_cu_km`, `jordkabel_share`, `urbanity_index`,
+`capex_cut_pct`, `cable_eff_pct`. Enhetslöst [−1, 1]. Första kolumnen = radnamn.
+
+### `s2_validation.csv` — valideringstester (2 rader)
+`test`, `expect` (positive/negative), `pearson`, `spearman`, `n`, `consistent_with_expectation` (bool).
+
+### `s3_channels.csv` — per REId (145 scorade)
+`urbanity_index`; full modell `req_full` (decimal), `kr_full` (tkr); varianter `eff_offA`/`req_offA`/`kr_offA` (kanal A av), `eff_offB`/`req_offB`/`kr_offB` (kanal B av); bidrag **`dA_pp`/`dB_pp` = φ = req(med)−req(utan) i pp** (φ<0 = gynnar); `dA_kr`/`dB_kr` (tkr); `req_full_pp` (pp, för netto-regressionen).
+
+### `s3_slopes.csv` — OLS-lutningar (3 rader)
+`channel`, `expect`, `slope` (pp per indexenhet), `ci_low`/`ci_high` (95 % pp), `r2`, `p`, `n`, `consistent`. **Preliminär OLS-inferens** (ignorerar DEA-korsberoende).
+
+### `s4_loo.csv` / `s4_aoi.csv` — per REId (145)
+LOO: `req_full_pp`; AOI: `req_base_pp`. Per spelare (`losses`/`nonctrl`/`capex_adj`/`cable`): `dpp_<spelare>` (pp marginaleffekt), `dkr_<spelare>` (tkr). LOO har även `kind_<spelare>` (variantens utfallstyp, för kind-flip).
+
+### `s4_ranking.csv` — per spelare (4 rader)
+`loo_median_abs_pp`, `aoi_median_abs_pp` (pp), `loo_kind_flip_share` (andel), `loo_sum_abs_kr`, `aoi_sum_abs_kr` (tkr, deskriptivt).
+
+### `s5_shapley_percompany.csv` — per REId (145)
+`v_empty_pp` (baslinje), `v_full_pp` (full); `phi_<spelare>` (pp Shapley-bidrag, φ<0 = gynnar); `sum_phi` (pp, = `v_full_pp−v_empty_pp`); `residual_vs_current_pp` (pp, mekanik + struktur, utanför spelarna).
+
+### `s5_shapley_summary.csv` — per spelare (4 rader)
+`mean_phi_pp`, `mean_abs_phi_pp` (pp), `share_dominant` (andel), `n_favoured(phi<0)`, `n_penalised(phi>0)` (antal bolag).
+
+---
+
 ## Filöversikt
 
 | Fil | Steg | Innehåll |
