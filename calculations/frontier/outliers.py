@@ -119,6 +119,7 @@ def detect_outliers_iterative(
     q_upper: float = 75.0,
     multiplier: float = 2.0,
     max_rounds: int | None = None,
+    forced_outliers: np.ndarray | None = None,
 ) -> OutlierResult:
     """Identify outliers by iterating the super-eff + IQR fence to convergence.
 
@@ -135,10 +136,20 @@ def detect_outliers_iterative(
 
     A final super-efficiency solve on the surviving firms always produces
     `final_scores`, regardless of how the loop terminated.
+
+    `forced_outliers`: optional (n,) bool mask of firms removed from the reference
+        set up front (e.g. firms Ei deems structurally unsuitable for DEA). They are
+        excluded from the frontier and the IQR fence that score everyone else, and
+        are themselves left unscored (NaN efficiency) rather than assigned a score —
+        scoring them against the full set would only reflect the very anomalies that
+        got them excluded. This mirrors how Ei reports them (no published efficiency).
     """
     n = len(inputs)
-    is_outlier = np.zeros(n, dtype=bool)
-    flag_scores = np.full(n, np.nan)
+    is_outlier = (
+        np.zeros(n, dtype=bool) if forced_outliers is None
+        else np.asarray(forced_outliers, dtype=bool).copy()
+    )
+    flag_scores = np.full(n, np.nan)  # forced firms keep NaN here -> reported unscored
 
     last_scores: np.ndarray | None = None
     last_remaining: np.ndarray | None = None

@@ -20,6 +20,7 @@ from config.column_names import (
     COL_EFF_REQ_NEW, COL_EFF_REQ_CURRENT, COL_EFF_REQ_DELTA,
 )
 from new_benchmarking_model import run_new_benchmarking, NewBenchmarkingConfig
+from new_benchmarking_model.config import EI_DEA_EXCLUDED_REIDS
 from new_benchmarking_model.totex.opex_components import (
     compute_loss_valued, compute_non_controllable_selected,
 )
@@ -127,8 +128,15 @@ def test_env_deductions_positive(nb_result):
 def test_comparison_schema_and_no_nan(nb_result):
     c = nb_result.comparison
     assert len(c) == 148
-    for col in (COL_EFF_REQ_NEW, COL_EFF_REQ_CURRENT, COL_EFF_REQ_DELTA):
-        assert c[col].notna().all()
+    is_excl = c[COL_REID].isin(EI_DEA_EXCLUDED_REIDS)
+    # Current model is read straight from Ei (published for all 148).
+    assert c[COL_EFF_REQ_CURRENT].notna().all()
+    # New model excludes the DEA-unsuitable firms (EI_DEA_EXCLUDED_REIDS) from its
+    # reference set, leaving them unscored → their new req and delta are NaN by design;
+    # every other firm must be scored.
+    for col in (COL_EFF_REQ_NEW, COL_EFF_REQ_DELTA):
+        assert c.loc[~is_excl, col].notna().all()
+        assert c.loc[is_excl, col].isna().all()
 
 
 def test_totex_components_present_and_consistent(nb_result):
@@ -152,10 +160,12 @@ def test_eff_req_within_bounds(nb_result):
     )
     lo = two_sided_requirement_from_gap(-cfg.gap_cap, **bound_kwargs)
     hi = two_sided_requirement_from_gap(cfg.gap_cap, **bound_kwargs)
-    assert (c[COL_EFF_REQ_NEW] >= lo - 1e-9).all()
-    assert (c[COL_EFF_REQ_NEW] <= hi + 1e-9).all()
+    # Excluded firms are unscored (NaN); bound checks apply to the scored firms.
+    new_req = c[COL_EFF_REQ_NEW].dropna()
+    assert (new_req >= lo - 1e-9).all()
+    assert (new_req <= hi + 1e-9).all()
     # The whole point of the change: at least some efficient firms cross into a reward.
-    assert (c[COL_EFF_REQ_NEW] < 0).any()
+    assert (new_req < 0).any()
     # Current model: read straight from EIs_DEA (Ei's published Effkrav_proc) → within [0, max].
     cur_hi = get_max_eff_req()
     assert (c[COL_EFF_REQ_CURRENT] >= -1e-9).all()

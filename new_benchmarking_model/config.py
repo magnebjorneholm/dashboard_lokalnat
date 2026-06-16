@@ -37,6 +37,12 @@ DEFAULT_NONCTRL_CATEGORIES: Tuple[str, ...] = (
     NONCTRL_CAPACITY_RESERVE,
 )
 
+# Companies Ei deems unsuitable for DEA (excluded from its current-model benchmarking:
+# flagged is_outlier with no published efficiency). We honour that in the new model —
+# they are removed from the frontier/E75 reference set so they cannot distort other
+# firms' scores, and are themselves left unscored (NaN efficiency), mirroring Ei.
+EI_DEA_EXCLUDED_REIDS: Tuple[str, ...] = ("REL00024", "REL00257", "REL00965")
+
 # New-model base outputs (before optionally appending cable length).
 # MWhh is plain delivered energy at high voltage. Only the *adjustment* of MWhh to include
 # levererad energi i gränspunkt is deferred (together with the "kostnad till övergripande
@@ -73,6 +79,8 @@ class NewBenchmarkingConfig:
     # ── DEA specification ────────────────────────────────────────────────────
     rts: str = "crs"                        # 'crs' | 'vrs'
     new_base_outputs: Tuple[str, ...] = NEW_MODEL_BASE_OUTPUTS
+    # REIds forced out of the DEA reference set (see EI_DEA_EXCLUDED_REIDS).
+    exclude_reids: Tuple[str, ...] = EI_DEA_EXCLUDED_REIDS
 
     # ── Efficiency-requirement: two-sided third-quartile mechanic ────────────
     # The new model's requirement is a signed gap to the third quartile (E75), not the
@@ -108,7 +116,7 @@ class NewBenchmarkingConfig:
             self.cable_method, _od(self.cable_override_percent),
             self.station_method, _od(self.station_override_percent),
             self.include_cable_length, tuple(self.cable_types), self.split_by_voltage,
-            self.rts, tuple(self.new_base_outputs),
+            self.rts, tuple(self.new_base_outputs), tuple(self.exclude_reids),
             self.reference_percentile, self.gap_cap, self.sharing,
             self.realization_time, self.supervision_period,
         )

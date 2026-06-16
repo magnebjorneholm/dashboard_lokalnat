@@ -1,5 +1,5 @@
 {
-  "signature": "(((2024, 753.44), (2025, 753.44), (2026, 753.44), (2027, 753.44)), True, True, True, ('grid_subscription', 'grid_connection', 'feed_in_compensation', 'capacity_reserve'), 'exact', None, 'exact', None, True, ('jordkabel', 'luftledning', 'hsp_hangkabel', 'sjokabel', 'ovriga'), False, 'crs', ('CU', 'MW', 'NS', 'MWhl', 'MWhh'), 75.0, 0.3, 0.5, 8, 4)",
+  "signature": "(((2024, 753.44), (2025, 753.44), (2026, 753.44), (2027, 753.44)), True, True, True, ('grid_subscription', 'grid_connection', 'feed_in_compensation', 'capacity_reserve'), 'exact', None, 'exact', None, True, ('jordkabel', 'luftledning', 'hsp_hangkabel', 'sjokabel', 'ovriga'), False, 'crs', ('CU', 'MW', 'NS', 'MWhl', 'MWhh'), ('REL00024', 'REL00257', 'REL00965'), 75.0, 0.3, 0.5, 8, 4)",
   "new_model_outputs": [
     "CU",
     "MW",
@@ -9,5 +9,5 @@
     "cable_length_km"
   ],
   "n_companies": 148,
-  "generated_at": "2026-06-15T15:35:48"
+  "generated_at": "2026-06-16T09:12:10"
 }

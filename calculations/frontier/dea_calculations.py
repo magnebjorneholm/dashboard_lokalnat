@@ -91,6 +91,7 @@ def run_dea_analysis(
         q_upper=outlier_params['q_upper'],
         multiplier=outlier_params['multiplier'],
         max_rounds=max_rounds,
+        forced_outliers=model_spec.get('forced_outliers', None),
     )
 
     df[COL_IS_OUTLIER] = res.is_outlier

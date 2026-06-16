@@ -123,7 +123,11 @@ def run_new_benchmarking(
             new_df[c] = new_df[c].fillna(0.0)
         new_outputs += cable_cols
 
-    dea_new = run_dea_analysis(new_df, {"inputs": [COL_TOTEX_NEW], "outputs": new_outputs, "rts": cfg.rts})
+    dea_spec = {"inputs": [COL_TOTEX_NEW], "outputs": new_outputs, "rts": cfg.rts}
+    if cfg.exclude_reids:
+        # Force Ei's DEA-unsuitable firms out of the reference set (still reported).
+        dea_spec["forced_outliers"] = new_df[COL_REID].isin(cfg.exclude_reids).to_numpy()
+    dea_new = run_dea_analysis(new_df, dea_spec)
     dea_new = calculate_two_sided_requirement(
         dea_new,
         reference_percentile=cfg.reference_percentile,
