@@ -1,7 +1,8 @@
 # Explorativ analys: TOTEX/CAPEX-dekomposition vs benchmarkingutfall
 
-> Arbetsdokument / implementationsplan. Explorativ analys i `temp/nb_analysis/`,
-> frikopplad från appen. Mål: förstå hur den nya benchmarkingmodellens kostnads-
+> Arbetsdokument / implementationsplan. Analys i `new_benchmarking_model/analysis/`, körd
+> offline (inte vid request); CSV-outputen läses av appen via `data/analysis_loader.py`.
+> Mål: förstå hur den nya benchmarkingmodellens kostnads-
 > komponenter (TOTEX, CAPEX) hänger ihop med utfallet, och om förläggningsmiljö-
 > justeringen ger den avsedda effekten. Allt utfall redovisas i **både procent och kronor**.
 
@@ -26,10 +27,11 @@
   Procent och kronor faller alltså ut för varje variant utan extra körning.
 - **Teckenkonvention** (företagsperspektiv, återanvänd från `new_benchmarking_model/ui/charts.outcome_kind`):
   `r > 0` avdrag, `r < 0` belöning, `r ≈ 0` full täckning. Färger: avdrag amber, belöning grön.
-- **Allt i `temp/`.** Detta är explorativ research, frikopplad från appen — inget skeppas till
-  frontend i detta skede (kan graduera senare om fynd motiverar det).
+- **Offline, inte vid request.** Stegen körs offline (tung DEA) och persisterar `.csv`;
+  appens chart-grupp läser dessa via `data/analysis_loader.py` och räknar aldrig om vid
+  request. Sektoraggregat, identiska för alla användare (bolaget bara highlightas).
 - **Ingen visualisering i utvecklingsfasen.** Stegen producerar **endast `.csv`** i
-  `temp/nb_analysis/out/`. Inga figurer byggs, renderas eller sparas i detta skede — utfallet
+  `new_benchmarking_model/analysis/out/`. Inga figurer byggs, renderas eller sparas i detta skede — utfallet
   läses och utvärderas direkt ur tabellerna. Skälet: visualisering i utvecklingsfasen vore
   dubbelarbete eftersom den ändå skulle byggas om vid graduering till appen. All grafik skjuts
   till implementeringsfasen (efter validering), och byggs då en gång, mot appens designsystem
@@ -44,7 +46,7 @@
 ## Filstruktur
 
 ```
-temp/nb_analysis/
+new_benchmarking_model/analysis/
   PLAN.md              # detta dokument
   _helpers.py          # delad: dataladdning, analysram (spine), variant-DEA-runner, urban-proxy, plot-tema
   s1_descriptive.py    # Steg 1 — bundle: deskriptivt, Q1, Q4

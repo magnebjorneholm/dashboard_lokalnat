@@ -2,8 +2,9 @@
 
 Explorativ analys av hur den nya benchmarkingmodellens kostnadskomponenter hänger ihop
 med utfallet, och om förläggningsmiljö-justeringen ger den avsedda fördelningseffekten
-mellan urbana och rurala bolag. Frikopplad från appen, körbar cell-för-cell, **endast
-tabell-output** (`.csv` i [out/](out/)), ingen visualisering i detta skede.
+mellan urbana och rurala bolag. Körs offline (inte vid request), cell-för-cell, **endast
+tabell-output** (`.csv` i [out/](out/)); appens chart-grupp läser dessa via
+[data/analysis_loader.py](../data/analysis_loader.py).
 
 Planen i sin helhet: [PLAN.md](PLAN.md). Implementationsnoterna om variabler och baser
 finns där under "Implementationsnoter".
@@ -13,12 +14,12 @@ finns där under "Implementationsnoter".
 ## Snabbstart
 
 ```bash
-.venv/bin/python temp/nb_analysis/s1_descriptive.py   # bundle, instant
-.venv/bin/python temp/nb_analysis/s2_urban.py         # light live (capbase + kalibrering)
-.venv/bin/python temp/nb_analysis/s3_channels.py      # heavy live, 2 DEA
-.venv/bin/python temp/nb_analysis/s4_decomposition.py # heavy live, ~9 DEA
-.venv/bin/python temp/nb_analysis/s5_shapley.py       # heavy live, 16 DEA
-.venv/bin/python temp/nb_analysis/s3_inference.py     # DEA-aware bootstrap CIs for s3 (~15 min, parallel)
+.venv/bin/python new_benchmarking_model/analysis/s1_descriptive.py   # bundle, instant
+.venv/bin/python new_benchmarking_model/analysis/s2_urban.py         # light live (capbase + kalibrering)
+.venv/bin/python new_benchmarking_model/analysis/s3_channels.py      # heavy live, 2 DEA
+.venv/bin/python new_benchmarking_model/analysis/s4_decomposition.py # heavy live, ~9 DEA
+.venv/bin/python new_benchmarking_model/analysis/s5_shapley.py       # heavy live, 16 DEA
+.venv/bin/python new_benchmarking_model/analysis/s3_inference.py     # DEA-aware bootstrap CIs for s3 (~15 min, parallel)
 ```
 
 All delad logik (spine-laddning, urban-proxies, variant-DEA-runner) ligger i

@@ -15,7 +15,7 @@ the requirement, i.e. FAVOURS the firm. Players: losses, nonctrl, capex_adj, cab
 The mechanic switch (two-sided E75 vs legacy front-reference) is held OUT of the players
 and surfaced separately as the residual v(∅) − req_current (structural + mechanic).
 
-    .venv/bin/python temp/nb_analysis/s5_shapley.py
+    .venv/bin/python new_benchmarking_model/analysis/s5_shapley.py
 """
 
 # %% setup

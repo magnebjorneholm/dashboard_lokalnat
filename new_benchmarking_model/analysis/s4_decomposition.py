@@ -19,7 +19,7 @@ two endpoints that bracket each player's effect, and their gap is the interactio
 that motivates Shapley (step 5). Analysis is in percentage points; per-firm Δkr is kept
 as raw data only (kr scales with size — no regression on it).
 
-    .venv/bin/python temp/nb_analysis/s4_decomposition.py
+    .venv/bin/python new_benchmarking_model/analysis/s4_decomposition.py
 """
 
 # %% setup — spine + composed input columns

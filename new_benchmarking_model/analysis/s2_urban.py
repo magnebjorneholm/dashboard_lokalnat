@@ -5,7 +5,7 @@ Per temp/PLAN.md step 2. Builds three urban measures on the analysis spine and r
 two independent validation tests of the "luftledning = landsbygd" assumption. No DEA,
 no KENT — only capbase reads + the jordkabel calibration. Output is tables only.
 
-    .venv/bin/python temp/nb_analysis/s2_urban.py
+    .venv/bin/python new_benchmarking_model/analysis/s2_urban.py
 """
 
 # %% build spine + urban proxies

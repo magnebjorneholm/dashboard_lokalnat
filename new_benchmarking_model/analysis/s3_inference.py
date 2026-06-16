@@ -15,8 +15,8 @@ on a subset and, unlike n-of-n with replacement, creates no duplicate DMUs (dupl
 would spuriously inflate efficiency). n-of-n is kept only as a caveated contrast.
 Subsampling CI uses the sqrt(m) rescaling (working rate for the second-stage slope).
 
-    .venv/bin/python temp/nb_analysis/s3_inference.py          # full run (~15 min, parallel)
-    .venv/bin/python temp/nb_analysis/s3_inference.py smoke     # tiny B sanity run
+    .venv/bin/python new_benchmarking_model/analysis/s3_inference.py          # full run (~15 min, parallel)
+    .venv/bin/python new_benchmarking_model/analysis/s3_inference.py smoke     # tiny B sanity run
 """
 
 from __future__ import annotations

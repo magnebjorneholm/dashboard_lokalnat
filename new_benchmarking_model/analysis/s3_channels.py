@@ -18,7 +18,7 @@ NOTE: the OLS slope is the point estimate; its naive t-CI is anti-conservative b
 ignores DEA-induced cross-sectional dependence. The valid CI comes from s3_inference.py
 (DEA-aware subsampling), which augments s3_slopes.csv with boot_ci_low/high. Read those.
 
-    .venv/bin/python temp/nb_analysis/s3_channels.py
+    .venv/bin/python new_benchmarking_model/analysis/s3_channels.py
 """
 
 # %% setup — spine (full model from bundle) + the two variants

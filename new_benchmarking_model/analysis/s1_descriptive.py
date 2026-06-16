@@ -5,7 +5,7 @@ Per temp/PLAN.md step 1. Builds `analysis_df` (one row per REId) and persists it
 No scatters, no figures — output is the table only; validation prints to stdout.
 
 Run cell-by-cell in VSCode (# %%), or as a script:
-    .venv/bin/python temp/nb_analysis/s1_descriptive.py
+    .venv/bin/python new_benchmarking_model/analysis/s1_descriptive.py
 """
 
 # %% build the spine
