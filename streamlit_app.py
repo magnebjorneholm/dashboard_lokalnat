@@ -262,11 +262,11 @@ def _render_authenticated_sidebar():
 # NAVIGATION REGISTRY
 # =============================================================================
 
-# --- Zon 1: public landing pages (native top-nav) ---
-landing_home = st.Page("landing_pages/home.py", title="Home", default=True)
-landing_tools = st.Page("landing_pages/tools.py", title="Tools")
-landing_team = st.Page("landing_pages/team.py", title="Team")
-LANDING_PAGES = [landing_home, landing_tools, landing_team]
+# --- Zon 1: public landing (single page, anchored Home/Tools/Team sections) ---
+# One page; the top bar's nav links scroll to in-page anchors (no page switch).
+# The native st.navigation top-nav is hidden via CSS (see landing_shell.py).
+landing_main = st.Page("landing_pages/landing.py", title="Home", default=True)
+LANDING_PAGES = [landing_main]
 
 # --- Zon 2: tool pages (protected) ---
 # Defined once; built as visible objects for the authenticated nav and as hidden
@@ -324,6 +324,6 @@ else:
     # the landing home (which carries the Sign in CTA) instead of 404'ing.
     pg = st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN, position="top")
     if pg in APP_PAGES_HIDDEN:
-        st.switch_page(landing_home)
+        st.switch_page(landing_main)
     else:
         pg.run()

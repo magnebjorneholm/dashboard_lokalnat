@@ -169,6 +169,17 @@ COL_APPLICATION_BASE_NEW = "application_base_new"           # full uncorrected T
 COL_KR_CURRENT = "efficiency_kr_current_period"             # current eff-req in tkr, 4-year period sum (OPEX base)
 COL_KR_NEW = "efficiency_kr_new_period"                     # new outcome in tkr, 4-year period sum (TOTEX base); <0 = reward
 
+# New-benchmarking TOTEX bridge — granular breakdown, VISUALISATION ONLY. These do not
+# feed the DEA input or any cost base; they exist so the bridge waterfall can split its
+# aggregate bars. The per-category non-controllable columns sum to COL_NONCTRL_SELECTED;
+# the cable+station capex corrections sum to (env-adjusted − KENT-unadjusted) capital cost.
+COL_NONCTRL_GRID_SUBSCRIPTION = "nonctrl_grid_subscription"   # annual avg (tkr)
+COL_NONCTRL_GRID_CONNECTION = "nonctrl_grid_connection"       # annual avg (tkr)
+COL_NONCTRL_FEED_IN = "nonctrl_feed_in_compensation"         # annual avg (tkr)
+COL_NONCTRL_CAPACITY_RESERVE = "nonctrl_capacity_reserve"    # annual avg (tkr)
+COL_CAPEX_CORR_CABLE = "capex_corr_cable"                    # jordkabel förläggningsmiljö capex correction (tkr, ≤0)
+COL_CAPEX_CORR_STATION = "capex_corr_station"                # nätstation förläggningsmiljö capex correction (tkr, ≤0)
+
 # =============================================================================
 # Rename dictionaries for data_loaders/
 # Swedish file column → English canonical name

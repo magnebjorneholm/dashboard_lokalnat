@@ -1,0 +1,178 @@
+"""Single landing page: Home, Tools and Team stacked vertically.
+
+One page, three anchored sections (``#home`` / ``#tools`` / ``#team``). The top
+bar's nav links scroll to these anchors in-page (no page switch, no rerun); the
+bar and the anchor nav live in ``frontend/common/landing_shell.py``.
+
+Content sources:
+- Tools cards are registry-driven (``config/tools_registry.py``); manuals are
+  served from ``static/manuals/<slug>.pdf`` (``frontend/common/manuals.py``).
+- The team bios are deliberate ``.rm-placeholder`` drafts (see
+  ``landing_pages/for_later/team_bios.md``).
+"""
+
+import streamlit as st
+
+from config.tools_registry import tools_for
+from frontend.common.landing_shell import (
+    apply_landing_shell, landing_anchor, landing_cards, landing_heading,
+    landing_profile, landing_footer,
+)
+from frontend.common.auth_dialog import auth_dialog
+from frontend.common.manuals import manual_path
+
+apply_landing_shell()
+
+
+# =============================================================================
+# HOME
+# =============================================================================
+landing_anchor("home")
+
+st.markdown(
+    """
+    <div class="rm-hero-brand"><span class="rm-accent">Regumetrica</span></div>
+    <div class="rm-hero-title">Revenue-cap analysis<br>for the
+        <span class="rm-accent">Swedish electricity grid</span></div>
+    <div class="rm-hero-sub">
+        Regumetrica replicates Energimarknadsinspektionen's regulatory model for
+        all 148 distribution networks — adjust parameters, run the pipeline, and
+        compare against the baseline with full transparency.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+cta1, cta2, _ = st.columns([1, 1, 2], vertical_alignment="center")
+with cta1:
+    if st.button("Get started", type="primary", width="stretch"):
+        auth_dialog()
+with cta2:
+    st.markdown(
+        '<a class="rm-inline-link" href="#tools">Explore the tools  →</a>',
+        unsafe_allow_html=True,
+    )
+
+st.markdown(
+    """
+    <div class="rm-stats">
+        <div><div class="rm-stat-num">148</div>
+             <div class="rm-stat-label">distribution networks</div></div>
+        <div><div class="rm-stat-num">Ei</div>
+             <div class="rm-stat-label">revenue-cap model</div></div>
+        <div><div class="rm-stat-num">DEA</div>
+             <div class="rm-stat-label">+ TOTEX benchmarking</div></div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.write("")
+
+landing_heading("What you get", eyebrow="Why Regumetrica")
+landing_cards([
+    {"icon": "🎯", "title": "Regulatory precision",
+     "body": "Faithful replication of Ei's revenue-cap model — capital base, "
+             "WACC, operating expenditure, efficiency requirements and incentives."},
+    {"icon": "🔍", "title": "Case vs baseline",
+     "body": "Every adjustment is shown side by side with the baseline, so the "
+             "impact of each parameter change is always explicit."},
+    {"icon": "📊", "title": "Built for analysis",
+     "body": "DEA benchmarking, the proposed new TOTEX model, and exportable "
+             "results — designed for regulators and operators alike."},
+])
+
+
+# =============================================================================
+# TOOLS
+# =============================================================================
+landing_anchor("tools")
+
+
+def _tool_cards(branch: str) -> list[dict]:
+    """Build card dicts for the public tools in a branch (registry-driven)."""
+    items: list[dict] = []
+    for t in tools_for(branch):  # type: ignore[arg-type]
+        item: dict = {"icon": t.icon, "title": t.name, "body": t.summary}
+        if t.status != "available":
+            item["status"] = t.status
+        # Link to the manual only if its PDF has actually been built.
+        if manual_path(t.manual).exists():
+            item["manual_url"] = f"app/static/manuals/{t.manual}.pdf"
+        items.append(item)
+    return items
+
+
+landing_heading("The tools", eyebrow="What you can do", level=1)
+st.markdown(
+    '<div class="rm-hero-sub">Regumetrica is a small suite of regulatory tools. '
+    "Sign in to use them; each card links to that tool's manual.</div>",
+    unsafe_allow_html=True,
+)
+
+st.write("")
+
+landing_heading("Revenue cap tool", eyebrow="Core tool")
+landing_cards(_tool_cards("revenue_cap"))
+
+st.write("")
+
+landing_heading("Standalone tools", eyebrow="Add-on analyses")
+landing_cards(_tool_cards("standalone"))
+
+
+# =============================================================================
+# TEAM
+# =============================================================================
+landing_anchor("team")
+
+landing_heading("Team", eyebrow="Who we are", level=1)
+st.markdown(
+    '<div class="rm-hero-sub">The people behind Regumetrica.</div>',
+    unsafe_allow_html=True,
+)
+
+st.write("")
+
+# --- Erik Lundin --------------------------------------------------------------
+landing_profile(
+    eyebrow="Role in Regumetrica",
+    name="Erik Lundin",
+    role="Tenured researcher in energy economics, "
+         "Research Institute of Industrial Economics (IFN)",
+    photo_url="app/static/team/erik_lundin.jpg",
+    # TODO(Erik): replace the placeholder bio below with your own text.
+    bio='<span class="rm-placeholder">Bio — to be written by Erik. Researcher in '
+        "electricity markets and their regulation, with a focus on the Swedish "
+        "distribution sector; expert in government inquiries (SOU) and a long "
+        "history of work with Energimarknadsinspektionen (Ei).</span>",
+    # TODO(Erik): choose the items to feature (kept regulation/grid-focused).
+    background={
+        "title": "Selected background",
+        "items": [
+            '<span class="rm-placeholder">Selected work — to be chosen (e.g. '
+            "Reformerad intäktsreglering, Swedenergy 2024).</span>",
+            '<span class="rm-placeholder">Placeholder — second selected item.</span>',
+        ],
+    },
+    affiliations=["IFN", "Stanford (PESD)", "PhD, Stockholm School of Economics"],
+    email="erik@eriklundin.org",
+    link=("Full CV & publications", "https://www.eriklundin.org"),
+)
+
+# --- Magne Björneholm ----------------------------------------------------------
+# TODO(Magne): add a portrait photo (-> static/team/) and write the bio.
+landing_profile(
+    eyebrow="Role in Regumetrica",
+    name="Magne Björneholm",
+    role="Research assistant in energy economics, "
+         "Research Institute of Industrial Economics (IFN)",
+    initials="MB",
+    bio='<span class="rm-placeholder">Bio — to be written. Develops Regumetrica and '
+        "works as a research assistant at IFN; MSc in economics (University of "
+        "Gothenburg) with a thesis on benchmarking of Swedish distribution "
+        "networks.</span>",
+    affiliations=["IFN", "MSc Economics, University of Gothenburg"],
+)
+
+landing_footer()

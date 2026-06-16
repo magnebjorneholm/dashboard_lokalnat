@@ -13,6 +13,8 @@ Read `ARCHITECTURE.md` at the start of every conversation for full project conte
 project context. Skip it unless the user explicitly asks you to open it. (A `Read` deny rule
 in `.claude/settings.json` also blocks the Read tool for this file.)
 
+**R / DEA:** native arm64 R 4.6.0 with the `rDEA` package (Robust DEA) is installed via Homebrew at `/opt/homebrew/bin/Rscript`. Always use that absolute path — the bare `Rscript` on PATH resolves to an old Intel R 4.0.5 in `/usr/local/bin` that does **not** have `rDEA`. Nothing to install.
+
 
 ## Language
 

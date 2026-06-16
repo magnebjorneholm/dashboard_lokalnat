@@ -16,8 +16,19 @@ import pandas as pd
 from config.column_names import (
     COL_REID, COL_CONTROLLABLE_AVG, COL_LOSS_VALUED, COL_NONCTRL_SELECTED,
     COL_CAPITAL_COST_ENV_ADJ, COL_OPEX_NEW, COL_TOTEX_NEW, COL_CAPITAL_COST_2024,
+    COL_NONCTRL_GRID_SUBSCRIPTION, COL_NONCTRL_GRID_CONNECTION,
+    COL_NONCTRL_FEED_IN, COL_NONCTRL_CAPACITY_RESERVE,
+    COL_CAPEX_CORR_CABLE, COL_CAPEX_CORR_STATION,
 )
 from new_benchmarking_model.config import NewBenchmarkingConfig
+
+# Granular per-category / per-asset bridge columns carried through for the waterfall only;
+# they never enter opex_new or totex_new (those use the aggregates).
+_BRIDGE_BREAKDOWN_COLS = (
+    COL_NONCTRL_GRID_SUBSCRIPTION, COL_NONCTRL_GRID_CONNECTION,
+    COL_NONCTRL_FEED_IN, COL_NONCTRL_CAPACITY_RESERVE,
+    COL_CAPEX_CORR_CABLE, COL_CAPEX_CORR_STATION,
+)
 
 
 def build_totex(
@@ -44,7 +55,8 @@ def build_totex(
     df = df.merge(opex_components_df, on=COL_REID, how="left")
     df = df.merge(capital_cost_df, on=COL_REID, how="left")
 
-    for col in (COL_CONTROLLABLE_AVG, COL_LOSS_VALUED, COL_NONCTRL_SELECTED, COL_CAPITAL_COST_ENV_ADJ):
+    for col in (COL_CONTROLLABLE_AVG, COL_LOSS_VALUED, COL_NONCTRL_SELECTED,
+                COL_CAPITAL_COST_ENV_ADJ, *_BRIDGE_BREAKDOWN_COLS):
         df[col] = df[col].fillna(0.0)
 
     controllable = df[COL_CONTROLLABLE_AVG] if cfg.include_controllable else 0.0

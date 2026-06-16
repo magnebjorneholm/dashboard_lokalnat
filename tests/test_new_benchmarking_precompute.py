@@ -15,9 +15,14 @@ Two things are checked:
 import pytest
 import pandas as pd
 
+import numpy as np
+
 from config.column_names import (
     COL_REID, COL_DEA_EFFICIENCY, COL_TOTEX_NEW, COL_EFF_REQ_DELTA,
     COL_APPLICATION_BASE_NEW, COL_KR_CURRENT, COL_KR_NEW,
+    COL_NONCTRL_SELECTED, COL_NONCTRL_GRID_SUBSCRIPTION, COL_NONCTRL_GRID_CONNECTION,
+    COL_NONCTRL_FEED_IN, COL_NONCTRL_CAPACITY_RESERVE,
+    COL_CAPEX_CORR_CABLE, COL_CAPEX_CORR_STATION,
 )
 from new_benchmarking_model import run_new_benchmarking, NewBenchmarkingConfig
 from new_benchmarking_model.data.loader import load_precomputed_main, MANIFEST_JSON
@@ -58,6 +63,16 @@ class TestBundleShape:
     def test_cost_impact_columns(self, precomputed):
         for col in (COL_APPLICATION_BASE_NEW, COL_KR_CURRENT, COL_KR_NEW):
             assert col in precomputed.totex.columns
+
+    def test_bridge_breakdown_columns(self, precomputed):
+        """The viz-only granular bridge columns exist and sum back to their aggregates."""
+        t = precomputed.totex
+        cats = [COL_NONCTRL_GRID_SUBSCRIPTION, COL_NONCTRL_GRID_CONNECTION,
+                COL_NONCTRL_FEED_IN, COL_NONCTRL_CAPACITY_RESERVE]
+        for col in cats + [COL_CAPEX_CORR_CABLE, COL_CAPEX_CORR_STATION]:
+            assert col in t.columns, col
+        # Per-category non-controllable must sum to the aggregate that feeds TOTEX.
+        assert np.allclose(t[cats].sum(axis=1), t[COL_NONCTRL_SELECTED])
 
     def test_env_per_company_present(self, precomputed):
         assert not precomputed.env_capex.cable_adjustment.per_company.empty

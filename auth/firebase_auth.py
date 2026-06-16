@@ -290,8 +290,13 @@ class FirebaseAuthManager:
             if not self.admin_initialized:
                 return None
             
-            # Verify token and get claims
-            decoded_token = admin_auth.verify_id_token(id_token)
+            # Verify token and get claims.
+            # clock_skew_seconds tolerates small clock differences between this
+            # server and Google's auth servers. Without it, a freshly issued
+            # token can be rejected as "used too early" when the local clock is
+            # a second or two behind, which silently drops the user's claims
+            # (role/reid) and leaves them without a selected company.
+            decoded_token = admin_auth.verify_id_token(id_token, clock_skew_seconds=60)
             
             return {
                 'uid': decoded_token.get('uid'),

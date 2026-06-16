@@ -35,8 +35,11 @@ from config.colors import get_plotly_template_safe
 from config.formatting import format_percent, format_pp, format_tkr, format_delta
 from config.column_names import (
     COL_REID, COL_DEA_EFFICIENCY, COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL, COL_DEA_REFERENCE,
-    COL_TOTEX_NEW, COL_CONTROLLABLE_AVG, COL_CAPITAL_COST_2024,
-    COL_LOSS_VALUED, COL_LOSS_ACTUAL, COL_NONCTRL_SELECTED, COL_CAPITAL_COST_ENV_ADJ,
+    COL_TOTEX_NEW, COL_CONTROLLABLE_AVG,
+    COL_LOSS_VALUED, COL_LOSS_ACTUAL, COL_CAPITAL_COST_ENV_ADJ,
+    COL_NONCTRL_GRID_SUBSCRIPTION, COL_NONCTRL_GRID_CONNECTION,
+    COL_NONCTRL_FEED_IN, COL_NONCTRL_CAPACITY_RESERVE,
+    COL_CAPEX_CORR_CABLE, COL_CAPEX_CORR_STATION,
     COL_KR_CURRENT, COL_KR_NEW,
 )
 from new_benchmarking_model.config import NewBenchmarkingConfig
@@ -322,46 +325,62 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
                      common price; capital cost levelled for placement environment.
 
     Each new post enters the scope phase at its *uncorrected* value, then the correction
-    phase adjusts it — which is exactly what isolates scope from correction. Everything is
-    exact and reconstructed from the totex frame:
+    phase adjusts it — which is exactly what isolates scope from correction. The granular
+    bars (non-controllable by category; capex correction by cable vs station) are exact and
+    sum back to their aggregates. Everything reconstructs the totex frame:
 
-        old + losses_actual + non_ctrl + (losses_common − losses_actual)
-            + (capex_env_adj − capex_unadj)  ==  totex_new.
+        old + losses_actual + Σ non_ctrl_cat + (losses_common − losses_actual)
+            + capex_cable + capex_station  ==  totex_new.
 
-    The placement-environment correction is shown as one bar here; the exact cable/station
-    split (a per-asset KENT re-run, not derivable from this frame) comes in a later step.
+    Capex is KENT-consistent here (Alt B): old capex is KENT(unadjusted capbase), recovered
+    as env_adjusted − cable − station, so the cable/station corrections close the bridge
+    exactly. This is a visualisation-only choice — the DEA input and cost bases are
+    untouched and still use the published baseline capital cost.
     """
     def g(col):
         return _val(totex, user_reid, col)
 
     controllable = g(COL_CONTROLLABLE_AVG)
-    capex_unadj = g(COL_CAPITAL_COST_2024)
+    capex_env = g(COL_CAPITAL_COST_ENV_ADJ)
+    cable_corr = g(COL_CAPEX_CORR_CABLE)
+    station_corr = g(COL_CAPEX_CORR_STATION)
     loss_actual = g(COL_LOSS_ACTUAL)
     loss_common = g(COL_LOSS_VALUED)
-    nonctrl = g(COL_NONCTRL_SELECTED)
-    capex_env = g(COL_CAPITAL_COST_ENV_ADJ)
+    grid_sub = g(COL_NONCTRL_GRID_SUBSCRIPTION)
+    grid_conn = g(COL_NONCTRL_GRID_CONNECTION)
+    feed_in = g(COL_NONCTRL_FEED_IN)
+    cap_res = g(COL_NONCTRL_CAPACITY_RESERVE)
     new_totex = g(COL_TOTEX_NEW)
 
-    if None in (controllable, capex_unadj, loss_actual, loss_common, nonctrl, capex_env, new_totex):
+    needed = (controllable, capex_env, cable_corr, station_corr, loss_actual, loss_common,
+              grid_sub, grid_conn, feed_in, cap_res, new_totex)
+    if None in needed:
         st.info("No TOTEX data for the selected company.")
         return
 
-    old_totex = controllable + capex_unadj
-    subtotal = old_totex + loss_actual + nonctrl   # end of the scope phase (uncorrected)
-    loss_reval = loss_common - loss_actual          # correction: common price vs actual
-    capex_corr = capex_env - capex_unadj            # correction: placement environment
+    # Old capex = KENT(unadjusted) = env-adjusted minus the two corrections (Alt B), so the
+    # cable/station bars close the bridge exactly.
+    old_capex = capex_env - cable_corr - station_corr
+    old_totex = controllable + old_capex
+    nonctrl_sum = grid_sub + grid_conn + feed_in + cap_res
+    subtotal = old_totex + loss_actual + nonctrl_sum   # end of the scope phase (uncorrected)
+    loss_reval = loss_common - loss_actual              # correction: common price vs actual
 
     # Opening bar is "absolute" (it sets the starting total); the two "total" bars (the
     # scope subtotal and the final TOTEX) show the running cumulative. Order top→bottom
     # reads as the journey (y-axis is reversed below).
     rows = [
-        ("Old TOTEX",                       old_totex,   "absolute"),
-        ("Network losses (actual)",         loss_actual, "relative"),
-        ("Non-controllable",                nonctrl,     "relative"),
-        ("New-scope TOTEX (uncorrected)",   subtotal,    "total"),
-        ("Losses → common price",           loss_reval,  "relative"),
-        ("Capex placement-environment",     capex_corr,  "relative"),
-        ("New TOTEX (DEA)",                 new_totex,   "total"),
+        ("Old TOTEX",                       old_totex,    "absolute"),
+        ("Network losses (actual)",         loss_actual,  "relative"),
+        ("Grid subscription",               grid_sub,     "relative"),
+        ("Grid connection",                 grid_conn,    "relative"),
+        ("Feed-in compensation",            feed_in,      "relative"),
+        ("Capacity reserve",                cap_res,      "relative"),
+        ("New-scope TOTEX (uncorrected)",   subtotal,     "total"),
+        ("Losses → common price",           loss_reval,   "relative"),
+        ("Capex: cable (jordkabel)",        cable_corr,   "relative"),
+        ("Capex: station (nätstation)",     station_corr, "relative"),
+        ("New TOTEX (DEA)",                 new_totex,    "total"),
     ]
     labels = [r[0] for r in rows]
     values = [r[1] / 1e3 for r in rows]  # tkr → MSEK
@@ -388,23 +407,45 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
         hovertext=hover, hovertemplate="%{hovertext}<extra></extra>",
     ))
 
-    # Phase bands (numeric y maps to category index): scope spans rows 0–3 (the opening Old
-    # TOTEX, the two scope additions, and the uncorrected subtotal they build), corrections
-    # spans rows 4–6 (the two corrections plus the final TOTEX they land on). The floating
-    # relative bars sit far to the right, so the phase labels go in the empty left of the plot.
-    fig.add_hrect(y0=-0.5, y1=3.5, fillcolor=_BAND_SCOPE, line_width=0, layer="below")
-    fig.add_hrect(y0=3.5, y1=6.5, fillcolor=_BAND_CORRECTION, line_width=0, layer="below")
-    for y_pos, label in ((1.5, "Scope"), (5.0, "Corrections")):
+    # Phase bands (numeric y maps to category index): scope spans rows 0–6 (the opening Old
+    # TOTEX, the scope additions, and the uncorrected subtotal they build), corrections spans
+    # rows 7–10 (the two corrections plus the final TOTEX they land on). The floating relative
+    # bars sit far to the right, so the phase labels go in the empty left of the plot.
+    fig.add_hrect(y0=-0.5, y1=6.5, fillcolor=_BAND_SCOPE, line_width=0, layer="below")
+    fig.add_hrect(y0=6.5, y1=10.5, fillcolor=_BAND_CORRECTION, line_width=0, layer="below")
+    for y_pos, label in ((3.0, "Scope"), (8.5, "Corrections")):
         fig.add_annotation(
             xref="paper", x=0.01, y=y_pos, yref="y", text=f"<b>{label}</b>",
             showarrow=False, xanchor="left", yanchor="middle",
             font=dict(size=12, color=COLORS["text_secondary"]),
         )
 
+    # Zero-value markers: a relative step that rounds to ~0 renders as an invisible bar (an
+    # odd gap in the bridge). Mark it with a thin vertical tick at its cumulative position —
+    # the same treatment as the M5 cost-impact waterfall (frontend/results/m5_efficiency_output).
+    running = 0.0
+    zero_x, zero_y = [], []
+    for label, val, measure in zip(labels, values, measures):
+        if measure == "absolute":
+            running = val
+        elif measure == "relative":
+            if abs(val) < 0.05:
+                zero_x.append(running)
+                zero_y.append(label)
+            running += val
+    if zero_y:
+        fig.add_trace(go.Scatter(
+            x=zero_x, y=zero_y, mode="markers",
+            marker=dict(symbol="line-ns", size=16,
+                        line=dict(width=2, color=COLORS["text_muted"]),
+                        color=COLORS["text_muted"]),
+            showlegend=False, hoverinfo="skip",
+        ))
+
     fig.update_layout(
         **layout_kwargs, template=template,
         margin=dict(l=10, r=80, t=10, b=40),
-        height=max(300, len(labels) * 52), dragmode=False,
+        height=max(300, len(labels) * 52), dragmode=False, showlegend=False,
         xaxis=dict(title="MSEK", fixedrange=True, showgrid=False, zeroline=True,
                    zerolinecolor=COLORS["bg_muted"], linecolor=COLORS["bg_muted"]),
         yaxis=dict(fixedrange=True, showgrid=True, gridcolor=COLORS["bg_muted"],
@@ -414,9 +455,11 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
     st.caption(
         "From the old TOTEX (controllable + unadjusted capital cost) to the new DEA TOTEX, "
         "in two phases. **Scope** (blue band) adds the cost posts the new model measures but "
-        "the old did not — network losses at their actual cost and selected non-controllable "
-        "costs. **Corrections** (amber band) then apply the benchmarking adjustments: losses "
-        "revalued to a common price, and capital cost levelled for placement environment."
+        "the old did not — network losses at their actual cost and the non-controllable "
+        "categories (grid subscription, grid connection, feed-in compensation, capacity "
+        "reserve). **Corrections** (amber band) then apply the benchmarking adjustments: "
+        "losses revalued to a common price, and the placement-environment capital-cost "
+        "levelling split into cable (jordkabel) and station (nätstation)."
     )
 
 

@@ -28,11 +28,29 @@ from typing import Dict, Iterable, Optional
 
 import pandas as pd
 
-from config.column_names import COL_REID, COL_LOSS_VALUED, COL_NONCTRL_SELECTED
-from new_benchmarking_model.config import NewBenchmarkingConfig
+from config.column_names import (
+    COL_REID, COL_LOSS_VALUED, COL_NONCTRL_SELECTED,
+    COL_NONCTRL_GRID_SUBSCRIPTION, COL_NONCTRL_GRID_CONNECTION,
+    COL_NONCTRL_FEED_IN, COL_NONCTRL_CAPACITY_RESERVE,
+)
+from new_benchmarking_model.config import (
+    NewBenchmarkingConfig,
+    NONCTRL_GRID_SUBSCRIPTION, NONCTRL_GRID_CONNECTION,
+    NONCTRL_FEED_IN, NONCTRL_CAPACITY_RESERVE,
+)
 
 # Forecast years present in the non-controllable grunddata and the adjustment variables.
 FORECAST_YEARS = (2024, 2025, 2026, 2027)
+
+# Non-controllable category → its per-category bridge column (visualisation only). Only
+# the four default categories get a dedicated column; the aggregate COL_NONCTRL_SELECTED
+# (which drives TOTEX) always reflects cfg.non_controllable_categories regardless.
+NONCTRL_CATEGORY_COLUMN = {
+    NONCTRL_GRID_SUBSCRIPTION: COL_NONCTRL_GRID_SUBSCRIPTION,
+    NONCTRL_GRID_CONNECTION: COL_NONCTRL_GRID_CONNECTION,
+    NONCTRL_FEED_IN: COL_NONCTRL_FEED_IN,
+    NONCTRL_CAPACITY_RESERVE: COL_NONCTRL_CAPACITY_RESERVE,
+}
 
 
 def compute_loss_valued(
@@ -114,4 +132,18 @@ def build_opex_components(
     out = reids.merge(loss, on=COL_REID, how="left").merge(nonctrl, on=COL_REID, how="left")
     out[COL_LOSS_VALUED] = out[COL_LOSS_VALUED].fillna(0.0)
     out[COL_NONCTRL_SELECTED] = out[COL_NONCTRL_SELECTED].fillna(0.0)
+
+    # Per-category breakdown (visualisation only): one column per default category, holding
+    # its selected value (0 if that category is not in cfg.non_controllable_categories).
+    # The columns sum to COL_NONCTRL_SELECTED for the default reading.
+    selected = set(cfg.non_controllable_categories)
+    for cat, col in NONCTRL_CATEGORY_COLUMN.items():
+        if cat in selected:
+            per = compute_non_controllable_selected(non_controllable_detail, [cat]).rename(
+                columns={COL_NONCTRL_SELECTED: col}
+            )
+            out = out.merge(per, on=COL_REID, how="left")
+            out[col] = out[col].fillna(0.0)
+        else:
+            out[col] = 0.0
     return out

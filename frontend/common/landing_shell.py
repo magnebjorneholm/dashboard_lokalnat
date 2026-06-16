@@ -41,26 +41,51 @@ _CSS = """
 [data-testid="stAppViewContainer"] > div{ position:relative; z-index:1; }
 
 /* === Frozen top bar ===
-   The native top-nav lives in stHeader (sticky, top:0). Make it a solid,
-   opaque bar that stays above all content while the page scrolls beneath it,
-   carry the brand wordmark on its left via ::before, and pin the Sign-in CTA
-   into its right (see .st-key-rm_signin). */
+   stHeader is the native sticky bar (top:0). Make it a solid, opaque bar that
+   stays above all content while the page scrolls beneath it. The bar's contents
+   are ours: the native nav links are hidden and replaced by the brand wordmark +
+   in-page anchor nav (.rm-topbar, pinned left) and the Sign-in CTA (pinned
+   right, see .st-key-rm_signin). The anchor nav scrolls within this one page
+   instead of switching pages. */
 [data-testid="stHeader"]{
     background:rgba(248,250,252,0.88);
     backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
     border-bottom:1px solid var(--rm-border);
     z-index:1000;
 }
-[data-testid="stTopNav"]{ display:flex; align-items:center; }
-[data-testid="stTopNav"]::before{
-    content:"⚡ Regumetrica"; font-weight:700; font-size:1.18rem;
-    letter-spacing:-0.01em; color:var(--rm-text); white-space:nowrap;
-    margin-right:1.4rem;
+/* Hide the native st.navigation top-nav (a single hidden "Home" entry); the
+   bar is drawn by .rm-topbar below. */
+[data-testid="stTopNav"]{ display:none !important; }
+
+/* Brand wordmark + anchor nav, pinned into the left of the frozen bar */
+.rm-topbar{
+    position:fixed; top:0; left:0; height:3.5rem; z-index:1001;
+    display:flex; align-items:center; gap:1.6rem; padding:0 1.2rem;
 }
+.rm-brand{ font-weight:700; font-size:1.18rem; letter-spacing:-0.01em;
+    color:var(--rm-text); white-space:nowrap; }
+.rm-nav{ display:flex; gap:1.2rem; }
+.rm-nav a{ font-size:.95rem; font-weight:500; color:var(--rm-text2);
+    text-decoration:none; padding:.25rem .1rem; transition:color .15s ease; }
+.rm-nav a:hover{ color:var(--rm-primary); }
+.rm-nav a:target{ color:var(--rm-primary); }
+@media (max-width:560px){ .rm-nav{ display:none; } }
+
 /* Sign-in CTA pinned into the frozen top bar */
 .st-key-rm_signin{
     position:fixed; top:.5rem; right:1.1rem; width:auto !important; z-index:1001;
 }
+
+/* === In-page anchor scrolling ===
+   Smooth glide to a section; scroll-margin keeps the target clear of the bar. */
+html{ scroll-behavior:smooth; }
+[data-testid="stMain"], [data-testid="stAppViewContainer"]{ scroll-behavior:smooth; }
+.rm-anchor{ display:block; height:0; scroll-margin-top:5rem; }
+
+/* In-content inline link (e.g. "Explore the tools →") */
+.rm-inline-link{ color:var(--rm-text2); font-weight:500; font-size:.97rem;
+    text-decoration:none; transition:color .15s ease; }
+.rm-inline-link:hover{ color:var(--rm-primary); }
 
 /* Hide tool chrome (no sidebar in the landing zone) */
 [data-testid="stSidebar"],
@@ -69,18 +94,11 @@ _CSS = """
 /* Centered, width-limited content column (top padding clears the frozen bar) */
 .main .block-container{ max-width:1080px; padding-top:4.5rem; padding-bottom:4rem; }
 
-/* === Page links (in-content, e.g. "Explore the tools →") === */
-[data-testid="stPageLink"] a{ padding:.3rem .2rem !important; border-radius:6px;
-    transition:color .15s ease; }
-[data-testid="stPageLink"] a p{ color:var(--rm-text2) !important; font-weight:500 !important;
-    font-size:.97rem !important; }
-[data-testid="stPageLink"] a:hover p{ color:var(--rm-primary) !important; }
-[data-testid="stPageLink"] a[aria-current] p{ color:var(--rm-primary) !important;
-    font-weight:600 !important; }
-
 /* === Hero === */
+.rm-hero-brand{ font-size:1.6rem; font-weight:700; letter-spacing:-0.01em;
+    line-height:1.1; margin:1.2rem 0 .1rem; }
 .rm-hero-title{ font-size:3.1rem; line-height:1.08; letter-spacing:-0.025em; font-weight:700;
-    color:var(--rm-text); margin:1.2rem 0 .6rem; }
+    color:var(--rm-text); margin:.2rem 0 .6rem; }
 .rm-accent{ background:linear-gradient(90deg, var(--rm-primary), var(--rm-teal));
     -webkit-background-clip:text; background-clip:text; color:transparent; }
 .rm-hero-sub{ font-size:1.2rem; line-height:1.5; color:var(--rm-text2); max-width:620px;
@@ -212,19 +230,36 @@ def _inject_theme() -> None:
 
 
 def apply_landing_shell() -> None:
-    """Inject the landing theme and pin the Sign in CTA into the frozen top bar.
+    """Inject the landing theme and the frozen top bar (brand + anchor nav + CTA).
 
-    The brand wordmark and the section navigation (Home / Tools / Team) live in
-    the native top bar (stHeader): the nav is rendered by streamlit_app.py via
-    st.navigation(position="top"), the brand is drawn by CSS (stTopNav::before).
-    The Sign in button is a real widget — it is pinned to the bar's right via the
-    ``.st-key-rm_signin`` container class.
+    The landing is a single page with three anchored sections (``#home`` /
+    ``#tools`` / ``#team``). The top bar carries the brand wordmark and the
+    section nav as in-page anchor links: clicking one scrolls to that section
+    instead of switching pages. The native st.navigation top-nav is hidden (CSS);
+    the bar's contents are rendered here. The Sign in button is a real widget,
+    pinned to the bar's right via the ``.st-key-rm_signin`` container class.
     """
     _inject_theme()
+
+    st.markdown(
+        '<div class="rm-topbar">'
+        '<span class="rm-brand">⚡ Regumetrica</span>'
+        '<nav class="rm-nav">'
+        '<a href="#home">Home</a>'
+        '<a href="#tools">Tools</a>'
+        '<a href="#team">Team</a>'
+        '</nav></div>',
+        unsafe_allow_html=True,
+    )
 
     with st.container(key="rm_signin"):
         if st.button("Sign in", type="primary"):
             auth_dialog()
+
+
+def landing_anchor(anchor_id: str) -> None:
+    """Invisible scroll target for an in-page section (the top-nav links here)."""
+    st.markdown(f'<span id="{anchor_id}" class="rm-anchor"></span>', unsafe_allow_html=True)
 
 
 def landing_heading(title: str, eyebrow: Optional[str] = None, level: int = 2) -> None:

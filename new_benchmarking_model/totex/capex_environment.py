@@ -45,7 +45,9 @@ from new_benchmarking_model.components.station_capex_adjustment import (
     adjustment as st_adj,
 )
 
-from config.column_names import COL_REID, COL_CAPITAL_COST_ENV_ADJ
+from config.column_names import (
+    COL_REID, COL_CAPITAL_COST_ENV_ADJ, COL_CAPEX_CORR_CABLE, COL_CAPEX_CORR_STATION,
+)
 
 CAPBASE_NUAV_COL = "nuav_2022"
 
@@ -122,6 +124,17 @@ def _station_result(capbase: pd.DataFrame, cfg: NewBenchmarkingConfig) -> st_adj
     )
 
 
+def _subtract_deductions(capbase: pd.DataFrame, results) -> pd.DataFrame:
+    """Copy of `capbase` with each result's per-component deduction subtracted from nuav_2022."""
+    adjusted = capbase.copy()
+    for res in results:
+        ded = res.components[env_C.COL_DEDUCTION]
+        adjusted.loc[ded.index, CAPBASE_NUAV_COL] = (
+            adjusted.loc[ded.index, CAPBASE_NUAV_COL] - ded.to_numpy()
+        )
+    return adjusted
+
+
 def build_adjusted_capbase(
     capbase: pd.DataFrame,
     cable_res: env_adj.EnvironmentAdjustmentResult,
@@ -135,13 +148,14 @@ def build_adjusted_capbase(
     per-component deduction is simply subtracted from the matching capbase row. cat 3
     and cat 13 are disjoint, so the two index sets never overlap.
     """
-    adjusted = capbase.copy()
-    for res in (cable_res, station_res):
-        ded = res.components[env_C.COL_DEDUCTION]
-        adjusted.loc[ded.index, CAPBASE_NUAV_COL] = (
-            adjusted.loc[ded.index, CAPBASE_NUAV_COL] - ded.to_numpy()
-        )
-    return adjusted
+    return _subtract_deductions(capbase, (cable_res, station_res))
+
+
+def _kent_capital_cost(capbase: pd.DataFrame, wacc: float) -> pd.Series:
+    """Run KENT (steps 5–8) on a capbase and return capital_cost_2024 per REId."""
+    _, df_network, _ = run_kent_calculations_batch(capbase, wacc=wacc, return_detailed=False)
+    reid = df_network["id_network"].apply(lambda x: f"REL{int(x):05d}")
+    return pd.Series(df_network["capital_cost_2024"].to_numpy(), index=reid.to_numpy())
 
 
 def compute_env_adjusted_capital_cost(
@@ -156,6 +170,13 @@ def compute_env_adjusted_capital_cost(
     network-level result to REId. When `cfg.include_capex` is False the correction is
     skipped and KENT runs on the unmodified capbase (so the model can isolate the OPEX
     side); the diagnostics are still computed and the column keeps the *_env_adjusted name.
+
+    For the bridge visualisation, the capital-cost correction is also split into its cable
+    and station parts (COL_CAPEX_CORR_CABLE / _STATION). Because KENT is linear in nuav and
+    the two asset sets are disjoint, the split is exact and additive: re-running KENT on the
+    unadjusted and cable-only capbases gives cable = KENT(cable) − KENT(unadjusted) and
+    station = KENT(both) − KENT(cable). This costs two extra KENT passes and is used only by
+    the waterfall — the DEA input and all cost bases are unaffected.
     """
     if capbase is None:
         capbase = load_capbase_a()
@@ -164,14 +185,22 @@ def compute_env_adjusted_capital_cost(
     station_res = _station_result(capbase, cfg)
 
     adjusted = build_adjusted_capbase(capbase, cable_res, station_res) if cfg.include_capex else capbase
+    cc_both = _kent_capital_cost(adjusted, wacc)
 
-    _, df_network, _ = run_kent_calculations_batch(
-        adjusted, wacc=wacc, return_detailed=False
-    )
+    if cfg.include_capex:
+        cc_unadj = _kent_capital_cost(capbase, wacc)
+        cc_cable = _kent_capital_cost(_subtract_deductions(capbase, (cable_res,)), wacc)
+        cable_corr = (cc_cable - cc_unadj).reindex(cc_both.index)
+        station_corr = (cc_both - cc_cable).reindex(cc_both.index)
+    else:
+        cable_corr = pd.Series(0.0, index=cc_both.index)
+        station_corr = pd.Series(0.0, index=cc_both.index)
 
     capital_cost = pd.DataFrame({
-        COL_REID: df_network["id_network"].apply(lambda x: f"REL{int(x):05d}"),
-        COL_CAPITAL_COST_ENV_ADJ: df_network["capital_cost_2024"].to_numpy(),
+        COL_REID: cc_both.index.to_numpy(),
+        COL_CAPITAL_COST_ENV_ADJ: cc_both.to_numpy(),
+        COL_CAPEX_CORR_CABLE: cable_corr.to_numpy(),
+        COL_CAPEX_CORR_STATION: station_corr.to_numpy(),
     })
 
     return EnvCapexResult(

@@ -15,10 +15,14 @@ kontext kring landningssidornas frontend.
 
 ## Låsta beslut
 
-1. **Native topp-nav** via `st.navigation(..., position="top")` (inte ett eget
-   `st.page_link`-bygge, inte Streamlit-sidofältet).
-2. **Sektioner:** `Home` (hero), `Tools` (introduktion till alla verktyg),
-   `Team` (team + kontakt). Tre nav-poster.
+1. **En enda landningssida** (`landing_pages/landing.py`) med tre **ankrade
+   sektioner** staplade vertikalt: `#home` (hero), `#tools` (alla verktyg),
+   `#team` (team + kontakt). Topp-navens länkar **scrollar** till respektive
+   sektion — ingen sidväxling, ingen rerun.
+2. **Egen topp-bar** (`landing_shell.py`): wordmark + ankar-nav (Home/Tools/Team)
+   fästa till vänster, Sign in-CTA till höger. Den native `st.navigation`
+   topp-naven **döljs med CSS** (den finns kvar enbart för att registrera/köra
+   sidor och för deep-link-bouncen).
 3. **`pages/login.py` retireras helt** — `auth_dialog()` sköter all inloggning.
 4. **`contact.py` slås in i `team.py`**; **`user_manual.py` → `tools.py`**
    (manual-PDF:en bäddas in på Tools-sidan).
@@ -63,9 +67,9 @@ else:
     # ZON 1 — landningen, native topp-nav
     pg = st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN, position="top")
     if pg in APP_PAGES_HIDDEN:
-        st.switch_page(landing_home) # deep-link till skyddad sida → landningen
+        st.switch_page(landing_main) # deep-link till skyddad sida → landningen
     else:
-        pg.run()                     # varje landningssida kallar apply_landing_shell()
+        pg.run()                     # landing.py kallar apply_landing_shell()
 ```
 
 `position="top"` ger en native topp-navbar för landningssektionerna och inget
@@ -81,11 +85,8 @@ till en login-sida, den finns inte längre). Dolda sidor syns inte i topp-navet.
 
 | Fil | Roll |
 |---|---|
-| `landing_pages/home.py` | **Home** — hero, tagline, intro, Sign in-CTA |
-| `landing_pages/tools.py` *(ersätter `user_manual.py`)* | **Tools** — introduktion till alla verktyg + inbäddad manual-PDF-nedladdning |
-| `landing_pages/team.py` | **Team** — team **+ kontakt** (sammanslagna) |
-| ~~`landing_pages/contact.py`~~ | **Tas bort** — innehåll → `team.py` |
-| ~~`landing_pages/user_manual.py`~~ | **Tas bort / döps om** → `tools.py` |
+| `landing_pages/landing.py` | **Hela landningen** — en sida, tre ankrade sektioner: `#home` (hero, stats, feature-cards), `#tools` (registry-driven verktygsindex + manual-länkar), `#team` (profiler + kontakt). Varje sektion inleds med `landing_anchor("<id>")`. |
+| ~~`landing_pages/home.py` / `tools.py` / `team.py`~~ | **Borttagna** — sammanslagna till `landing.py`. |
 
 ### Att skapa
 
@@ -115,13 +116,21 @@ till en login-sida, den finns inte längre). Dolda sidor syns inte i topp-navet.
 
 ---
 
-## Topp-navbar & Sign in
+## Topp-bar, ankar-nav & Sign in
 
-`st.navigation(LANDING_PAGES, position="top")` ritar den native topp-navbaren med
-en post per sektion (Home / Tools / Team). Den kan bara innehålla *sidor* — så
-**Sign in** (som öppnar en dialog, inte navigerar till en sida) renderas av
-`apply_landing_shell()` som en prominent CTA i sidinnehållet (t.ex. hero + en
-fast knapp högt upp), inte som en nav-post.
+Den native `st.navigation(position="top")`-naven kan bara *byta sida* (rerun),
+inte scrolla inom en sida — så den **döljs** (`[data-testid="stTopNav"]{display:none}`)
+och baren ritas av `apply_landing_shell()`:
+
+- **Wordmark + ankar-nav** (`.rm-topbar`, fixerad till vänster i stHeader-baren):
+  `<a href="#home">` / `#tools` / `#team`. `html{scroll-behavior:smooth}` ger den
+  mjuka glidningen; `.rm-anchor{scroll-margin-top}` håller målet fritt från baren.
+- **Sign in** (öppnar en dialog, navigerar inte) är en riktig widget, fäst till
+  höger via `.st-key-rm_signin`.
+
+Varje sektion i `landing.py` inleds med `landing_anchor("<id>")` (osynligt
+scroll-mål). *Begränsning:* ingen levande scroll-spy (kräver JS som Streamlit inte
+kör i huvuddokumentet); `:target` ger enkel highlight av den klickade länken.
 
 ---
 
