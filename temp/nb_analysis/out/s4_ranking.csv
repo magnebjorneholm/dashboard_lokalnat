@@ -1,0 +1,5 @@
+player,loo_median_abs_pp,aoi_median_abs_pp,loo_kind_flip_share,loo_sum_abs_kr,aoi_sum_abs_kr
+nonctrl,0.3069,0.3029,0.179,1725977.0,1551627.0
+capex_adj,0.074,0.1082,0.055,369352.0,913127.0
+losses,0.0428,0.066,0.028,195276.0,729743.0
+cable,0.0214,0.1312,0.014,177148.0,508417.0

@@ -1,8 +1,9 @@
 # macOS
 .DS_Store
 
-# Local scratch / working files
-temp/
+# Local scratch / working files (but keep the committed nb_analysis research harness)
+temp/*
+!temp/nb_analysis/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

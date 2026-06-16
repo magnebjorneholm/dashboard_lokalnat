@@ -1,0 +1,3 @@
+test,expect,pearson,spearman,n,consistent_with_expectation
+A: luftledning_share vs jordkabel_landsbygd_share,positive,0.441,0.658,148,True
+B: luftledning_share vs density_cu_km,negative,-0.532,-0.701,148,True
