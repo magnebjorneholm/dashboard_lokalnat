@@ -14,8 +14,9 @@ lowers that firm's requirement, i.e. FAVOURS it. Slope vs urbanity: expect chann
 negative (favours urban → more negative as urbanity rises), channel B positive (favours
 rural), and the full-model req level near-flat if the two cancel.
 
-NOTE (open question, see PLAN): the OLS slope + CI is a placeholder for direction +
-strength, read indicatively — CIs ignore DEA-induced cross-sectional dependence.
+NOTE: the OLS slope is the point estimate; its naive t-CI is anti-conservative because it
+ignores DEA-induced cross-sectional dependence. The valid CI comes from s3_inference.py
+(DEA-aware subsampling), which augments s3_slopes.csv with boot_ci_low/high. Read those.
 
     .venv/bin/python temp/nb_analysis/s3_channels.py
 """

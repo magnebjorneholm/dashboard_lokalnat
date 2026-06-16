@@ -1,4 +1,4 @@
-channel,expect,slope,ci_low,ci_high,r2,p,n,consistent
-A: capex-adj (phi pp),negative,-0.1481,-0.242,-0.0541,0.0636,0.0022,145,True
-B: cable-length (phi pp),positive,0.1286,-0.0043,0.2615,0.025,0.0577,145,True
-"net: full model (req level, pp/urb)",≈ flat,-0.1092,-0.6281,0.4096,0.0012,0.678,145,—
+channel,expect,slope,ci_low,ci_high,r2,p,n,consistent,boot_ci_low,boot_ci_high,boot_se
+A: capex-adj (phi pp),negative,-0.1481,-0.242,-0.0541,0.0636,0.0022,145,True,-0.2742,0.1244,0.1366
+B: cable-length (phi pp),positive,0.1286,-0.0043,0.2615,0.025,0.0577,145,True,-0.2442,0.21,0.1723
+"net: full model (req level, pp/urb)",≈ flat,-0.1092,-0.6281,0.4096,0.0012,0.678,145,—,-0.6072,0.3092,0.3356

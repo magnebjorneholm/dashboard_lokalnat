@@ -164,11 +164,11 @@ fullt sätt). Eftersom DEA är relativ är detta "hur hela fördelningen rör si
 kr-utfall via konstant `application_base_new`. OLS-lutningen är deskriptiv (urbanitet endogen),
 men kanal-Δ:t i sig är en ren isolering.
 
-> **Öppen fråga — statistisk modell.** Den faktiska statistiska specifikationen för
-> lutningarna (skattningsmodell, hur CI:t hanterar DEA-inducerat korsberoende, ev.
-> robusta/clustrade SE eller bootstrap, funktionsform) bestäms i en separat diskussion
-> senare. Tills dess är "OLS-lutning med CI" en platshållare för riktning + styrka, läst
-> indikativt.
+> **Statistisk modell (åtgärdad).** Det DEA-inducerade korsberoendet hanteras nu i
+> `s3_inference.py`: OLS behålls som punktskattning, men CI:t kommer från DEA-medveten
+> subsampling (återskattar front + E75 + alla specar per resample, kopplat). De naiva
+> OLS-CI:na var anti-konservativa (~2.5–3× för smala); under de korrekta CI:na är ingen
+> kanalgradient skild från noll. Se README "DEA-medveten inferens".
 
 **Definition of done:** tre lutningar kvantifierade + tvåkanals-tabellen (`out/s3_slopes.csv`)
 som visar om de neutraliserar varandra.

@@ -18,6 +18,7 @@ finns där under "Implementationsnoter".
 .venv/bin/python temp/nb_analysis/s3_channels.py      # heavy live, 2 DEA
 .venv/bin/python temp/nb_analysis/s4_decomposition.py # heavy live, ~9 DEA
 .venv/bin/python temp/nb_analysis/s5_shapley.py       # heavy live, 16 DEA
+.venv/bin/python temp/nb_analysis/s3_inference.py     # DEA-aware bootstrap CIs for s3 (~15 min, parallel)
 ```
 
 All delad logik (spine-laddning, urban-proxies, variant-DEA-runner) ligger i
@@ -141,26 +142,45 @@ Analysens centrum. Isolerar de två motverkande kanalerna via
 [`run_variant`](_helpers.py) (full modell läst ur bundlen; 2 DEA-varianter live) och
 projicerar dem på urban-axeln. Per bolag: `φ = req(med kanal) − req(utan)`.
 
-**OLS-lutningar mot urbanity_index** ([out/s3_slopes.csv](out/s3_slopes.csv), allt i pp):
+**Lutningar mot urbanity_index** ([out/s3_slopes.csv](out/s3_slopes.csv), allt i pp). Punkt =
+OLS; två CI:n: naiv OLS-t och DEA-medveten bootstrap (subsampling m=75, se nedan):
 
-| Kanal | lutning | 95% CI | p | konsistent |
-|---|---|---|---|---|
-| A: capex-justering | **−0.148** | [−0.242, −0.054] | 0.002 | ✓ gynnar urbant |
-| B: ledningslängd | **+0.129** | [−0.004, 0.262] | 0.058 | ✓ gynnar ruralt |
-| Netto: full modell (nivå) | −0.109 | [−0.63, +0.41] | 0.68 | ≈ platt |
+| Kanal | lutning | naiv OLS-CI | **DEA-medveten CI** |
+|---|---|---|---|
+| A: capex-justering | **−0.148** | [−0.242, −0.054] (p=0.002, exkl. 0) | **[−0.274, +0.124] (inkl. 0)** |
+| B: ledningslängd | **+0.129** | [−0.004, 0.262] (p=0.058) | **[−0.244, +0.210] (inkl. 0)** |
+| Netto: full modell (nivå) | −0.109 | [−0.63, +0.41] | [−0.61, +0.31] (inkl. 0) |
 
-**Tolkning.** Kanal A (capex-justering) gynnar urbant (φ blir mer negativt med urbanitet,
-tydligt: p=0.002). Kanal B (ledningslängd-output) gynnar ruralt (marginellt, p=0.058).
-Var för sig är de starka och motriktade (−0.148 vs +0.129); **den fulla modellens
-urban-gradient går inte att skilja från noll** (p=0.68). Kanalerna tar i praktiken ut
-varandra → modellen är approximativt urban/rural-neutral. Det är planens centrala hypotes.
+**Tolkning (konservativ).** Punktskattningarna pekar åt mekanismen: kanal A gynnar urbant
+(negativ), kanal B gynnar ruralt (positiv), motriktade och nästan lika stora → konsistent
+med att kanalerna **neutraliserar varandra** längs urban-axeln (netto platt). **Men under
+DEA-medveten inferens är ingen av de tre gradienterna skild från noll.** Vi kan alltså inte
+fastställa att kanalerna har nollskilda motverkande gradienter, bara att data är förenligt
+med modesta motverkande effekter som tar ut varandra.
 
-**Begränsningar.** Netto-punktestimatet (−0.109) är **inte** literalt noll — det är svagt
-urbant — men CI:t spänner brett över noll, så vi kan inte hävda en netto-skevhet.
-OLS-lutningen är **deskriptiv, inte kausal** (urbanitet endogen, se steg 2); den rena
-isoleringen är kanal-Δ:t i sig, inte regressionen. **CI:t är indikativt** — standardfelen
-ignorerar DEA-inducerat korsberoende mellan bolag (öppen fråga; robust statistisk modell
-tas senare, se PLAN). kr-lutningar är medvetet bortvalda.
+**Den naiva OLS:en var anti-konservativ.** De DEA-medvetna standardfelen är ~2.5–3× större;
+kanal A:s skenbara signifikans (p=0.002) försvinner när frontier- och E75-beroendet
+propageras. Punktestimaten flyttar inte — det är osäkerheten som var underskattad. Tecknet:
+r² var redan litet (0.06 / 0.025), så signifikansen vilade på n=145-antagandet om oberoende,
+inte på en tät relation; när det effektiva n kollapsar pga beroendet faller signifikansen.
+
+**Begränsningar.** Gradienten är **deskriptiv, inte kausal** (urbanitet endogen, se steg 2);
+den rena isoleringen är kanal-Δ:t i sig (regressionsfritt, oförändrat), inte regressionen.
+kr-lutningar är medvetet bortvalda.
+
+### DEA-medveten inferens ([s3_inference.py](s3_inference.py))
+
+Det naiva t-intervallet antar oberoende bolag; DEA gör dem beroende (delad front + E75 är en
+sampel-percentil). [s3_inference.py](s3_inference.py) räknar om **hela** pipelinen
+(full/offA/offB + tvåsidiga kravet + E75) på varje resample, så beroendet propageras in i
+CI:t. OLS-lutningen behålls som punktskattning; kopplat by construction (β_A = β_full − β_offA
+exakt per replikat). Output: [out/s3_slopes_robustness.csv](out/s3_slopes_robustness.csv).
+
+- **Primärt: subsampling utan återläggning** (m<n), √m-omskalat CI. Undviker dubblett-DMU:er
+  (som n-av-n med återläggning skapar och som konstlat lyfter effektivitet). Stabilt mellan
+  m=75 och m=110 → takt-/m-valet ändrar inte slutsatsen.
+- **n-av-n-kontrast** ger smalare, noll-*exkluderande* CI:n — dubblett-snedvridningen/
+  inkonsistensen biter, så den avfärdas (förregistrerat att lita på subsampling).
 
 ---
 
@@ -230,8 +250,10 @@ kausal policy-kontrafaktisk.
   andras utfall marginellt.
 - **Endogenitet:** urban-axeln är korrelerad med behandlingsdosen by construction → all
   urban-regression är deskriptiv, inte kausal.
-- **Inferens:** OLS-CI:n ignorerar DEA-korsberoende → läs p-värden indikativt. En robust
-  statistisk modell är en öppen fråga (tas senare).
+- **Inferens (åtgärdad):** naiva OLS-CI:n ignorerar DEA-korsberoende och var anti-konservativa.
+  DEA-medveten subsampling (s3_inference.py) ger ~2.5–3× bredare CI:n; under dem är ingen
+  kanalgradient skild från noll. Punktskattningarna kvarstår som deskriptiva. Gäller bara
+  s3:s gradienter; s4/s5 (regressionsfria) är opåverkade.
 - **kr** är medvetet utelämnat ur regression/rangordning (storleksheteroskedasticitet).
 - **En spec, en period:** default-konfigurationen; viktkänslighet (premie vs sek_per_km) är
   bara delvis utforskad.
@@ -271,8 +293,11 @@ Pearson resp. Spearman mellan `density_cu_km`, `jordkabel_share`, `urbanity_inde
 ### `s3_channels.csv` — per REId (145 scorade)
 `urbanity_index`; full modell `req_full` (decimal), `kr_full` (tkr); varianter `eff_offA`/`req_offA`/`kr_offA` (kanal A av), `eff_offB`/`req_offB`/`kr_offB` (kanal B av); bidrag **`dA_pp`/`dB_pp` = φ = req(med)−req(utan) i pp** (φ<0 = gynnar); `dA_kr`/`dB_kr` (tkr); `req_full_pp` (pp, för netto-regressionen).
 
-### `s3_slopes.csv` — OLS-lutningar (3 rader)
-`channel`, `expect`, `slope` (pp per indexenhet), `ci_low`/`ci_high` (95 % pp), `r2`, `p`, `n`, `consistent`. **Preliminär OLS-inferens** (ignorerar DEA-korsberoende).
+### `s3_slopes.csv` — lutningar (3 rader)
+`channel`, `expect`, `slope` (pp per indexenhet), `ci_low`/`ci_high` (naiv OLS-t, pp), `r2`, `p`, `n`, `consistent`; plus `boot_ci_low`/`boot_ci_high` (DEA-medveten subsampling m=75, pp) och `boot_se`. Läs `boot_ci_*`, inte de naiva.
+
+### `s3_slopes_robustness.csv` — alla resampling-scheman (9 rader)
+`scheme` (subsample/nofn), `m`, `B`, `slope` (beta_net/beta_A/beta_B), `point` (OLS-punkt), `ci_low`/`ci_high` (pp), `boot_se`. Subsampling m=75 = primär, m=110 = stabilitet, nofn = brasklappad kontrast.
 
 ### `s4_loo.csv` / `s4_aoi.csv` — per REId (145)
 LOO: `req_full_pp`; AOI: `req_base_pp`. Per spelare (`losses`/`nonctrl`/`capex_adj`/`cable`): `dpp_<spelare>` (pp marginaleffekt), `dkr_<spelare>` (tkr). LOO har även `kind_<spelare>` (variantens utfallstyp, för kind-flip).
@@ -297,6 +322,7 @@ LOO: `req_full_pp`; AOI: `req_base_pp`. Per spelare (`losses`/`nonctrl`/`capex_a
 | [s1_descriptive.py](s1_descriptive.py) | 1 | Spine + validering |
 | [s2_urban.py](s2_urban.py) | 2 | Urban-mått + korrelation + validering |
 | [s3_channels.py](s3_channels.py) | 3 | Tvåkanals-isolering |
+| [s3_inference.py](s3_inference.py) | 3 | DEA-medveten bootstrap-CI för kanal-lutningarna |
 | [s4_decomposition.py](s4_decomposition.py) | 4 | Leave-one-out + add-one-in |
 | [s5_shapley.py](s5_shapley.py) | 5 | Shapley-attribution |
 | [out/](out/) | — | Persisterade tabeller (`.csv`) |
