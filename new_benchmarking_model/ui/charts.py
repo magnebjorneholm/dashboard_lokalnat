@@ -425,6 +425,16 @@ _RESIDUAL_COLOR = CHART_COLORS[6]  # slate — the held-out mechanic/structural 
 _BAND_COMPUTE = "rgba(100, 116, 139, 0.10)"     # slate tint — how the requirement is computed
 _BAND_COMPONENTS = "rgba(37, 99, 235, 0.06)"    # primary tint — the cost components
 
+# Distribution charts (Fig 3a boxplots, Fig 3b quartile bars) show all six contributions:
+# the four cost components plus the two structural terms (mechanic switch, input aggregation)
+# from the residual split. Structural terms first (top / left), in slate to set them apart.
+# A term is only drawn if its phi_<key> column is present, so the charts degrade to the four
+# cost components when the residual decomposition is unavailable.
+STRUCTURAL_KEYS = ("mechanic", "input")
+DIST_TERM_KEYS = STRUCTURAL_KEYS + PLAYER_KEYS
+DIST_TERM_LABELS = {"mechanic": "Mechanic switch", "input": "Input structure", **PLAYER_LABELS}
+DIST_TERM_COLORS = {"mechanic": "#475569", "input": "#94A3B8", **PLAYER_COLORS}  # slate pair
+
 
 # ---------------------------------------------------------------------------
 # Fig 1 — channel tilt along urbanity (regression lines + scatter + boot-CI band)
@@ -687,21 +697,23 @@ def render_shapley_boxplots(
     shapley: pd.DataFrame, user_reid: str, user_label: str,
     key: str = "nb_shapley_box",
 ) -> None:
-    """One horizontal box per cost player over the signed Shapley contribution (pp).
+    """One horizontal box per contribution term over the signed Shapley value (pp).
 
-    Categories on the y-axis (more horizontal room for the spread). Every company is a faint
-    point jittered *inside* the box's footprint (drawn behind a translucent box so the median
-    (solid) and mean (dashed) lines stay crisp on top). The means sit near zero but the
-    spread is wide: each component redistributes the requirement between firms rather than
-    shifting everyone the same way.
+    Shows all six terms: the two structural terms (mechanic switch, input aggregation) on top,
+    then the four cost components. Categories on the y-axis (more horizontal room for the
+    spread). Every company is a faint point jittered *inside* the box's footprint (drawn behind
+    a translucent box so the median (solid) and mean (dashed) lines stay crisp on top). The
+    cost components sit near zero but spread wide (redistribution); the mechanic switch is a
+    large near-uniform downward shift. A term is only drawn if its phi_<key> column is present.
     """
-    if any(f"phi_{p}" not in shapley.columns for p in PLAYER_KEYS):
+    keys = [k for k in DIST_TERM_KEYS if f"phi_{k}" in shapley.columns]
+    if not keys:
         st.info("No Shapley data to plot.")
         return
 
-    # Numeric y positions so the points can jitter inside each box; nonctrl on top.
-    n = len(PLAYER_KEYS)
-    y_pos = {p: (n - 1 - i) for i, p in enumerate(PLAYER_KEYS)}
+    # Numeric y positions so the points can jitter inside each box; first key on top.
+    n = len(keys)
+    y_pos = {k: (n - 1 - i) for i, k in enumerate(keys)}
     box_width, jitter_w = 0.5, 0.20
     rng = np.random.default_rng(0)   # deterministic jitter — points don't jump between reruns
 
@@ -709,29 +721,29 @@ def render_shapley_boxplots(
     fig = go.Figure()
     fig.add_vline(x=0, line_dash="dot", line_color=COLORS["text_muted"], line_width=1)
 
-    vals_by_player = {
-        p: pd.to_numeric(shapley[f"phi_{p}"], errors="coerce").dropna().to_numpy()
-        for p in PLAYER_KEYS
+    vals_by_term = {
+        k: pd.to_numeric(shapley[f"phi_{k}"], errors="coerce").dropna().to_numpy()
+        for k in keys
     }
 
     # Layer 1 — the points, behind, jittered inside the box band, faint (box stays prominent).
-    for p in PLAYER_KEYS:
-        vals = vals_by_player[p]
-        yj = y_pos[p] + rng.uniform(-jitter_w, jitter_w, len(vals))
+    for k in keys:
+        vals = vals_by_term[k]
+        yj = y_pos[k] + rng.uniform(-jitter_w, jitter_w, len(vals))
         fig.add_trace(go.Scatter(
             x=vals, y=yj, mode="markers",
-            marker=dict(color=PLAYER_COLORS[p], size=4, opacity=0.30, line=dict(width=0)),
+            marker=dict(color=DIST_TERM_COLORS[k], size=4, opacity=0.30, line=dict(width=0)),
             hoverinfo="skip",
             showlegend=False,
         ))
 
     # Layer 2 — the box on top: translucent fill so points show through, opaque median + mean.
-    for p in PLAYER_KEYS:
-        vals = vals_by_player[p]
+    for k in keys:
+        vals = vals_by_term[k]
         fig.add_trace(go.Box(
-            x=vals, y=np.full(len(vals), y_pos[p]), width=box_width, orientation="h",
-            line=dict(color=PLAYER_COLORS[p], width=1.5),
-            fillcolor=_rgba(PLAYER_COLORS[p], 0.16),
+            x=vals, y=np.full(len(vals), y_pos[k]), width=box_width, orientation="h",
+            line=dict(color=DIST_TERM_COLORS[k], width=1.5),
+            fillcolor=_rgba(DIST_TERM_COLORS[k], 0.16),
             boxmean=True,                  # dashed mean line alongside the solid median
             boxpoints=False,               # raw points are the separate layer above
             hoverinfo="skip",
@@ -742,11 +754,11 @@ def render_shapley_boxplots(
     u = shapley[shapley["REId"] == user_reid]
     if not u.empty:
         ux, uy = [], []
-        for p in PLAYER_KEYS:
-            v = u[f"phi_{p}"].iloc[0]
+        for k in keys:
+            v = u[f"phi_{k}"].iloc[0]
             if pd.notna(v):
                 ux.append(float(v))
-                uy.append(y_pos[p])
+                uy.append(y_pos[k])
         if ux:
             fig.add_trace(go.Scatter(
                 x=ux, y=uy, mode="markers", name=user_label,
@@ -757,8 +769,8 @@ def render_shapley_boxplots(
 
     fig.update_layout(
         **layout_kwargs, template=template,
-        title=dict(text="Small on average, large in redistribution", font=dict(size=13)),
-        height=460, dragmode=False, hovermode=False,
+        title=dict(text="Contribution distribution by term", font=dict(size=13)),
+        height=max(460, n * 95), dragmode=False, hovermode=False,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=10)),
         margin=dict(l=10, r=10, t=60, b=40),
         xaxis=dict(title="Shapley contribution (pp/yr)", fixedrange=True,
@@ -766,18 +778,19 @@ def render_shapley_boxplots(
         yaxis=dict(
             fixedrange=True, showgrid=False, linecolor=COLORS["bg_muted"],
             range=[-0.6, n - 0.4],
-            tickmode="array", tickvals=[y_pos[p] for p in PLAYER_KEYS],
-            ticktext=[PLAYER_LABELS[p] for p in PLAYER_KEYS],
+            tickmode="array", tickvals=[y_pos[k] for k in keys],
+            ticktext=[DIST_TERM_LABELS[k] for k in keys],
         ),
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
     st.caption(
-        "Each box is one cost component's signed Shapley contribution across the 145 scored "
-        "companies (negative = lowers the requirement = favours the firm). The solid line is "
-        "the median, the dashed line the mean, and every company is a faint point inside the "
-        "box. The means sit near zero, but the spread is wide: the components reshuffle the "
-        "requirement between firms rather than moving everyone the same way. Your firm is the "
-        "diamond."
+        "Each box is one term's signed Shapley contribution across the 145 scored companies "
+        "(negative = lowers the requirement = favours the firm). The solid line is the median, "
+        "the dashed line the mean, and every company is a faint point inside the box. The four "
+        "**cost components** sit near zero but spread wide (redistribution between firms); the "
+        "**mechanic switch** and **input structure** (slate, the two structural terms) are how "
+        "the requirement is computed, with the mechanic a large near-uniform downward shift. "
+        "Your firm is the diamond."
     )
 
 
@@ -789,15 +802,18 @@ def render_shapley_by_urban_quantile(
     shapley: pd.DataFrame, channels: pd.DataFrame, user_reid: str,
     key: str = "nb_shapley_quantile",
 ) -> None:
-    """Mean Shapley contribution per component, grouped by urban quartile (grouped bars).
+    """Mean Shapley contribution per term, grouped by urban quartile (grouped bars).
 
-    Joins the per-firm Shapley contributions to urbanity_index and bins firms into four equal
-    urban quartiles (Q1 least urban to Q4 most). The x-axis is the urbanity axis (the
-    quartiles); each component is a bar in its own colour (matching the boxplot), so scanning
-    one colour across Q1 to Q4 reveals its redistribution gradient.
+    Joins the per-firm contributions to urbanity_index and bins firms into four equal urban
+    quartiles (Q1 least urban to Q4 most). The x-axis is the urbanity axis (the quartiles);
+    each term is a bar in its own colour (matching the boxplot), so scanning one colour across
+    Q1 to Q4 reveals its gradient. Click a legend entry to hide/show a term; the y-axis
+    rescales to the visible terms, so hiding the large mechanic term lets the cost-component
+    gradients expand.
     """
-    phi_cols = [f"phi_{p}" for p in PLAYER_KEYS]
-    if any(c not in shapley.columns for c in phi_cols) or "urbanity_index" not in channels.columns:
+    keys = [k for k in DIST_TERM_KEYS if f"phi_{k}" in shapley.columns]
+    phi_cols = [f"phi_{k}" for k in keys]
+    if not keys or "urbanity_index" not in channels.columns:
         st.info("No data to plot.")
         return
 
@@ -823,21 +839,21 @@ def render_shapley_by_urban_quantile(
     fig = go.Figure()
     fig.add_hline(y=0, line_dash="dot", line_color=COLORS["text_muted"], line_width=1)
 
-    # One bar per component (its boxplot colour); x = quartiles (the urbanity axis).
-    for p in PLAYER_KEYS:
-        ys = [float(agg.loc[ql, f"phi_{p}"]) if ql in agg.index else None for ql in q_labels]
+    # One bar per term (its boxplot colour); x = quartiles (the urbanity axis).
+    for k in keys:
+        ys = [float(agg.loc[ql, f"phi_{k}"]) if ql in agg.index else None for ql in q_labels]
         fig.add_trace(go.Bar(
-            x=q_labels, y=ys, name=PLAYER_LABELS[p],
-            marker=dict(color=PLAYER_COLORS[p], opacity=0.72, line=dict(color="white", width=0.5)),
+            x=q_labels, y=ys, name=DIST_TERM_LABELS[k],
+            marker=dict(color=DIST_TERM_COLORS[k], opacity=0.72, line=dict(color="white", width=0.5)),
             hoverinfo="skip",
         ))
 
     fig.update_layout(
         **layout_kwargs, template=template, barmode="group",
-        title=dict(text="Redistribution along urbanity", font=dict(size=13)),
-        height=400, dragmode=False, hovermode=False, bargap=0.25, bargroupgap=0.05,
+        title=dict(text="Contribution along urbanity", font=dict(size=13)),
+        height=400, dragmode=False, hovermode=False, bargap=0.25, bargroupgap=0.04,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-                    font=dict(size=10), itemclick=False, itemdoubleclick=False),
+                    font=dict(size=10), itemclick="toggle", itemdoubleclick="toggleothers"),
         margin=dict(l=10, r=10, t=60, b=40),
         xaxis=dict(title="Urban quartile  (least → most urban)", fixedrange=True,
                    showgrid=False, linecolor=COLORS["bg_muted"]),
@@ -846,9 +862,12 @@ def render_shapley_by_urban_quantile(
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
     caption = (
-        "Each company's Shapley contributions averaged within urban quartiles (negative = "
-        "favours the firm). The gradient across Q1→Q4 shows the direction of redistribution: "
-        "capex levelling turns more favourable toward urban firms, cable length toward rural."
+        "Each term's Shapley contribution averaged within urban quartiles (negative = favours "
+        "the firm). Scanning one colour across Q1→Q4 shows its gradient: capex levelling turns "
+        "more favourable toward urban firms, cable length toward rural. The slate structural "
+        "terms (mechanic, input) are flat or weakly sloped; the mechanic sits far below as a "
+        "large near-uniform shift. Click a legend entry to hide that term; the axis rescales "
+        "to what remains."
     )
     if user_q:
         caption += f" Your firm is in **{user_q}**."

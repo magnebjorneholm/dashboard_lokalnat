@@ -81,10 +81,12 @@ landing_cards([
      "body": "Change a parameter or a company variable, run it, and see the effect "
              "on the revenue frame side by side with the baseline. The impact of "
              "each choice is always explicit."},
-    {"eyebrow": "Reform", "title": "Ready for what comes next",
-     "body": "The regulation is being rebuilt for the 2028 to 2031 period. "
-             "Regumetrica already models Ei's proposed direction, so you can see "
-             "what it would mean for a network before it takes effect."},
+    {"eyebrow": "Always up to date", "title": "Evolves with the regulation",
+     "body": "The regulation is being rebuilt for the 2028 to 2031 period, and it "
+             "will keep changing after that. We interpret each change Ei makes and "
+             "build it into the tools, so Regumetrica reflects where the regulation "
+             "is heading, not only where it has been. The new benchmarking model is "
+             "the first of these."},
 ])
 
 
@@ -110,8 +112,9 @@ def _tool_cards(branch: str) -> list[dict]:
 
 landing_heading("The tools", eyebrow="What you can do", level=1)
 st.markdown(
-    '<div class="rm-hero-sub">Regumetrica is a small suite of regulatory tools. '
-    "Sign in to use them; each card links to that tool's manual.</div>",
+    '<div class="rm-hero-sub">Regumetrica is a small suite of regulatory tools, and '
+    "the suite grows as the regulation does. Sign in to use them; each card links to "
+    "that tool's manual.</div>",
     unsafe_allow_html=True,
 )
 
@@ -162,7 +165,7 @@ landing_profile(
     },
     affiliations=["IFN", "Stanford (PESD)", "PhD, Stockholm School of Economics"],
     email="erik@eriklundin.org",
-    link=("Full CV & publications", "https://www.eriklundin.org"),
+    link=("Personal website", "https://www.eriklundin.org"),
 )
 
 # --- Magne Björneholm ----------------------------------------------------------

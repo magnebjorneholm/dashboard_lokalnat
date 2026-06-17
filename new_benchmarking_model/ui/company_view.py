@@ -525,13 +525,21 @@ def _group_placeholder(ctx: GroupContext) -> None:
         return
     decomp = load_residual_decomp()   # optional; the waterfall falls back to one residual bar
 
+    # The distribution charts show all six terms: the four cost components (shapley) plus the
+    # two structural terms (mechanic, input) from the residual split, merged in when present.
+    shapley_terms = shapley
+    if decomp is not None and all(c in decomp.columns for c in ("phi_mechanic", "phi_input")):
+        shapley_terms = shapley.merge(
+            decomp[["REId", "phi_mechanic", "phi_input"]], on="REId", how="left"
+        )
+
     render_channel_regression(channels, slopes)
     st.divider()
     render_shapley_waterfall(shapley, decomp)
     st.divider()
-    render_shapley_boxplots(shapley, ctx.user_reid, ctx.user_label)
+    render_shapley_boxplots(shapley_terms, ctx.user_reid, ctx.user_label)
     st.divider()
-    render_shapley_by_urban_quantile(shapley, channels, ctx.user_reid)
+    render_shapley_by_urban_quantile(shapley_terms, channels, ctx.user_reid)
 
 
 CHART_GROUPS = [
