@@ -69,11 +69,11 @@ def _user_eff_req(result: NewBenchmarkingResult, reid: str):
 def _render_model_diff() -> None:
     """Short, factual summary of what the new model changes vs. the current one.
 
-    Always shown at the top of the page. Placeholder - the final description is
-    authored by the project owner.
+    Always shown at the top of the page. The description itself is authored by the
+    project owner.
     """
-    st.markdown("**What this model changes vs. the current one**")
-    st.caption("_Placeholder. A short, factual description of the model changes goes here._")
+    st.markdown("**Summary of changes**")
+    st.caption("_A short, factual description of the model changes goes here._")
 
 
 def render_page() -> None:

@@ -100,7 +100,7 @@ def _tool_cards(branch: str) -> list[dict]:
     """Build card dicts for the public tools in a branch (registry-driven)."""
     items: list[dict] = []
     for t in tools_for(branch):  # type: ignore[arg-type]
-        item: dict = {"icon": t.icon, "title": t.name, "body": t.summary}
+        item: dict = {"title": t.name, "body": t.summary}
         if t.status != "available":
             item["status"] = t.status
         # Link to the manual only if its PDF has actually been built.

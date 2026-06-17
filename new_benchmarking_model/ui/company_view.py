@@ -308,7 +308,7 @@ def _render_sector_and_position(result, user_reid, cfg, e75, new_eff, new_out, u
 
 
 # ---------------------------------------------------------------------------
-# 3. New model TOTEX bridge — two-phase (scope, then corrections)
+# 3. New model TOTEX bridge — two-phase (cost coverage, then corrections)
 # ---------------------------------------------------------------------------
 
 # Full-width bands behind the two phases of the bridge.
@@ -317,20 +317,21 @@ _BAND_CORRECTION = "rgba(217, 119, 6, 0.15)"  # amber tint — benchmarking corr
 
 
 def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
-    """Two-phase bridge from the old (legacy-scope) TOTEX to the new DEA TOTEX.
+    """Two-phase bridge from the old (legacy) TOTEX to the new DEA TOTEX.
 
     Old TOTEX is controllable + unadjusted capital cost. The journey to the new DEA input
     is split into two phases that are kept visually separate (subtle background bands plus
     an intermediate subtotal bar), so "what the new model measures" and "how it corrects
     what it measures" never blur together:
 
-      Scope        — cost posts the new model brings into the DEA input that the old did
-                     not: network losses at their actual cost, selected non-controllable.
-      Corrections  — the benchmarking adjustments to those posts: losses revalued to a
-                     common price; capital cost levelled for placement environment.
+      Cost coverage — cost posts the new model brings into the DEA input that the old did
+                      not: network losses at their actual cost, selected non-controllable.
+      Corrections   — the benchmarking adjustments to those posts: losses revalued to a
+                      common price; capital cost levelled for placement environment.
 
-    Each new post enters the scope phase at its *uncorrected* value, then the correction
-    phase adjusts it — which is exactly what isolates scope from correction. The granular
+    Each new post enters the cost-coverage phase at its *uncorrected* value, then the
+    correction phase adjusts it, which is exactly what isolates cost coverage from correction.
+    The granular
     bars (non-controllable by category; capex correction by cable vs station) are exact and
     sum back to their aggregates. Everything reconstructs the totex frame:
 
@@ -368,7 +369,7 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
     old_capex = capex_env - cable_corr - station_corr
     old_totex = controllable + old_capex
     nonctrl_sum = grid_sub + grid_conn + feed_in + cap_res
-    subtotal = old_totex + loss_actual + nonctrl_sum   # end of the scope phase (uncorrected)
+    subtotal = old_totex + loss_actual + nonctrl_sum   # end of the cost-coverage phase (uncorrected)
     loss_reval = loss_common - loss_actual              # correction: common price vs actual
 
     # Opening bar is "absolute" (it sets the starting total); the two "total" bars (the
@@ -381,7 +382,7 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
         ("Grid connection",                 grid_conn,    "relative"),
         ("Feed-in compensation",            feed_in,      "relative"),
         ("Capacity reserve",                cap_res,      "relative"),
-        ("New-scope TOTEX (uncorrected)",   subtotal,     "total"),
+        ("Full cost base (uncorrected)",     subtotal,     "total"),
         ("Losses → common price",           loss_reval,   "relative"),
         ("Capex: cable (jordkabel)",        cable_corr,   "relative"),
         ("Capex: station (nätstation)",     station_corr, "relative"),
@@ -412,13 +413,13 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
         hovertext=hover, hovertemplate="%{hovertext}<extra></extra>",
     ))
 
-    # Phase bands (numeric y maps to category index): scope spans rows 0–6 (the opening Old
-    # TOTEX, the scope additions, and the uncorrected subtotal they build), corrections spans
+    # Phase bands (numeric y maps to category index): cost coverage spans rows 0-6 (the opening
+    # Old TOTEX, the coverage additions, and the uncorrected subtotal they build), corrections spans
     # rows 7–10 (the two corrections plus the final TOTEX they land on). The floating relative
     # bars sit far to the right, so the phase labels go in the empty left of the plot.
     fig.add_hrect(y0=-0.5, y1=6.5, fillcolor=_BAND_SCOPE, line_width=0, layer="below")
     fig.add_hrect(y0=6.5, y1=10.5, fillcolor=_BAND_CORRECTION, line_width=0, layer="below")
-    for y_pos, label in ((3.0, "Scope"), (8.5, "Corrections")):
+    for y_pos, label in ((3.0, "Cost coverage"), (8.5, "Corrections")):
         fig.add_annotation(
             xref="paper", x=0.01, y=y_pos, yref="y", text=f"<b>{label}</b>",
             showarrow=False, xanchor="left", yanchor="middle",
@@ -459,8 +460,8 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="nb_totex_waterfall")
     st.caption(
         "From the old TOTEX (controllable + unadjusted capital cost) to the new DEA TOTEX, "
-        "in two phases. **Scope** (blue band) adds the cost posts the new model measures but "
-        "the old did not — network losses at their actual cost and the non-controllable "
+        "in two phases. **Cost coverage** (blue band) adds the cost posts the new model measures but "
+        "the old did not: network losses at their actual cost and the non-controllable "
         "categories (grid subscription, grid connection, feed-in compensation, capacity "
         "reserve). **Corrections** (amber band) then apply the benchmarking adjustments: "
         "losses revalued to a common price, and the placement-environment capital-cost "
@@ -492,8 +493,8 @@ def _group_efficiency_outcome(ctx: GroupContext) -> None:
         render_requirement_scatter(ctx.result.comparison, ctx.user_reid, ctx.user_label)
     st.caption(
         "Each point is a company: new model (vertical) against current model (horizontal); "
-        "the dotted line is no change. Left — efficiency: above the line means more efficient "
-        "under the new model. Right — efficiency requirement (%/yr): below the line is a "
+        "the dotted line is no change. Left, efficiency: above the line means more efficient "
+        "under the new model. Right, efficiency requirement (%/yr): below the line is a "
         "smaller requirement, and below zero is a reward (only the new model can go negative). "
         "Your company is highlighted."
     )
@@ -515,7 +516,7 @@ def _group_placeholder(ctx: GroupContext) -> None:
     is_main = ctx.cfg.signature() == NewBenchmarkingConfig().signature()
     if not is_main:
         st.caption(
-            "ⓘ These figures reflect the **main model** — the analysis is precomputed and "
+            "ⓘ These figures reflect the **main model**; the analysis is precomputed and "
             "not affected by experiment settings."
         )
 
@@ -545,6 +546,6 @@ def _group_placeholder(ctx: GroupContext) -> None:
 CHART_GROUPS = [
     ChartGroup("efficiency_outcome", "Efficiency & outcome", _group_efficiency_outcome),
     ChartGroup("totex_bridge", "TOTEX bridge", _group_totex_bridge),
-    ChartGroup("placeholder", "Placeholder", _group_placeholder),
+    ChartGroup("placeholder", "Outcome decomposition", _group_placeholder),
 ]
 

@@ -1,3 +1,13 @@
+---
+title: "Nytt om effektiviseringsincitament i elnätsregleringen"
+source_url: "https://ei.se/om-oss/projekt/pagaende/intaktsramar-elnat-och-gasnat/intaktsramar-elnat-2024-2027/2026-05-12-nytt-om-effektiviseringsincitament-i-elnatsregleringen"
+publisher: "Energimarknadsinspektionen (Ei)"
+published: "2026-05-12"
+retrieved: "2026-06-05"
+language: sv
+note: "Migrerad från Ei:s nyhet på ei.se. All brödtext är ordagrann."
+---
+
 # Nytt om effektiviseringsincitament i elnätsregleringen
 
 Energimarknadsinspektionen (Ei) har tidigare presenterat en övergripande metod för hur incitamentet för kostnadseffektivitet ska tillämpas, den så kallade **"enstegsmetoden"**. Nu presenteras ytterligare några viktiga principer inom ramen för denna metod, medan arbetet med att utforma detaljerna fortsätter.

@@ -1,3 +1,13 @@
+---
+title: "Tillämpningsmetod för effektiviseringsincitament i elnätsregleringen"
+source_url: "https://ei.se/om-oss/projekt/pagaende/intaktsramar-elnat-och-gasnat/intaktsramar-elnat-2024-2027/2025-12-10-tillampningsmetod-for-effektiviseringsincitament-i-elnatsregleringen"
+publisher: "Energimarknadsinspektionen (Ei)"
+published: "2025-12-10"
+retrieved: "2026-06-05"
+language: sv
+note: "Migrerad från Ei:s nyhet på ei.se. All brödtext är ordagrann."
+---
+
 # Tillämpningsmetod för effektiviseringsincitament i elnätsregleringen
 
 Det är viktigt att intäktsramsregleringen ger incitament för att främja kostnadseffektiva lösningar och för att säkerställa att vissa kvalitativa krav på nätet uppfylls. Utifrån andra förändringar som Energimarknadsinspektionen (Ei) avser göra i regleringen, ambition om starkare styrning och omvärldsförändringar, finns det behov av att ändra incitamenten i nuvarande reglering. Nu presenterar Ei inriktningen för några av dessa frågor, medan arbetet kring mer detaljer i olika aspekter fortsätter framöver. Intressenter är välkomna att lämna synpunkter.

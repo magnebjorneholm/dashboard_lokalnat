@@ -169,11 +169,12 @@ def render_position_chart(
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
     st.caption(
-        "Bars: efficiency of all 148 companies. The line is the model's transfer function — "
-        "how an efficiency score maps to an annual outcome (right axis). Left of the "
-        "third-quartile benchmark E₇₅ is a deduction (amber); right of it, a reward (green); "
-        "exactly at E₇₅ is full cost coverage. Left of the cap mark, deductions are held at "
-        "their maximum (+1.82 %/yr)."
+        "Bars show the efficiency of all 148 companies. The line maps each efficiency score "
+        "to an annual outcome (right axis). Companies below the third-quartile benchmark E₇₅ "
+        "receive a deduction (amber); those above it a reward (green); a company exactly at "
+        "E₇₅ receives full cost coverage. Below the cap mark the deduction is held at its "
+        "maximum, 1.82 percent per year under our working parameters (sharing 0.50, gap cap "
+        "0.30). These parameters are not yet set by Ei, so the magnitude is conditional on them."
     )
 
 
@@ -232,6 +233,14 @@ def render_outcome_distribution(
                    gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"]),
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
+    st.caption(
+        "Signed annual outcomes for all 148 companies: deductions (amber, above zero) and "
+        "rewards (green, below zero), with the zero pivot marking full cost coverage. The "
+        "two-sided requirement is structurally asymmetric: because efficiency is capped at 1.0 "
+        "and E₇₅ sits near the top of the distribution, the reward side is bounded (here "
+        "roughly −0.43 percent per year) while the deduction side can reach the cap at "
+        "+1.82 percent per year."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +407,7 @@ def render_requirement_scatter(
 
 
 # ===========================================================================
-# Sector decomposition — the "Placeholder" chart group
+# Sector decomposition — the "Outcome decomposition" chart group
 # ===========================================================================
 # Static, sector-level read of the committed analysis tables (channel isolation +
 # Shapley attribution). The four cost-component PLAYERS keep one colour each across the
@@ -426,13 +435,13 @@ _BAND_COMPUTE = "rgba(100, 116, 139, 0.10)"     # slate tint — how the require
 _BAND_COMPONENTS = "rgba(37, 99, 235, 0.06)"    # primary tint — the cost components
 
 # Distribution charts (Fig 3a boxplots, Fig 3b quartile bars) show all six contributions:
-# the four cost components plus the two structural terms (mechanic switch, input aggregation)
+# the four cost components plus the two structural terms (reference change, input aggregation)
 # from the residual split. Structural terms first (top / left), in slate to set them apart.
 # A term is only drawn if its phi_<key> column is present, so the charts degrade to the four
 # cost components when the residual decomposition is unavailable.
 STRUCTURAL_KEYS = ("mechanic", "input")
 DIST_TERM_KEYS = STRUCTURAL_KEYS + PLAYER_KEYS
-DIST_TERM_LABELS = {"mechanic": "Mechanic switch", "input": "Input structure", **PLAYER_LABELS}
+DIST_TERM_LABELS = {"mechanic": "Reference change", "input": "Input aggregation", **PLAYER_LABELS}
 DIST_TERM_COLORS = {"mechanic": "#475569", "input": "#94A3B8", **PLAYER_COLORS}  # slate pair
 
 
@@ -540,7 +549,7 @@ def render_channel_regression(
 
     fig.update_layout(
         **layout_kwargs, template=template,
-        title=dict(text="Who the corrections favour — channel tilt along urbanity", font=dict(size=13)),
+        title=dict(text="How the two corrections distribute the requirement along urbanity", font=dict(size=13)),
         height=440, dragmode=False,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                     font=dict(size=10)),
@@ -552,12 +561,15 @@ def render_channel_regression(
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
     st.caption(
-        "Each point is a company; the line is the channel's regression on urbanity (drawn "
-        "from the stored slope, band = bootstrap CI). **Capex levelling** tilts down, "
-        "favouring urban firms; **cable length** tilts up, favouring rural firms. The dashed "
-        "**net** line (A + B) is roughly flat near zero: the two channels cancel along the "
-        "urban axis. The bootstrap bands are wide and cross zero, so read direction over "
-        "significance. The y-axis is clipped to ±0.4 pp/yr"
+        "Each point is a company; each line is the channel's regression on the urbanity "
+        "index (slope from the analysis, band = bootstrap confidence interval). The "
+        "**capex levelling** slopes negative, lowering the requirement for more urban firms "
+        "relative to their peers; **cable length** slopes positive, lowering it for more "
+        "rural firms. The dashed **net** line (A + B) is approximately flat near zero, "
+        "consistent with the two channels offsetting each other along the urban axis. The "
+        "bootstrap intervals are wide and include zero, so the slopes are better read as "
+        "directional than as distinguishable from zero. The vertical axis is clipped to "
+        "±0.4 percentage points per year"
         + (f"; {n_off} extreme points fall outside and are not shown." if n_off else ".")
     )
 
@@ -574,8 +586,8 @@ def render_shapley_waterfall(
 
     The four cost players' mean Shapley contributions net to ~0; the bulk of the shift is the
     held-out residual. When the residual decomposition is supplied, the residual is split into
-    the mechanic switch (legacy front-reference to two-sided E75, the dominant term) and the
-    input-structure change (two separate DEA inputs to one summed TOTEX), anchored on the
+    the reference change (legacy front-reference to two-sided E75, the dominant term) and the
+    input aggregation (two separate DEA inputs to one summed TOTEX), anchored on the
     recomputed legacy baseline C1 (the reconciliation against Ei's published figure is solver
     noise and is dropped, so the bridge closes exactly). Without it, the residual is one bar.
     """
@@ -604,8 +616,8 @@ def render_shapley_waterfall(
         v_full = v_empty + sum(phis.values())      # exact cumulative end
         rows = [
             ("Current requirement (legacy)", c1, "absolute"),
-            ("Mechanic: front-reference → two-sided", mech, "relative"),
-            ("Input structure: 2 inputs → 1 TOTEX", inp, "relative"),
+            ("Reference change: frontier → third quartile", mech, "relative"),
+            ("Input aggregation: two inputs → one TOTEX", inp, "relative"),
             ("Two-sided baseline", v_empty, "total"),
             *player_rows,
             ("New outcome", v_full, "total"),
@@ -620,7 +632,7 @@ def render_shapley_waterfall(
         v_full = float(d["v_full_pp"].mean())
         rows = [
             ("Current requirement", v_empty - resid, "absolute"),
-            ("Mechanic + structure (residual)", resid, "relative"),
+            ("Reference + input change (residual)", resid, "relative"),
             *player_rows,
             ("New outcome", v_full, "total"),
         ]
@@ -652,7 +664,7 @@ def render_shapley_waterfall(
         end = len(rows) - 0.5
         fig.add_hrect(y0=-0.5, y1=boundary, fillcolor=_BAND_COMPUTE, line_width=0, layer="below")
         fig.add_hrect(y0=boundary, y1=end, fillcolor=_BAND_COMPONENTS, line_width=0, layer="below")
-        for y_pos, lab in ((1.5, "How the requirement is computed"),
+        for y_pos, lab in ((1.5, "How the requirement is calculated"),
                            ((boundary + end) / 2, "Cost components")):
             fig.add_annotation(
                 xref="paper", x=0.01, y=y_pos, yref="y", text=f"<b>{lab}</b>",
@@ -675,17 +687,17 @@ def render_shapley_waterfall(
     if split_ok:
         st.caption(
             "Sector mean, from the recomputed legacy baseline to the new outcome. The shift is "
-            "overwhelmingly the **mechanic** switch (legacy front-reference to the two-sided E₇₅ "
-            "rule), with the **input-structure** change (two DEA inputs to one TOTEX) small. "
+            "almost entirely the **reference change** (legacy front-reference to the two-sided "
+            "E₇₅ rule), with the **input aggregation** (two DEA inputs to one TOTEX) small. "
             "Only past the two-sided baseline do the four cost components enter, and they net to "
             f"{net_players:+.3f} pp/yr. Amber raises the requirement, green lowers it."
         )
     else:
         st.caption(
-            "Sector mean, current model to new model. The **residual** (the two-sided E₇₅ "
-            "mechanic plus structural input differences, held out of the four players) accounts "
-            f"for almost the whole shift. The four cost components net to {net_players:+.3f} "
-            "pp/yr. Amber raises the requirement, green lowers it."
+            "Sector mean, current model to new model. The **residual** (the reference change to "
+            "the two-sided E₇₅ rule plus the input aggregation, held out of the four players) "
+            "accounts for almost the whole shift. The four cost components net to "
+            f"{net_players:+.3f} pp/yr. Amber raises the requirement, green lowers it."
         )
 
 
@@ -699,11 +711,11 @@ def render_shapley_boxplots(
 ) -> None:
     """One horizontal box per contribution term over the signed Shapley value (pp).
 
-    Shows all six terms: the two structural terms (mechanic switch, input aggregation) on top,
+    Shows all six terms: the two structural terms (reference change, input aggregation) on top,
     then the four cost components. Categories on the y-axis (more horizontal room for the
     spread). Every company is a faint point jittered *inside* the box's footprint (drawn behind
     a translucent box so the median (solid) and mean (dashed) lines stay crisp on top). The
-    cost components sit near zero but spread wide (redistribution); the mechanic switch is a
+    cost components sit near zero but spread wide (redistribution); the reference change is a
     large near-uniform downward shift. A term is only drawn if its phi_<key> column is present.
     """
     keys = [k for k in DIST_TERM_KEYS if f"phi_{k}" in shapley.columns]
@@ -788,9 +800,9 @@ def render_shapley_boxplots(
         "(negative = lowers the requirement = favours the firm). The solid line is the median, "
         "the dashed line the mean, and every company is a faint point inside the box. The four "
         "**cost components** sit near zero but spread wide (redistribution between firms); the "
-        "**mechanic switch** and **input structure** (slate, the two structural terms) are how "
-        "the requirement is computed, with the mechanic a large near-uniform downward shift. "
-        "Your firm is the diamond."
+        "**reference change** and **input aggregation** (slate, the two structural terms) are "
+        "how the requirement is calculated, with the reference change a large near-uniform "
+        "downward shift. Your firm is the diamond."
     )
 
 
@@ -808,7 +820,7 @@ def render_shapley_by_urban_quantile(
     quartiles (Q1 least urban to Q4 most). The x-axis is the urbanity axis (the quartiles);
     each term is a bar in its own colour (matching the boxplot), so scanning one colour across
     Q1 to Q4 reveals its gradient. Click a legend entry to hide/show a term; the y-axis
-    rescales to the visible terms, so hiding the large mechanic term lets the cost-component
+    rescales to the visible terms, so hiding the large reference-change term lets the cost-component
     gradients expand.
     """
     keys = [k for k in DIST_TERM_KEYS if f"phi_{k}" in shapley.columns]
@@ -862,12 +874,12 @@ def render_shapley_by_urban_quantile(
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
     caption = (
-        "Each term's Shapley contribution averaged within urban quartiles (negative = favours "
-        "the firm). Scanning one colour across Q1→Q4 shows its gradient: capex levelling turns "
-        "more favourable toward urban firms, cable length toward rural. The slate structural "
-        "terms (mechanic, input) are flat or weakly sloped; the mechanic sits far below as a "
-        "large near-uniform shift. Click a legend entry to hide that term; the axis rescales "
-        "to what remains."
+        "Each term's Shapley contribution averaged within urban quartiles (negative = lowers "
+        "the firm's requirement relative to its peers). Reading one colour across Q1 to Q4 "
+        "shows its gradient: capex levelling turns more favourable toward urban firms, cable "
+        "length toward rural. The slate structural terms (reference change, input aggregation) "
+        "are flat or weakly sloped; the reference change sits far below as a large near-uniform "
+        "shift. Click a legend entry to hide that term; the axis rescales to what remains."
     )
     if user_q:
         caption += f" Your firm is in **{user_q}**."

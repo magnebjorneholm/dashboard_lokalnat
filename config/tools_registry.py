@@ -26,7 +26,6 @@ class ToolSpec:
     name: str
     branch: ToolBranch
     summary: str                       # short, card-length description
-    icon: str = ""                     # emoji
     status: ToolStatus = "available"
     manual_slug: Optional[str] = None  # PDF slug; defaults to ``key``
     public: bool = True                # show on the public landing tools page
@@ -44,7 +43,6 @@ TOOLS: List[ToolSpec] = [
         key="revenue_cap",
         name="Revenue cap tool",
         branch="revenue_cap",
-        icon="📐",
         status="available",
         manual_slug="regumetrica_user_manual",
         summary=(
@@ -58,7 +56,6 @@ TOOLS: List[ToolSpec] = [
         key="new_benchmarking_model",
         name="New benchmarking model",
         branch="standalone",
-        icon="📊",
         status="available",
         summary=(
             "Explore Energimarknadsinspektionen's proposed TOTEX-based DEA "
@@ -71,7 +68,6 @@ TOOLS: List[ToolSpec] = [
         key="placeholder",
         name="Placeholder",
         branch="standalone",
-        icon="🧰",
         status="coming_soon",
         summary="A future standalone analysis. Details will be announced here.",
     ),

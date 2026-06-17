@@ -37,7 +37,9 @@ _CABLE_METHOD_HELP = {
     env_C.METHOD_SCHABLON_PER_KM:
         "Deducts a flat premium (kr/km) per placement environment.",
     env_C.METHOD_SCHABLON_PERCENT:
-        "Deducts a flat percentage of value per placement environment (Ei's schablon).",
+        "Deducts a flat percentage of value per placement environment. The percentage "
+        "schablon is of the form Ei describes; the values used here are our reconstruction "
+        "from the price list, not Ei's published figures.",
 }
 _STATION_METHOD_LABELS = {
     st_C.METHOD_EXACT: "Exact",
@@ -47,7 +49,9 @@ _STATION_METHOD_HELP = {
     st_C.METHOD_EXACT:
         "Removes the City/tätort station surcharge in full. Exact, per company.",
     st_C.METHOD_SCHABLON_PERCENT:
-        "Deducts a flat percentage across the whole station base (Ei's schablon).",
+        "Deducts a flat percentage across the whole station base. The percentage schablon is "
+        "of the form Ei describes; the values are our reconstruction, not Ei's published "
+        "figures.",
 }
 
 

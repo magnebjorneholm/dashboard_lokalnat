@@ -35,7 +35,7 @@ from auth.cookie_session import (
 # Page configuration
 st.set_page_config(
     page_title="Regumetrica",
-    page_icon="⚡",
+    page_icon="static/favicon.svg",  # monochrome "R" in the primary color
     layout="wide",
     initial_sidebar_state="expanded",
 )

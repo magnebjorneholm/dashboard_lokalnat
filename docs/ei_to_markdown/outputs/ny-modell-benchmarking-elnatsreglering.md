@@ -2,7 +2,7 @@
 title: "Ny modell för benchmarking i elnätsregleringen"
 source_url: "https://ei.se/om-oss/projekt/pagaende/intaktsramar-elnat-och-gasnat/intaktsramar-elnat-2024-2027/2026-05-29-ny-modell-for-benchmarking-i-elnatsregleringen"
 publisher: "Energimarknadsinspektionen (Ei)"
-published: "2025-05-29"
+published: "2026-05-29"
 retrieved: "2026-06-05"
 language: sv
 note: "Migrerad från Ei:s webbsida/PDF. Figurerna är återskapade som tre oberoende listor (variabelgrupperna input/output/exogena i DEA-modellen) eftersom dokumentet är avsett som kontext för en kodagent, inte för visuell läsning. Grupperna har ingen radvis koppling sinsemellan. All brödtext är ordagrann; läsordningen i 'Sammanfattning' har återställts där PDF:ens kolumnbrytning splittrade stycket."

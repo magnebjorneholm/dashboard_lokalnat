@@ -124,7 +124,6 @@ html{ scroll-behavior:smooth; }
     transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .rm-card:hover{ transform:translateY(-3px); box-shadow:0 12px 30px rgba(15,23,42,.10);
     border-color:#CBD5E1; }
-.rm-card-icon{ font-size:1.7rem; line-height:1; margin-bottom:.55rem; }
 .rm-card-eyebrow{ font-size:.76rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
     color:var(--rm-primary); margin-bottom:.3rem; }
 .rm-card-title{ font-weight:600; font-size:1.06rem; color:var(--rm-text); margin-bottom:.32rem; }
@@ -243,7 +242,7 @@ def apply_landing_shell() -> None:
 
     st.markdown(
         '<div class="rm-topbar">'
-        '<span class="rm-brand">⚡ Regumetrica</span>'
+        '<span class="rm-brand">Regumetrica</span>'
         '<nav class="rm-nav">'
         '<a href="#home">Home</a>'
         '<a href="#tools">Tools</a>'
@@ -274,7 +273,7 @@ def landing_heading(title: str, eyebrow: Optional[str] = None, level: int = 2) -
 def landing_cards(items: List[Dict[str, str]]) -> None:
     """Responsive grid of cards.
 
-    Each item: ``{title, body, icon?, eyebrow?, status?, manual_url?, manual_label?}``.
+    Each item: ``{title, body, eyebrow?, status?, manual_url?, manual_label?}``.
     ``status`` (e.g. ``"beta"``, ``"coming_soon"``) renders a pill top-right;
     ``manual_url`` renders a manual link pinned to the card's footer.
     """
@@ -284,8 +283,6 @@ def landing_cards(items: List[Dict[str, str]]) -> None:
         if it.get("status"):
             label = it["status"].replace("_", " ")
             parts.append(f'<div class="rm-card-status {it["status"]}">{label}</div>')
-        if it.get("icon"):
-            parts.append(f'<div class="rm-card-icon">{it["icon"]}</div>')
         if it.get("eyebrow"):
             parts.append(f'<div class="rm-card-eyebrow">{it["eyebrow"]}</div>')
         parts.append(f'<div class="rm-card-title">{it["title"]}</div>')
@@ -352,7 +349,7 @@ def landing_profile(
     actions: List[str] = []
     if email:
         actions.append(
-            f'<a class="rm-profile-link" href="mailto:{email}">✉&nbsp;{email}</a>'
+            f'<a class="rm-profile-link" href="mailto:{email}">{email}</a>'
         )
     if link:
         label, url = link

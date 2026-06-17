@@ -1,25 +1,26 @@
-% User manual for the "New benchmarking model" tool.
-% Migrated from new_benchmarking_model/docs/method/metod_samlad_v3.tex and adapted to
-% build against the shared manual preamble. Paths are relative to this file; see
-% manuals/_template/main.tex for the convention.
-\input{../../shared/preamble.tex}
-\graphicspath{ {../../../graphs/} }
-\makeatletter
-\def\input@path{ {../../../graphs/} }
-\makeatother
+\documentclass[11pt,a4paper]{article}
 
-% Bits the source preamble defined that the shared one does not:
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[main=swedish,provide=*]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{parskip}
+\usepackage[round,authoryear,sort]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+
 \DeclareMathOperator{\clip}{clip}
 \renewcommand{\refname}{Referenser}
 
 \begin{document}
-\selectlanguage{swedish}
 
-\title{Regumetrica \linebreak \emph{Betaversion} \linebreak Den nya benchmarkingmodellen: en metodbeskrivning \linebreak Version 1.0 \\}
-\author{\href{https://www.regumetrica.com/um}{www.regumetrica.com/um}}
-\date{Juni 2026}
-\maketitle
-\setcounter{page}{1}
+\begin{center}
+  {\LARGE\bfseries Den nya benchmarkingmodellen: en metodbeskrivning}\\[4pt]
+  {\normalsize Juni 2026}
+\end{center}
 
 \begin{quote}\itshape\small
 Status: Detta är en metodbeskrivning. Den återger vår operationalisering och tolkning av
@@ -29,9 +30,6 @@ inriktning och våra arbetsantaganden. Där modellen vilar på arbetsantaganden,
 parametervärden och i hanteringen av data, är de utfall som följer av dem betingade på dessa
 antaganden. Resultaten redovisas separat; detta dokument förklarar enbart metoden.
 \end{quote}
-
-\tableofcontents
-\newpage
 
 \section{Syfte och läsanvisning}
 

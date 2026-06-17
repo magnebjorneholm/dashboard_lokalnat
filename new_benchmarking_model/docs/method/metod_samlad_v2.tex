@@ -1,25 +1,22 @@
-% User manual for the "New benchmarking model" tool.
-% Migrated from new_benchmarking_model/docs/method/metod_samlad_v3.tex and adapted to
-% build against the shared manual preamble. Paths are relative to this file; see
-% manuals/_template/main.tex for the convention.
-\input{../../shared/preamble.tex}
-\graphicspath{ {../../../graphs/} }
-\makeatletter
-\def\input@path{ {../../../graphs/} }
-\makeatother
+\documentclass[11pt,a4paper]{article}
 
-% Bits the source preamble defined that the shared one does not:
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[main=swedish,provide=*]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{parskip}
+
 \DeclareMathOperator{\clip}{clip}
-\renewcommand{\refname}{Referenser}
 
 \begin{document}
-\selectlanguage{swedish}
 
-\title{Regumetrica \linebreak \emph{Betaversion} \linebreak Den nya benchmarkingmodellen: en metodbeskrivning \linebreak Version 1.0 \\}
-\author{\href{https://www.regumetrica.com/um}{www.regumetrica.com/um}}
-\date{Juni 2026}
-\maketitle
-\setcounter{page}{1}
+\begin{center}
+  {\LARGE\bfseries Den nya benchmarkingmodellen: en metodbeskrivning}\\[4pt]
+  {\normalsize Juni 2026}
+\end{center}
 
 \begin{quote}\itshape\small
 Status: Detta är en metodbeskrivning. Den återger vår operationalisering och tolkning av
@@ -29,9 +26,6 @@ inriktning och våra arbetsantaganden. Där modellen vilar på arbetsantaganden,
 parametervärden och i hanteringen av data, är de utfall som följer av dem betingade på dessa
 antaganden. Resultaten redovisas separat; detta dokument förklarar enbart metoden.
 \end{quote}
-
-\tableofcontents
-\newpage
 
 \section{Syfte och läsanvisning}
 
@@ -47,7 +41,7 @@ dessa förändringar bidrar till det samlade utfallet. Skillnaden är viktig: de
 beskriver vad modellen gör, medan det sista beskriver hur vi räknar på vad modellen gör.
 
 Genomgående skiljer vi på vad Energimarknadsinspektionen har angett som inriktning och vad som
-är vår operationalisering. Myndigheten har offentliggjort sin inriktning i en serie underlag \citep{Ei2025Inriktning, Ei2025Benchmarking, Ei2025Tillampning, Ei2026Effektivisering}, medan flera detaljer
+är vår operationalisering. Myndigheten har offentliggjort en inriktning, medan flera detaljer
 ännu inte är fastställda. Där vi har låst parametervärden eller gjort dataval för att kunna
 räkna, markerar vi det, och de magnituder som följer är betingade på dessa val.
 
@@ -77,7 +71,7 @@ korrigeringarna ska tolkas och för hela dekompositionsmetoden i del II.
 
 Den första gruppen av förändringar gäller hur det kostnadsunderlag som går in i DEA byggs.
 Utgångspunkten är en TOTEX-ansats: samtliga kostnadsposter utom myndighetsavgifter ska ingå i en
-och samma kostnadsvariabel \citep{Ei2025Benchmarking}. Skälet är en mer rättvisande jämförelse. Ett företag kan ha högre
+och samma kostnadsvariabel. Skälet är en mer rättvisande jämförelse. Ett företag kan ha högre
 kapitalkostnad men lägre kostnader för abonnemang till överliggande nät, medan ett annat har den
 omvända sammansättningen. Bedöms företagen bara på en delmängd av kostnaderna jämförs de på sin
 kostnadssammansättning snarare än på sin totala effektivitet. Myndighetsavgifter utesluts eftersom
@@ -103,16 +97,16 @@ summerade över prognosåren och medelvärdesbildade.
 
 Nätförluster förs in i TOTEX, vilket samtidigt innebär att det fristående incitamentet för
 nätförluster tas bort: en TOTEX-modell ger redan incitament att sänka förlusterna, eftersom en
-lägre förlustkostnad sänker den totala kostnaden \citep{Ei2025Tillampning}. I benchmarkingen värderas förlusterna till ett
+lägre förlustkostnad sänker den totala kostnaden. I benchmarkingen värderas förlusterna till ett
 gemensamt pris i stället för till varje företags faktiska förlustkostnad, eftersom den faktiska
 kostnaden beror på elpriset i företagets elområde. Detta är principen ovan: prisskillnaden
 neutraliseras i jämförelsen, medan incitamentet utgår från de faktiska kostnaderna. Myndighetens
-inriktning tillåter att nätförluster, abonnemang eller båda värderas till ett gemensamt pris \citeyearpar{Ei2025Benchmarking}. I
+inriktning tillåter att nätförluster, abonnemang eller båda värderas till ett gemensamt pris. I
 nuläget gör modellen detta enbart för nätförluster, vilket följer av att tillräckligt detaljerad
 data för abonnemang ännu saknas, inte av ett metodval.
 
 Bland de icke-påverkbara posterna är abonnemang till överliggande och angränsande nät den enda
-som inriktningen namnger uttryckligen \citeyearpar{Ei2025Benchmarking}. Den inkluderas trots att den är svår att påverka på kort
+som inriktningen namnger uttryckligen. Den inkluderas trots att den är svår att påverka på kort
 sikt, eftersom den är utbytbar mot kapitalkostnad. Ytterligare poster förs in under det generella
 kriteriet att en kostnad ska vara i någon grad utbytbar eller påverkbar. Vilka dessa är följer av
 en klassificering i datapipelinen snarare än av en uppräkning i inriktningstexten, vilket är värt
@@ -126,7 +120,7 @@ företag med en dyrare förläggningsmiljö får en högre kapitalkostnad och fa
 benchmarkingen på ett sätt som inte speglar dess effektivitet. Inriktningen är att justera ned
 anskaffningsvärdet för jordkabel till en gemensam nivå, landsbygd normal, för de dyrare miljöerna.
 Jordkabel ingår eftersom den utgör en stor del av kapitalbasen; kabelskåp utesluts som
-försumbart; och en motsvarande korrigering görs för nätstationer \citeyearpar{Ei2025Benchmarking}.
+försumbart; och en motsvarande korrigering görs för nätstationer.
 
 Den metodiskt avgörande observationen är att förläggningsmiljöns premie redan ligger i prislistan.
 Varje kabeltyps pris per kilometer är satt för den exakta kabeltypen i dess specifika
@@ -135,7 +129,7 @@ Korrigeringen är därför inte ett mätproblem utan ett omprissättningsproblem
 kabel ersätter man dess pris med landsbygd-normal-priset för samma kabeltyp. Premien behöver inte
 skattas externt, utan är skillnaden mellan miljöns pris och landsbygd-normal-priset i samma lista.
 Ur denna prisstruktur härleds ett schablonavdrag i procent per förläggningsmiljö, vilket är just
-den form inriktningen efterfrågar för att slippa detaljerad rapportering per kabeltyp \citeyearpar{Ei2025Benchmarking}. Att
+den form inriktningen efterfrågar för att slippa detaljerad rapportering per kabeltyp. Att
 schablonen är tillräckligt träffsäker bekräftas av att den nära sammanfaller med en exakt
 omprissättning per kabeltyp på sektornivå.
 
@@ -150,7 +144,7 @@ fördelningsmässig, i enlighet med principen ovan.
 
 I dagens modell ingår de påverkbara löpande kostnaderna och kapitalkostnaden som två separata
 inputs i DEA. I den nya modellen slås de samman till en enda TOTEX-input. Skälet, enligt
-inriktningen \citeyearpar{Ei2025Benchmarking}, är att dagens reglering ger incitament att inte investera i för dyra anläggningar men
+inriktningen, är att dagens reglering ger incitament att inte investera i för dyra anläggningar men
 inget incitament att välja den mest kostnadseffektiva lösningen, oavsett om den innebär löpande
 kostnader eller investeringar. Med en sammanslagen kostnadsvariabel bedöms ett företag på sin
 totala kostnad i stället för på fördelningen mellan löpande kostnader och kapital, vilket gör
@@ -174,16 +168,16 @@ som
 \]
 och kan nu bli negativt. Ett företag under tröskeln får ett avdrag, ett företag vid tröskeln får
 full kostnadstäckning, och ett företag över tröskeln får ett tillägg. Eftersom tröskeln ligger vid
-den 75:e percentilen är det per definition den översta fjärdedelen som får full täckning eller mer \citep{Ei2026Effektivisering}.
+den 75:e percentilen är det per definition den översta fjärdedelen som får full täckning eller mer.
 Valet av tredje kvartilen som referens är lånat från den brittiska regleringen. Tröskeln är
 rörlig: den räknas om varje tillsynsperiod ur den aktuella fördelningen, så att den höjs när
 branschen som helhet blir effektivare. I och med detta tas dagens golv och fasta outlierkrav bort,
-och det finns inget separat generellt effektiviseringskrav i den nya modellen \citeyearpar{Ei2026Effektivisering}.
+och det finns inget separat generellt effektiviseringskrav i den nya modellen.
 
 Själva beräkningskedjan från gap till årligt krav behåller i allt väsentligt sin form från dagens
 modell. Det syns tydligast om de två formlerna ställs bredvid varandra, där $s$ är kundandelen,
 $\clip$ kapar argumentet till det angivna intervallet, och faktorn $\tfrac{4}{8}$ skalar för att
-potentialen realiseras över åtta år medan kravet sätts per fyraårig tillsynsperiod \citeyearpar{Ei2026Effektivisering}:
+potentialen realiseras över åtta år medan kravet sätts per fyraårig tillsynsperiod:
 \begin{align*}
   \text{Nuvarande:} \quad
     & \text{krav} = \Bigl(1 + \clip\bigl(1 - E_i,\ \text{golv},\ \text{tak}\bigr)
@@ -220,7 +214,7 @@ i sak ojämn.
 De konkreta parametervärdena i denna kedja, kundandelen, taket på gapet och realiseringsskalningen,
 är ännu inte publicerade av myndigheten. Vi har låst dem som arbetsantaganden, valda för att spegla
 dagens beräkningskedja, och redovisar dem i avsnittet om arbetsspecifikation. Takets nivå är
-uttryckligen en av myndighetens öppna frågor \citeyearpar{Ei2026Effektivisering}.
+uttryckligen en av myndighetens öppna frågor.
 
 \section{Del II: Att mäta förändringarnas samlade effekt}
 
@@ -298,7 +292,7 @@ på dem.
   \item De konkreta procentsatserna är vår härledning ur prisstrukturen; myndighetens officiella
     schablonavdrag är ännu inte publicerat.
   \item Premien härleds ur normvärdeslistan, medan den kommande metoden riktar sig mot
-    anskaffningsvärde \citep{Ei2025Inriktning}, som saknas i nära all tillgänglig data. Härledningen vilar därmed på att
+    anskaffningsvärde, som saknas i nära all tillgänglig data. Härledningen vilar därmed på att
     prisrelationen mellan förläggningsmiljöer är densamma i anskaffningsvärde som i normvärde.
     Antagandet är rimligt men inte verifierbart ur denna data.
 \end{enumerate}
@@ -331,8 +325,5 @@ på dem.
   \item Parametervärden och vissa dataval är arbetsantaganden, inte myndighetens beslut, och de
     magnituder som redovisas separat är betingade på dem.
 \end{enumerate}
-
-\bibliographystyle{plainnat}
-\bibliography{references}
 
 \end{document}
