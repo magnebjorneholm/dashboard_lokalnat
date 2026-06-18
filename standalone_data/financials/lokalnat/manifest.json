@@ -1,0 +1,284 @@
+{
+  "source_report": "Energimarknadsinspektionen R2026:05",
+  "scope": "Lokalnät only (regionnät & transmissionsnät removed)",
+  "datasets": {
+    "return_on_capital": {
+      "rows": 9003,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2020,
+        2024
+      ],
+      "metrics": 8,
+      "granularities": [
+        "accounting_unit",
+        "company"
+      ]
+    },
+    "capital_employed_components": {
+      "rows": 18371,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2019,
+        2024
+      ],
+      "metrics": 31,
+      "granularities": [
+        "accounting_unit"
+      ]
+    },
+    "group_contributions": {
+      "rows": 17245,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2020,
+        2024
+      ],
+      "metrics": 16,
+      "granularities": [
+        "accounting_unit",
+        "company"
+      ]
+    },
+    "key_figures": {
+      "rows": 6006,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2020,
+        2024
+      ],
+      "metrics": 7,
+      "granularities": [
+        "company"
+      ]
+    },
+    "key_figures_underlying": {
+      "rows": 12112,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2020,
+        2024
+      ],
+      "metrics": 16,
+      "granularities": [
+        "accounting_unit"
+      ]
+    },
+    "income_statement_items": {
+      "rows": 23683,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2020,
+        2024
+      ],
+      "metrics": 15,
+      "granularities": [
+        "accounting_unit",
+        "company"
+      ]
+    },
+    "interest_and_loans": {
+      "rows": 7257,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2020,
+        2024
+      ],
+      "metrics": 9,
+      "granularities": [
+        "company"
+      ]
+    },
+    "technical_indicators": {
+      "rows": 16120,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2012,
+        2024
+      ],
+      "metrics": 4,
+      "granularities": [
+        "accounting_unit",
+        "company"
+      ]
+    },
+    "all_yearly_long": {
+      "rows": 109797,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "metric_code",
+        "metric_name",
+        "year",
+        "value",
+        "unit",
+        "source_file",
+        "company_has_nonlocal_units"
+      ],
+      "years": [
+        2012,
+        2024
+      ]
+    },
+    "investments": {
+      "rows": 5168,
+      "columns": [
+        "dataset",
+        "granularity",
+        "company",
+        "org_nr",
+        "re_id",
+        "network_level",
+        "basis",
+        "period_window",
+        "period_start",
+        "period_end",
+        "investment_category",
+        "value",
+        "unit",
+        "source_file"
+      ],
+      "periods": [
+        "2011H2-2015H1",
+        "2015H2-2019H1",
+        "2019H2-2023H1",
+        "2023H2-2027H1"
+      ],
+      "basis": [
+        "forecast",
+        "outcome"
+      ]
+    },
+    "accounting_unit_changes": {
+      "rows": 765,
+      "columns": [
+        "track_id",
+        "year",
+        "re_id",
+        "company",
+        "change_type",
+        "network_level"
+      ],
+      "years": [
+        2020,
+        2024
+      ]
+    }
+  }
+}

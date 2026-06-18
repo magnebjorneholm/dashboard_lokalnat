@@ -1,0 +1,216 @@
+org_nr,company,network_levels,has_local,has_regional,has_transmission
+202100-4284,Svenska kraftnät,"Regionnät, Transmissionsnät",False,True,True
+212000-0522,Vaggeryds kommun Elverket,Lokalnät,True,False,False
+212000-1199,Trelleborgs Kommun,Lokalnät,True,False,False
+212000-1694,Lidköpings kommun,Lokalnät,True,False,False
+556001-3715,Dala Elnät AB,Lokalnät,True,False,False
+556002-8473,Falu Elnät AB,Lokalnät,True,False,False
+556004-3332,Tidaholms Elnät AB,Lokalnät,True,False,False
+556006-9816,Herrljunga Elektriska AB,Lokalnät,True,False,False
+556008-2157,Gotlands Energi AB GEAB,Lokalnät,True,False,False
+556011-5510,Sjöbo Elnät AB,Lokalnät,True,False,False
+556011-9272,Sandviken Energi Elnät AB,Lokalnät,True,False,False
+556012-2649,Bergs Tingslags Elektriska AB,Lokalnät,True,False,False
+556013-1459,Varberg Energi Elnät AB,Lokalnät,True,False,False
+556017-9532,Nacka Energi AB,Lokalnät,True,False,False
+556020-7622,Borgholm Energi Elnät AB,Lokalnät,True,False,False
+556026-3245,Härryda Energi AB,Lokalnät,True,False,False
+556031-7777,Hjo Energi AB,Lokalnät,True,False,False
+556037-7326,Ellevio AB,"Lokalnät, Regionnät",True,True,False
+556050-9191,Laforsen Produktionsnät AB,Regionnät,False,True,False
+556053-3258,Skyllbergs Bruks AB,Lokalnät,True,False,False
+556055-8677,Sölvesborgs Energi & Vatten AB,Lokalnät,True,False,False
+556058-4897,Nybro Elnät AB,Lokalnät,True,False,False
+556058-9805,Habo Kraft AB,Lokalnät,True,False,False
+556059-9796,LKAB Nät AB,Lokalnät,True,False,False
+556061-9172,Blåsjön Nät AB,Lokalnät,True,False,False
+556066-8492,AB Kramfors Energiverk,Lokalnät,True,False,False
+556070-6060,E.ON Energidistribution AB,"Lokalnät, Regionnät",True,True,False
+556070-9429,Oxelö Energi AB,Lokalnät,True,False,False
+556082-3998,Ljungby Energinät AB,Lokalnät,True,False,False
+556083-2064,Kungälv Energi AB,Lokalnät,True,False,False
+556086-8225,Umeå Energi Elnät AB,Lokalnät,True,False,False
+556089-7851,Öresundskraft AB,"Lokalnät, Regionnät",True,True,False
+556091-5166,Sollentuna Energi och Miljö AB,Lokalnät,True,False,False
+556103-3993,Jämtkraft Elnät AB,"Lokalnät, Regionnät",True,True,False
+556107-7248,Vetlanda Energi & Teknik AB Vetab,Lokalnät,True,False,False
+556109-3955,Lerum Nät AB,Lokalnät,True,False,False
+556115-5226,Hedemora Energi AB,Lokalnät,True,False,False
+556127-9265,Mjölby Kraftnät AB,Lokalnät,True,False,False
+556133-3328,Härnösand Elnät AB,Lokalnät,True,False,False
+556153-1582,Åkab Nät & Skog AB,Lokalnät,True,False,False
+556166-7758,Dala Energi Elnät AB,Lokalnät,True,False,False
+556179-6508,Ålem Energi AB,Lokalnät,True,False,False
+556181-3675,Sala-Heby Energi Elnät AB,Lokalnät,True,False,False
+556182-7543,Kalmar Energi Elnät AB,Lokalnät,True,False,False
+556189-3198,Härjeåns Nät AB,Lokalnät,True,False,False
+556189-4352,Vimmerby Energi & Miljö AB,Lokalnät,True,False,False
+556190-5802,Njudung Energi Sävsjö AB,Lokalnät,True,False,False
+556192-2856,Sevab Nät AB,Lokalnät,True,False,False
+556205-9997,Söderhamn Elnät AB,Lokalnät,True,False,False
+556209-8599,E.ON Elnät Stockholm AB,Lokalnät,True,False,False
+556210-3571,Degerfors Energi AB,Lokalnät,True,False,False
+556223-8765,Gislaved Energi Elnät AB,Lokalnät,True,False,False
+556223-8849,Karlshamn Energi AB,Lokalnät,True,False,False
+556228-1138,Kraftringen Nät AB,Lokalnät,True,False,False
+556244-3951,Skellefteå Kraft Elnät AB,"Lokalnät, Regionnät",True,True,False
+556245-9825,PiteEnergi Elnät AB,Lokalnät,True,False,False
+556274-3608,Elektra Nät AB,Lokalnät,True,False,False
+556275-8762,Oskarshamn Energi Nät AB,Lokalnät,True,False,False
+556307-3468,Almnäs Bruk AB,Lokalnät,True,False,False
+556330-3980,Halmstads Energi & Miljö Nät AB,Lokalnät,True,False,False
+556330-9227,AB PiteEnergi,Lokalnät,True,False,False
+556332-7955,Tranås Energi AB,Lokalnät,True,False,False
+556354-1860,VänerEnergi AB,Lokalnät,True,False,False
+556366-1437,Ronneby Miljö & Teknik AB,Lokalnät,True,False,False
+556379-2729,Göteborg Energi Nät AB,Lokalnät,True,False,False
+556399-2246,Norrtälje Energi AB,Lokalnät,True,False,False
+556402-5905,Alingsås Energi Nät AB,Lokalnät,True,False,False
+556406-3054,Österlens Kraft Elnät AB,Lokalnät,True,False,False
+556407-2501,Gävle Energi AB,Lokalnät,True,False,False
+556407-5165,Falbygdens Energi Nät AB,Lokalnät,True,False,False
+556417-0800,Vattenfall Eldistribution AB,"Lokalnät, Regionnät",True,True,False
+556425-7441,Hofors Elverk AB,Lokalnät,True,False,False
+556426-8588,Tekniska Verken Katrineholm Nät AB,Lokalnät,True,False,False
+556429-4303,Skara Energi AB,Lokalnät,True,False,False
+556440-2401,Höganäs Energi AB,Lokalnät,True,False,False
+556447-6736,Staffanstorps Energi AB,Lokalnät,True,False,False
+556449-7575,Jönköping Energinät AB,Lokalnät,True,False,False
+556456-5389,Ulricehamns Energi AB,Lokalnät,True,False,False
+556459-9271,Emmaboda Elnät AB,Lokalnät,True,False,False
+556461-4831,Falkenberg Energi AB,Lokalnät,True,False,False
+556462-1125,Olofströms Kraft Nät AB,Lokalnät,True,False,False
+556468-5278,Linde Energi Elnät AB,Lokalnät,True,False,False
+556478-9682,AB Borlänge Energi Elnät,Lokalnät,True,False,False
+556483-4926,Tekniska Verken Linköping Nät AB,Lokalnät,True,False,False
+556486-7660,Eksjö Elnät AB,Lokalnät,True,False,False
+556495-1415,Karlsborgs Energi AB,Lokalnät,True,False,False
+556496-0044,C4 Elnät AB,Lokalnät,True,False,False
+556497-5232,Skånska Energi Nät AB,Lokalnät,True,False,False
+556502-1127,Bengtsfors Energi Nät AB,Lokalnät,True,False,False
+556502-7223,Sundsvall Elnät AB,Lokalnät,True,False,False
+556507-4290,Karlskoga Elnät AB,Lokalnät,True,False,False
+556508-3440,LEVA Nät AB,Lokalnät,True,False,False
+556509-4587,Mölndal Energi Nät AB,Lokalnät,True,False,False
+556509-9891,Ljusdal Elnät AB,Lokalnät,True,False,False
+556513-9556,Eskilstuna Energi & Miljö Elnät AB,Lokalnät,True,False,False
+556517-4991,Filipstad Energinät AB,Lokalnät,True,False,False
+556525-6210,Alvesta Elnät AB,Lokalnät,True,False,False
+556525-8638,Bromölla Energi & Vatten AB,Lokalnät,True,False,False
+556526-1459,Nässjö Affärsverk Elnät AB,Lokalnät,True,False,False
+556526-5195,Kristinehamns Elnät AB,Lokalnät,True,False,False
+556526-6995,Näckåns Elnät AB,Lokalnät,True,False,False
+556526-8512,Växjö Energi Elnät AB,Lokalnät,True,False,False
+556526-8561,Bodens Energi Nät AB,Lokalnät,True,False,False
+556527-2936,Ystad Energi AB,Lokalnät,True,False,False
+556527-4254,Envikens Elnät AB,Lokalnät,True,False,False
+556527-4817,Malung-Sälens Elnät AB,Lokalnät,True,False,False
+556527-5582,Nätkraft Borås Infra AB,Lokalnät,True,False,False
+556527-6713,Arvika Elnät AB,Lokalnät,True,False,False
+556527-6739,Karlstads Elnät AB,Lokalnät,True,False,False
+556527-7067,Övik Energi Nät AB,Lokalnät,True,False,False
+556527-7539,Luleå Energi Elnät AB,Lokalnät,True,False,False
+556527-8719,Smedjebacken Energi Nät AB,Lokalnät,True,False,False
+556528-0566,Värnamo Elnät AB,Lokalnät,True,False,False
+556528-1382,Västerviks Kraft Elnät AB,Lokalnät,True,False,False
+556528-1754,Sturefors Eldistribution AB,Lokalnät,True,False,False
+556528-5698,Partille Energi Nät AB,Lokalnät,True,False,False
+556532-0834,Affärsverken Elnät i Karlskrona AB,Lokalnät,True,False,False
+556537-4724,Gotlands Elnät AB,Lokalnät,True,False,False
+556554-1504,Mälarenergi Elnät AB,Lokalnät,True,False,False
+556558-1757,Telge Nät AB,Lokalnät,True,False,False
+556565-6864,Västerbergslagens Elnät AB,Lokalnät,True,False,False
+556610-7198,YS Nät AB,Regionnät,False,True,False
+556659-6283,Njudung Sävsjö Elnät AB,Lokalnät,True,False,False
+556685-3544,Havsnäs Vindkraft Elnät AB,Regionnät,False,True,False
+556686-0879,Trollhättan Energi Elnät AB,Lokalnät,True,False,False
+556712-4507,Vindpark Vänern Drift AB,Regionnät,False,True,False
+556712-4705,Kviinge El AB,Lokalnät,True,False,False
+556714-5494,Storrun Vindkraft Elnät AB,Regionnät,False,True,False
+556715-6921,Tibro Elnät AB,Lokalnät,True,False,False
+556717-4478,Röbergsfjället Nät AB,Regionnät,False,True,False
+556717-5061,Fortum Produktionsnät AB,Regionnät,False,True,False
+556720-3996,Bliekevare Nät AB,Regionnät,False,True,False
+556722-1519,Brobacken Nät AB,Regionnät,False,True,False
+556731-3043,Kungsleden Kraft AB,Regionnät,False,True,False
+556740-0782,Kvarnforsen Nät AB,Regionnät,False,True,False
+556747-2641,Arise Elnät AB,Regionnät,False,True,False
+556759-3362,Dragaliden Net AB,Regionnät,False,True,False
+556762-5628,Uddevalla Energi Elnät AB,Lokalnät,True,False,False
+556775-1564,Sjisjka Nät AB,Regionnät,False,True,False
+556796-8291,Statkraft Sverige Vind Elnät AB,Regionnät,False,True,False
+556803-9217,Landskrona Energi AB,Lokalnät,True,False,False
+556812-2609,VindIn Elnät AB,Regionnät,False,True,False
+556819-4749,Njudung Vetlanda Elnät AB,Lokalnät,True,False,False
+556875-9632,Markbygden Net AB,Regionnät,False,True,False
+556878-3905,Holmen Energi Elnät AB,Regionnät,False,True,False
+556883-1837,Hedemora Elnät AB,Lokalnät,True,False,False
+556890-2166,Sidensjö Vindkraft Elnät AB,Regionnät,False,True,False
+556897-8521,Mullbergs Elnät AB,Regionnät,False,True,False
+556907-2134,Elverket Vallentuna Elnät AB,Lokalnät,True,False,False
+556933-8006,Övertorneå Energi AB,Lokalnät,True,False,False
+556934-1687,Skurups Elverk AB,Lokalnät,True,False,False
+556942-1935,Markbygden Net Väst AB,Regionnät,False,True,False
+556952-0207,Tranås Energi Elnät AB,Lokalnät,True,False,False
+556959-1141,Skövde Energi Elnät AB,Lokalnät,True,False,False
+559010-6174,Lehtirova Nät AB,Regionnät,False,True,False
+559011-4988,Vimmerby Energi Nät AB,Lokalnät,True,False,False
+559012-8897,Åsele Elnät AB,Lokalnät,True,False,False
+559036-7289,Karskruv Nät AB,Regionnät,False,True,False
+559036-7313,Brännliden Nät AB,Regionnät,False,True,False
+559080-2913,Åskälen Vindkraft Elnät AB,Regionnät,False,True,False
+559139-3722,Almnäs Elnät AB,"Lokalnät, Regionnät",True,True,False
+559157-3067,Marhult Nät AB,Regionnät,False,True,False
+559181-6169,Trelleborgs Elnät AB,Lokalnät,True,False,False
+559186-9630,Vaggeryds Elverk AB,Lokalnät,True,False,False
+559395-9983,Lidköping Elnät AB,Lokalnät,True,False,False
+559397-1228,Gävle Energi Elnät AB,Lokalnät,True,False,False
+559408-1852,Ystad Energi Elnät AB,Lokalnät,True,False,False
+559425-3659,Ulricehamns Energi Elnät AB,Lokalnät,True,False,False
+559427-7245,Bjäre Kraft Elnät AB,Lokalnät,True,False,False
+559434-7188,Alingsås Energi Elnät AB,Lokalnät,True,False,False
+559434-9705,Karlsborgs Elnät AB,Lokalnät,True,False,False
+559440-4443,Degerfors Elnät AB,Lokalnät,True,False,False
+559440-6000,Skyllberg Elnät AB,Lokalnät,True,False,False
+559440-7347,Karlshamn Elnät AB,Lokalnät,True,False,False
+559441-5910,Skara Elnät AB,Lokalnät,True,False,False
+559441-7643,Hjo Elnät AB,Lokalnät,True,False,False
+559443-4036,Öresundskraft Elnät AB,"Lokalnät, Regionnät",True,True,False
+559461-7457,Sandhult-Sandareds Elnät AB,Lokalnät,True,False,False
+559461-7556,Östra Kinds Elnät AB,Lokalnät,True,False,False
+559463-4999,Telge Elnät AB,Lokalnät,True,False,False
+559481-7768,Varbergsortens Elnät AB,Lokalnät,True,False,False
+714000-0204,Boo Energi ek för,Lokalnät,True,False,False
+714400-0515,Hallstaviks Elverk Ek för,Lokalnät,True,False,False
+716410-3645,Nossebroortens Energi ek för,Lokalnät,True,False,False
+717600-7735,Upplands Energi ek för,Lokalnät,True,False,False
+735000-1520,Rödeby Elverk ek för,Lokalnät,True,False,False
+737000-0106,Brittedals Elnät ek för.,Lokalnät,True,False,False
+737000-2458,Mellersta Skånes Kraft ek. för.,Lokalnät,True,False,False
+738200-3924,Olseröds Elektriska Distributionsförening upa,Lokalnät,True,False,False
+739400-0132,Bjäre Kraft ek för,Lokalnät,True,False,False
+749200-2733,Södra Hallands Kraft ek för,Lokalnät,True,False,False
+749600-1145,Varbergsortens Elkraft ek. för.,Lokalnät,True,False,False
+758500-0537,Hjärtums Elförening Ek För,Lokalnät,True,False,False
+758500-2152,Västra Orusts Energitjänst ek för,Lokalnät,True,False,False
+763000-0128,Bjärke Energi ek för,Lokalnät,True,False,False
+763500-0040,Ale El ek för,Lokalnät,True,False,False
+764500-4644,Sandhult-Sandared Elektriska ek för,Lokalnät,True,False,False
+765500-1985,Östra Kinds Elkraft ek för,Lokalnät,True,False,False
+766600-1875,Sjogerstads Elektriska Distributionsförening ek för,Lokalnät,True,False,False
+768400-1048,Larv Elektriska Distributionsförening,Lokalnät,True,False,False
+768400-2038,Vara Energi ek för,Lokalnät,True,False,False
+768400-2194,Kvänumsbygdens Energi ek för,Lokalnät,True,False,False
+768400-2202,Vallebygdens Energi ek för,Lokalnät,True,False,False
+769000-0612,Götene Elförening ek för,Lokalnät,True,False,False
+769000-2485,Vinninga Elektriska Förening ek för,Lokalnät,True,False,False
+769000-2766,Grästorps Energi Ek för,Lokalnät,True,False,False
+774000-0950,Viggafors Elektriska Andelsförening UPA,Lokalnät,True,False,False
+775000-1898,Närkes Kils Elektriska Ek för,Lokalnät,True,False,False
+785500-2239,Årsunda Kraft & Belysningsförening ek för,Lokalnät,True,False,False
+785500-2312,Österfärnebo El ek. för.,Lokalnät,True,False,False
+797300-0370,Jukkasjärvi Sockens Belysningsförening upa,Lokalnät,True,False,False
+798200-0726,Töre Energi ek för,Lokalnät,True,False,False
+887000-0166,Hamra Besparingsskog,Lokalnät,True,False,False
+926000-2671,Carlfors Bruk E Björklund & Co KB,Lokalnät,True,False,False
+969694-4066,Sörbylunds Elnät HB,Lokalnät,True,False,False

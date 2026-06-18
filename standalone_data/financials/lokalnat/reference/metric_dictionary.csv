@@ -1,0 +1,110 @@
+dataset,metric_code,metric_name,unit
+capital_employed_components,BR72410,Check-räknings-kredit UB,tkr
+capital_employed_components,IB72410,"Check-räknings-kredit, IB",tkr
+capital_employed_components,IB72510,"Check-räknings-kredit, IB",tkr
+capital_employed_components,BR72510,"Check-räknings-kredit, UB",tkr
+capital_employed_components,IB72100,"Eget kapital, IB",tkr
+capital_employed_components,,Genom-snittlig Checkräknings-kredit,tkr
+capital_employed_components,,Genom-snittliga Obligations-lån,tkr
+capital_employed_components,,Genom-snittliga Växel-skulder,tkr
+capital_employed_components,,"Genom-snittligt Eget kapital, IB/UB",tkr
+capital_employed_components,,Genom-snittligt sysselsatt kapital,tkr
+capital_employed_components,,Genomsnitliga Skulder till kreditinstitut,tkr
+capital_employed_components,,Genomsnittlig Checkräkning-skredit,tkr
+capital_employed_components,,Genomsnittliga  Skulder till koncernföretag,tkr
+capital_employed_components,,Genomsnittliga Skulder till intresseföretag,tkr
+capital_employed_components,,Genomsnittliga Skulder till koncernföretag,tkr
+capital_employed_components,,Genomsnittliga skulder till kreditinstitut UB,tkr
+capital_employed_components,IB72411,Obligations-lån IB,tkr
+capital_employed_components,BR72411,"Obligations-lån, UB",tkr
+capital_employed_components,IB72414,Skulder till intresse-företag,tkr
+capital_employed_components,IB72516,Skulder till intresse-företag IB,tkr
+capital_employed_components,BR72414,Skulder till intresse-företag UB,tkr
+capital_employed_components,BR72516,"Skulder till intresse-företag, UB",tkr
+capital_employed_components,IB72515,Skulder till koncern-företag,tkr
+capital_employed_components,BR72413,Skulder till koncern-företag IB,tkr
+capital_employed_components,BR72515,Skulder till koncern-företag UB,tkr
+capital_employed_components,IB72413,"Skulder till koncern-företag, UB",tkr
+capital_employed_components,BR72412,Skulder till kredit-institut,tkr
+capital_employed_components,IB72412,Skulder till kredit-institut,tkr
+capital_employed_components,IB72511,"Skulder till kredit-institut, IB",tkr
+capital_employed_components,BR72511,"Skulder till kredit-institut, UB",tkr
+capital_employed_components,BR72100,"Summa eget kapital, UB",tkr
+capital_employed_components,IB72514,Växel-skulder IB,tkr
+capital_employed_components,BR72514,Växel-skulder UB,tkr
+group_contributions,TU7713332,Erhållna koncernbidrag,ratio
+group_contributions,,Erhållna koncernbidrag i förhållande till omsättning,ratio
+group_contributions,,Erhållna koncernbidrag i tkr per org.nr,ratio
+group_contributions,,Interna lånekostnader i tkr per org.nr,ratio
+group_contributions,,Koncernbidrag netto i tkr per org.nr,ratio
+group_contributions,,Kostnader för internlån i förhållande till omsättning,ratio
+group_contributions,TU7713331,Lämnade koncernbidrag,ratio
+group_contributions,,Lämnade koncernbidrag i förhållande till omsättning,ratio
+group_contributions,,Lämnade koncernbidrag i tkr per org.nr,ratio
+group_contributions,,Netto koncernbidrag i förhållande till omsättning (+) större andel erhållna  (-) större andel lämnade,ratio
+group_contributions,RR7110,Nettoomsättning,ratio
+group_contributions,,Nettoomsättning i tkr per org.nr,ratio
+group_contributions,TU751513,Räntekostnader till koncernföretag,ratio
+group_contributions,TU7212010,Utdelning,ratio
+group_contributions,,Utdelning i förhållande till omsättning,ratio
+group_contributions,,Utdelning i tkr per org.nr,ratio
+income_statement_items,RR73150,Av- och nedskrivn-ingar av materiella och immateri-ella anläggnings-tillgångar,tkr
+income_statement_items,TU7713332,Erhållna koncern-bidrag,tkr
+income_statement_items,TU771323,Föränd-ring av överav-skrivningar,tkr
+income_statement_items,TU771323,Förändring av överavskrivningar,tkr
+income_statement_items,TU7713331,Lämnade koncern-bidrag,tkr
+income_statement_items,RR7110,Netto-omsättning,tkr
+income_statement_items,RR76000,Resultat efter finans-iella poster,tkr
+income_statement_items,RR77135,Resultat före skatt,tkr
+income_statement_items,TU751513,Räntekostnader till koncern-företag,tkr
+income_statement_items,RR74000,Rörelser-esultat,tkr
+income_statement_items,RR77140,Skatt på årets resultat,tkr
+income_statement_items,RR71160,"Summa rörelse-intäkter, lagerför-ändringar m.m.",tkr
+income_statement_items,TU771433,Uppskjuten skatt,tkr
+income_statement_items,TU7212010,Utdelning,tkr
+income_statement_items,RR78000,Årets resultat,tkr
+interest_and_loans,,Andel externa lån,ratio
+interest_and_loans,,Andel interna lån,ratio
+interest_and_loans,,Beräknad ränta på externa lån,tkr
+interest_and_loans,,Beräknad ränta på interna lån,tkr
+interest_and_loans,,Externa ränte-kostnader,tkr
+interest_and_loans,,Interna ränte-kostnader,tkr
+interest_and_loans,,Totalt externa ränte-bärande skulder,tkr
+interest_and_loans,,Totalt interna och externa ränte-bärande skulder,tkr
+interest_and_loans,,Totalt interna räntebärande lån,tkr
+key_figures,,Avkastning på eget kapital,ratio
+key_figures,,Avkastning på totat kapital,ratio
+key_figures,,Justerad soliditet,ratio
+key_figures,,Rörelseresultat,ratio
+key_figures,,Skuldsättningsgrad,ratio
+key_figures,,Soliditet,ratio
+key_figures,,Vinst-marginal,ratio
+key_figures_underlying,RR75120,Intäkter från andelar i intresseföretag,tkr
+key_figures_underlying,RR75110,Intäkter från andelar i koncernföretag,tkr
+key_figures_underlying,RR75130,Intäkter från övriga värdepapper och fordringar som är anläggningstillgångar (med särskild uppgift om intäkter från koncernföretag),tkr
+key_figures_underlying,RR75145,Nedskrivningar av finansiella anläggningstillgångar och kortfristiga placeringar,tkr
+key_figures_underlying,RR7110,Nettoomsättning,tkr
+key_figures_underlying,BR72200,Obeskattade reserver,tkr
+key_figures_underlying,RR76000,Resultat efter finansiella poster,tkr
+key_figures_underlying,RR75150,Räntekostnader och liknande resultatposter,tkr
+key_figures_underlying,RR74000,Rörelseresultat,tkr
+key_figures_underlying,BR71000,SUMMA TILLGÅNGAR,tkr
+key_figures_underlying,BR72300,Summa avsättningar,tkr
+key_figures_underlying,BR72100,Summa eget kapital,tkr
+key_figures_underlying,BR71210,Summa immateriella anläggningstillgångar,tkr
+key_figures_underlying,BR72500,Summa kortfristiga skulder,tkr
+key_figures_underlying,BR72400,Summa långfristiga skulder,tkr
+key_figures_underlying,RR75140,Övriga ränteintäkter och liknande resultatposter,tkr
+return_on_capital,,Avkastning på sysselsatt kapital (ROCE),ratio
+return_on_capital,,Avskrivningar på Immateriella anläggningstillgångar,tkr
+return_on_capital,,Beräknad avkastning intäktsramar 2020-2023,tkr
+return_on_capital,,EBIT,tkr
+return_on_capital,,EBITA,tkr
+return_on_capital,,Genomsnittligt sysselsatt kapital,tkr
+return_on_capital,,Resultat efter finansiella poster,tkr
+return_on_capital,RR76000,Resultat efter finansiella poster,tkr
+return_on_capital,RR74000,Rörelseresultat,tkr
+technical_indicators,,Antal abonnemang i inmatningspunkt,count
+technical_indicators,,Antal abonnemang i uttagspunkt,count
+technical_indicators,,Total ledningslängd (kilometer),km
+technical_indicators,,Totalt installerad transformatoreffekt i nätstationerna (MVA),MVA

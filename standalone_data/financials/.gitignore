@@ -1,0 +1,7 @@
+# Derived CSV mirror of the Parquet datasets (~49 MB, regenerable).
+# Rebuild with:  uv run python build_lokalnat_data.py
+# The small reference CSVs are kept (see negations below).
+lokalnat/csv/
+
+# Keep the tiny, human-handy reference tables in both formats.
+!lokalnat/reference/
