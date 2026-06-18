@@ -89,11 +89,6 @@ def _rank(df: pd.DataFrame, reid: str, eff_col: str = COL_DEA_EFFICIENCY) -> Opt
     return int(idx[0]) + 1 if len(idx) else None
 
 
-def _ordinal(n: int) -> str:
-    suffix = "th" if 11 <= (n % 100) <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-    return f"{n}{suffix}"
-
-
 def _reference_e75(dea_new: pd.DataFrame) -> Optional[float]:
     """The third-quartile reference (constant column written by the two-sided mechanic)."""
     if COL_DEA_REFERENCE not in dea_new.columns or dea_new.empty:
@@ -144,7 +139,7 @@ def render_company_view(
     is_outlier_new = _flag(dea_new, user_reid, COL_IS_OUTLIER)
 
     # Verdict stays pinned on top — the firm's answer, always visible.
-    _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req, kr_cur, kr_new, is_outlier_new)
+    _render_verdict(dea_new, dea_cur, user_reid, e75, new_eff, new_out, cur_req, kr_cur, kr_new, is_outlier_new)
     st.divider()
 
     # Everything else is grouped thematically and stacked vertically (see chart_panel).
@@ -217,60 +212,76 @@ def _render_transition_hero(cur_req, new_out, kr_cur, kr_new) -> None:
     (st.success if money_better else st.warning if money_worse else st.info)(msg)
 
 
-def _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req,
+def _render_verdict(dea_new, dea_cur, user_reid, e75, new_eff, new_out, cur_req,
                     kr_cur, kr_new, is_outlier) -> None:
     st.markdown("#### Your company under the new model")
 
     _render_transition_hero(cur_req, new_out, kr_cur, kr_new)
 
-    # Revenue-frame swings, new vs current (>0 = the new model raises the cap relative to today).
+    # Each card shows where the firm lands under the new model, with the change versus the
+    # current model as a coloured st.metric delta (green = the new model raises the cap /
+    # improves the position; Streamlit reads the delta string's sign). Everything is in
+    # revenue-frame terms (positive raises the cap). The page isolates the benchmarking
+    # change, all else equal, so the delta IS the reform's effect on each dimension.
+    new_impact = revenue_frame_impact(new_out)
     swing_pct = (cur_req - new_out) if (new_out is not None and cur_req is not None) else None
     swing_kr = (kr_cur - kr_new) if (kr_new is not None and kr_cur is not None) else None
+    cur_eff = _val(dea_cur, user_reid, COL_DEA_EFFICIENCY)
     new_rank = _rank(dea_new, user_reid)
+    cur_rank = _rank(dea_cur, user_reid)
     n_total = int(dea_new[COL_DEA_EFFICIENCY].notna().sum())
 
-    # KPI levels (no longer a restatement of the hero): the two models' impact on the cap side
-    # by side on their respective bases, the change in kronor, and the efficiency score. Every
-    # figure is in revenue-frame terms (positive raises the cap). E₇₅ and the distance to it
-    # live in the position chart below.
+    # Each delta is "<change> <unit> from <current-model value>" so the colour-coded arrow and
+    # the baseline it is measured against read in one line. Streamlit colours the delta on its
+    # leading sign only (st.metric / _is_negative_delta), so the trailing "from ..." is inert.
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         cur_impact = revenue_frame_impact(cur_req)
+        delta = (f"{format_pp(swing_pct)} from {cur_impact * 100:+.2f}%/yr"
+                 if swing_pct is not None and cur_impact is not None else None)
         st.metric(
-            "Current model",
-            f"{cur_impact * 100:+.2f}%/yr" if cur_impact is not None else "–",
-            help="Today's published efficiency requirement, as its impact on the revenue "
-                 "frame (annual %); negative lowers the cap. The kronor figure is the 4-year "
-                 "period sum, applied to the OPEX (controllable) cost base.",
-        )
-        st.caption(format_delta(-kr_cur) if kr_cur is not None else "")
-    with c2:
-        new_impact = revenue_frame_impact(new_out)
-        st.metric(
-            "New model",
+            "Efficiency requirement",
             f"{new_impact * 100:+.2f}%/yr" if new_impact is not None else "–",
-            help="The new model's two-sided outcome, as its impact on the revenue frame "
-                 "(annual %); positive raises the cap, negative lowers it. The kronor figure "
-                 "is the 4-year period sum, applied to the full TOTEX cost base.",
+            delta,
+            help="The new model's outcome as its impact on the revenue frame (annual %); "
+                 "positive raises the cap. The delta is the change from the current model.",
         )
-        st.caption(format_delta(-kr_new) if kr_new is not None else "")
+    with c2:
+        delta = (f"{format_delta(swing_kr)} from {format_delta(-kr_cur)}"
+                 if swing_kr is not None and kr_cur is not None else None)
+        st.metric(
+            "In kronor",
+            format_delta(-kr_new) if kr_new is not None else "–",
+            delta,
+            help="The same outcome in kronor over the 4-year period; the new model applies it "
+                 "to the full TOTEX base. The delta is the change from the current model "
+                 "(OPEX base) - a firm can improve in % yet worsen in kronor.",
+        )
     with c3:
+        places = (cur_rank - new_rank) if (new_rank is not None and cur_rank is not None) else None
         st.metric(
-            "Change in kronor",
-            format_delta(swing_kr) if swing_kr is not None else "–",
-            help="New minus current, in kronor over the period, in revenue-frame terms. "
-                 "Positive means a larger cap under the new model. The percentage-point "
-                 "change is shown below.",
+            "Rank",
+            f"{new_rank} / {n_total}" if new_rank else "–",
+            f"{places:+d} places from {cur_rank}" if places else None,
+            help="Efficiency rank under the new model (1 = most efficient). The delta is how "
+                 "many places the firm moves from its current-model rank; up is better.",
         )
-        st.caption(f"{format_pp(swing_pct)} on the revenue frame" if swing_pct is not None else "")
     with c4:
+        eff_delta = (new_eff - cur_eff) if (new_eff is not None and cur_eff is not None) else None
         st.metric(
-            "Efficiency score",
+            "Efficiency",
             f"{new_eff:.3f}" if new_eff is not None else "–",
-            help="New-model DEA efficiency (0 to 1, where 1 is the frontier). Rank is among "
-                 "the 148 companies.",
+            f"{eff_delta:+.3f} from {cur_eff:.3f}" if eff_delta is not None else None,
+            help="New-model DEA efficiency (0 to 1, 1 = frontier). The delta is from the "
+                 "current model; the two models use different DEA inputs, so read it alongside "
+                 "the efficiency scatter below.",
         )
-        st.caption(f"Rank {_ordinal(new_rank)} / {n_total}" if new_rank else "")
+
+    st.caption(
+        "These figures use current-regulation (RP4) data and our reading of Ei's method, with "
+        "incentive parameters not yet set by Ei. Read them as the isolated effect of the "
+        "benchmarking change, all else equal, not a forecast of the 2028-2031 levels."
+    )
 
     if is_outlier:
         st.caption(
