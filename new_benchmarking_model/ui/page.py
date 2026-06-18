@@ -67,13 +67,37 @@ def _user_eff_req(result: NewBenchmarkingResult, reid: str):
 
 
 def _render_model_diff() -> None:
-    """Short, factual summary of what the new model changes vs. the current one.
+    """Short, factual summary of what the new benchmarking model changes vs. the current one.
 
-    Always shown at the top of the page. The description itself is authored by the
-    project owner.
+    Bullet form and to the point; the module's user manual carries the full detail. The
+    figures and parameters this rests on are Ei's proposed direction plus our working
+    assumptions (see the method docs and the conditionality note under the KPIs).
     """
     st.markdown("**Summary of changes**")
-    st.caption("_A short, factual description of the model changes goes here._")
+    st.caption(
+        "Based on Ei's proposed direction for 2028-2031. Some details and parameter values "
+        "are our working assumptions, not yet set by Ei."
+    )
+    st.markdown(
+        "- **Built on total cost (TOTEX).** Operating cost and capital cost are merged into a "
+        "single measure, so companies are compared on total cost rather than on how it splits "
+        "between operations and investment. The requirement is then applied to that total cost, "
+        "giving cost coverage across all cost posts, instead of only operating costs as today.\n"
+        "- **Broader cost base.** Network losses and selected non-controllable costs (grid "
+        "subscription and connection, feed-in, capacity reserve) now enter the comparison; only "
+        "regulatory fees are excluded.\n"
+        "- **Network losses at a common price.** Losses are valued at a shared price so firms "
+        "are not compared on their local electricity-area price. The standalone loss incentive "
+        "is removed.\n"
+        "- **Correction for placement environment.** The capital base for ground cable and "
+        "substations is levelled to a common \"rural normal\" cost, so a firm is not penalised "
+        "for an environment it cannot control.\n"
+        "- **Cable length as a new output.** Physical line length enters as a structural output "
+        "alongside the existing volume measures.\n"
+        "- **Two-sided efficiency requirement.** The benchmark moves from the frontier to the "
+        "third quartile (E75): firms below it get a deduction, the top quarter get full cost "
+        "coverage or an addition. Today's general floor is removed."
+    )
 
 
 def render_page() -> None:

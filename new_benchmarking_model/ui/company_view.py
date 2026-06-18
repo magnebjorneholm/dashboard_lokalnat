@@ -139,7 +139,7 @@ def render_company_view(
     is_outlier_new = _flag(dea_new, user_reid, COL_IS_OUTLIER)
 
     # Verdict stays pinned on top — the firm's answer, always visible.
-    _render_verdict(dea_new, dea_cur, user_reid, e75, new_eff, new_out, cur_req, kr_cur, kr_new, is_outlier_new)
+    _render_verdict(dea_new, dea_cur, user_reid, e75, new_eff, new_out, cur_req, kr_cur, kr_new, is_outlier_new, user_label)
     st.divider()
 
     # Everything else is grouped thematically and stacked vertically (see chart_panel).
@@ -213,8 +213,8 @@ def _render_transition_hero(cur_req, new_out, kr_cur, kr_new) -> None:
 
 
 def _render_verdict(dea_new, dea_cur, user_reid, e75, new_eff, new_out, cur_req,
-                    kr_cur, kr_new, is_outlier) -> None:
-    st.markdown("#### Your company under the new model")
+                    kr_cur, kr_new, is_outlier, user_label="Your company") -> None:
+    st.markdown(f"#### {user_label} under the new model")
 
     _render_transition_hero(cur_req, new_out, kr_cur, kr_new)
 
