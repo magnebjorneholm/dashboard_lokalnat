@@ -40,9 +40,9 @@ KIND_REWARD = "reward"
 KIND_DEDUCTION = "deduction"
 KIND_COVERAGE = "coverage"
 
-# Subtle full-height zone tints: amber = deduction side, green = reward side.
-_ZONE_DEDUCTION = "rgba(217, 119, 6, 0.07)"
-_ZONE_REWARD = "rgba(5, 150, 105, 0.07)"
+# Full-height zone tints: amber = deduction side, green = reward side.
+_ZONE_DEDUCTION = "rgba(217, 119, 6, 0.13)"
+_ZONE_REWARD = "rgba(5, 150, 105, 0.13)"
 
 
 def outcome_kind(r: Optional[float], eps: float = _EPS) -> Optional[str]:
@@ -65,14 +65,33 @@ def outcome_color(kind: Optional[str]) -> str:
     }.get(kind, COLORS["text_muted"])
 
 
+def revenue_frame_impact(req: Optional[float]) -> Optional[float]:
+    """Signed impact on the revenue frame from a (deduction-positive) efficiency requirement.
+
+    The stored requirement follows the regulatory convention used everywhere else in the app
+    (>0 = deduction). This page presents every figure as its impact on the firm's revenue
+    frame instead, so the sign is flipped here:
+
+        impact > 0  → the cap is raised  (addition / reward)
+        impact < 0  → the cap is lowered (deduction)
+        impact ≈ 0  → full cost coverage
+
+    This is the single seam where the page converts requirement → revenue-frame sign; the
+    underlying model, comparison and kr figures keep the regulatory convention untouched.
+    """
+    return None if req is None or pd.isna(req) else -float(req)
+
+
 def _transfer_curve(e_grid: np.ndarray, e75: float, cfg: NewBenchmarkingConfig) -> np.ndarray:
-    """Outcome (%/yr) for each efficiency on the grid — the model's own transfer function.
+    """Revenue-frame impact (%/yr) for each efficiency on the grid: the model's own transfer
+    function, presented as impact on the cap (positive = the cap is raised).
 
     Reuses the calculation function so the drawn curve IS the model, with no risk of the
-    chart drifting from the maths.
+    chart drifting from the maths; the sign is flipped to revenue-frame terms (see
+    revenue_frame_impact).
     """
     return np.array([
-        two_sided_requirement_from_gap(
+        -two_sided_requirement_from_gap(
             e75 - e,
             gap_cap=cfg.gap_cap, sharing=cfg.sharing,
             realization_time=cfg.realization_time, supervision_period=cfg.supervision_period,
@@ -87,7 +106,6 @@ def render_position_chart(
     cfg: NewBenchmarkingConfig,
     user_eff: Optional[float],
     user_label: str,
-    peer_label: Optional[str] = None,
     key: str = "nb_position",
 ) -> None:
     """Efficiency histogram (all firms) + the E75 threshold pivot splitting the deduction
@@ -111,10 +129,10 @@ def render_position_chart(
     fig.add_vrect(x0=lo, x1=e75, fillcolor=_ZONE_DEDUCTION, line_width=0, layer="below")
     fig.add_vrect(x0=e75, x1=hi, fillcolor=_ZONE_REWARD, line_width=0, layer="below")
 
-    # Efficiency histogram (counts, primary axis) — subtle background.
+    # Efficiency histogram (counts, primary axis) — soft blue context behind the curve.
     fig.add_trace(go.Histogram(
-        x=eff, nbinsx=28, marker_color=COLORS["bg_muted"],
-        marker_line_color="white", marker_line_width=1, opacity=0.7, yaxis="y",
+        x=eff, nbinsx=28, marker_color=COLORS["primary"],
+        marker_line_color="white", marker_line_width=1, opacity=0.45, yaxis="y",
         hovertemplate="Efficiency: %{x:.3f}<br>Companies: %{y}<extra></extra>",
         showlegend=False,
     ))
@@ -123,7 +141,7 @@ def render_position_chart(
     fig.add_trace(go.Scatter(
         x=grid, y=curve, mode="lines", yaxis="y2",
         line=dict(color=COLORS["primary"], width=2.5),
-        hovertemplate="Efficiency: %{x:.3f}<br>Outcome: %{y:+.2f} %/yr<extra></extra>",
+        hovertemplate="Efficiency: %{x:.3f}<br>Revenue frame: %{y:+.2f} %/yr<extra></extra>",
         showlegend=False,
     ))
 
@@ -134,15 +152,10 @@ def render_position_chart(
         showarrow=False, font=dict(size=11, color=COLORS["text_secondary"]),
         bgcolor="rgba(255,255,255,0.9)", borderpad=2,
     )
-    if peer_label:
-        fig.add_annotation(
-            x=e75, y=0.05, yref="paper", yanchor="bottom", text=f"≈ {peer_label}",
-            showarrow=False, font=dict(size=10, color=COLORS["text_muted"]),
-        )
     if lo < elbow < hi:
         fig.add_vline(x=elbow, line_dash="dot", line_color=COLORS["text_muted"], line_width=1)
         fig.add_annotation(
-            x=elbow, y=0.93, yref="paper", yanchor="top", text="deduction cap",
+            x=elbow, y=0.93, yref="paper", yanchor="top", text="Deduction cap",
             showarrow=False, font=dict(size=9, color=COLORS["text_muted"]),
         )
 
@@ -164,17 +177,19 @@ def render_position_chart(
                    showgrid=False, linecolor=COLORS["bg_muted"]),
         yaxis=dict(title="Number of companies", fixedrange=True,
                    gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"]),
-        yaxis2=dict(title="Outcome (%/yr)", overlaying="y", side="right", fixedrange=True,
-                    zeroline=True, zerolinecolor=COLORS["bg_muted"], showgrid=False),
+        yaxis2=dict(title="Impact on revenue frame (%/yr)", overlaying="y", side="right",
+                    fixedrange=True, zeroline=True, zerolinecolor=COLORS["text_secondary"],
+                    zerolinewidth=1.5, showgrid=False),
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
     st.caption(
         "Bars show the efficiency of all 148 companies. The line maps each efficiency score "
-        "to an annual outcome (right axis). Companies below the third-quartile benchmark E₇₅ "
-        "receive a deduction (amber); those above it a reward (green); a company exactly at "
-        "E₇₅ receives full cost coverage. Below the cap mark the deduction is held at its "
-        "maximum, 1.82 percent per year under our working parameters (sharing 0.50, gap cap "
-        "0.30). These parameters are not yet set by Ei, so the magnitude is conditional on them."
+        "to its impact on the revenue frame (right axis). Companies below the third-quartile "
+        "benchmark E₇₅ get a deduction that lowers the cap (amber); those above it get an "
+        "addition that raises it (green); a company exactly at E₇₅ gets full cost coverage. "
+        "Below the cap mark the deduction is held at its maximum, lowering the cap by 1.82 "
+        "percent per year under our working parameters (sharing 0.50, gap cap 0.30). These "
+        "parameters are not yet set by Ei, so the magnitude is conditional on them."
     )
 
 
@@ -184,27 +199,28 @@ def render_outcome_distribution(
     user_label: str,
     key: str = "nb_outcome",
 ) -> None:
-    """Diverging histogram of signed annual outcomes — deductions (amber, >0) vs rewards
-    (green, <0) — with a zero pivot (full coverage) and the firm marked."""
+    """Diverging histogram of revenue-frame impact: additions that raise the cap (green, >0,
+    right) vs deductions that lower it (amber, <0, left), with a zero pivot (full coverage)
+    and the firm marked."""
     o = np.asarray(outcomes, dtype=float)
-    o = o[~np.isnan(o)] * 100.0
+    o = -o[~np.isnan(o)] * 100.0   # → revenue-frame impact (%/yr); positive raises the cap
     if o.size == 0:
         st.info("No outcome data to plot.")
         return
 
-    rew = o[o < -_EPS * 100]
-    ded = o[o > _EPS * 100]
+    add = o[o > _EPS * 100]    # additions (raise the cap) → green, right of zero
+    ded = o[o < -_EPS * 100]   # deductions (lower the cap) → amber, left of zero
 
     layout_kwargs, template = get_plotly_template_safe()
     bins = dict(start=min(float(o.min()), 0.0) - 0.1, end=max(float(o.max()), 0.0) + 0.1, size=0.1)
     common = dict(
         xbins=bins, marker_line_color="white", marker_line_width=1, opacity=0.85,
-        hovertemplate="Outcome: %{x:+.2f} %/yr<br>Companies: %{y}<extra></extra>",
+        hovertemplate="Revenue frame: %{x:+.2f} %/yr<br>Companies: %{y}<extra></extra>",
         showlegend=False,
     )
 
     fig = go.Figure()
-    fig.add_trace(go.Histogram(x=rew, marker_color=COLORS["success"], **common))
+    fig.add_trace(go.Histogram(x=add, marker_color=COLORS["success"], **common))
     fig.add_trace(go.Histogram(x=ded, marker_color=COLORS["warning"], **common))
 
     fig.add_vline(x=0, line_dash="solid", line_color=COLORS["text_secondary"], line_width=1.5)
@@ -214,7 +230,7 @@ def render_outcome_distribution(
         bgcolor="rgba(255,255,255,0.9)", borderpad=2,
     )
     if user_outcome is not None:
-        ux = user_outcome * 100.0
+        ux = -user_outcome * 100.0   # revenue-frame impact
         fig.add_vline(x=ux, line_dash="solid", line_color=COLORS["text_primary"], line_width=2)
         fig.add_annotation(
             x=ux, y=0.86, yref="paper", yanchor="bottom",
@@ -225,21 +241,21 @@ def render_outcome_distribution(
 
     fig.update_layout(
         **layout_kwargs, template=template, barmode="overlay",
-        title=dict(text="Outcome across all 148 companies", font=dict(size=13)),
+        title=dict(text="Impact on the revenue frame across all 148 companies", font=dict(size=13)),
         height=340, bargap=0.03, dragmode=False,
-        xaxis=dict(title="Annual outcome (%/yr)   ← reward · deduction →", fixedrange=True,
-                   showgrid=False, zeroline=False, linecolor=COLORS["bg_muted"]),
+        xaxis=dict(title="Impact on revenue frame (%/yr)   ← lowers the cap · raises the cap →",
+                   fixedrange=True, showgrid=False, zeroline=False, linecolor=COLORS["bg_muted"]),
         yaxis=dict(title="Number of companies", fixedrange=True,
                    gridcolor=COLORS["bg_subtle"], linecolor=COLORS["bg_muted"]),
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
     st.caption(
-        "Signed annual outcomes for all 148 companies: deductions (amber, above zero) and "
-        "rewards (green, below zero), with the zero pivot marking full cost coverage. The "
-        "two-sided requirement is structurally asymmetric: because efficiency is capped at 1.0 "
-        "and E₇₅ sits near the top of the distribution, the reward side is bounded (here "
-        "roughly −0.43 percent per year) while the deduction side can reach the cap at "
-        "+1.82 percent per year."
+        "Impact on the revenue frame for all 148 companies: additions that raise the cap "
+        "(green, right of zero) and deductions that lower it (amber, left of zero), with the "
+        "zero pivot marking full cost coverage. The two-sided requirement is structurally "
+        "asymmetric: because efficiency is capped at 1.0 and E₇₅ sits near the top of the "
+        "distribution, the addition side is bounded (here roughly +0.43 percent per year) "
+        "while the deduction side can reach the cap at −1.82 percent per year."
     )
 
 
@@ -265,6 +281,8 @@ def _comparison_scatter(
     hover_format: Optional[str] = None,
     shared_range: bool = True,
     zero_line: bool = False,
+    reverse: bool = False,
+    higher_is_better: bool = True,
     key: str,
 ) -> None:
     """Scatter of each company's new (y) vs current (x) value with a y=x reference line.
@@ -274,7 +292,11 @@ def _comparison_scatter(
     diagonal, right when the two quantities live on the same natural scale); set it False
     when the two sides occupy very different ranges, so each axis fits its own data instead
     of one side stretching the other. zero_line draws a faint y=0 line (for the signed
-    requirement, below which the new model is a reward).
+    requirement, below which the new model is a reward). reverse flips both axes' display
+    direction (e.g. ranks, where 1 is best and should sit top-right so "above the diagonal =
+    better under the new model" matches the other scatters). higher_is_better says which
+    direction favours the firm, used to colour each point (green = the new model is better
+    for it, amber = worse); set it False for rank, where a lower number is better.
     """
     if col_current not in comparison.columns or col_new not in comparison.columns:
         st.info("No comparison data to plot.")
@@ -326,19 +348,28 @@ def _comparison_scatter(
     layout_kwargs, template = get_plotly_template_safe()
     fig = go.Figure()
 
-    # y = x identity line — "no change" reference.
+    # y = x identity line — the "no change" reference. Made prominent (slate, dashed) so it
+    # reads clearly through the coloured point cloud.
     fig.add_trace(go.Scatter(
         x=diag, y=diag, mode="lines",
-        line=dict(color=COLORS["bg_muted"], width=1, dash="dot"),
+        line=dict(color=COLORS["text_secondary"], width=1.75, dash="dash"),
         hoverinfo="skip", showlegend=False,
     ))
     if zero_line:
         fig.add_hline(y=0, line_dash="dot", line_color=COLORS["text_muted"], line_width=1)
 
-    # The crowd — subtle grey.
+    # The crowd — coloured by whether the new model is better (green) or worse (amber) than
+    # the current model for that firm; points on the line stay neutral grey. "Better" is
+    # higher on both axes for efficiency/impact, lower for rank (higher_is_better=False).
+    delta = y - x
+    good = (delta > _EPS) if higher_is_better else (delta < -_EPS)
+    bad = (delta < -_EPS) if higher_is_better else (delta > _EPS)
+    point_color = np.full(len(delta), COLORS["text_muted"], dtype=object)
+    point_color[good] = COLORS["success"]
+    point_color[bad] = COLORS["warning"]
     fig.add_trace(go.Scatter(
         x=x[~is_user], y=y[~is_user], mode="markers",
-        marker=dict(color=COLORS["text_muted"], size=6, opacity=0.5,
+        marker=dict(color=point_color[~is_user], size=6, opacity=0.65,
                     line=dict(color="white", width=0.5)),
         customdata=[cd[i] for i in range(len(cd)) if not is_user[i]],
         hovertemplate=hover, showlegend=False,
@@ -366,10 +397,10 @@ def _comparison_scatter(
     fig.update_layout(
         **layout_kwargs, template=template,
         title=dict(text=title, font=dict(size=13)),
-        height=360, dragmode=False, showlegend=False,
+        height=320, dragmode=False, showlegend=False,
         margin=dict(l=10, r=10, t=40, b=40),
-        xaxis={**axis, "range": x_range, "title": f"Current{title_unit}"},
-        yaxis={**axis, "range": y_range, "title": f"New{title_unit}"},
+        xaxis={**axis, "range": (x_range[::-1] if reverse else x_range), "title": f"Current{title_unit}"},
+        yaxis={**axis, "range": (y_range[::-1] if reverse else y_range), "title": f"New{title_unit}"},
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=key)
 
@@ -382,7 +413,7 @@ def render_efficiency_scatter(
     _comparison_scatter(
         comparison, user_reid, user_label,
         col_current=COL_DEA_EFFICIENCY_CURRENT, col_new=COL_DEA_EFFICIENCY_NEW,
-        title="Efficiency: new vs current",
+        title="Efficiency",
         tickformat=".2f", hover_format=".3f", key=key,
     )
 
@@ -391,18 +422,45 @@ def render_requirement_scatter(
     comparison: pd.DataFrame, user_reid: str, user_label: str,
     key: str = "nb_req_scatter",
 ) -> None:
-    """New vs current efficiency requirement (%/yr) per company.
+    """New vs current revenue-frame impact (%/yr) per company.
 
-    Below the identity line = a smaller requirement under the new model; below the y=0
-    line = a reward (only the new model can be negative — the current model is
+    Axes are the impact on the cap (requirement sign flipped, scale −100). Above the
+    identity line = the new model is more favourable to the cap; above the y=0 line = an
+    addition that raises the cap (only the new model can be positive; the current model is
     deduction-only).
     """
     _comparison_scatter(
         comparison, user_reid, user_label,
         col_current=COL_EFF_REQ_CURRENT, col_new=COL_EFF_REQ_NEW,
-        title="Requirement: new vs current",
-        scale=100.0, unit_label="%/yr", tickformat=".1f", hover_format="+.2f",
+        title="Revenue-frame impact",
+        scale=-100.0, unit_label="%/yr", tickformat=".1f", hover_format="+.2f",
         shared_range=False, zero_line=True, key=key,
+    )
+
+
+def render_rank_scatter(
+    comparison: pd.DataFrame, user_reid: str, user_label: str,
+    key: str = "nb_rank_scatter",
+) -> None:
+    """New vs current efficiency rank per company (1 = most efficient).
+
+    Both axes are reversed so rank 1 sits top-right, keeping the same grammar as the other
+    two scatters: above the identity line = a better rank under the new model. Ranks are
+    derived from each model's efficiency (1 = highest); firms with no efficiency get no rank.
+    """
+    need = [COL_DEA_EFFICIENCY_CURRENT, COL_DEA_EFFICIENCY_NEW]
+    if any(c not in comparison.columns for c in need):
+        st.info("No comparison data to plot.")
+        return
+    d = comparison[[COL_REID, *need]].copy()
+    d["_rank_cur"] = d[COL_DEA_EFFICIENCY_CURRENT].rank(ascending=False, method="min")
+    d["_rank_new"] = d[COL_DEA_EFFICIENCY_NEW].rank(ascending=False, method="min")
+    _comparison_scatter(
+        d, user_reid, user_label,
+        col_current="_rank_cur", col_new="_rank_new",
+        title="Rank",
+        tickformat="d", hover_format=".0f",
+        shared_range=True, reverse=True, higher_is_better=False, key=key,
     )
 
 

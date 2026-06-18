@@ -246,7 +246,8 @@ dashboard_lokalnat/
 |   |-- ui/                       # ONLY Streamlit-dependent part of the module
 |   |   |-- page.py                           # render_page() (pages/5 is a thin shim)
 |   |   |-- company_view.py                   # per-company view (firm-first)
-|   |   |-- charts.py                         # two-sided position/bridge graph drawers
+|   |   |-- charts.py                         # two-sided position/bridge/scatter graph drawers
+|   |   |-- chart_panel.py                    # stacks the thematic chart groups (layout seam)
 |   |   |-- config_panel.py                   # render_config_panel() (Experiment panel)
 |   |-- docs/                     # dependency_graph.md + interpretation notes
 |
@@ -1203,15 +1204,26 @@ changes.**
   adjustable fields (common loss price defaulted from `K_NF`, cable/station method, line
   types), a "Run experiment" button, and a "Reset to main model" button that clears the
   committed config and widget keys.
-- `ui/company_view.py` -- per-company view, firm-first: **Your
-  company** (a from/to transition verdict: the requirement current -> new in both % and
-  kronor, coloured by the *kronor* swing - lower cost green, higher amber - with a
-  plain-language note when % and kronor diverge; plus KPI levels - current requirement, new
-  outcome, change in kronor, efficiency + rank - each with an explanatory `help` tooltip),
-  **Sector & position** (the position chart: efficiency histogram with the E75 pivot
-  splitting deduction/reward zones and the model's transfer curve overlaid, the firm and the
-  reference peer marked, plus a diverging outcome distribution and deduction/coverage/reward
-  counts; the E75 benchmark and the firm's distance to it live here), and the **TOTEX
-  bridge** waterfall (current -> new TOTEX: additions red, the förläggningsmiljö capex cut
-  green, totals blue). The two-sided visuals live in `ui/charts.py`
-  (not the M5-shared `frontend/results/_efficiency_charts.py`).
+- `ui/company_view.py` -- per-company view, firm-first. Every figure is framed as the impact
+  on the firm's **revenue frame** (positive = the cap is raised), flipped from the regulatory
+  deduction-positive convention at a single display seam (`revenue_frame_impact` in
+  `ui/charts.py`); the model, comparison and kr data keep the regulatory sign untouched. The
+  verdict is pinned on top, then the thematic groups are stacked vertically (no tabs):
+  - **Your company** (verdict): a from/to transition (how the new model raises or lowers the
+    cap *relative to the current model*, coloured by the kronor swing - raises green, lowers
+    amber - with a plain-language note when % and kronor diverge); plus KPI cards (Current
+    model, New model, change in kronor, efficiency + rank), all in revenue-frame terms.
+  - **Efficiency & outcome**: the position chart (efficiency histogram with the E75 pivot
+    splitting the lower-cap / higher-cap zones, the transfer curve and a clear 0-impact line,
+    the firm marked), the diverging revenue-frame-impact distribution (raises right/green,
+    lowers left/amber), the lower-cap / full-coverage / higher-cap counts, and three
+    new-vs-current scatters (rank, efficiency, revenue-frame impact; points green where the
+    new model favours the firm, amber where not, with a prominent no-change diagonal).
+  - **TOTEX bridge**: the waterfall (current -> new TOTEX: additions red, the förläggningsmiljö
+    capex cut green, totals blue).
+  A fourth group, **Outcome decomposition** (sector-level channel / Shapley analysis read from
+  the committed `analysis/out/` tables), is built and wired but hidden for V1 as too technical
+  (`HIDDEN_CHART_GROUPS`; re-enabling is a one-line move). The groups are stacked by
+  `ui/chart_panel.py` (`render_chart_panel`), which owns the layout so a horizontal switcher
+  can be restored in one place. The two-sided visuals live in `ui/charts.py` (not the
+  M5-shared `frontend/results/_efficiency_charts.py`).

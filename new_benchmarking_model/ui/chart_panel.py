@@ -1,10 +1,11 @@
 """
 chart_panel.py — generic thematic-group panel for the new-benchmarking result view.
 
-Related charts are grouped into themes shown at one vertical position and switched
-horizontally. The horizontal switcher is deliberately isolated here (currently st.tabs)
-so swapping it for st.segmented_control / st.pills / st.radio later is a one-function
-change that no caller has to know about.
+Related charts are grouped into themes. The themes are currently stacked vertically (the
+user reads the whole result by scrolling), each under its own heading. The layout
+mechanic is deliberately isolated here so swapping the vertical stack for a horizontal
+switcher (st.tabs / st.segmented_control / st.pills) later is a one-function change that
+no caller has to know about.
 
 A "group" is just a title plus a render callback that takes whatever context object the
 caller passes through (this module never inspects it), so the panel stays decoupled from
@@ -35,15 +36,15 @@ class ChartGroup:
 
 
 def render_chart_panel(groups: Sequence[ChartGroup], ctx: Any) -> None:
-    """Render the thematic groups behind a horizontal switcher.
+    """Render the thematic groups stacked vertically, one after another.
 
-    Currently a tab strip: each group occupies the same vertical position and the user
-    moves between them horizontally. To switch the mechanic (e.g. to a segmented control
-    that renders only the active group), change only this function.
+    Each group gets its title as a section heading and is separated from the previous one
+    by a divider, so the user reads the whole result by scrolling. The grouping
+    abstraction is kept so a horizontal switcher (st.tabs / st.segmented_control /
+    st.pills) can be restored later by changing only this function.
     """
-    if not groups:
-        return
-    tabs = st.tabs([g.title for g in groups])
-    for tab, group in zip(tabs, groups):
-        with tab:
-            group.render(ctx)
+    for i, group in enumerate(groups):
+        if i > 0:
+            st.divider()
+        st.markdown(f"#### {group.title}")
+        group.render(ctx)

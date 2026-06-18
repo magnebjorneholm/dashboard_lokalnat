@@ -8,13 +8,15 @@ cost coverage at the benchmark.
 
 Layout (firm-first - the user's answer comes before the sector context):
   - Verdict (pinned on top): hero (deduction / coverage / reward) + supporting KPIs.
-  - A horizontally-switched panel of thematic chart groups (see chart_panel.py), each
-    shown at the same vertical position:
+  - The thematic chart groups (see chart_panel.py), stacked vertically under their own
+    headings (the user scrolls through them):
       * "Efficiency & outcome" - the position chart (efficiency histogram with the E75
         pivot, deduction/reward zones and the model's transfer curve) + the outcome
         distribution, the firm marked in both.
       * "TOTEX bridge" - waterfall from the current-model TOTEX to the new one.
-    Add a theme by adding one entry to CHART_GROUPS (bottom of this file).
+    A third group, "Outcome decomposition", is built and wired but hidden for V1 (see
+    HIDDEN_CHART_GROUPS at the bottom of this file). Add a theme by adding one entry to
+    CHART_GROUPS (bottom of this file).
 
 The two-sided visuals live in new_benchmarking_model/ui/charts.py (NOT the M5-shared
 _efficiency_charts.py). The current model (EIs_DEA) is used only as the comparison point
@@ -46,10 +48,10 @@ from new_benchmarking_model.config import NewBenchmarkingConfig
 from new_benchmarking_model.model import NewBenchmarkingResult
 from new_benchmarking_model.ui.charts import (
     render_position_chart, render_outcome_distribution,
-    render_efficiency_scatter, render_requirement_scatter,
+    render_efficiency_scatter, render_requirement_scatter, render_rank_scatter,
     render_channel_regression, render_shapley_waterfall,
     render_shapley_boxplots, render_shapley_by_urban_quantile,
-    outcome_kind, KIND_REWARD, KIND_DEDUCTION,
+    outcome_kind, revenue_frame_impact, KIND_REWARD, KIND_DEDUCTION,
 )
 from new_benchmarking_model.ui.chart_panel import ChartGroup, render_chart_panel
 from new_benchmarking_model.data.analysis_loader import (
@@ -100,18 +102,6 @@ def _reference_e75(dea_new: pd.DataFrame) -> Optional[float]:
     return None if pd.isna(v) else float(v)
 
 
-def _peer_label(dea_new: pd.DataFrame, e75: Optional[float]) -> Optional[str]:
-    """Short name of the non-outlier firm whose efficiency is closest to E75."""
-    if e75 is None:
-        return None
-    d = dea_new[~dea_new[COL_IS_OUTLIER].astype(bool)].dropna(subset=[COL_DEA_EFFICIENCY])
-    if d.empty:
-        return None
-    reid = d.loc[(d[COL_DEA_EFFICIENCY] - e75).abs().idxmin(), COL_REID]
-    from frontend.utils.company_directory import get_company_name_lookup
-    return get_company_name_lookup().get(reid, reid)
-
-
 # ---------------------------------------------------------------------------
 # Group context — everything a thematic chart group needs for one company
 # ---------------------------------------------------------------------------
@@ -157,7 +147,7 @@ def render_company_view(
     _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req, kr_cur, kr_new, is_outlier_new)
     st.divider()
 
-    # Everything else is grouped thematically and switched horizontally (see chart_panel).
+    # Everything else is grouped thematically and stacked vertically (see chart_panel).
     ctx = GroupContext(
         result=result, user_reid=user_reid, cfg=cfg, user_label=user_label,
         e75=e75, new_eff=new_eff, new_out=new_out,
@@ -170,52 +160,57 @@ def render_company_view(
 # ---------------------------------------------------------------------------
 
 def _render_transition_hero(cur_req, new_out, kr_cur, kr_new) -> None:
-    """From/to hero: how the requirement changes, current to new.
+    """From/to hero: how the new benchmarking model changes the revenue frame vs the current
+    model.
 
-    Coloured by the kronor swing (the firm's actual money impact, since the two models
-    apply their % to different bases), and surfacing the OPEX→TOTEX divergence in words
-    when percent and kronor point different ways (the majority of companies).
+    The page isolates the benchmarking change, all else equal, so the headline is the change
+    relative to the current model (does the reform raise or lower the cap?). Coloured by the
+    kronor swing (the firm's actual money impact, since the two models apply their % to
+    different bases), and surfacing the OPEX→TOTEX divergence in words when percent and
+    kronor point different ways (the majority of companies).
     """
     if None in (cur_req, new_out, kr_cur, kr_new):
         st.info("No outcome available for this company.")
         return
 
     new_kind = outcome_kind(new_out)
-    swing_pct = new_out - cur_req
-    swing_kr = kr_new - kr_cur
-    money_better = swing_kr < -_EPS
-    money_worse = swing_kr > _EPS
+    # Revenue-frame swings, new vs current (>0 = the new model raises the cap relative to today).
+    swing_pct = cur_req - new_out
+    swing_kr = kr_cur - kr_new
+    money_better = swing_kr > _EPS
+    money_worse = swing_kr < -_EPS
 
     if new_kind == KIND_REWARD:
         new_phrase = (
-            f"a reward of {format_percent(abs(new_out))}/yr "
+            f"raising it by {format_percent(abs(new_out))}/yr "
             f"({format_tkr(abs(kr_new))} added to the cap over the period)"
         )
     elif new_kind == KIND_DEDUCTION:
         new_phrase = (
-            f"a deduction of {format_percent(new_out)}/yr "
-            f"({format_tkr(kr_new)} over the period)"
+            f"lowering it by {format_percent(new_out)}/yr "
+            f"({format_tkr(kr_new)} removed over the period)"
         )
     else:
         new_phrase = "full cost coverage (no change to the cap)"
 
     headline = (
-        "Lower cost under the new model" if money_better
-        else "Higher cost under the new model" if money_worse
-        else "About the same cost under the new model"
+        "The new benchmarking model raises your revenue frame" if money_better
+        else "The new benchmarking model lowers your revenue frame" if money_worse
+        else "The new benchmarking model leaves your revenue frame about unchanged"
     )
     body = (
-        f"Your efficiency requirement goes from a deduction of {format_percent(cur_req)}/yr "
-        f"({format_tkr(kr_cur)} over the period) to {new_phrase}."
+        f"Compared with the current model, your efficiency requirement goes from lowering the "
+        f"cap by {format_percent(cur_req)}/yr ({format_tkr(kr_cur)} over the period) to {new_phrase}."
     )
 
-    # Divergence: percent improves but kronor worsens, or vice versa (52% of companies).
-    pct_better = swing_pct < -_EPS
-    if (pct_better and money_worse) or (swing_pct > _EPS and money_better):
+    # Divergence: the reform helps the cap in percentage terms but hurts it in kronor, or vice
+    # versa (the majority of companies), because the new model applies it to the full TOTEX.
+    pct_better = swing_pct > _EPS
+    if (pct_better and money_worse) or (swing_pct < -_EPS and money_better):
         body += (
-            f" Note that the requirement {'falls' if pct_better else 'rises'} in percentage "
-            f"terms, but the amount in kronor {'rises' if money_worse else 'falls'} because "
-            "the new model applies it to your full TOTEX instead of only OPEX."
+            f" Note that in percentage terms the new model is {'more' if pct_better else 'less'} "
+            "favourable to your cap, but the kronor effect points the other way, because the new "
+            "model applies the requirement to your full TOTEX instead of only OPEX."
         )
 
     msg = f"**{headline}**\n\n{body}"
@@ -228,39 +223,46 @@ def _render_verdict(dea_new, user_reid, e75, new_eff, new_out, cur_req,
 
     _render_transition_hero(cur_req, new_out, kr_cur, kr_new)
 
-    swing_pct = (new_out - cur_req) if (new_out is not None and cur_req is not None) else None
-    swing_kr = (kr_new - kr_cur) if (kr_new is not None and kr_cur is not None) else None
+    # Revenue-frame swings, new vs current (>0 = the new model raises the cap relative to today).
+    swing_pct = (cur_req - new_out) if (new_out is not None and cur_req is not None) else None
+    swing_kr = (kr_cur - kr_new) if (kr_new is not None and kr_cur is not None) else None
     new_rank = _rank(dea_new, user_reid)
     n_total = int(dea_new[COL_DEA_EFFICIENCY].notna().sum())
 
-    # KPI levels (no longer a restatement of the hero): the two requirements side by side
-    # on their respective bases, the change in kronor, and the efficiency score. E₇₅ and
-    # the distance to it live in the position chart below.
+    # KPI levels (no longer a restatement of the hero): the two models' impact on the cap side
+    # by side on their respective bases, the change in kronor, and the efficiency score. Every
+    # figure is in revenue-frame terms (positive raises the cap). E₇₅ and the distance to it
+    # live in the position chart below.
     c1, c2, c3, c4 = st.columns(4)
     with c1:
+        cur_impact = revenue_frame_impact(cur_req)
         st.metric(
-            "Current requirement",
-            f"{cur_req * 100:+.2f}%/yr" if cur_req is not None else "–",
-            help="Today's published efficiency requirement (annual %). The kronor figure is "
-                 "the 4-year period sum, applied to the OPEX (controllable) cost base.",
+            "Current model",
+            f"{cur_impact * 100:+.2f}%/yr" if cur_impact is not None else "–",
+            help="Today's published efficiency requirement, as its impact on the revenue "
+                 "frame (annual %); negative lowers the cap. The kronor figure is the 4-year "
+                 "period sum, applied to the OPEX (controllable) cost base.",
         )
-        st.caption(format_tkr(kr_cur) if kr_cur is not None else "")
+        st.caption(format_delta(-kr_cur) if kr_cur is not None else "")
     with c2:
+        new_impact = revenue_frame_impact(new_out)
         st.metric(
-            "New outcome",
-            f"{new_out * 100:+.2f}%/yr" if new_out is not None else "–",
-            help="Two-sided outcome under the new model (annual %); negative is a reward. The "
-                 "kronor figure is the 4-year period sum, applied to the full TOTEX cost base.",
+            "New model",
+            f"{new_impact * 100:+.2f}%/yr" if new_impact is not None else "–",
+            help="The new model's two-sided outcome, as its impact on the revenue frame "
+                 "(annual %); positive raises the cap, negative lowers it. The kronor figure "
+                 "is the 4-year period sum, applied to the full TOTEX cost base.",
         )
-        st.caption(format_tkr(kr_new) if kr_new is not None else "")
+        st.caption(format_delta(-kr_new) if kr_new is not None else "")
     with c3:
         st.metric(
             "Change in kronor",
             format_delta(swing_kr) if swing_kr is not None else "–",
-            help="New minus current, in kronor over the period. Positive means a larger cost "
-                 "under the new model. The percentage-point change is shown below.",
+            help="New minus current, in kronor over the period, in revenue-frame terms. "
+                 "Positive means a larger cap under the new model. The percentage-point "
+                 "change is shown below.",
         )
-        st.caption(f"{format_pp(swing_pct)} in the requirement" if swing_pct is not None else "")
+        st.caption(f"{format_pp(swing_pct)} on the revenue frame" if swing_pct is not None else "")
     with c4:
         st.metric(
             "Efficiency score",
@@ -292,17 +294,16 @@ def _render_sector_and_position(result, user_reid, cfg, e75, new_eff, new_out, u
 
     st.caption(
         "Where every company lands under the new model. The third-quartile benchmark E₇₅ "
-        "splits the sector: companies below it get a deduction, the top quarter get full "
-        "coverage or a reward."
+        "splits the sector: companies below it have their cap lowered, the top quarter get "
+        "full coverage or a higher cap."
     )
     k1, k2, k3 = st.columns(3)
-    k1.metric("Deduction", f"{n_ded} / {n}")
+    k1.metric("Lower cap", f"{n_ded} / {n}")
     k2.metric("Full coverage", f"{n_cov} / {n}")
-    k3.metric("Reward", f"{n_rew} / {n}")
+    k3.metric("Higher cap", f"{n_rew} / {n}")
 
     render_position_chart(
         dea_new[COL_DEA_EFFICIENCY].to_numpy(), e75, cfg, new_eff, user_label,
-        peer_label=_peer_label(dea_new, e75),
     )
     render_outcome_distribution(outcomes.to_numpy(), new_out, user_label)
 
@@ -472,10 +473,10 @@ def _render_totex_waterfall(totex: pd.DataFrame, user_reid: str) -> None:
 # ---------------------------------------------------------------------------
 # Thematic chart groups (registry)
 # ---------------------------------------------------------------------------
-# The horizontal panel below the verdict is built from this list. Each group is a theme
-# rendered at the same vertical position; the panel (chart_panel.render_chart_panel) owns
-# the horizontal switcher. Add a theme by adding one ChartGroup entry — e.g. a future
-# "New vs current" group with scatter plots of efficiency and the requirement.
+# The section below the verdict is built from this list. Each group is a theme rendered as
+# its own vertical section; the panel (chart_panel.render_chart_panel) stacks them under
+# headings. Add a theme by adding one ChartGroup entry — e.g. a future "New vs current"
+# group with scatter plots of efficiency and the requirement.
 
 
 def _group_efficiency_outcome(ctx: GroupContext) -> None:
@@ -486,17 +487,22 @@ def _group_efficiency_outcome(ctx: GroupContext) -> None:
     )
 
     st.markdown("###### New vs current, company by company")
-    left, right = st.columns(2)
-    with left:
+    c_rank, c_eff, c_imp = st.columns(3)
+    with c_rank:
+        render_rank_scatter(ctx.result.comparison, ctx.user_reid, ctx.user_label)
+    with c_eff:
         render_efficiency_scatter(ctx.result.comparison, ctx.user_reid, ctx.user_label)
-    with right:
+    with c_imp:
         render_requirement_scatter(ctx.result.comparison, ctx.user_reid, ctx.user_label)
     st.caption(
         "Each point is a company: new model (vertical) against current model (horizontal); "
-        "the dotted line is no change. Left, efficiency: above the line means more efficient "
-        "under the new model. Right, efficiency requirement (%/yr): below the line is a "
-        "smaller requirement, and below zero is a reward (only the new model can go negative). "
-        "Your company is highlighted."
+        "the dashed line is no change, and your company is highlighted in every panel. Green "
+        "means the new model is better for the firm, amber worse. **Rank** (1 = most "
+        "efficient, top-right): above the line means a better rank under the new model. "
+        "**Efficiency**: above the line means more efficient under the new model. "
+        "**Revenue-frame impact** (%/yr): above the line means the new model is more "
+        "favourable to your cap, and above zero is an addition that raises it (only the new "
+        "model can go positive)."
     )
 
 
@@ -543,9 +549,17 @@ def _group_placeholder(ctx: GroupContext) -> None:
     render_shapley_by_urban_quantile(shapley_terms, channels, ctx.user_reid)
 
 
+# Visible groups, stacked vertically (see chart_panel.render_chart_panel).
 CHART_GROUPS = [
     ChartGroup("efficiency_outcome", "Efficiency & outcome", _group_efficiency_outcome),
     ChartGroup("totex_bridge", "TOTEX bridge", _group_totex_bridge),
+]
+
+# Hidden for V1: the outcome decomposition is considered too technical for the first
+# Regumetrica release, but it is kept fully wired (_group_placeholder + the analysis
+# loaders/charts it uses) so we can keep building on it behind the scenes and re-enable it
+# for stakeholder discussions with Ei. Re-enabling is a one-line move into CHART_GROUPS above.
+HIDDEN_CHART_GROUPS = [
     ChartGroup("placeholder", "Outcome decomposition", _group_placeholder),
 ]
 
