@@ -31,10 +31,12 @@ REQUIRED_COLUMNS: Dict[str, Tuple[str, ...]] = {
     ),
     "non_controllable_a": ("REId", "kent_category", "year", "amount"),
 
-    # frozen snapshots (transformed loader output)
+    # frozen snapshots (transformed loader output). The frontier track only: the
+    # requirement-side controllable_cost_average / totex_first_year are added later
+    # in load_baseline_data() from the SDF grunddata, not in this snapshot.
     "data_modeller": (
-        "DMU", "REId", "company_name", "controllable_cost_average",
-        "capital_cost_2024", "CU", "MW", "NS", "MWhl", "MWhh", "totex_first_year",
+        "DMU", "REId", "company_name", "opexp_dea",
+        "capital_cost_2024", "CU", "MW", "NS", "MWhl", "MWhh", "totex_dea",
     ),
     "eis_dea": (
         "REId", "dea_efficiency", "dea_super_efficiency", "potential",

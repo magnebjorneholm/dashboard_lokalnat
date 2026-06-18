@@ -194,7 +194,8 @@ def _load_user_baselines_cached(user_reid: str) -> Dict[str, float]:
 
     baseline = load_baseline_data()
 
-    # OPEXp from df_all_companies (already = SDF-derived medelvärde + neo/4)
+    # Controllable cost (requirement base = SDF-derived medelvärde, neo handled
+    # separately in the requirement calc). This is NOT the DEA input (opexp_dea).
     row = baseline.df_all_companies[baseline.df_all_companies["REId"] == user_reid]
     opex = float(row[COL_CONTROLLABLE_AVG].iloc[0]) if not row.empty else 0.0
 

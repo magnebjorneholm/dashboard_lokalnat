@@ -72,7 +72,7 @@ class TestMiniRunCustom:
         """DEA with different inputs should run without error."""
         custom = DeaConfig(
             method=EfficiencyMethod.DEA,
-            inputs=["totex_first_year"],
+            inputs=["totex_dea"],
             outputs=["CU", "MW", "NS"],
         )
         result = run_dea_mini(baseline_data, custom, "REL00886")

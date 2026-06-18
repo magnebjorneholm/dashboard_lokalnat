@@ -8,9 +8,10 @@ specification with the shared outlier routine (iterated to convergence, the
 default), reproduces the app's baseline DEA efficiencies. This is what makes
 "two DEA implementations" an asset (cross-validated) rather than a risk.
 
-Note: the diagnostics run on the app's SDF-derived controllable input, not Ei's
-raw OPEXp, so the cleaned outlier set (5 firms) is the app baseline and these
-efficiencies sit within ~1e-3 of Ei's published facit (see eis_dea_metod.md).
+Note: the diagnostics run on the locked frontier input — raw OPEXp (opexp_dea),
+exactly what Ei ran on — so the cleaned outlier set is Ei's published 3-firm set
+and these efficiencies reproduce Ei's published facit to solver tolerance
+(see eis_dea_metod.md).
 """
 
 import numpy as np
@@ -24,19 +25,19 @@ from calculations.dea_diagnostics.config import DeaDiagnosticsConfig
 from calculations.dea_diagnostics.model import run_dea_diagnostics
 from calculations.frontier.outliers import detect_outliers_iterative
 from config.column_names import (
-    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+    COL_CAPITAL_COST_2024, COL_OPEXP_DEA,
     COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
 )
 
-# App-baseline DEA efficiencies (SDF-derived input), within ~1e-3 of Ei's
-# published facit. Unchanged by single vs iterated outliers for these 3 firms.
+# Ei's published DEA efficiencies (EIs_DEA.xlsx). Running on the raw-OPEXp frontier
+# input (opexp_dea) + iterated fence reproduces these to solver tolerance.
 FACIT = {
-    "REL00001": 0.67793232,
-    "REL00886": 0.77067884,
-    "REL03035": 0.95397050,
+    "REL00001": 0.67775340,
+    "REL00886": 0.79354730,
+    "REL03035": 0.98089851,
 }
 
-EI_INPUTS = [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG]
+EI_INPUTS = [COL_CAPITAL_COST_2024, COL_OPEXP_DEA]
 EI_OUTPUTS = [COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH]
 
 
@@ -73,7 +74,7 @@ class TestEiCrossValidation:
         assert reid in reids, f"{reid} unexpectedly flagged as outlier"
         idx = int(np.where(reids == reid)[0][0])
         theta = min(ei_dea_solved["primal"].theta[idx], 1.0)
-        assert theta == pytest.approx(FACIT[reid], abs=1e-3)
+        assert theta == pytest.approx(FACIT[reid], abs=1e-6)
 
     def test_primal_equals_dual(self, ei_dea_solved):
         """LP duality: primal and dual theta agree within tolerance."""
@@ -187,19 +188,19 @@ class TestModelEndToEnd:
         assert set(model_result.diagnostics) == set(reg.all_keys())
 
     def test_outlier_bookkeeping(self, model_result):
-        # Iterated to convergence on the SDF-derived input flags 5 firms over 5
-        # rounds (the documented 3->5 shift vs Ei's raw-OPEXp set, eis_dea_metod.md).
+        # Iterated to convergence on the raw-OPEXp frontier input (opexp_dea)
+        # reproduces Ei's published 3-firm outlier set exactly (eis_dea_metod.md).
         assert model_result.all_firms.shape[0] == 148
-        assert model_result.n_outlier_rounds == 5
+        assert model_result.n_outlier_rounds == 3
         flagged = set(model_result.all_firms[model_result.is_outlier])
-        assert flagged == {"REL00024", "REL00033", "REL00257", "REL00899", "REL00965"}
-        assert len(model_result.firms) == 148 - 5
+        assert flagged == {"REL00024", "REL00257", "REL00965"}
+        assert len(model_result.firms) == 148 - 3
 
     @pytest.mark.parametrize("reid", list(FACIT))
     def test_facit_through_full_model(self, model_result, reid):
         idx = int(np.where(model_result.firms == reid)[0][0])
         theta = min(model_result.theta_primal[idx], 1.0)
-        assert theta == pytest.approx(FACIT[reid], abs=1e-3)
+        assert theta == pytest.approx(FACIT[reid], abs=1e-6)
 
     def test_primal_dual_close(self, model_result):
         assert model_result.primal_dual_max_abs_diff < 1e-5

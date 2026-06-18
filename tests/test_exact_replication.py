@@ -20,7 +20,7 @@ import pandas as pd
 import numpy as np
 
 from config.column_names import (
-    COL_DEA_EFFICIENCY, COL_IS_OUTLIER, COL_OPEXP_RAW,
+    COL_DEA_EFFICIENCY, COL_IS_OUTLIER, COL_OPEXP_DEA,
     COL_CAPITAL_COST_PERIOD,
 )
 
@@ -38,21 +38,22 @@ def exact_replication_result(baseline_data):
 
 
 class TestRawOpexpColumn:
-    """The raw OPEXp input column must survive into the baseline frame."""
+    """The raw OPEXp (frontier/DEA) input column must survive into the baseline frame."""
 
-    def test_opexp_raw_present(self, baseline_data):
+    def test_opexp_dea_present(self, baseline_data):
         df = baseline_data.df_all_companies
-        assert COL_OPEXP_RAW in df.columns
-        assert df[COL_OPEXP_RAW].notna().sum() >= 140
+        assert COL_OPEXP_DEA in df.columns
+        assert df[COL_OPEXP_DEA].notna().sum() >= 140
 
-    def test_opexp_raw_differs_from_sdf_derived(self, baseline_data):
-        """Raw OPEXp and SDF-derived controllable diverge for a meaningful subset."""
+    def test_opexp_dea_differs_from_sdf_derived(self, baseline_data):
+        """Raw OPEXp (opexp_dea) and SDF-derived controllable diverge for a meaningful subset."""
         df = baseline_data.df_all_companies
-        raw = pd.to_numeric(df[COL_OPEXP_RAW], errors="coerce")
+        raw = pd.to_numeric(df[COL_OPEXP_DEA], errors="coerce")
         sdf = pd.to_numeric(df["controllable_cost_average"], errors="coerce")
         rel = (raw - sdf).abs() / sdf.abs().clip(lower=1.0)
-        # eis_dea_metod.md: the two coincide for only 92/148 firms.
-        assert (rel > 1e-6).sum() >= 40
+        # Raw OPEXp and the pure SDF controllable average diverge for a meaningful
+        # subset (~38 firms; they coincide where there is no neo separation).
+        assert (rel > 1e-6).sum() >= 30
 
 
 class TestDeaExactReplication:

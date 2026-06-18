@@ -12,18 +12,6 @@ from calculations.frontier.dea_calculations import run_dea_analysis, _run_super_
 
 
 # ============================================================================
-# Hardcoded expected DEA values for test companies
-# ============================================================================
-
-DEA_EXPECTED = {
-    # Expected values with SDF-derived controllable_cost_average as DEA input
-    "REL00001": {"dea_efficiency": 0.67793232, "potential": 0.32206768},
-    "REL00886": {"dea_efficiency": 0.77067884, "potential": 0.22932116},
-    "REL03035": {"dea_efficiency": 0.9539705, "potential": 0.04602950},
-}
-
-
-# ============================================================================
 # Synthetic DEA tests
 # ============================================================================
 
@@ -121,15 +109,15 @@ class TestDEAOutlierDetection:
 
 class TestDEABaseline148:
     def test_dea_baseline_runs(self, baseline_data):
-        """Run DEA on all 148 companies with baseline spec."""
+        """Run DEA on all 148 companies with the locked baseline spec (opexp_dea)."""
         from config.column_names import (
-            COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+            COL_CAPITAL_COST_2024, COL_OPEXP_DEA,
             COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
         )
 
         df = baseline_data.df_all_companies.copy()
         spec = {
-            "inputs": [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG],
+            "inputs": [COL_CAPITAL_COST_2024, COL_OPEXP_DEA],
             "outputs": [COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH],
             "rts": "crs",
             "orientation": "input",
@@ -141,16 +129,22 @@ class TestDEABaseline148:
         assert (result["dea_efficiency"] > 0).all()
 
     @pytest.mark.parametrize("reid", ["REL00001", "REL00886", "REL03035"])
-    def test_dea_efficiency_vs_facit(self, baseline_data, reid):
-        """Compare DEA efficiency against EIs_DEA hardcoded facit."""
+    def test_dea_efficiency_vs_facit(self, baseline_data, dea_baseline, reid):
+        """DEA on the frontier input (opexp_dea) reproduces Ei's published facit.
+
+        Running on raw OPEXp + the iterated outlier fence matches EIs_DEA.xlsx to
+        solver tolerance for every firm except the documented REL00193 anomaly
+        (none of the three sampled here). See eis_dea_metod.md.
+        """
         from config.column_names import (
-            COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+            COL_CAPITAL_COST_2024, COL_OPEXP_DEA,
             COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
+            COL_DEA_EFFICIENCY,
         )
 
         df = baseline_data.df_all_companies.copy()
         spec = {
-            "inputs": [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG],
+            "inputs": [COL_CAPITAL_COST_2024, COL_OPEXP_DEA],
             "outputs": [COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH],
             "rts": "crs",
             "orientation": "input",
@@ -158,6 +152,5 @@ class TestDEABaseline148:
         }
         result = run_dea_analysis(df, spec)
         row = result[result["REId"] == reid].iloc[0]
-        expected = DEA_EXPECTED[reid]["dea_efficiency"]
-        # DEA solver may have small numerical differences
-        assert row["dea_efficiency"] == pytest.approx(expected, rel=0.01)
+        facit = dea_baseline[dea_baseline["REId"] == reid][COL_DEA_EFFICIENCY].iloc[0]
+        assert row["dea_efficiency"] == pytest.approx(float(facit), abs=1e-6)

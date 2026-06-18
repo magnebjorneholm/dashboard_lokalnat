@@ -48,11 +48,14 @@ COL_RETURN_PERIOD = "return_on_assets_period"  # was: Avkastning_Period
 # =============================================================================
 # Controllable costs
 # =============================================================================
-COL_CONTROLLABLE_AVG = "controllable_cost_average"  # was: OPEXp, Paverkbara_Medelvarde
-# Raw OPEXp from Data_modeller, preserved before the SDF-derived swap. This is the
-# exact cost input Ei ran the DEA on; controllable_cost_average is the SDF-derived
-# value the app uses everywhere else (see eis_dea_metod.md).
-COL_OPEXP_RAW = "opexp_raw"
+# SDF-derived only. The REQUIREMENT base: the efficiency requirement is applied to it
+# and it enters the revenue frame as påverkbara kostnader. NEVER a DEA input — the
+# frontier runs on opexp_dea (raw OPEXp). See eis_dea_metod.md and the two-track split.
+COL_CONTROLLABLE_AVG = "controllable_cost_average"  # was: Paverkbara_Medelvarde
+# Raw OPEXp from Data_modeller — the FRONTIER (DEA) input. This is the exact cost input
+# Ei ran the DEA on. Locked: frozen against user cost changes, never used as a
+# requirement base. Pairs with capital_cost_2024 as the two locked DEA inputs.
+COL_OPEXP_DEA = "opexp_dea"  # was: OPEXp (and the short-lived COL_OPEXP_RAW)
 COL_NEO_ADJUSTMENTS = "neo_adjustments_period"  # was: Neonjusteringar
 COL_CONTROLLABLE_2024 = "controllable_cost_2024"  # was: Paverkbara_2024
 COL_CONTROLLABLE_2025 = "controllable_cost_2025"
@@ -75,7 +78,11 @@ COL_CAPEX_SHARE = "capex_share"  # was: CAPEX_Andel
 # =============================================================================
 # TOTEX
 # =============================================================================
-COL_TOTEX = "totex_first_year"  # was: TOTEX
+# Two-track split (mirrors the OPEX split above):
+#   COL_TOTEX     — requirement-side display total = controllable_cost_average + capital_cost_2024
+#   COL_TOTEX_DEA — frontier total = opexp_dea + capital_cost_2024 (the locked TOTEX DEA input)
+COL_TOTEX = "totex_first_year"  # requirement-side display total (SDF controllable + capex)
+COL_TOTEX_DEA = "totex_dea"     # frontier TOTEX (raw OPEXp + capex); only ever a DEA input
 
 # =============================================================================
 # DEA and efficiency
@@ -192,10 +199,11 @@ COL_CAPEX_CORR_STATION = "capex_corr_station"                # nätstation förl
 DATA_MODELLER_RENAME = {
     "Företag": COL_COMPANY_NAME,
     "CAPEX": COL_CAPITAL_COST_2024,
-    "OPEXp": COL_CONTROLLABLE_AVG,
+    "OPEXp": COL_OPEXP_DEA,
     # Note: "Kapitalkostnad_2024" alias is not created; CAPEX maps directly
     # Note: Avkastning columns removed from DM; return sourced from capcost_a.parquet
-    "TOTEX": COL_TOTEX,
+    # Note: TOTEX is not taken from the Excel; the loader builds totex_dea (frontier)
+    #       and totex_first_year (requirement) from the two cost tracks.
 }
 
 EIS_DEA_RENAME = {

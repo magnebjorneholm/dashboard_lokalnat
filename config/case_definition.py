@@ -128,7 +128,7 @@ class PreDeaConfig:
     
     # === M4 OPEX: parameter scaling (all 148 companies) and variable override (user only) ===
     opex_scaling: Optional[float] = None    # 4.1.1: None = 1.0 (no scaling)
-    opex_override: Optional[float] = None   # 40.1.1: annual OPEXp in tkr (trumps scaling for user)
+    opex_override: Optional[float] = None   # 40.1.1: annual controllable cost (requirement base) in tkr (trumps scaling for user)
 
     # === WACC input specification (for M3 output display) ===
     # How WACC was specified: "capm", "derived", "direct", "baseline"
@@ -150,7 +150,7 @@ class DeaConfig:
     method: EfficiencyMethod = EfficiencyMethod.BASELINE
     
     # Custom DEA model specification
-    inputs: List[str] = field(default_factory=lambda: ['capital_cost_2024', 'controllable_cost_average'])
+    inputs: List[str] = field(default_factory=lambda: ['capital_cost_2024', 'opexp_dea'])
     outputs: List[str] = field(default_factory=lambda: ['CU', 'MW', 'NS', 'MWhl', 'MWhh'])
     rts: str = "crs"  # "crs" or "vrs"
     orientation: str = "input"  # "input" or "output"
@@ -285,7 +285,7 @@ def get_exact_replication_config(user_reid: str) -> CaseDefinition:
     documented data anomalies (REL00193 in DEA, REL00584 in capital cost). See
     eis_dea_metod.md.
     """
-    from config.column_names import COL_CAPITAL_COST_2024, COL_OPEXP_RAW
+    from config.column_names import COL_CAPITAL_COST_2024, COL_OPEXP_DEA
 
     return CaseDefinition(
         name="Exact replication",
@@ -297,7 +297,7 @@ def get_exact_replication_config(user_reid: str) -> CaseDefinition:
         ),
         dea=DeaConfig(
             method=EfficiencyMethod.DEA,
-            inputs=[COL_CAPITAL_COST_2024, COL_OPEXP_RAW],
+            inputs=[COL_CAPITAL_COST_2024, COL_OPEXP_DEA],
             outlier_max_rounds=None,
         ),
         post_dea=PostDeaConfig(),

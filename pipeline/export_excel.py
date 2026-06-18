@@ -33,7 +33,7 @@ from config.column_names import (
     COL_DEPRECIATION_2026, COL_DEPRECIATION_2027, COL_DEPRECIATION_PERIOD,
     COL_RETURN_2024, COL_RETURN_2025,
     COL_RETURN_2026, COL_RETURN_2027, COL_RETURN_PERIOD,
-    COL_CONTROLLABLE_AVG, COL_CONTROLLABLE_PERIOD, COL_CONTROLLABLE_BEFORE,
+    COL_CONTROLLABLE_AVG, COL_OPEXP_DEA, COL_CONTROLLABLE_PERIOD, COL_CONTROLLABLE_BEFORE,
     COL_CONTROLLABLE_IN_RF,
     COL_OPEX_BEFORE, COL_OPEX_AFTER, COL_OPEX_EFF_DEDUCTION, COL_OPEX_SHARE,
     COL_CAPEX_BEFORE, COL_CAPEX_AFTER, COL_CAPEX_EFF_DEDUCTION, COL_CAPEX_SHARE,
@@ -1040,7 +1040,7 @@ def _build_all_companies_dea_sheet(wb: Workbook, case_result, baseline_result, u
 
     # Merge DEA input variables from pre_dea (costs + outputs used in DEA)
     df_all = case_result.pre_dea.df_all_companies
-    dea_input_cols = [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+    dea_input_cols = [COL_CAPITAL_COST_2024, COL_OPEXP_DEA,
                       COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH]
     merge_cols = [c for c in dea_input_cols if c in df_all.columns]
     if merge_cols and COL_REID in df_all.columns:
@@ -1052,7 +1052,7 @@ def _build_all_companies_dea_sheet(wb: Workbook, case_result, baseline_result, u
                    COL_DEA_POTENTIAL, "bl_potential",
                    COL_IS_OUTLIER,
                    COL_EFF_REQ_ANNUAL, "bl_eff_req_annual",
-                   COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+                   COL_CAPITAL_COST_2024, COL_OPEXP_DEA,
                    COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH]
     selected = [c for c in output_cols if c in df.columns]
     df = df[selected].copy()
@@ -1069,7 +1069,7 @@ def _build_all_companies_dea_sheet(wb: Workbook, case_result, baseline_result, u
         COL_EFF_REQ_ANNUAL: "Eff. Req (Case)",
         "bl_eff_req_annual": "Eff. Req (Baseline)",
         COL_CAPITAL_COST_2024: "Cap Cost 2024 (tkr)",
-        COL_CONTROLLABLE_AVG: "Controllable Avg (tkr)",
+        COL_OPEXP_DEA: "OPEXp DEA input (tkr)",
         COL_CU: "CU",
         COL_MW: "MW",
         COL_NS: "NS",
@@ -1087,7 +1087,7 @@ def _build_all_companies_dea_sheet(wb: Workbook, case_result, baseline_result, u
         "Eff. Req (Case)": _FMT_PCT,
         "Eff. Req (Baseline)": _FMT_PCT,
         "Cap Cost 2024 (tkr)": _FMT_TKR,
-        "Controllable Avg (tkr)": _FMT_TKR,
+        "OPEXp DEA input (tkr)": _FMT_TKR,
         "CU": _FMT_TKR,
         "MW": '#,##0.0',
         "NS": _FMT_TKR,

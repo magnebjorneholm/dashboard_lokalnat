@@ -39,7 +39,7 @@ from calculations.capex.wacc_calculations import BASELINE_WACC, BASELINE_CAPM, B
 from config.incentive_parameters import BASELINE_INCENTIVE
 
 from calculations.frontier.dea_calculations import BASELINE_DEA_SPEC
-from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG
+from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_OPEXP_DEA, COL_TOTEX_DEA
 from config.glossary import (
     PID_GENERAL_SCALING, PID_WACC_REAL, PID_LOSS_SCALING, PID_LOSS_SHARING,
     PID_MAX_POTENTIAL_CAP, PID_REALIZATION_TIME, PID_CUSTOMER_SHARING,
@@ -344,6 +344,11 @@ def _get_scaled_user_capbase(
         return None
 
 
+# Cost inputs allowed on the frontier. The requirement-side controllable_cost_average
+# must NEVER reach the DEA — only the frozen frontier track does.
+_ALLOWED_DEA_INPUTS = {COL_CAPITAL_COST_2024, COL_OPEXP_DEA, COL_TOTEX_DEA}
+
+
 def build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
     """Build DeaConfig from addon_benchmarking."""
     addon = ui_config.get("addon_benchmarking", {})
@@ -351,9 +356,19 @@ def build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
     # Custom DEA
     _op = BASELINE_DEA_SPEC['outlier_params']
     if addon.get("dea_method") == "custom":
+        inputs = addon.get("dea_inputs", DEA_INPUT_OPTIONS)
+        # Guard: keep the two-track split intact. controllable_cost_average is the
+        # requirement base, never a frontier input.
+        bad = set(inputs) - _ALLOWED_DEA_INPUTS
+        if bad:
+            raise ValueError(
+                f"Illegal DEA input(s) {sorted(bad)}. The frontier is locked to "
+                f"{sorted(_ALLOWED_DEA_INPUTS)}; controllable_cost_average is the "
+                f"requirement base and must not be used as a DEA input."
+            )
         return DeaConfig(
             method=EfficiencyMethod.DEA,
-            inputs=addon.get("dea_inputs", DEA_INPUT_OPTIONS),
+            inputs=inputs,
             outputs=addon.get("dea_outputs", DEA_OUTPUT_OPTIONS),
             rts=addon.get("dea_rts", BASELINE_DEA_SPEC['rts']),
             multiplier=addon.get("dea_multiplier", _op['multiplier']),

@@ -23,9 +23,9 @@ def _load_snapshot(snap_name: str):
     return pd.read_parquet(snap) if snap.exists() else None
 from config.column_names import (
     COL_REID, COL_DMU, COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT, COL_DISPLAY_NAME,
-    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_OPEXP_DEA,
     COL_RETURN_2024, COL_RETURN_2025, COL_RETURN_2026, COL_RETURN_2027,
-    COL_RETURN_PERIOD, COL_TOTEX,
+    COL_RETURN_PERIOD, COL_TOTEX, COL_TOTEX_DEA,
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_DEA_POTENTIAL,
     COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL,
     DATA_MODELLER_RENAME, EIS_DEA_RENAME, SDF_IR_RENAME,
@@ -78,8 +78,12 @@ def _parse_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
 
     Returns:
         DataFrame with columns (after rename):
-        ['DMU', 'REId', 'company_name', 'controllable_cost_average',
-         'capital_cost_2024', 'CU', 'MW', 'NS', 'MWhl', 'MWhh', 'totex_first_year']
+        ['DMU', 'REId', 'company_name', 'opexp_dea',
+         'capital_cost_2024', 'CU', 'MW', 'NS', 'MWhl', 'MWhh', 'totex_dea']
+
+    Note: OPEXp becomes opexp_dea (the raw frontier/DEA input). The requirement-side
+    controllable_cost_average and totex_first_year are NOT produced here — they are
+    derived from the SDF grunddata in load_baseline_data().
     """
     data_file = require_dataset("data_modeller", data_path)
 
@@ -111,11 +115,12 @@ def _parse_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Calculate TOTEX (before rename, using original column names)
-    df["TOTEX"] = df["OPEXp"] + df["CAPEX"]
-
-    # Rename Swedish → English at the load boundary
+    # Rename Swedish → English at the load boundary (OPEXp → opexp_dea, CAPEX → capital_cost_2024)
     df = df.rename(columns=DATA_MODELLER_RENAME)
+
+    # Frontier TOTEX = raw OPEXp + capex (the locked TOTEX DEA input). The
+    # requirement-side totex_first_year is built later from the SDF controllable value.
+    df[COL_TOTEX_DEA] = df[COL_OPEXP_DEA] + df[COL_CAPITAL_COST_2024]
 
     return df
 
@@ -397,37 +402,27 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     df_all_companies = df_all_companies.merge(return_df, on="REId", how="left")
     print(f"  Added per-year return (2024-2027) for {len(return_df)} companies")
 
-    # 8. Replace OPEXp with SDF-derived controllable_cost_average.
-    #    Preserve the raw Data_modeller OPEXp first: it is the exact cost input
-    #    Ei ran the baseline DEA on (the SDF-derived value diverges for ~109
-    #    firms — see eis_dea_metod.md). Keeping both lets an exact-replication
-    #    profile feed raw OPEXp to the DEA while everything else uses the
-    #    SDF-derived controllable_cost_average.
-    from config.column_names import COL_OPEXP_RAW
-    df_all_companies[COL_OPEXP_RAW] = df_all_companies[COL_CONTROLLABLE_AVG]
-
+    # 8. Add the REQUIREMENT-side controllable cost as its own column.
+    #    Two-track split (see eis_dea_metod.md): the frontier/DEA input is the raw
+    #    OPEXp (opexp_dea, already on df_all_companies), while the efficiency
+    #    requirement is applied to the SDF-derived controllable_cost_average. They
+    #    differ for ~56 firms (up to ~16.5 %), so they are kept as distinct columns
+    #    and never conflated. No swap, no opexp_equivalent: opexp_dea stays raw, the
+    #    requirement base is the plain SDF average (neo is handled separately in the
+    #    requirement calculation, not baked in here).
     from calculations.opex.cost_aggregation import aggregate_controllable
     sdf_derived = aggregate_controllable(controllable_detail, controllable_meta)
-    # Compute opexp_equivalent = controllable_cost_average + neo_adjustments/4
-    # This matches how OPEXp was used: as the DEA input (average + annualized neo)
-    sdf_derived["opexp_equivalent"] = (
-        sdf_derived[COL_CONTROLLABLE_AVG]
-        + sdf_derived["neo_adjustments_period"] / 4
-    )
-    # Replace OPEXp-based controllable_cost_average in df_all_companies
-    df_all_companies = df_all_companies.drop(columns=[COL_CONTROLLABLE_AVG], errors="ignore")
     df_all_companies = df_all_companies.merge(
-        sdf_derived[["REId", "opexp_equivalent"]].rename(
-            columns={"opexp_equivalent": COL_CONTROLLABLE_AVG}
-        ),
+        sdf_derived[["REId", COL_CONTROLLABLE_AVG]],
         on="REId",
         how="left",
     )
-    # Recalculate TOTEX with SDF-derived value
+    # Requirement-side display TOTEX = SDF controllable + capex (distinct from the
+    # frontier totex_dea = opexp_dea + capex built in _parse_data_modeller).
     df_all_companies[COL_TOTEX] = (
         df_all_companies[COL_CONTROLLABLE_AVG] + df_all_companies[COL_CAPITAL_COST_2024]
     )
-    print(f"  Replaced OPEXp with SDF-derived controllable_cost_average")
+    print(f"  Added SDF-derived controllable_cost_average (requirement base)")
 
     # 9. Validate
     n_companies = len(df_all_companies)

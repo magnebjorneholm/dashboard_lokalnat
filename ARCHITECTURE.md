@@ -635,7 +635,8 @@ Identifiers:     COL_REID, COL_ID_NETWORK, COL_DMU, COL_COMPANY_NAME
 Capital costs:   COL_CAPITAL_COST_2024 .. 2027, COL_CAPITAL_COST_PERIOD
 Depreciation:    COL_DEPRECIATION_2024 .. 2027, COL_DEPRECIATION_PERIOD
 Returns:         COL_RETURN_2024 .. 2027, COL_RETURN_PERIOD
-Controllable:    COL_CONTROLLABLE_AVG, COL_CONTROLLABLE_2024 .. 2027, COL_CONTROLLABLE_PERIOD
+Controllable:    COL_CONTROLLABLE_AVG (SDF, requirement base), COL_CONTROLLABLE_2024 .. 2027, COL_CONTROLLABLE_PERIOD
+DEA frontier:    COL_OPEXP_DEA (raw OPEXp), COL_TOTEX_DEA (= opexp_dea + capital_cost_2024)
 OPEX/CAPEX:      COL_OPEX_BEFORE/AFTER, COL_CAPEX_BEFORE/AFTER, COL_OPEX/CAPEX_EFF_DEDUCTION
 DEA:             COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_DEA_POTENTIAL, COL_IS_OUTLIER
 Efficiency:      COL_EFF_REQ_ANNUAL
@@ -729,7 +730,7 @@ case to Firestore to preserve work across sessions.
 - wacc_input_method ("capm"/"derived"/"direct"/"baseline"),
   wacc_capm_inputs (3.1.X), wacc_derived_inputs (3.2.X)
 - opex_scaling (4.1.1) -- float multiplier for user's company controllable OPEX only
-- opex_override (40.1.1) -- absolute OPEXp in tkr for user's company (trumps scaling)
+- opex_override (40.1.1) -- absolute controllable cost (requirement base) in tkr for user's company (trumps scaling)
 
 **DeaConfig** (Stage 3):
 - method (EfficiencyMethod), inputs, outputs, rts ("crs"/"vrs")
@@ -782,10 +783,14 @@ module, `new_benchmarking_model/` (see Section 20).
 **KENT:** Steps 1-4 (capbase prep) then 5-8 (depreciation, returns, capital cost).
 Uses half-year timecodes: 229=2024H1, 230=2024H2, 231=2025H1, ..., 236=2027H2.
 
-**DEA:** Input-oriented CRS. Default inputs: [capital_cost_2024, controllable_cost_average].
+**DEA:** Input-oriented CRS. Default (locked) inputs: [capital_cost_2024, opexp_dea]
+(raw OPEXp), or their sum totex_dea in TOTEX mode. The requirement-side
+controllable_cost_average is NEVER a DEA input (config_adapter guards this).
 Default outputs: [CU, MW, NS, MWhl, MWhh]. Outlier detection via IQR method.
 DEA always uses baseline (historical) cost data — user changes to OPEX/CAPEX/WACC
-do NOT affect DEA inputs. Only the model specification (inputs, outputs, RTS) can be changed.
+do NOT affect DEA inputs. Only the model specification (cost-input mode, outputs, RTS,
+outlier params) can be changed. The default spec is served from EIs_DEA.xlsx as a cache;
+any non-default spec recomputes live on opexp_dea. See the two-track split note below.
 
 > **Replicating Ei's baseline DEA results** (`data/raw/ei/EIs_DEA.xlsx`): the exact,
 > data-agnostic procedure that reproduces Ei's effektivitet/supereffektivitet to solver
@@ -815,7 +820,12 @@ Swedish column names from files are renamed to English here using rename dicts.
 ### baseline_data.py
 
 `load_baseline_data() -> BaselineData` (frozen dataclass):
-- `df_all_companies` -- 148 rows from Data_modeller.xlsx (OPEXp replaced with SDF-derived values; company names overridden by the curated list, see below)
+- `df_all_companies` -- 148 rows from Data_modeller.xlsx. Two cost tracks kept separate:
+  the FRONTIER track `opexp_dea` (raw OPEXp) + `totex_dea` (= opexp_dea + capex), used only
+  as locked DEA inputs; and the REQUIREMENT track `controllable_cost_average` (SDF-derived
+  pure average, merged in at load) + `totex_first_year` (= controllable + capex), the base
+  the efficiency requirement is applied to. The two never mix (see eis_dea_metod.md and the
+  two-track DEA note). Company names overridden by the curated list, see below.
 - `dea_results` -- Baseline DEA from EIs_DEA.xlsx
 - `sdf_ir` -- Revenue frame baseline from SDF file
 - `sdf_controllable` -- Controllable costs from SDF file (raw sheet, used for verification)

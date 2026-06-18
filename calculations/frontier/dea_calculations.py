@@ -10,7 +10,7 @@ import numpy as np
 from typing import Dict, Any, List
 
 from config.column_names import (
-    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+    COL_CAPITAL_COST_2024, COL_OPEXP_DEA,
     COL_DEA_EFFICIENCY, COL_DEA_SUPER_EFF, COL_DEA_POTENTIAL, COL_IS_OUTLIER,
     COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
 )
@@ -27,9 +27,9 @@ def run_dea_analysis(
     Run DEA analysis with configurable model specification.
 
     Args:
-        df: DataFrame with all 148 companies, columns: REId, capital_cost_2024, controllable_cost_average, CU, MW, NS, MWhl, MWhh
+        df: DataFrame with all 148 companies, columns: REId, capital_cost_2024, opexp_dea, CU, MW, NS, MWhl, MWhh
         model_spec: Dict with DEA specification:
-            - inputs: List of input columns (default: ['capital_cost_2024', 'controllable_cost_average'])
+            - inputs: List of input columns (default: ['capital_cost_2024', 'opexp_dea'])
             - outputs: List of output columns (default: ['CU', 'MW', 'NS', 'MWhl', 'MWhh'])
             - rts: 'crs' or 'vrs' (default: 'crs')
             - orientation: 'input' or 'output' (default: 'input')
@@ -47,7 +47,7 @@ def run_dea_analysis(
     df = df.copy()
 
     # Extract model specification (defaults from BASELINE_DEA_SPEC at bottom of file)
-    input_cols = model_spec.get('inputs', [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG])
+    input_cols = model_spec.get('inputs', [COL_CAPITAL_COST_2024, COL_OPEXP_DEA])
     output_cols = model_spec.get('outputs', [COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH])
     rts = model_spec.get('rts', 'crs')
     orientation = model_spec.get('orientation', 'input')
@@ -151,9 +151,11 @@ def _run_super_efficiency_dea(
     return [s if np.isfinite(s) else "OUTLIER" for s in scores]
 
 
-# Baseline DEA specification (Ei's model)
+# Baseline DEA specification (Ei's model). Inputs are LOCKED to the frontier track:
+# capital cost + raw OPEXp (opexp_dea). The requirement-side controllable_cost_average
+# is never a DEA input. See eis_dea_metod.md.
 BASELINE_DEA_SPEC = {
-    'inputs': [COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG],
+    'inputs': [COL_CAPITAL_COST_2024, COL_OPEXP_DEA],
     'outputs': [COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH],
     'rts': 'crs',
     'orientation': 'input',

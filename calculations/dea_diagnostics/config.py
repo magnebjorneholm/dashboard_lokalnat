@@ -17,12 +17,14 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from config.column_names import (
-    COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
+    COL_CAPITAL_COST_2024, COL_OPEXP_DEA,
     COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
 )
 
-# Ei's baseline DEA specification.
-EI_INPUTS: Tuple[str, ...] = (COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG)
+# Ei's baseline DEA specification. Cost inputs are the locked frontier track:
+# capital cost + raw OPEXp (opexp_dea), the exact input Ei ran on (eis_dea_metod.md).
+# The requirement-side controllable_cost_average is never a DEA input.
+EI_INPUTS: Tuple[str, ...] = (COL_CAPITAL_COST_2024, COL_OPEXP_DEA)
 EI_OUTPUTS: Tuple[str, ...] = (COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH)
 
 

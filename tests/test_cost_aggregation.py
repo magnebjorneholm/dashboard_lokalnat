@@ -156,10 +156,11 @@ class TestSdfDerivedVsOpexp:
     """
 
     def test_match_count(self, ctrl_aggregated, ctrl_meta):
-        """At least 90 companies without Neo should match OPEXp."""
+        """At least 90 companies without Neo should match raw OPEXp (opexp_dea)."""
         from data_loaders.baseline_data import load_baseline_data
+        from config.column_names import COL_OPEXP_DEA
         baseline = load_baseline_data()
-        dm = baseline.df_all_companies[["REId", COL_CONTROLLABLE_AVG]].copy()
+        dm = baseline.df_all_companies[["REId", COL_OPEXP_DEA]].copy()
         dm.columns = ["REId", "opexp_dm"]
 
         # Only companies without unseparated Neo
