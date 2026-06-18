@@ -18,13 +18,15 @@ Data model (capbase_a):
 
 from pathlib import Path
 
+from config.data_paths import dataset_path
+
 from config.column_names import COL_REID
 
 # ── Paths ───────────────────────────────────────────────────────────────────
 # repo root = four levels up from this file:
 #   .../dashboard_lokalnat/new_benchmarking_model/components/cable_length/config.py
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CAPBASE_PATH = REPO_ROOT / "data" / "rab_and_capex" / "capbase_a.parquet"
+CAPBASE_PATH = dataset_path("capbase_a")
 
 # ── Ledningstyp codes (axis 1) ──────────────────────────────────────────────
 # ASCII codes, kept stable for use as parameter values / dict keys.

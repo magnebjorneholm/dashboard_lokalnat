@@ -130,9 +130,12 @@ def detect_outliers_iterative(
     round flags nothing new, or after `max_rounds` rounds.
 
     `max_rounds`:
-        None -> iterate until no new outliers appear (the general behaviour).
-        1    -> a single identification round, i.e. Ei's reference method
-                (flag once on the full-set scores, then one cleaned re-solve).
+        None -> iterate until no new outliers appear (the default; this is what
+                reproduces Ei's published outlier set and efficiencies — a single
+                round leaves moderate outliers in the reference set that only get
+                caught once the extreme firm is removed, see eis_dea_metod.md).
+        1    -> a single identification round (flag once on the full-set scores,
+                then one cleaned re-solve). Does NOT match Ei on the full data.
 
     A final super-efficiency solve on the surviving firms always produces
     `final_scores`, regardless of how the loop terminated.

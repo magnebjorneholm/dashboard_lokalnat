@@ -48,7 +48,8 @@ from frontend.results import (
 
 init_session_state()
 
-SHAPEFILE_PATH = "data/shapefiles/all_network_operator_areas.shp"
+from config.data_paths import dataset_path
+SHAPEFILE_PATH = str(dataset_path("network_areas_shapefile"))
 
 # =============================================================================
 # HELPER FUNCTIONS

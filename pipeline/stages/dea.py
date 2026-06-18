@@ -81,7 +81,8 @@ def stage_dea(
                 'q_lower': config.q_lower,
                 'q_upper': config.q_upper,
                 'multiplier': config.multiplier
-            }
+            },
+            'outlier_max_rounds': config.outlier_max_rounds,
         }
 
         # Always use baseline data for DEA (historical values)

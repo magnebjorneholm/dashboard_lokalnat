@@ -31,8 +31,8 @@ from calculations.opex.controllable_cost_calculations import calculate_controlla
 from calculations.opex.cost_aggregation import aggregate_controllable, aggregate_non_controllable
 from calculations.revenue_frame_assembly import assemble_revenue_frame, extract_user_revenue_frame
 from calculations.incentive.incentive_calculations import calculate_all_incentives
-from data_loaders.incentive_data import (
-    load_incentive_data,
+from data_loaders.incentive_data import load_incentive_data
+from calculations.incentive.incentive_prep import (
     prepare_incentive_input,
     get_incentive_summary_by_reid,
     get_incentive_detailed_by_reid,

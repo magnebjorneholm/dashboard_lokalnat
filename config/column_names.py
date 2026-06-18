@@ -49,6 +49,10 @@ COL_RETURN_PERIOD = "return_on_assets_period"  # was: Avkastning_Period
 # Controllable costs
 # =============================================================================
 COL_CONTROLLABLE_AVG = "controllable_cost_average"  # was: OPEXp, Paverkbara_Medelvarde
+# Raw OPEXp from Data_modeller, preserved before the SDF-derived swap. This is the
+# exact cost input Ei ran the DEA on; controllable_cost_average is the SDF-derived
+# value the app uses everywhere else (see eis_dea_metod.md).
+COL_OPEXP_RAW = "opexp_raw"
 COL_NEO_ADJUSTMENTS = "neo_adjustments_period"  # was: Neonjusteringar
 COL_CONTROLLABLE_2024 = "controllable_cost_2024"  # was: Paverkbara_2024
 COL_CONTROLLABLE_2025 = "controllable_cost_2025"

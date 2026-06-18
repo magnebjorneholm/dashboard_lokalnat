@@ -3,10 +3,14 @@ tests/test_dea_diagnostics.py
 
 Tests for the standalone DEA-diagnostics solvers and diagnostics.
 
-The central test proves that the new primal+dual solver, run on Ei's
-specification with the shared outlier routine (single identification round),
-reproduces Ei's published efficiency facit. This is what makes "two DEA
-implementations" an asset (cross-validated) rather than a risk.
+The central test proves that the new primal+dual solver, run on the model
+specification with the shared outlier routine (iterated to convergence, the
+default), reproduces the app's baseline DEA efficiencies. This is what makes
+"two DEA implementations" an asset (cross-validated) rather than a risk.
+
+Note: the diagnostics run on the app's SDF-derived controllable input, not Ei's
+raw OPEXp, so the cleaned outlier set (5 firms) is the app baseline and these
+efficiencies sit within ~1e-3 of Ei's published facit (see eis_dea_metod.md).
 """
 
 import numpy as np
@@ -24,7 +28,8 @@ from config.column_names import (
     COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
 )
 
-# Ei's published DEA efficiency facit (same values as test_dea.py).
+# App-baseline DEA efficiencies (SDF-derived input), within ~1e-3 of Ei's
+# published facit. Unchanged by single vs iterated outliers for these 3 firms.
 FACIT = {
     "REL00001": 0.67793232,
     "REL00886": 0.77067884,
@@ -37,18 +42,18 @@ EI_OUTPUTS = [COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH]
 
 @pytest.fixture(scope="module")
 def ei_dea_solved(baseline_data):
-    """Run Ei's spec through the shared outlier routine + new primal/dual solver.
+    """Run the model spec through the shared outlier routine + new primal/dual solver.
 
-    Outliers are detected with the shared frontier routine (Ei's single round,
-    max_rounds=1) and removed from the reference set. The surviving firms are
-    then scored with the new standard-DEA solvers (super_eff=False). Returns the
-    cleaned-set arrays, REIds, and both solver results.
+    Outliers are detected with the shared frontier routine iterated to
+    convergence (the default) and removed from the reference set. The surviving
+    firms are then scored with the new standard-DEA solvers (super_eff=False).
+    Returns the cleaned-set arrays, REIds, and both solver results.
     """
     df = baseline_data.df_all_companies.copy()
     inputs = df[EI_INPUTS].apply(pd.to_numeric, errors="coerce").values
     outputs = df[EI_OUTPUTS].apply(pd.to_numeric, errors="coerce").values
 
-    res = detect_outliers_iterative(inputs, outputs, "crs", multiplier=2.0, max_rounds=1)
+    res = detect_outliers_iterative(inputs, outputs, "crs", multiplier=2.0, max_rounds=None)
     clean = ~res.is_outlier
 
     x = inputs[clean]
@@ -63,7 +68,7 @@ def ei_dea_solved(baseline_data):
 class TestEiCrossValidation:
     @pytest.mark.parametrize("reid", list(FACIT))
     def test_new_solver_matches_ei_facit(self, ei_dea_solved, reid):
-        """Standard DEA on the cleaned set (capped at 1) reproduces Ei's facit."""
+        """Standard DEA on the cleaned set (capped at 1) reproduces the app-baseline efficiency."""
         reids = ei_dea_solved["reids"]
         assert reid in reids, f"{reid} unexpectedly flagged as outlier"
         idx = int(np.where(reids == reid)[0][0])
@@ -167,13 +172,13 @@ class TestBenchmarkComposition:
 
 
 # ---------------------------------------------------------------------------
-# End-to-end model run (run_dea_diagnostics) on Ei data, Ei-mode outliers
+# End-to-end model run (run_dea_diagnostics) on the app baseline, iterated outliers
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
 def model_result(baseline_data):
-    """Full run_dea_diagnostics pass with Ei's single outlier round."""
-    cfg = DeaDiagnosticsConfig(outlier_max_rounds=1)
+    """Full run_dea_diagnostics pass with the default (iterated) outlier detection."""
+    cfg = DeaDiagnosticsConfig()
     return run_dea_diagnostics(cfg, baseline_data.df_all_companies)
 
 
@@ -182,12 +187,13 @@ class TestModelEndToEnd:
         assert set(model_result.diagnostics) == set(reg.all_keys())
 
     def test_outlier_bookkeeping(self, model_result):
-        # Ei's single round flags exactly REL00024 and REL00257.
+        # Iterated to convergence on the SDF-derived input flags 5 firms over 5
+        # rounds (the documented 3->5 shift vs Ei's raw-OPEXp set, eis_dea_metod.md).
         assert model_result.all_firms.shape[0] == 148
-        assert model_result.n_outlier_rounds == 1
+        assert model_result.n_outlier_rounds == 5
         flagged = set(model_result.all_firms[model_result.is_outlier])
-        assert flagged == {"REL00024", "REL00257"}
-        assert len(model_result.firms) == 148 - 2
+        assert flagged == {"REL00024", "REL00033", "REL00257", "REL00899", "REL00965"}
+        assert len(model_result.firms) == 148 - 5
 
     @pytest.mark.parametrize("reid", list(FACIT))
     def test_facit_through_full_model(self, model_result, reid):

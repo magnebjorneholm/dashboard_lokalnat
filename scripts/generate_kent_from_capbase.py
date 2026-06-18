@@ -15,11 +15,15 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config.data_paths import dataset_path, data_dir
+
+DATA_DIR = data_dir()
 OUTPUT_PATH = DATA_DIR / "examples" / "generated_kent_886.xlsx"
 NETWORK_ID = 886
 WACC = 0.0453
@@ -66,7 +70,7 @@ def time_invest_to_halvar(ti: float) -> str:
 
 def load_company_capbase(network_id: int) -> pd.DataFrame:
     """Load capbase_a rows for a single company."""
-    path = DATA_DIR / "rab_and_capex" / "capbase_a.parquet"
+    path = dataset_path("capbase_a")
     df = pd.read_parquet(path)
     company = df[df["id_network"] == network_id].copy()
     print(f"Loaded {len(company)} rows for id_network={network_id}")

@@ -7,11 +7,13 @@ matches raw data values (subcat strings in capbase_a) or regulatory terms.
 
 from pathlib import Path
 
+from config.data_paths import dataset_path
+
 # ── Paths ───────────────────────────────────────────────────────────────────
 # repo root = four levels up from this file:
 #   .../dashboard_lokalnat/new_benchmarking_model/components/environment_capex_adjustment/config.py
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CAPBASE_PATH = REPO_ROOT / "data" / "rab_and_capex" / "capbase_a.parquet"
+CAPBASE_PATH = dataset_path("capbase_a")
 
 # ── Category ────────────────────────────────────────────────────────────────
 # cat_encode == 3 is "annan ledning / kabel" in capbase_a; all jordkabel lives here.

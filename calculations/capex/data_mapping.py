@@ -15,8 +15,7 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple
 
 from config.time_codes import YEAR_TO_TIMECODES
-
-TEST_MODE = False  # Flag for test mode (mini-dataset)
+from config.runtime import TEST_MODE  # noqa: F401  (re-exported for backward compatibility)
 
 
 def merge_kent_with_baseline(
@@ -104,9 +103,13 @@ def merge_kent_with_baseline(
     log(f"Columns from KENT: {len(available_update_cols)}", indent=2)
 
     # 5. Ensure all update columns exist in result
+    #    KENT produces float64; some baseline columns (return_on_assets_*) arrive
+    #    as float32 from capcost_a.parquet. pandas >= 3 raises LossySetitemError on
+    #    a float64 -> float32 .loc assignment, so widen the targets to float64 first.
     for col in available_update_cols:
         if col not in df_result.columns:
             df_result[col] = pd.NA
+        df_result[col] = pd.to_numeric(df_result[col], errors='coerce').astype('float64')
 
     # 6. Update ONLY the rows that exist in KENT output
     df_network_indexed = df_network.set_index('REId')

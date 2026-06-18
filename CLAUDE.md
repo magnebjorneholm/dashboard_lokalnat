@@ -9,11 +9,46 @@ Entrypoint: `streamlit_app.py` (Streamlit, Python 3.12).
 
 Read `ARCHITECTURE.md` at the start of every conversation for full project context.
 
+**When a question touches asset/capital-base valuation** (värderingsprincip,
+kapacitetsbevarande/förmögenhetsbevarande, värdekonsistent övergång, or whether the
+pipeline / new_benchmarking_model data is a valid basis for an analysis), read
+`kapitalbas_vardering_och_dashboard.md` (repo root). It summarises Ei's switch of
+valuation principle for 2028–2031 and what it means for the dashboard data, with cited
+references to the Ei source doc.
+
+**When a question touches replicating Ei's baseline DEA results** (reproducing
+`data/ei/EIs_DEA.xlsx`: effektivitet, supereffektivitet, outliers), read
+`eis_dea_metod.md` (repo root). It states the exact, data-agnostic procedure that
+reproduces Ei's results to solver tolerance (super-efficiency LP, iterated IQR outlier
+fence, final scoring), the invariants that must hold, and the one known non-replicable
+row (REL00193).
+
 **Do not read `MIGRATION_PRINCIPER.md`** — it is a scratch/working note, not authoritative
 project context. Skip it unless the user explicitly asks you to open it. (A `Read` deny rule
 in `.claude/settings.json` also blocks the Read tool for this file.)
 
-**R / DEA:** native arm64 R 4.6.0 with the `rDEA` package (Robust DEA) is installed via Homebrew at `/opt/homebrew/bin/Rscript`. Always use that absolute path — the bare `Rscript` on PATH resolves to an old Intel R 4.0.5 in `/usr/local/bin` that does **not** have `rDEA`. Nothing to install.
+## Cowork sessions (writing, not coding)
+
+In Cowork the work is **writing** — reports, remissvar, debattartiklar, research-paper
+text, user manuals, summaries. **All coding is done in Claude Code, not here.** Don't edit
+source under `calculations/`, `pipeline/`, `frontend/`, etc. in a Cowork session; if a code
+change is needed, say so and leave it for Claude Code.
+
+When Erik says "jobba med Regumetrica" (or similar) in Cowork, the start routine is:
+
+1. Read `ARCHITECTURE.md` for project context. Read `kapitalbas_vardering_och_dashboard.md`
+   or `eis_dea_metod.md` when the topic touches valuation or DEA replication (per the rules above).
+2. For substance — figures, results, normvärden — pull from the repo's own data
+   (`data/`, `new_benchmarking_model/`, `standalone_data/`, `Normvärdeslista-2024-2027.xlsx`)
+   rather than guessing. Cite the file.
+3. Apply the `eriks-voice` skill for voice/register, and `econ-write-electricity` for
+   structure on research-style text.
+4. Before drafting, confirm target **format** (docx / PDF / LaTeX manual under
+   `user_manual_latex/` / Markdown) and **audience** (Ei, företag, allmänhet, akademiskt).
+
+**Always read files in full.** When asked to read a `.py`, `.md`, data, or any other file,
+read the entire file — never just a section or excerpt. For files longer than one read
+window, read across multiple passes until the whole file is covered.
 
 
 ## Language

@@ -11,9 +11,16 @@ After loading, all DataFrames use canonical English names from config.column_nam
 from dataclasses import dataclass
 import pandas as pd
 from typing import Dict, Optional
-from pathlib import Path
-import streamlit as st
 
+from config.data_paths import require_dataset, dataset_path
+from data_loaders._cache import cached
+from data_loaders.schemas import require_columns
+
+
+def _load_snapshot(snap_name: str):
+    """Return the frozen parquet snapshot if present (and no explicit override)."""
+    snap = dataset_path(snap_name)
+    return pd.read_parquet(snap) if snap.exists() else None
 from config.column_names import (
     COL_REID, COL_DMU, COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT, COL_DISPLAY_NAME,
     COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG,
@@ -25,28 +32,6 @@ from config.column_names import (
     SDF_IR_REVENUE_FRAME_PATTERNS, COL_REVENUE_FRAME,
     COL_CAPITAL_COST_PERIOD, COL_DEPRECIATION_PERIOD,
 )
-
-
-def _find_data_file(filename: str, data_path: Optional[str] = None) -> Path:
-    """Search for a data file in standard locations and return the first match.
-
-    Search order: data_path/ (if given), cwd, data/, /mnt/project/.
-    """
-    search_paths = []
-    if data_path:
-        search_paths.append(Path(data_path) / filename)
-    search_paths.extend([
-        Path(filename),
-        Path("data") / filename,
-        Path("/mnt/project") / filename,
-    ])
-    for path in search_paths:
-        if path.exists():
-            return path
-    raise FileNotFoundError(
-        f"Could not find {filename}. "
-        f"Tried: {[str(p) for p in search_paths]}"
-    )
 
 
 @dataclass(frozen=True)
@@ -73,6 +58,15 @@ class BaselineData:
 
 
 def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
+    """Load Data_modeller (frozen snapshot if available, else parse the Excel)."""
+    if data_path is None:
+        snap = _load_snapshot("snap_data_modeller")
+        if snap is not None:
+            return require_columns(snap, "data_modeller")
+    return require_columns(_parse_data_modeller(data_path), "data_modeller")
+
+
+def _parse_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
     """
     Load Data_modeller.xlsx with company identifiers, volumes, and OPEXp/CAPEX.
 
@@ -87,7 +81,7 @@ def _load_data_modeller(data_path: Optional[str] = None) -> pd.DataFrame:
         ['DMU', 'REId', 'company_name', 'controllable_cost_average',
          'capital_cost_2024', 'CU', 'MW', 'NS', 'MWhl', 'MWhh', 'totex_first_year']
     """
-    data_file = _find_data_file("ei/Data_modeller.xlsx", data_path)
+    data_file = require_dataset("data_modeller", data_path)
 
     # Try reading from different sheet names (backwards compatibility)
     df = None
@@ -170,6 +164,15 @@ def _aggregate_return_from_capcost(data_path: Optional[str] = None) -> pd.DataFr
 
 
 def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
+    """Load Ei DEA results (frozen snapshot if available, else parse the Excel)."""
+    if data_path is None:
+        snap = _load_snapshot("snap_eis_dea")
+        if snap is not None:
+            return require_columns(snap, "eis_dea")
+    return require_columns(_parse_eis_dea(data_path), "eis_dea")
+
+
+def _parse_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
     """
     Load Ei's reference DEA results from Excel.
 
@@ -187,7 +190,7 @@ def _load_eis_dea(data_path: Optional[str] = None) -> pd.DataFrame:
         - Effkrav_proc: Annual efficiency requirement
         - is_outlier: Boolean flag
     """
-    data_file = _find_data_file("ei/EIs_DEA.xlsx", data_path)
+    data_file = require_dataset("eis_dea", data_path)
 
     try:
         df = pd.read_excel(data_file, sheet_name='Körning', engine='openpyxl')
@@ -235,13 +238,16 @@ def _load_sdf_data(data_path: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     """
     Load SDF data from "Löpande kostnader från SDF" Excel file.
 
+    Not frozen to parquet: the controllable / non-controllable sheets contain
+    heterogeneous Excel columns that do not round-trip through parquet safely.
+
     Args:
         data_path: Path to data folder
 
     Returns:
         Dict with three DataFrames: 'ir', 'controllable', 'non_controllable'
     """
-    data_file = _find_data_file("ei/Löpande kostnader från SDF 2024-27.xlsx", data_path)
+    data_file = require_dataset("sdf_running_costs", data_path)
 
     result = {}
 
@@ -293,7 +299,7 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     Returns:
         DataFrame with mappings
     """
-    data_file = _find_data_file("reference/reconciliation_id_network_firm_dmu.csv", data_path)
+    data_file = require_dataset("reconciliation", data_path)
 
     df = pd.read_csv(data_file)
 
@@ -301,7 +307,7 @@ def _load_reconciliation(data_path: Optional[str] = None) -> pd.DataFrame:
     if 'id_network_string' in df.columns and 'REId' not in df.columns:
         df['REId'] = df['id_network_string']
 
-    return df
+    return require_columns(df, "reconciliation")
 
 
 def _load_company_names(data_path: Optional[str] = None) -> pd.DataFrame:
@@ -313,15 +319,15 @@ def _load_company_names(data_path: Optional[str] = None) -> pd.DataFrame:
     Returns:
         DataFrame with columns [REId, company_name, company_name_short].
     """
-    data_file = _find_data_file("reference/company_names.csv", data_path)
-    df = pd.read_csv(data_file)
+    data_file = require_dataset("company_names", data_path)
+    df = require_columns(pd.read_csv(data_file), "company_names")
     return df.rename(columns={
         "name_full": COL_COMPANY_NAME,
         "name_short": COL_COMPANY_NAME_SHORT,
     })[["REId", COL_COMPANY_NAME, COL_COMPANY_NAME_SHORT]]
 
 
-@st.cache_data(ttl=3600, show_spinner="Loading baseline data...")
+@cached(ttl=3600, show_spinner="Loading baseline data...")
 def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     """
     Main function to load all baseline data.
@@ -391,7 +397,15 @@ def load_baseline_data(data_path: Optional[str] = None) -> BaselineData:
     df_all_companies = df_all_companies.merge(return_df, on="REId", how="left")
     print(f"  Added per-year return (2024-2027) for {len(return_df)} companies")
 
-    # 8. Replace OPEXp with SDF-derived controllable_cost_average
+    # 8. Replace OPEXp with SDF-derived controllable_cost_average.
+    #    Preserve the raw Data_modeller OPEXp first: it is the exact cost input
+    #    Ei ran the baseline DEA on (the SDF-derived value diverges for ~109
+    #    firms — see eis_dea_metod.md). Keeping both lets an exact-replication
+    #    profile feed raw OPEXp to the DEA while everything else uses the
+    #    SDF-derived controllable_cost_average.
+    from config.column_names import COL_OPEXP_RAW
+    df_all_companies[COL_OPEXP_RAW] = df_all_companies[COL_CONTROLLABLE_AVG]
+
     from calculations.opex.cost_aggregation import aggregate_controllable
     sdf_derived = aggregate_controllable(controllable_detail, controllable_meta)
     # Compute opexp_equivalent = controllable_cost_average + neo_adjustments/4

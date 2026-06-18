@@ -2,9 +2,11 @@
 calculations/dea_diagnostics/config.py
 
 `DeaDiagnosticsConfig` — every user-facing choice for one DEA-diagnostics run.
-Defaults reproduce Ei's specification (inputs, outputs, CRS, IQR fence), except
-that outlier detection iterates to convergence by default (the tool's own
-method). Set `outlier_max_rounds=1` to reproduce Ei's published results exactly.
+Defaults match Ei's model specification (inputs, outputs, CRS, IQR fence) and
+iterate outlier detection to convergence (`outlier_max_rounds=None`); iteration
+is what reproduces Ei's published outlier set and efficiencies (a single round
+leaves moderate outliers in and does NOT match Ei, see eis_dea_metod.md). Set
+`outlier_max_rounds=1` for a single identification round as a diagnostic only.
 
 Nothing else in the package reads ad-hoc settings; everything flows through here.
 """
@@ -36,7 +38,8 @@ class DeaDiagnosticsConfig:
     # ── Outlier detection (super-eff + IQR, shared with the pipeline) ────────
     # Super-efficiency is used here only to identify outliers; the main DEA solve
     # is standard (theta <= 1). `outlier_max_rounds`: None = iterate to
-    # convergence (tool default); 1 = Ei's single identification round.
+    # convergence (default; reproduces Ei, see eis_dea_metod.md); 1 = a single
+    # identification round (does NOT match Ei).
     outlier_enable: bool = True
     outlier_q_lower: float = 25.0
     outlier_q_upper: float = 75.0

@@ -160,6 +160,12 @@ class DeaConfig:
     q_upper: float = 75.0
     multiplier: float = 2.0
 
+    # Outlier-fence iteration: None = iterate until no new outliers appear
+    # (default; reproduces Ei's published outlier set and efficiencies, see
+    # eis_dea_metod.md). An int caps the rounds (1 = a single identification
+    # round, which does NOT match Ei on the full data).
+    outlier_max_rounds: Optional[int] = None
+
 
 @dataclass
 class IncentiveConfig:
@@ -259,4 +265,40 @@ def get_baseline_config(user_reid: str) -> CaseDefinition:
         ),
         dea=DeaConfig(method=EfficiencyMethod.BASELINE),
         post_dea=PostDeaConfig()
+    )
+
+
+def get_exact_replication_config(user_reid: str) -> CaseDefinition:
+    """
+    Config that runs the WHOLE chain from scratch and reproduces Ei's published
+    facit, rather than lifting precomputed values.
+
+    Unlike get_baseline_config (which lifts capital cost from SDF and reads DEA
+    straight from EIs_DEA.xlsx), this:
+    - computes capital cost via KENT 5-8 for all 148 companies (PARAMETER_CHANGE,
+      baseline WACC),
+    - runs the DEA on the RAW Data_modeller OPEXp (the input Ei used), not the
+      SDF-derived controllable_cost_average,
+    - iterates the IQR outlier fence to convergence.
+
+    Reproduces Ei's effektivitet to solver tolerance for every firm except the
+    documented data anomalies (REL00193 in DEA, REL00584 in capital cost). See
+    eis_dea_metod.md.
+    """
+    from config.column_names import COL_CAPITAL_COST_2024, COL_OPEXP_RAW
+
+    return CaseDefinition(
+        name="Exact replication",
+        user_reid=user_reid,
+        pre_dea=PreDeaConfig(
+            capbase_source=CapbaseSource.BASELINE,
+            method=CapexMethod.PARAMETER_CHANGE,
+            wacc_input_method="baseline",
+        ),
+        dea=DeaConfig(
+            method=EfficiencyMethod.DEA,
+            inputs=[COL_CAPITAL_COST_2024, COL_OPEXP_RAW],
+            outlier_max_rounds=None,
+        ),
+        post_dea=PostDeaConfig(),
     )

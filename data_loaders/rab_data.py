@@ -2,36 +2,31 @@
 data_loaders/rab_data.py
 
 Centraliserad laddning av kapitalbasdata (capbase_a).
-Separerar dataladdning frÃ¥n berÃ¤kningslogik i kent_calculations.py.
+Separerar dataladdning från beräkningslogik i kent_calculations.py.
 """
 
 import pandas as pd
 from pathlib import Path
 from typing import Optional, List
-import streamlit as st
 
-# Ã…teranvÃ¤nd befintlig flagga frÃ¥n data_mapping
-from calculations.capex.data_mapping import TEST_MODE
+from config.data_paths import require_dataset
+from config.runtime import TEST_MODE
+from data_loaders._cache import cached
+from data_loaders.schemas import require_columns
 
-# Paths
-CAPBASE_MINI_PATH = "data/test/capbase_a_mini.parquet"
-CAPBASE_FULL_PATH = "data/rab_and_capex/capbase_a.parquet"
-CAPCOST_PATH = "data/rab_and_capex/capcost_a.parquet"
-
-@st.cache_data(ttl=3600, show_spinner=False)
+@cached(ttl=3600)
 def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
     """
-    Laddar capbase_a frÃ¥n parquet-fil.
-    
-    I TEST_MODE laddas mini-filen (3 fÃ¶retag) om full fil saknas.
-    I produktion (TEST_MODE=False) krÃ¤vs fullstÃ¤ndig fil.
-    
+    Laddar capbase_a från parquet-fil.
+
+    I TEST_MODE laddas mini-filen (3 företag), annars den fullständiga.
+
     Args:
-        data_path: Explicit sÃ¶kvÃ¤g (override). Om None, sÃ¶k automatiskt.
-        
+        data_path: Explicit fil-sökväg (override). Om None, resolva via registry.
+
     Returns:
         DataFrame med kapitalbaskomponenter.
-        
+
     Raises:
         FileNotFoundError: Om ingen fil hittas.
     """
@@ -40,43 +35,25 @@ def load_capbase_a(data_path: Optional[str] = None) -> pd.DataFrame:
         if path.exists():
             return pd.read_parquet(path)
         raise FileNotFoundError(f"Angiven fil finns inte: {data_path}")
-    
-    if TEST_MODE:
-        search_paths = [
-            CAPBASE_MINI_PATH,           #
-            "capbase_a_mini.parquet",
-            "data/test/capbase_a_mini.parquet",
-            ]
-    else:
-        search_paths = [
-                CAPBASE_FULL_PATH,
-                "capbase_a.parquet",
-                "data/rab_and_capex/capbase_a.parquet",
-            ]
-    
-    for path_str in search_paths:
-        path = Path(path_str)
-        if path.exists():
-            df = pd.read_parquet(path)
-            _log_load_info(df, path_str)
-            return df
-    
-    raise FileNotFoundError(
-        f"capbase_a hittades inte. TEST_MODE={TEST_MODE}. "
-        f"SÃ¶kvÃ¤gar: {search_paths}"
-    )
+
+    name = "capbase_a_mini" if TEST_MODE else "capbase_a"
+    path = require_dataset(name)
+    df = pd.read_parquet(path)
+    require_columns(df, "capbase_a")
+    _log_load_info(df, str(path))
+    return df
 
 
 def load_user_capbase(user_id_network: int, data_path: Optional[str] = None) -> pd.DataFrame:
     """
-    Laddar kapitalbasdata fÃ¶r ett specifikt fÃ¶retag.
+    Laddar kapitalbasdata för ett specifikt företag.
     
     Args:
-        user_id_network: FÃ¶retagets id_network
-        data_path: Explicit sÃ¶kvÃ¤g (optional)
+        user_id_network: Företagets id_network
+        data_path: Explicit sökväg (optional)
         
     Returns:
-        DataFrame med anvÃ¤ndarens komponenter.
+        DataFrame med användarens komponenter.
     """
     df = load_capbase_a(data_path)
     user_df = df[df['id_network'] == user_id_network].copy()
@@ -84,13 +61,13 @@ def load_user_capbase(user_id_network: int, data_path: Optional[str] = None) -> 
     if len(user_df) == 0 and TEST_MODE:
         available = sorted(df['id_network'].unique().tolist())
         print(f"  Varning: id_network={user_id_network} finns inte i data. "
-              f"TillgÃ¤ngliga: {available[:10]}{'...' if len(available) > 10 else ''}")
+              f"Tillgängliga: {available[:10]}{'...' if len(available) > 10 else ''}")
     
     return user_df
 
 
 def get_available_networks(data_path: Optional[str] = None) -> List[int]:
-    """Returnerar lista med tillgÃ¤ngliga id_network i capbase_a."""
+    """Returnerar lista med tillgängliga id_network i capbase_a."""
     df = load_capbase_a(data_path)
     return sorted(df['id_network'].unique().tolist())
 
@@ -102,15 +79,15 @@ def _log_load_info(df: pd.DataFrame, path: str) -> None:
     total_nuav = df['nuav_2022'].sum() / 1e9 if 'nuav_2022' in df.columns else 0
     
     mode = "TEST" if TEST_MODE else "PROD"
-    print(f"[{mode}] Laddade capbase_a frÃ¥n {path}")
-    print(f"  - {n_components:,} komponenter, {n_networks} nÃ¤tverk, {total_nuav:.1f} Mdr kr NUAV")
+    print(f"[{mode}] Laddade capbase_a från {path}")
+    print(f"  - {n_components:,} komponenter, {n_networks} nätverk, {total_nuav:.1f} Mdr kr NUAV")
 
 
 # =============================================================================
 # CAPCOST_A: Aggregated capital costs per category (baseline)
 # =============================================================================
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@cached(ttl=3600)
 def load_capcost_a(data_path: Optional[str] = None) -> pd.DataFrame:
     """
     Load aggregated capital cost data per category (baseline).
@@ -135,23 +112,32 @@ def load_capcost_a(data_path: Optional[str] = None) -> pd.DataFrame:
         if path.exists():
             return pd.read_parquet(path)
         raise FileNotFoundError(f"File not found: {data_path}")
-    
-    search_paths = [
-        CAPCOST_PATH,
-        "capcost_a.parquet",
-        "data/rab_and_capex/capcost_a.parquet",
-    ]
-    
-    for path_str in search_paths:
-        path = Path(path_str)
-        if path.exists():
-            df = pd.read_parquet(path)
-            _log_capcost_load_info(df, path_str)
-            return df
-    
-    raise FileNotFoundError(
-        f"capcost_a not found. Searched: {search_paths}"
-    )
+
+    path = require_dataset("capcost_a")
+    df = pd.read_parquet(path)
+    require_columns(df, "capcost_a")
+    df = _enforce_capcost_amount_dtypes(df)
+    _log_capcost_load_info(df, str(path))
+    return df
+
+
+# Monetary columns in capcost_a. Some (return_ord/return_tail) are stored as
+# float32 in the parquet while the rest are float64 — an inconsistent contract
+# that silently loses precision above ~16M tkr and, on pandas >= 3, raises when a
+# float64 KENT value is written back into a float32 column. Normalise the whole
+# amount contract to float64 at the load boundary.
+CAPCOST_AMOUNT_COLS = (
+    "nuav_ord", "nuav_tail", "dep_ord", "dep_tail",
+    "return_ord", "return_tail", "capcost_sum", "capcost_network",
+)
+
+
+def _enforce_capcost_amount_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    """Coerce capcost_a amount columns to float64 (see CAPCOST_AMOUNT_COLS)."""
+    for col in CAPCOST_AMOUNT_COLS:
+        if col in df.columns and df[col].dtype != "float64":
+            df[col] = df[col].astype("float64")
+    return df
 
 
 def load_user_capcost(user_id_network: int, data_path: Optional[str] = None) -> pd.DataFrame:

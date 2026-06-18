@@ -81,10 +81,11 @@ def run_dea_analysis(
     outputs = df[output_cols].values
 
     # Outlier detection (super-eff + IQR) and cleaned re-solve, via the shared
-    # routine. `outlier_max_rounds` controls iteration: 1 = Ei's single
-    # identification round (the regulatory baseline); None = iterate until no
-    # new outliers appear. Default keeps the pipeline on Ei's method.
-    max_rounds = model_spec.get('outlier_max_rounds', 1)
+    # routine. `outlier_max_rounds` controls iteration: None = iterate until no
+    # new outliers appear (default; reproduces Ei's published outlier set and
+    # efficiencies, see eis_dea_metod.md); an int caps the rounds (e.g. 1 = a
+    # single identification round, which does NOT match Ei on the full data).
+    max_rounds = model_spec.get('outlier_max_rounds', None)
     res = detect_outliers_iterative(
         inputs, outputs, rts,
         q_lower=outlier_params['q_lower'],

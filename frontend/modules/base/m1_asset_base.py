@@ -232,7 +232,8 @@ def _render_category_scaling(
 
         # Add weighted average norm value per category (read-only context)
         try:
-            norm_df = pd.read_parquet("data/reference/avg_norm_value_by_category.parquet")
+            from config.data_paths import require_dataset
+            norm_df = pd.read_parquet(require_dataset("avg_norm_value"))
             norm_df['Norm value (tkr)'] = norm_df['avg_norm_value'] / 1000.0
             df = df.merge(
                 norm_df[['cat_encode', 'Norm value (tkr)']],
