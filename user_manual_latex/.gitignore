@@ -1,0 +1,53 @@
+# LaTeX build output and intermediates.
+#
+# Praxis: builds are out-of-source — latexmk writes everything to each manual's
+# build/ subfolder (see latexmkrc: $out_dir = 'build'). The published PDFs live
+# in static/manuals/ and are committed from there. So nothing under
+# user_manual_latex/ should ever be tracked except the .tex sources, latexmkrc,
+# build.sh and shared/.
+#
+# The patterns below also catch any stray intermediates that land next to a
+# main.tex (e.g. from a one-off build that didn't pick up out_dir), so they
+# never show up in `git status` again.
+
+# Out-of-source build directories (one per manual)
+build/
+
+# macOS
+.DS_Store
+
+# latexmk
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.synctex(busy)
+
+# Core LaTeX intermediates
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.idx
+*.ind
+*.ilg
+*.glo
+*.gls
+*.glg
+*.acn
+*.acr
+*.alg
+*.nav
+*.snm
+*.vrb
+*.xdv
+*.dvi
+*.fmt
+
+# Misc scratch / temp
+*.tmp
