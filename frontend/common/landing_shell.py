@@ -5,10 +5,13 @@ Design layer only — touches no app infrastructure (auth, routing, controller).
 ``apply_landing_shell()`` is called at the top of every landing page and:
 - injects the landing theme (faded ``login_pic.jpg`` background + soft gradient
   overlay, full-width, no sidebar),
-- renders the brand wordmark + the "Sign in" CTA that opens ``auth_dialog()``.
+- renders the brand wordmark + the top-bar CTA: a "Sign in" button that opens
+  ``auth_dialog()`` for anonymous visitors, or an "Open tool" link (new tab) for
+  an already-authenticated user.
 
-Section navigation (Home / Tools / Team) is the native top-nav rendered by
-streamlit_app.py via ``st.navigation(position="top")``.
+Section navigation (Home / Tools / Team) is drawn here as the in-page anchor nav
+in the frozen top bar (``.rm-topbar``); the native st.navigation menu is hidden on
+the landing (the landing is st.navigation's hidden default page — see streamlit_app.py).
 
 Helpers for the pages:
 - ``landing_heading(title, eyebrow, level)`` — section / page heading.
@@ -28,6 +31,12 @@ import streamlit as st
 
 from config.colors import COLORS, CHART_COLORS
 from frontend.common.auth_dialog import auth_dialog
+from frontend.utils.state_manager import is_authenticated
+from auth.firebase_auth import is_dev_mode
+
+# Tool entry URL — the first revenue-cap page (pages/1_create_and_select_case.py;
+# its inferred url_path). The "Open tool" CTA links here when already signed in.
+_TOOL_ENTRY_URL = "/create_and_select_case"
 
 
 # Static stylesheet (plain string → literal braces; colors via CSS variables).
@@ -75,6 +84,12 @@ _CSS = """
 .st-key-rm_signin{
     position:fixed; top:.5rem; right:1.1rem; width:auto !important; z-index:1001;
 }
+/* "Open tool" CTA — anchor styled as the primary button (authed visitors). It
+   replaces the Sign-in button in the same pinned slot and opens a new tab. */
+.rm-cta{ display:inline-block; background:var(--rm-primary); color:#fff !important;
+    font-size:.92rem; font-weight:600; text-decoration:none; padding:.42rem .95rem;
+    border-radius:8px; transition:filter .15s ease; }
+.rm-cta:hover{ filter:brightness(1.07); }
 
 /* === In-page anchor scrolling ===
    Smooth glide to a section; scroll-margin keeps the target clear of the bar. */
@@ -235,8 +250,9 @@ def apply_landing_shell() -> None:
     ``#tools`` / ``#team``). The top bar carries the brand wordmark and the
     section nav as in-page anchor links: clicking one scrolls to that section
     instead of switching pages. The native st.navigation top-nav is hidden (CSS);
-    the bar's contents are rendered here. The Sign in button is a real widget,
-    pinned to the bar's right via the ``.st-key-rm_signin`` container class.
+    the bar's contents are rendered here. The right-hand CTA is pinned via the
+    ``.st-key-rm_signin`` container class: a real "Sign in" button for anonymous
+    visitors, or an "Open tool" link (new tab) once authenticated.
     """
     _inject_theme()
 
@@ -252,7 +268,15 @@ def apply_landing_shell() -> None:
     )
 
     with st.container(key="rm_signin"):
-        if st.button("Sign in", type="primary"):
+        if is_dev_mode() or is_authenticated():
+            # Already signed in: offer the tool instead. New tab keeps the
+            # landing open (landing + tool side by side).
+            st.markdown(
+                f'<a class="rm-cta" href="{_TOOL_ENTRY_URL}" target="_blank" '
+                'rel="noopener">Open tool ↗</a>',
+                unsafe_allow_html=True,
+            )
+        elif st.button("Sign in", type="primary"):
             auth_dialog()
 
 

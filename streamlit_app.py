@@ -1,19 +1,29 @@
 """
 Regumetrica Streamlit Application.
 
-Entry point. A two-zone controller:
+Entry point. A route-based two-zone controller. All pages live in ONE
+``st.navigation`` so Streamlit resolves the requested page from the real URL
+(reliable); the zone is then chosen by the returned page, and auth only gates the
+tool pages. This lets a logged-in user keep the public landing open in one window
+and a tool in another at the same time:
 
-  ZON 1 — Landing (public): native top-nav (Home / Tools / Team), no sidebar,
-          its own look (frontend/common/landing_shell.py). Sign in happens in a
-          dialog (frontend/common/auth_dialog.py).
-  ZON 2 — Tool (authenticated): the "Revenue cap tool" pages with the locked
-          sidebar + company selector + logout, exactly as before.
+  ZON 1 — Landing (public): the hidden default page (root URL), shown regardless
+          of auth. No sidebar; it draws its own top bar
+          (frontend/common/landing_shell.py). Sign in happens in a dialog
+          (frontend/common/auth_dialog.py); when already authenticated the top-bar
+          CTA becomes "Open tool" instead.
+  ZON 2 — Tool: the tool pages, gated by auth (a tool URL hit while logged out
+          bounces to the landing). Locked sidebar + company selector + logout, and
+          a link back to the landing (opens a new tab).
 
-A successful login reruns the app; check_auth() then routes into zone 2.
+A successful login sets a one-shot flag; the controller then ``switch_page``s
+straight into the tool zone.
 See landing_pages/FRONTEND_FILES.md for the full architecture.
 """
 
 import streamlit as st
+
+from config.colors import COLORS
 
 from frontend.utils.state_manager import (
     init_session_state,
@@ -161,6 +171,28 @@ def _sync_case_cookie() -> None:
 # SIDEBAR (tool zone only)
 # =============================================================================
 
+def _render_home_button():
+    """Sidebar link back to the public landing.
+
+    Opens in a NEW tab (``target="_blank"``) so the tool window stays open — the
+    point of the route-based zones is to allow landing + tool side by side.
+    """
+    st.markdown(
+        f"""
+        <style>
+        .rm-home-btn{{ display:block; text-align:center; padding:.45rem .5rem;
+            border:1px solid {COLORS['bg_muted']}; border-radius:.5rem;
+            color:{COLORS['text_secondary']}; text-decoration:none; font-weight:500;
+            font-size:.9rem; margin-bottom:.5rem;
+            transition:border-color .15s ease, color .15s ease; }}
+        .rm-home-btn:hover{{ border-color:{COLORS['primary']}; color:{COLORS['primary']}; }}
+        </style>
+        <a class="rm-home-btn" href="/" target="_blank" rel="noopener">Back to Home ↗</a>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_sidebar():
     """Render the tool-zone sidebar: company selection + logout."""
     with st.sidebar:
@@ -200,6 +232,9 @@ def _render_dev_mode_selector():
         if reid:
             set_user_reid(reid)
 
+    st.divider()
+    _render_home_button()
+
 
 def _render_authenticated_sidebar():
     """Sidebar for authenticated users: company context + logout."""
@@ -236,6 +271,7 @@ def _render_authenticated_sidebar():
             set_user_reid(reid)
 
     st.divider()
+    _render_home_button()
 
     @st.dialog("Log out")
     def _confirm_logout():
@@ -262,16 +298,19 @@ def _render_authenticated_sidebar():
 # NAVIGATION REGISTRY
 # =============================================================================
 
-# --- Zon 1: public landing (single page, anchored Home/Tools/Team sections) ---
-# One page; the top bar's nav links scroll to in-page anchors (no page switch).
-# The native st.navigation top-nav is hidden via CSS (see landing_shell.py).
-landing_main = st.Page("landing_pages/landing.py", title="Home", default=True)
-LANDING_PAGES = [landing_main]
+# All pages live in ONE st.navigation so Streamlit resolves the requested page
+# from the real URL (reliable) — we then branch the zone on the returned page.
+#
+# Zon 1 — landing: a single page (anchored Home/Tools/Team sections). It is the
+# default page (root URL) and is hidden from the menu — the landing draws its own
+# top bar and hides the sidebar (see landing_shell.py), so it never appears in the
+# tool sidebar nav.
+landing_main = st.Page(
+    "landing_pages/landing.py", title="Home", default=True, visibility="hidden"
+)
 
-# --- Zon 2: tool pages (protected) ---
-# Defined once; built as visible objects for the authenticated nav and as hidden
-# objects so bookmarked tool URLs redirect to the landing page instead of 404.
-# The revenue-cap pages form one grouped "folder"; standalone tools sit beside it.
+# Zon 2 — tool pages (protected). The revenue-cap pages form one grouped "folder";
+# standalone tools sit beside it. Both groups render in the tool sidebar nav.
 _REVENUE_CAP_SPECS = [
     ("pages/1_create_and_select_case.py", "1. Create and select case"),
     ("pages/2_case_setup.py", "2. Select modules to modify"),
@@ -282,13 +321,10 @@ _STANDALONE_TOOL_SPECS = [
     ("pages/5_new_benchmarking.py", "New benchmarking model"),
     ("pages/6_placeholder.py", "Placeholder"),
 ]
-_TOOL_PAGE_SPECS = _REVENUE_CAP_SPECS + _STANDALONE_TOOL_SPECS
 
 REVENUE_CAP_PAGES = [st.Page(path, title=title) for path, title in _REVENUE_CAP_SPECS]
 STANDALONE_PAGES = [st.Page(path, title=title) for path, title in _STANDALONE_TOOL_SPECS]
-APP_PAGES_HIDDEN = [
-    st.Page(path, title=title, visibility="hidden") for path, title in _TOOL_PAGE_SPECS
-]
+TOOL_PAGES = REVENUE_CAP_PAGES + STANDALONE_PAGES
 
 
 # =============================================================================
@@ -298,8 +334,32 @@ APP_PAGES_HIDDEN = [
 # Restore auth from cookie if the session was lost (page refresh).
 try_restore_auth_from_cookie()
 
-if check_auth():
-    # ZON 2 — the tool.
+# One-shot: a fresh login (set in auth_dialog) asks to land in the tool zone, even
+# though the login happened on the landing URL.
+login_redirect = st.session_state.pop("_login_redirect", False)
+
+# One navigation for everything. Streamlit resolves the requested page from the
+# real URL (reliable — no guessing the path ourselves); we branch the zone on the
+# returned page. landing_main is the hidden default, so it owns the root URL but
+# never shows in the tool sidebar nav. The two visible groups are the tool zone.
+pg = st.navigation({
+    "Revenue cap tool": [landing_main, *REVENUE_CAP_PAGES],
+    "Standalone tools": STANDALONE_PAGES,
+})
+
+# A fresh login jumps straight into the tool (decision: land in the tool zone).
+# switch_page runs AFTER st.navigation (so the target page is registered) and
+# BEFORE the cookie write below, so the cookie is written on the next run that
+# renders a page in full — the JS cookie component needs a clean render.
+if login_redirect and check_auth():
+    st.switch_page(REVENUE_CAP_PAGES[0])
+
+if pg in TOOL_PAGES:
+    # ZON 2 — the tool, gated by auth.
+    if not check_auth():
+        # Tool URL hit while logged out (e.g. a bookmark) → back to the landing.
+        st.switch_page(landing_main)
+
     apply_tool_chrome()
 
     # Set pending auth cookie (deferred from the sign-in dialog so JS renders).
@@ -311,19 +371,11 @@ if check_auth():
     try_restore_case_from_cookie()
     _sync_case_cookie()
 
-    pg = st.navigation({
-        "Revenue cap tool": REVENUE_CAP_PAGES,
-        "Standalone tools": STANDALONE_PAGES,
-    })
     render_sidebar()
     pg.run()
 
 else:
-    # ZON 1 — the landing zone. Native top-nav; no sidebar.
-    # Protected tool pages are registered hidden so bookmarked URLs redirect to
-    # the landing home (which carries the Sign in CTA) instead of 404'ing.
-    pg = st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN, position="top")
-    if pg in APP_PAGES_HIDDEN:
-        st.switch_page(landing_main)
-    else:
-        pg.run()
+    # ZON 1 — the public landing (pg is landing_main), shown regardless of auth so
+    # a logged-in user can keep it open alongside a tool. It draws its own top bar
+    # and hides the sidebar (landing_shell.py).
+    pg.run()

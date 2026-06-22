@@ -115,10 +115,9 @@ dashboard_lokalnat/
 |   |-- manuals/<slug>.pdf            # Per-tool manual PDFs (published by user_manual_latex/build.sh)
 |   |-- login_pic.jpg                 # Landing background photo (inlined as a data URI)
 |
-|-- landing_pages/                # ZON 1: public landing (native top-nav, no sidebar)
-|   |-- home.py                   # Hero, tagline, intro, Sign in CTA
-|   |-- tools.py                  # Registry-driven tools index (per-tool card + manual link)
-|   |-- team.py                   # Team + contact (merged)
+|-- landing_pages/                # ZON 1: public landing (no sidebar, own top bar)
+|   |-- landing.py                # Single page, three anchored sections: #home (hero),
+|   |                             #   #tools (registry-driven index), #team (profiles)
 |
 |-- pages/                        # ZON 2: authenticated tool pages (sidebar nav, two groups)
 |   |-- 1_create_and_select_case.py  # Create/load/delete/duplicate/compare cases
@@ -146,7 +145,7 @@ dashboard_lokalnat/
 |   |   |-- parameter_input.py    # Reusable input component with baseline comparison
 |   |   |-- styling.py            # apply_base_styling() (both zones) + apply_tool_chrome() (tool sidebar); re-exports colors
 |   |   |-- auth_dialog.py        # Sign-in dialog (login/register/reset/verify) for the landing zone
-|   |   |-- landing_shell.py      # Landing theme (faded bg) + frozen top bar (brand via CSS + pinned Sign-in) + shared helpers (landing_cards/heading/footer)
+|   |   |-- landing_shell.py      # Landing theme (faded bg) + frozen top bar (brand + anchor nav + auth-aware CTA: Sign in / Open tool) + shared helpers (landing_anchor/cards/heading/profile/footer)
 |   |   |-- manuals.py            # Reads published per-tool manual PDFs (static/manuals/<slug>.pdf)
 |   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
 |   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
@@ -340,7 +339,7 @@ Dependencies flow strictly downward. Lower layers NEVER import from higher layer
 ```
 Layer 1: PAGES (top)
     streamlit_app.py (two-zone controller),
-    landing_pages/{home,tools,team}.py,
+    landing_pages/landing.py,
     pages/1_create_and_select_case.py .. pages/5_new_benchmarking.py
         |
         | imports
@@ -402,53 +401,63 @@ is Streamlit-free.
 
 ## 5. Page Flow & Navigation
 
-Two zones, decided by `check_auth()` on every run. They do not share chrome.
+Two zones, but the **route** decides the zone, not auth. All pages live in ONE
+`st.navigation` so Streamlit resolves the requested page from the real URL
+(reliable — the controller never parses the URL itself); the controller then
+branches on the *returned* page, and auth only gates the tool pages. This lets a
+logged-in user keep the public landing open in one window and a tool in another at
+the same time.
 
 ```
-ZON 1 — Landing (public)             ZON 2 — Tool (authenticated)
-------------------------             ----------------------------
-native top-nav (position="top"):     sidebar nav, two groups:
-landing_pages/home.py   (Home)
-landing_pages/tools.py  (Tools)      group "Revenue cap tool":
-landing_pages/team.py   (Team)         pages/1_create_and_select_case.py  (Create & Select)
+ZON 1 — Landing (public)             ZON 2 — Tool (auth-gated)
+------------------------             -------------------------
+landing_pages/landing.py             sidebar nav, two groups:
+(hidden DEFAULT page, root "/")
+  #home / #tools / #team             group "Revenue cap tool":
+  (in-page anchor nav)                 pages/1_create_and_select_case.py  (Create & Select)
         |                                    |
-   [Sign in CTA]                             v
-        | auth_dialog() (st.dialog)    pages/2_case_setup.py              (Case Setup)
-        |  success -> st.rerun()             |
-        |  (app scope) swaps zone            v
-        v                              pages/3_specification.py          (Specification)
-(no sidebar; faded bg theme)                 |
+  [Sign in] -> auth_dialog()                 v
+        |  success: _login_redirect   pages/2_case_setup.py              (Case Setup)
+        |  flag + st.rerun()                 |
+        v                                     v
+  controller switch_page's into       pages/3_specification.py          (Specification)
+  the tool  ───────────────────►            |
                                         [Compute] (on page 4)
-(protected pages registered                 |
- hidden -> redirect to landing_home)         v
+  [Open tool ↗] when already authed         |
+  (new tab; landing stays open)             v
                                        pages/4_revenue_frame.py          (Revenue Frame)
-
-                                     group "Standalone tools":  (decoupled, not part of 1 → 4)
+  ◄─── [Back to Home ↗] (sidebar,
+       new tab; tool stays open)      group "Standalone tools":  (decoupled, not part of 1 → 4)
                                        pages/5_new_benchmarking.py        (New benchmarking model)
                                        pages/6_placeholder.py             (Placeholder — empty stub)
 ```
 
-**Entrypoint:** `streamlit_app.py` — a two-zone controller.
+**Entrypoint:** `streamlit_app.py` — a route-based two-zone controller.
 - Configures page (`st.set_page_config`); `apply_base_styling()` (fonts +
-  branding) applies to both zones.
-- Initializes session state; restores auth/case from cookies on refresh.
-- Auth guard: `check_auth()` (dev mode OR logged in) decides the zone.
-  - **Zon 1 (public):** `st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN,
-    position="top")` — native top-nav, no sidebar. Each landing page calls
-    `apply_landing_shell()` (theme + a frozen top bar: the native nav styled
-    opaque, brand via CSS, Sign in pinned into it). Sign in opens `auth_dialog()`;
-    a verified login does `st.rerun()` (app scope), which closes the dialog and
-    re-routes into Zon 2. Protected tool pages are registered hidden so
-    bookmarked tool URLs redirect to `landing_home` instead of 404'ing.
-  - **Zon 2 (authenticated):** `apply_tool_chrome()` (locked sidebar + Nordic
-    Energy refinements) + a two-group `st.navigation`: "Revenue cap tool"
-    (pages 1–4) and "Standalone tools" (the New benchmarking page). Pages are
-    built from `_TOOL_PAGE_SPECS` (= `_REVENUE_CAP_SPECS` + `_STANDALONE_TOOL_SPECS`);
-    the same specs build `APP_PAGES_HIDDEN` for the Zon 1 redirect guard.
-    `render_sidebar()` (company selector + logout) renders here only. Logout
-    clears auth and reruns → lands back on the public landing zone.
-- Sidebar (Zon 2 only): Company selector + logout. Compute + Revert/New case +
-  stale-results indicator live on the tool pages.
+  branding) applies to both zones. Initializes state; restores auth/case from
+  cookies on refresh.
+- One navigation for everything:
+  `st.navigation({"Revenue cap tool": [landing_main, *REVENUE_CAP_PAGES],
+  "Standalone tools": STANDALONE_PAGES})`. `landing_main` is the **hidden default**
+  page — it owns the root URL but never shows in the tool sidebar nav. The returned
+  page `pg` decides the zone: `pg in TOOL_PAGES` → Zon 2, else → Zon 1.
+  - **Zon 1 (landing):** `pg.run()` runs `landing.py`, which calls
+    `apply_landing_shell()` (theme + a frozen top bar: brand + in-page anchor nav,
+    the native menu hidden via CSS). The right-hand CTA is auth-aware: **Sign in**
+    (opens `auth_dialog()`) when anonymous, **Open tool ↗** (new tab) when already
+    authenticated. Shown regardless of auth.
+  - **Zon 2 (tool):** gated by `check_auth()` — a tool URL hit while logged out
+    `switch_page`s back to the landing. Otherwise `apply_tool_chrome()` (locked
+    sidebar + Nordic Energy refinements) + `render_sidebar()` (company selector,
+    **Back to Home ↗** new-tab link, logout), then `pg.run()`.
+- **Login → tool:** `auth_dialog()` can't `switch_page` from its fragment, so on a
+  verified login it sets a one-shot `_login_redirect` flag and reruns; the
+  controller then `switch_page`s into page 1 (before the cookie write, so the JS
+  cookie component renders cleanly on the next full run).
+- **Logout:** clears auth + deletes the cookie and reruns → the (now logged-out)
+  tool URL bounces to the landing. *Caveat:* logout is per-window — other open tool
+  windows keep their in-memory session until reloaded (cookie reads are a
+  connection-time snapshot). Cross-window "global logout" is a known post-V1 item.
 
 
 ## 6. Module Architecture (M1-M7)
@@ -910,14 +919,17 @@ streamlit_app.py
     |-- auth.firebase_auth                (is_dev_mode, initialize_firebase_auth)
     |-- auth.cookie_session               (auth + case cookie helpers)
 
-landing_pages/{home,tools,team}.py        (ZON 1)
-    |-- frontend.common.landing_shell     (apply_landing_shell, landing_cards, landing_heading, landing_footer)
-          |-- frontend.common.auth_dialog (auth_dialog: login/register/reset/verify)
-          |     |-- frontend.utils.company_directory (get_company_options)
-          |     |-- frontend.utils.state_manager     (set_user_reid)
-          |     |-- auth.firebase_auth               (initialize_firebase_auth)
-    |-- config.tools_registry             (tools.py: tools_for, ToolSpec)
-    |-- frontend.common.manuals           (tools.py: manual_path)
+landing_pages/landing.py                  (ZON 1 — single page)
+    |-- frontend.common.landing_shell     (apply_landing_shell, landing_anchor, landing_cards,
+    |                                       landing_heading, landing_profile, landing_footer)
+    |     |-- frontend.common.auth_dialog (auth_dialog: login/register/reset/verify)
+    |     |     |-- frontend.utils.company_directory (get_company_options)
+    |     |     |-- frontend.utils.state_manager     (set_user_reid)
+    |     |     |-- auth.firebase_auth               (initialize_firebase_auth)
+    |     |-- frontend.utils.state_manager (is_authenticated — auth-aware top-bar CTA)
+    |     |-- auth.firebase_auth           (is_dev_mode)
+    |-- config.tools_registry             (#tools section: tools_for, ToolSpec)
+    |-- frontend.common.manuals           (#tools section: manual_path)
 
 pages/1_create_and_select_case.py
     |-- frontend.utils.state_manager     (init, get/set, reset_case)
@@ -1123,9 +1135,9 @@ application. The tools themselves are described centrally by the **tool registry
 `ToolSpec` (frozen dataclass) + the `TOOLS` list are the Streamlit-free single
 source of truth for the tools: `key`, `name`, `branch` (`revenue_cap` /
 `standalone`), `summary`, `icon`, `status` (`available` / `beta` / `coming_soon`),
-`manual_slug`, `public`, `page_path`. `tools_for(branch)` drives the Tools landing
-page ([landing_pages/tools.py](landing_pages/tools.py)); being pure data it ports
-directly to the future React landing.
+`manual_slug`, `public`, `page_path`. `tools_for(branch)` drives the `#tools`
+section of the landing ([landing_pages/landing.py](landing_pages/landing.py));
+being pure data it ports directly to the future React landing.
 
 ### Manuals: source -> published
 

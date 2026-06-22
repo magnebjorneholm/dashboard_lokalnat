@@ -35,18 +35,21 @@ kontext kring landningssidornas frontend.
 ## Två zoner
 
 ```
-ZON 1 — Landning (publik)            ZON 2 — Verktyget (bakom login)
+ZON 1 — Landning (publik)            ZON 2 — Verktyget (auth-grindat)
 ────────────────────────            ──────────────────────────────
-• native topp-nav (position=top)    • sidofält + Nordic Energy (som idag)
-• inget Streamlit-sidofält          • BARA "Revenue cap tool" (1–5)
-• faded login_pic-bakgrund          • render_sidebar(): företagsväljare + logout
-• Sign in-CTA → auth_dialog()                 ▲
-• egna designregler                           │ sign-in (dialog, scope="app" rerun)
+• egen topp-bar, inget sidofält      • sidofält + Nordic Energy (som idag)
+• faded login_pic-bakgrund           • "Revenue cap tool" + "Standalone tools"
+• CTA: Sign in / Open tool ↗         • render_sidebar(): företagsväljare,
+  (auth-medveten)                      Back to Home ↗, logout
+• egna designregler                           ▲
+          │ login: _login_redirect →  switch_page in i verktyget
           └───────────────────────────────────┘
 ```
 
-`streamlit_app.py` är en **tvåzons-kontroller** som grenar på `check_auth()`.
-Zonerna delar inte chrome.
+`streamlit_app.py` är en **route-baserad tvåzons-kontroller**: zonen avgörs av
+URL:en (vilken sida `st.navigation` returnerar), inte av `check_auth()`. Auth
+grindar bara verktygssidorna. Det gör att en inloggad användare kan ha landningen
+i ett fönster och ett verktyg i ett annat samtidigt. Zonerna delar inte chrome.
 
 ## Kontrollflöde (`streamlit_app.py`)
 
@@ -55,27 +58,38 @@ st.set_page_config(...)              # behålls
 apply_base_styling()                 # BARA fonts + branding-borttagning (båda zonerna)
 init_session_state()
 try_restore_auth_from_cookie()
+login_redirect = st.session_state.pop("_login_redirect", False)
 
-if check_auth():
-    # ZON 2 — verktyget (i princip oförändrat)
-    apply_tool_chrome()              # sidofälts-lås + Nordic Energy-finputs
+# EN navigation för allt — Streamlit löser begärd sida från riktiga URL:en (pålitligt).
+# landing_main är HIDDEN DEFAULT (äger "/", syns ej i verktygets sidofältsnav).
+pg = st.navigation({
+    "Revenue cap tool": [landing_main, *REVENUE_CAP_PAGES],
+    "Standalone tools": STANDALONE_PAGES,
+})
+
+# Färsk login hoppar rakt in i verktyget (switch_page går ej i auth_dialogs fragment).
+if login_redirect and check_auth():
+    st.switch_page(REVENUE_CAP_PAGES[0])
+
+if pg in TOOL_PAGES:
+    # ZON 2 — verktyget, grindat av auth
+    if not check_auth():
+        st.switch_page(landing_main) # tool-URL utloggad (bokmärke) → landningen
+    apply_tool_chrome()
     ... cookie/case-sync ...
-    pg = st.navigation({"Revenue cap tool": APP_PAGES})   # sidofält, inga landningssidor
-    render_sidebar()                 # företagsväljare + logout
+    render_sidebar()                 # företagsväljare + Back to Home ↗ + logout
     pg.run()
 else:
-    # ZON 1 — landningen, native topp-nav
-    pg = st.navigation(LANDING_PAGES + APP_PAGES_HIDDEN, position="top")
-    if pg in APP_PAGES_HIDDEN:
-        st.switch_page(landing_main) # deep-link till skyddad sida → landningen
-    else:
-        pg.run()                     # landing.py kallar apply_landing_shell()
+    # ZON 1 — landningen (pg == landing_main), oavsett auth
+    pg.run()                         # landing.py kallar apply_landing_shell()
 ```
 
-`position="top"` ger en native topp-navbar för landningssektionerna och inget
-sidofält. Skyddade tool-sidor registreras fortfarande dolt (`visibility="hidden"`)
-så att bokmärkta URL:er inte 404:ar — de bouncar nu till `landing_home` (inte
-till en login-sida, den finns inte längre). Dolda sidor syns inte i topp-navet.
+Varför en enad nav i stället för att läsa pathen själv: `st.context.url` är en
+ögonblicksbild från anslutningstillfället och kan vara stale/`None` på första
+körningen → opålitlig för zonval. `st.navigation` löser sidan korrekt internt, så
+vi grenar på den returnerade sidan. landing_main är default + `visibility="hidden"`,
+så bokmärkta tool-URL:er routar fortfarande (och bouncar till landningen om
+utloggad), men landningen skräpar inte ner verktygets sidofältsnav.
 
 ---
 
@@ -92,7 +106,7 @@ till en login-sida, den finns inte längre). Dolda sidor syns inte i topp-navet.
 
 | Fil | Roll |
 |---|---|
-| `frontend/common/landing_shell.py` | `apply_landing_shell()` — landningstema (full-bredd, **inget** sidofält, faded `login_pic`-bakgrund) + **Sign in-CTA** (knapp som öppnar `auth_dialog()`) + footer. Anropas överst på varje landningssida. *Bygger inte navbaren — det gör `st.navigation(position="top")`.* |
+| `frontend/common/landing_shell.py` | `apply_landing_shell()` — landningstema (full-bredd, **inget** sidofält, faded `login_pic`-bakgrund) + frusen topp-bar (wordmark + ankar-nav + auth-medveten CTA: **Sign in** / **Open tool ↗**) + helpers (landing_anchor/cards/heading/profile/footer). Anropas överst i `landing.py`. Bygger själv baren; `st.navigation`-menyn döljs (landningen är dess dolda default-sida). |
 | `frontend/common/auth_dialog.py` | `auth_dialog()` + omflyttade formulär-renderare (login/register/reset/verify). Se `auth_dialog_forslag.md`. |
 | `static/regumetrica_user_manual.pdf` | Asset; kopieras från `user_manual_latex/build/Regumetrica user manual.pdf` (serveras via `enableStaticServing`). |
 
@@ -118,15 +132,15 @@ till en login-sida, den finns inte längre). Dolda sidor syns inte i topp-navet.
 
 ## Topp-bar, ankar-nav & Sign in
 
-Den native `st.navigation(position="top")`-naven kan bara *byta sida* (rerun),
-inte scrolla inom en sida — så den **döljs** (`[data-testid="stTopNav"]{display:none}`)
-och baren ritas av `apply_landing_shell()`:
+Landningen är `st.navigation`s **dolda default-sida**, så dess sidofältsnav är
+gömd (`apply_landing_shell` döljer hela sidofältet via CSS). Hela baren ritas i
+stället av `apply_landing_shell()`:
 
 - **Wordmark + ankar-nav** (`.rm-topbar`, fixerad till vänster i stHeader-baren):
   `<a href="#home">` / `#tools` / `#team`. `html{scroll-behavior:smooth}` ger den
   mjuka glidningen; `.rm-anchor{scroll-margin-top}` håller målet fritt från baren.
-- **Sign in** (öppnar en dialog, navigerar inte) är en riktig widget, fäst till
-  höger via `.st-key-rm_signin`.
+- **CTA** (fäst till höger via `.st-key-rm_signin`): **Sign in** (öppnar dialogen,
+  navigerar inte) när utloggad, eller **Open tool ↗** (länk, ny flik) när inloggad.
 
 Varje sektion i `landing.py` inleds med `landing_anchor("<id>")` (osynligt
 scroll-mål). *Begränsning:* ingen levande scroll-spy (kräver JS som Streamlit inte

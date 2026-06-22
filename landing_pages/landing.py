@@ -18,7 +18,6 @@ from frontend.common.landing_shell import (
     apply_landing_shell, landing_anchor, landing_cards, landing_heading,
     landing_profile, landing_footer,
 )
-from frontend.common.auth_dialog import auth_dialog
 from frontend.common.manuals import manual_path
 
 apply_landing_shell()
@@ -44,16 +43,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-cta1, cta2, _ = st.columns([1, 1, 2], vertical_alignment="center")
-with cta1:
-    if st.button("Get started", type="primary", width="stretch"):
-        auth_dialog()
-with cta2:
-    st.markdown(
-        '<a class="rm-inline-link" href="#tools">Explore the tools  →</a>',
-        unsafe_allow_html=True,
-    )
 
 st.markdown(
     """

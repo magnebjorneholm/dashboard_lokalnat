@@ -5,8 +5,9 @@ A single ``st.dialog`` that handles login, registration, password reset and the
 email-verification follow-up. Opened from the landing shell's "Sign in" CTA.
 
 Why a dialog (not a page): the user stays in context on the landing page, and a
-successful login closes the dialog via ``st.rerun()`` (app scope), which lets
-``streamlit_app.py`` re-evaluate auth and swap the whole app into the tool zone.
+successful login closes the dialog via ``st.rerun()`` (app scope). It also sets a
+one-shot ``_login_redirect`` flag so ``streamlit_app.py`` ``switch_page``s into
+the tool zone (switch_page itself can't be called from a dialog/fragment).
 
 Dialog/rerun mechanics (verified against Streamlit 1.55, see
 landing_pages/auth_dialog_forslag.md):
@@ -79,7 +80,10 @@ def _render_login(auth_manager) -> None:
                 _store_auth_session(user, email, claims)
                 if claims and claims.get("role") == "company" and claims.get("reid"):
                     set_user_reid(claims["reid"])
-                # App-scope rerun: close dialog + swap into the tool zone.
+                # Ask the controller to land straight in the tool zone (switch_page
+                # can't be called from a dialog/fragment, so signal via a flag).
+                st.session_state["_login_redirect"] = True
+                # App-scope rerun: close dialog + re-enter the controller.
                 st.rerun()
 
     with st.expander("Forgot your password?"):
