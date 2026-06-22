@@ -214,7 +214,7 @@ def _render_transition_hero(cur_req, new_out, kr_cur, kr_new) -> None:
 
 def _render_verdict(dea_new, dea_cur, user_reid, e75, new_eff, new_out, cur_req,
                     kr_cur, kr_new, is_outlier, user_label="Your company") -> None:
-    st.markdown(f"#### {user_label} under the new model")
+    st.markdown(f"####{user_label} under the new model")
 
     _render_transition_hero(cur_req, new_out, kr_cur, kr_new)
 
@@ -497,7 +497,7 @@ def _group_efficiency_outcome(ctx: GroupContext) -> None:
         ctx.result, ctx.user_reid, ctx.cfg, ctx.e75, ctx.new_eff, ctx.new_out, ctx.user_label
     )
 
-    st.markdown("###### New vs current, company by company")
+    st.markdown("###### Model comparison")
     c_rank, c_eff, c_imp = st.columns(3)
     with c_rank:
         render_rank_scatter(ctx.result.comparison, ctx.user_reid, ctx.user_label)
@@ -511,9 +511,9 @@ def _group_efficiency_outcome(ctx: GroupContext) -> None:
         "means the new model is better for the firm, amber worse. **Rank** (1 = most "
         "efficient, top-right): above the line means a better rank under the new model. "
         "**Efficiency**: above the line means more efficient under the new model. "
-        "**Revenue-frame impact** (%/yr): above the line means the new model is more "
-        "favourable to your cap, and above zero is an addition that raises it (only the new "
-        "model can go positive)."
+        "**Efficiency adjustment** (%/yr), its impact on the revenue frame: above the line "
+        "means the new model is more favourable to your cap, and above zero is an addition "
+        "that raises it (only the new model can go positive)."
     )
 
 
@@ -562,8 +562,8 @@ def _group_placeholder(ctx: GroupContext) -> None:
 
 # Visible groups, stacked vertically (see chart_panel.render_chart_panel).
 CHART_GROUPS = [
-    ChartGroup("efficiency_outcome", "Efficiency & outcome", _group_efficiency_outcome),
-    ChartGroup("totex_bridge", "TOTEX bridge", _group_totex_bridge),
+    ChartGroup("efficiency_outcome", "Model outputs", _group_efficiency_outcome),
+    ChartGroup("totex_bridge", "TOTEX decomposition", _group_totex_bridge),
 ]
 
 # Hidden for V1: the outcome decomposition is considered too technical for the first

@@ -171,7 +171,7 @@ def render_position_chart(
 
     fig.update_layout(
         **layout_kwargs, template=template,
-        title=dict(text="Your position vs the third-quartile benchmark", font=dict(size=13)),
+        title=dict(text="Efficiency distribution relative to the third-quartile benchmark", font=dict(size=13)),
         height=400, bargap=0.05, dragmode=False, showlegend=False,
         xaxis=dict(title="Efficiency score", range=[lo, hi], fixedrange=True,
                    showgrid=False, linecolor=COLORS["bg_muted"]),
@@ -432,7 +432,7 @@ def render_requirement_scatter(
     _comparison_scatter(
         comparison, user_reid, user_label,
         col_current=COL_EFF_REQ_CURRENT, col_new=COL_EFF_REQ_NEW,
-        title="Revenue-frame impact",
+        title="Efficiency adjustment (%/yr)",
         scale=-100.0, unit_label="%/yr", tickformat=".1f", hover_format="+.2f",
         shared_range=False, zero_line=True, key=key,
     )
