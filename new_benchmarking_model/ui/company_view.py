@@ -214,7 +214,7 @@ def _render_transition_hero(cur_req, new_out, kr_cur, kr_new) -> None:
 
 def _render_verdict(dea_new, dea_cur, user_reid, e75, new_eff, new_out, cur_req,
                     kr_cur, kr_new, is_outlier, user_label="Your company") -> None:
-    st.markdown(f"####{user_label} under the new model")
+    st.markdown(f"#### {user_label} under the new model")
 
     _render_transition_hero(cur_req, new_out, kr_cur, kr_new)
 
