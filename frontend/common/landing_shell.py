@@ -97,11 +97,6 @@ html{ scroll-behavior:smooth; }
 [data-testid="stMain"], [data-testid="stAppViewContainer"]{ scroll-behavior:smooth; }
 .rm-anchor{ display:block; height:0; scroll-margin-top:5rem; }
 
-/* In-content inline link (e.g. "Explore the tools →") */
-.rm-inline-link{ color:var(--rm-text2); font-weight:500; font-size:.97rem;
-    text-decoration:none; transition:color .15s ease; }
-.rm-inline-link:hover{ color:var(--rm-primary); }
-
 /* Hide tool chrome (no sidebar in the landing zone) */
 [data-testid="stSidebar"],
 [data-testid="collapsedControl"]{ display:none !important; }
