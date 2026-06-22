@@ -16,8 +16,11 @@ Design:
 Note on capital-cost output IDs (Table 7): The User Manual assigns
 30.2-30.18 to per-category capital costs, which conflicts with
 Table 9 (30.2.X = network loss variables). The code resolves this
-by using a four-level scheme: 30.1.{cat}.{component} for capital
-cost output. The glossary follows the code convention.
+by using a four-level scheme under the 30.1 block: totals at
+30.1.1.{component} and per-category at 30.1.{cat+1}.{component}.
+This keeps 30.1.1 (totals) and 30.1.2-30.1.18 (categories) as
+distinct parent nodes, so no ID is both a leaf and a parent. The
+glossary follows the code convention.
 """
 
 from typing import NamedTuple, Dict, List, Tuple, Optional
@@ -163,9 +166,12 @@ PID_WACC_NOMINAL = "3.2.4"
 PID_WACC_REAL = "3.2.5"
 
 # --- 30.1 Capital cost output (Table 7) ---
-# Note: code uses 30.1.{cat}.{component} to avoid conflict with Table 9
-VID_TOTAL_CAPITAL_COST_ORD = "30.1.1"
-VID_TOTAL_CAPITAL_COST_TAIL = "30.1.2"
+# Totals live at 30.1.1.{component}; per-category at 30.1.{cat+1}.{component}.
+# This keeps totals (30.1.1) and categories (30.1.2-30.1.18) as distinct
+# parent nodes, avoiding any leaf/parent clash, and sidesteps the Table 9
+# conflict (30.2.X = network loss variables).
+VID_TOTAL_CAPITAL_COST_ORD = "30.1.1.1"
+VID_TOTAL_CAPITAL_COST_TAIL = "30.1.1.2"
 
 def capital_cost_var_id(cat_encode: int, component: str = "combined") -> str:
     """
@@ -224,6 +230,14 @@ PID_ILEFFEKT: Dict[Tuple[int, str], str] = {
     (2, "unplanned"): "3.6.25", (2, "planned"): "3.6.26",   # Industry
     (4, "unplanned"): "3.6.27", (4, "planned"): "3.6.28",   # Public sector
     (6, "unplanned"): "3.6.29", (6, "planned"): "3.6.30",   # Boundary points
+}
+
+# --- 3.7 KPI indexation factors (per year) ---
+# KPI factors used to index interruption costs to the reference price level.
+# The User Manual refers to these factors without numbering them; the code and
+# UI carry them under 3.7.X (one per year), distinct from the CPI factors (3.6.2-3.6.5).
+PID_KPI: Dict[int, str] = {
+    2024: "3.7.1", 2025: "3.7.2", 2026: "3.7.3", 2027: "3.7.4",
 }
 
 # --- 30.2 Network loss input variables (Table 9) ---
@@ -505,6 +519,8 @@ def _build_glossary() -> Dict[str, GlossaryEntry]:
     g[PID_CEMI4_CORRECTION] = GlossaryEntry(
         PID_CEMI4_CORRECTION, "CEMI4 correction factor",
         "m3", "parameter")
+    for year, pid in PID_KPI.items():
+        g[pid] = GlossaryEntry(pid, f"KPI indexation factor {year}", "m3", "parameter")
     for key, pid in PID_ILE.items():
         sni, pt = key
         g[pid] = GlossaryEntry(

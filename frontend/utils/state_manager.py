@@ -45,17 +45,20 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "enable_netloss": True,
         "enable_load": True,
         
-        # === 3.3 Quality incentive ===
-        "adj_max_cemi4": None,  # None = baseline (0.25)
-        "ait_costs": None,      # Dict with (ann, sni) -> float
-        "aif_costs": None,      # Dict with (ann, sni) -> float
-        
-        # === 3.4 Network loss incentive ===
-        "sharing_netloss": None,  # None = baseline (0.75)
-        "k_nf": None,             # Dict with year -> float
-        
-        # === 3.6 Limits ===
-        "adj_max_agg": None,  # None = baseline (1/3)
+        # === Quality (section 3.3); params carry 3.6.x IDs ===
+        "adj_max_cemi4": None,  # CEMI4 correction factor 3.6.6; None = baseline (0.25)
+        "ait_costs": None,      # ILE 3.6.7-3.6.18; Dict with (ann, sni) -> float
+        "aif_costs": None,      # ILEffekt 3.6.19-3.6.30; Dict with (ann, sni) -> float
+
+        # === Network loss (section 3.4) ===
+        "sharing_netloss": None,  # 3.4.2; None = baseline (0.75)
+        "k_nf": None,             # 3.4.3 electricity price; Dict with year -> float
+
+        # === Aggregate cap (3.3.1) ===
+        "adj_max_agg": None,  # 3.3.1 max total adjustment; None = baseline (1/3)
+
+        # === KPI indexation factors (3.7.1-3.7.4) ===
+        "kpi": None,          # Dict with year -> float
     },
     "m3_incentive_variables": {
         # 30.2 Network loss
@@ -84,9 +87,12 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "non_controllable_override": None,     # float in tkr (Var 40.2.1)
     },
     "m5_efficiency": {
-        "trunkering_max": None,  # None = baseline (1.0)
-        "trunkering_min": None,  # None = baseline (0.85)
-        "efficiency_override": None,  # float or None
+        "trunkering_max": None,     # 5.2.1 max potential cap; None = baseline (0.30)
+        "trunkering_min": None,     # derived from outlier_krav; explicit override only
+        "outlier_krav": None,       # 5.3.1 min annual requirement; None = baseline (0.01)
+        "realiseringstid": None,    # 5.2.2 realization time; None = baseline (8)
+        "kunddelning": None,        # 5.2.3 customer sharing; None = baseline (0.50)
+        "paverkbara_method": None,  # 5.4.1 cost base "OPEX"/"TOTEX"; None = baseline (OPEX)
     },
     "addon_benchmarking": {
         "dea_method": "baseline",  # 'baseline' or 'custom'

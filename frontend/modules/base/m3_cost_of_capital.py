@@ -34,6 +34,8 @@ from config.glossary import (
     PID_MARKET_RISK_PREMIUM, PID_CREDIT_RISK_PREMIUM, PID_TAX_RATE,
     PID_INFLATION, PID_EQUITY_BETA, PID_COST_OF_EQUITY, PID_COST_OF_DEBT,
     PID_WACC_REAL,
+    PID_MAX_TOTAL_ADJUSTMENT, PID_LOSS_SHARING, PID_LOSS_COST_AVG,
+    PID_CEMI4_CORRECTION,
 )
 
 MODULE_KEY = "m3_cost_of_capital"
@@ -202,7 +204,7 @@ def render_incentive_params() -> Dict[str, Any]:
     with st.expander("3.5 Utilization rate adjustment parameters", expanded=False):
         _render_load_section(config)
     
-    with st.expander("3.6 Aggregate adjustment cap", expanded=False):
+    with st.expander("Aggregate adjustment cap (3.3.1)", expanded=False):
         _render_caps_section(config)
     
     with st.expander("3.7 KPI factors", expanded=False):
@@ -488,7 +490,7 @@ def _render_direct_section() -> None:
     st.caption("Enter WACC directly (real, pre-tax)")
     
     direct_wacc = st.number_input(
-        "WACC (real, pre-tax)",
+        f"{PID_WACC_REAL} WACC (real, pre-tax)",
         value=get_config_value(MODULE_KEY, "direct_wacc", BASELINE_WACC),
         min_value=0.01,
         max_value=0.15,
@@ -516,7 +518,7 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     # CEMI adjustment
     st.markdown("###### CEMI adjustment")
     adj_max_cemi4 = st.slider(
-        "Max CEMI4 adjustment",
+        f"Max CEMI4 adjustment ({PID_CEMI4_CORRECTION})",
         min_value=0.0,
         max_value=1.0,
             value=get_config_value(MODULE_KEY_QA, "adj_max_cemi4", BASELINE_INCENTIVE["adj_max_cemi4"]),
@@ -532,8 +534,8 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     
     st.divider()
     
-    # AIT costs
-    st.markdown("###### AIT costs (SEK/kWh)")
+    # AIT costs (ILE - interruption energy cost)
+    st.markdown("###### AIT costs — ILE (3.6.7-3.6.18, SEK/kWh)")
     ait_source_key = f"{MODULE_KEY_QA}_ait_editor_source"
     ait_editor_key = f"{MODULE_KEY_QA}_ait_editor"
     if ait_source_key not in st.session_state or ait_editor_key not in st.session_state:
@@ -556,8 +558,8 @@ def _render_quality_section(config: Dict[str, Any]) -> None:
     
     st.divider()
     
-    # AIF costs
-    st.markdown("###### AIF costs (SEK/kW)")
+    # AIF costs (ILEffekt - interruption power cost)
+    st.markdown("###### AIF costs — ILEffekt (3.6.19-3.6.30, SEK/kW)")
     aif_source_key = f"{MODULE_KEY_QA}_aif_editor_source"
     aif_editor_key = f"{MODULE_KEY_QA}_aif_editor"
     if aif_source_key not in st.session_state or aif_editor_key not in st.session_state:
@@ -586,7 +588,7 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
     
     with col1:
         sharing = st.slider(
-            "Sharing factor",
+            f"Sharing factor ({PID_LOSS_SHARING})",
             min_value=0.0,
             max_value=1.0,
             value=get_config_value(MODULE_KEY_QA, "sharing_netloss", BASELINE_INCENTIVE["sharing_netloss"]),
@@ -601,7 +603,7 @@ def _render_netloss_section(config: Dict[str, Any]) -> None:
             st.caption(f":orange[Modified] (baseline: {BASELINE_INCENTIVE['sharing_netloss']:.2f})")
     
     with col2:
-        st.markdown("**Electricity price (K_NF) per year**")
+        st.markdown(f"**Electricity price (K_NF) per year ({PID_LOSS_COST_AVG})**")
         k_nf_source_key = f"{MODULE_KEY_QA}_k_nf_editor_source"
         k_nf_editor_key = f"{MODULE_KEY_QA}_k_nf_editor"
         if k_nf_source_key not in st.session_state or k_nf_editor_key not in st.session_state:
@@ -628,11 +630,11 @@ def _render_load_section(config: Dict[str, Any]) -> None:
 
 
 def _render_caps_section(config: Dict[str, Any]) -> None:
-    """Render 3.6 Aggregate adjustment cap parameters."""
-    st.markdown("Maximum aggregate incentive adjustment (share of WACC)")
-    
+    """Render the aggregate adjustment cap parameter (3.3.1)."""
+    st.markdown(f"Maximum aggregate incentive adjustment, share of WACC ({PID_MAX_TOTAL_ADJUSTMENT})")
+
     adj_agg = st.slider(
-        "Max total per year",
+        f"Max total per year ({PID_MAX_TOTAL_ADJUSTMENT})",
         min_value=0.0,
         max_value=1.0,
         value=get_config_value(MODULE_KEY_QA, "adj_max_agg", BASELINE_INCENTIVE["adj_max_agg"]),
@@ -648,8 +650,8 @@ def _render_caps_section(config: Dict[str, Any]) -> None:
 
 
 def _render_kpi_section(config: Dict[str, Any]) -> None:
-    """Render 3.7 KPI factors."""
-    st.markdown("KPI factors for indexation to 2022 prices.")
+    """Render 3.7 KPI factors (3.7.1-3.7.4, one per year)."""
+    st.markdown("KPI factors for indexation to 2022 prices (3.7.1-3.7.4).")
     
     kpi_source_key = f"{MODULE_KEY_QA}_kpi_editor_source"
     kpi_editor_key = f"{MODULE_KEY_QA}_kpi_editor"

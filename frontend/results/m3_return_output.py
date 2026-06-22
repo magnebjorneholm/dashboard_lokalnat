@@ -114,7 +114,7 @@ def _render_return_section(
 ) -> None:
     """Render return on capital by category -- mirrors M1 layout."""
 
-    _sec_prefix = VID_TOTAL_CAPITAL_COST_ORD.rsplit(".", 1)[0]   # "30.1"
+    _sec_prefix = VID_TOTAL_CAPITAL_COST_ORD.rsplit(".", 2)[0]   # "30.1"
     st.markdown(f"#### {_sec_prefix} Return on Capital")
 
     if user_id_network is None:

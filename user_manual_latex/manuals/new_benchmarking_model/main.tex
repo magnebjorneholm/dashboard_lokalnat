@@ -1,6 +1,9 @@
 % User manual for the "New benchmarking model" tool.
-% Migrated from new_benchmarking_model/docs/method/metod_samlad_v3.tex and adapted to
-% build against the shared manual preamble. Paths are relative to this file; see
+% Primary register: a method description and analysis of Ei's proposed new direction,
+% conditional on our working assumptions, with a short user guide woven in. English.
+% The Swedish method note (new_benchmarking_model/docs/method/metod_samlad_v3.tex) is kept
+% as a complement; this file is the manual built and served in the frontend.
+% Builds against the shared manual preamble. Paths are relative to this file; see
 % manuals/_template/main.tex for the convention.
 \input{../../shared/preamble.tex}
 \graphicspath{ {../../../graphs/} }
@@ -8,328 +11,393 @@
 \def\input@path{ {../../../graphs/} }
 \makeatother
 
-% Bits the source preamble defined that the shared one does not:
+% Bits the source preamble does not define:
 \DeclareMathOperator{\clip}{clip}
-\renewcommand{\refname}{Referenser}
+\renewcommand{\refname}{References}
 
 \begin{document}
-\selectlanguage{swedish}
+\selectlanguage{english}
 
-\title{Regumetrica \linebreak \emph{Betaversion} \linebreak Den nya benchmarkingmodellen: en metodbeskrivning \linebreak Version 1.0 \\}
+\title{Regumetrica \linebreak \emph{Beta version} \linebreak The new benchmarking model \linebreak Method, results, and user guide \linebreak Version 1.0 \\}
 \author{\href{https://www.regumetrica.com/um}{www.regumetrica.com/um}}
-\date{Juni 2026}
+\date{June 2026}
 \maketitle
 \setcounter{page}{1}
 
 \begin{quote}\itshape\small
-Status: Detta är en metodbeskrivning. Den återger vår operationalisering och tolkning av
-Energimarknadsinspektionens inriktning för benchmarkingmodellen, given den information
-myndigheten har offentliggjort fram till juni 2026. Vi skiljer genomgående mellan myndighetens
-inriktning och våra arbetsantaganden. Där modellen vilar på arbetsantaganden, framför allt i
-parametervärden och i hanteringen av data, är de utfall som följer av dem betingade på dessa
-antaganden. Resultaten redovisas separat; detta dokument förklarar enbart metoden.
+Status: this is a method description. It sets out our operationalisation and reading of the
+direction the Swedish Energy Markets Inspectorate (Energimarknadsinspektionen, Ei) has taken
+for the benchmarking model, given the information the authority has published up to June 2026.
+Throughout, we separate what Ei has stated as its direction from our own working assumptions.
+Where the model rests on working assumptions, above all in parameter values and in the handling
+of data, the outcomes that follow are conditional on those assumptions. The figures in this
+manual are reported as conditional illustrations computed on current-regulation data; the manual
+explains the method and how to read the tool, not a forecast of the 2028 to 2031 levels.
 \end{quote}
 
 \tableofcontents
 \newpage
 
-\section{Syfte och läsanvisning}
+\section{Purpose and how to read this manual}
 
-Syftet med detta dokument är att förklara metoden bakom den nya benchmarkingmodellen för en
-publik som känner till modellens beståndsdelar, alltså DEA-metoden, kapitalbasen och
-kostnadsposterna, men inte nödvändigtvis hur de enskilda förändringarna är konstruerade eller
-hur deras samlade effekt kan mätas.
+The new benchmarking model is a standalone tool in Regumetrica. It answers one question: how
+would a network company be affected by Ei's proposed new benchmarking model if that change were made on its own
+and everything else were held constant. The tool is deliberately decoupled from the
+revenue-frame calculation. It does not build a regulatory case and does not feed the revenue
+cap; it isolates the benchmarking change so that its effect can be read on its own.
 
-Dokumentet är uppdelat i två delar som svarar på två olika frågor. Den första delen beskriver
-förändringarna i själva modellen: hur kostnadsunderlaget byggs och hur effektiviseringskravet
-beräknas. Den andra delen beskriver den metod vi använder för att mäta hur mycket var och en av
-dessa förändringar bidrar till det samlade utfallet. Skillnaden är viktig: de första avsnitten
-beskriver vad modellen gör, medan det sista beskriver hur vi räknar på vad modellen gör.
+We wrote this manual for readers that know the building blocks, the DEA method, the
+capital base, and the cost posts, but not necessarily how the individual changes are constructed
+or how their combined effect can be measured. The text is mostly a method description, or more
+precisely our working interpretation of Ei's method. Where it
+quotes a number, the number is an illustration computed on the current regulatory period's data
+under our reading of Ei's method, and it is conditional on the working assumptions set out in
+Section~\ref{sec:caveats}.
 
-Genomgående skiljer vi på vad Energimarknadsinspektionen har angett som inriktning och vad som
-är vår operationalisering. Myndigheten har offentliggjort sin inriktning i en serie underlag \citep{Ei2025Inriktning, Ei2025Benchmarking, Ei2025Tillampning, Ei2026Effektivisering}, medan flera detaljer
-ännu inte är fastställda. Där vi har låst parametervärden eller gjort dataval för att kunna
-räkna, markerar vi det, och de magnituder som följer är betingade på dessa val.
+Two features of the tool shape the rest of the manual. First, the model is fixed at a reference
+reading, so the page shows a result immediately and the only thing a user adjusts is a short set
+of fine-tuning controls. Second, the new model changes several things at once, which makes the
+combined effect easy to see but the contribution of any single change hard to isolate. The first
+of these is covered in the user guide (Section~\ref{sec:tool}); the second is a caution that runs
+through the whole method and that a company should keep in mind when reading its own result.
 
-\section{Genomgående principer}
+The manual proceeds as follows. Section~\ref{sec:principles} states two principles that recur in
+several of the changes. Section~\ref{sec:partI} describes the changes in the model: how the cost
+base is built and how the efficiency requirement is computed. Section~\ref{sec:tool} is a short
+guide to the page. Section~\ref{sec:caveats} lists our working assumptions and the data
+limitations on which the reported magnitudes depend, and Section~\ref{sec:summary} summarises.
 
-Två principer återkommer i flera av förändringarna, och vi formulerar dem en gång här.
+\section{Two principles that recur}
+\label{sec:principles}
 
-\textbf{Normalisera i jämförelsen, ge incitament på de faktiska kostnaderna.} Flera av
-förändringarna korrigerar för kostnadsskillnader som ett nätföretag inte kan påverka, exempelvis
-elpriset i dess elområde eller förläggningsmiljön i dess nätområde. Korrigeringen görs i
-benchmarkingen, så att företagen jämförs på mer lika villkor. Vid tillämpningen av incitamentet
-görs däremot ingen motsvarande korrigering: incitamentet utgår från de faktiska, okorrigerade
-kostnaderna, så att relativpriserna får genomslag i det slutliga utfallet i kronor. Samma logik
-återkommer i värderingen av nätförluster och i korrigeringen för förläggningsmiljö.
+Two principles return in several of the changes, and we state them once here so that each later
+change reads correctly.
 
-\textbf{Relativ DEA innebär fördelningsmässiga effekter.} DEA-metoden mäter varje företag mot en
-front av de mest effektiva företagen, och referensnivån bestäms ur samma fördelning. När en
-kostnadspost förs in eller justeras förskjuts både det enskilda företagets position och fronten,
-vilket påverkar samtliga företags relativa utfall. En förändrings effekt är därför
-fördelningsmässig snarare än absolut: den omfördelar utfall mellan företag snarare än att skapa
-eller ta bort kostnader i absoluta termer. Denna egenskap är avgörande både för hur
-korrigeringarna ska tolkas och för hela dekompositionsmetoden i del II.
+Several of the changes correct for cost differences a network company cannot control, for example the
+electricity price in its bidding zone or the placement environment in its network area. The
+correction is made in the benchmarking, so that companies are compared on more equal terms. At
+the point where the incentive is applied, no such correction is made: the incentive works on the
+actual, uncorrected costs, so that relative prices carry through to the final outcome.
 
-\section{Del I: Förändringarna i benchmarkingmodellen}
+DEA measures each company against a frontier of the most efficient companies, and the reference level is read from the same distribution. The
+corrections in this manual redefine a cost post for every company at once, so the whole input is
+rescaled: the frontier is re-formed, which companies are efficient can change, and almost every
+company's relative position shifts. (A change to a single company would move the frontier only if
+that company is, or becomes, one of the frontier companies; a company in the interior moves only
+itself.) The effect of a change is therefore distributional rather than absolute: it reallocates
+outcomes between companies rather than creating or removing costs in absolute terms. This property
+is decisive for how the corrections should be read.
 
-\subsection{Kostnadsunderlaget}
+\section{What the new model changes}
+\label{sec:partI}
 
-Den första gruppen av förändringar gäller hur det kostnadsunderlag som går in i DEA byggs.
-Utgångspunkten är en TOTEX-ansats: samtliga kostnadsposter utom myndighetsavgifter ska ingå i en
-och samma kostnadsvariabel \citep{Ei2025Benchmarking}. Skälet är en mer rättvisande jämförelse. Ett företag kan ha högre
-kapitalkostnad men lägre kostnader för abonnemang till överliggande nät, medan ett annat har den
-omvända sammansättningen. Bedöms företagen bara på en delmängd av kostnaderna jämförs de på sin
-kostnadssammansättning snarare än på sin totala effektivitet. Myndighetsavgifter utesluts eftersom
-de varken är påverkbara eller utbytbara, utan en bestämd summa som följer av antalet kunder och
-deras spänningsnivåer.
+\subsection{The cost base}
 
-\subsubsection{OPEX-variabeln}
+The first group of changes concerns how the cost base that enters DEA is built. The starting
+point is a TOTEX approach: every cost post except regulatory fees enters one and the same cost
+variable \citep{Ei2025Benchmarking}. The reason is a fairer comparison. One company can have a
+higher capital cost but lower costs for subscriptions to the overlying grid, while another has the
+opposite composition. If companies are judged on only a subset of their costs, they are compared
+on their cost composition rather than on their total efficiency. Regulatory fees are excluded
+because they are neither controllable nor substitutable, but a fixed sum that follows from the
+number of customers and their voltage levels.
 
-OPEX-variabeln samlar de löpande kostnaderna. De påverkbara kostnaderna återanvänds från
-baslinjen, så att den nya och den nuvarande modellen utgår från exakt samma påverkbara siffra och
-därmed kan jämföras direkt. Till dessa läggs värderade nätförluster och ett urval icke-påverkbara
-men utbytbara poster. Sammansättningen är
+\subsubsection{The OPEX variable}
+
+The operating-cost variable collects the running costs. The controllable costs are reused from
+the baseline, so that the new and the current model start from exactly the same controllable
+figure and can be compared directly. To these we add price-adjusted network losses and a selection of
+non-controllable but substitutable posts. The composition is
 \[
-  \mathrm{OPEX} = \text{påverkbara} \;+\; \text{värderade förluster}
-  \;+\; \sum \text{utvalda icke-påverkbara} \;-\; \text{myndighetsavgifter},
+  \mathrm{OPEX} = \text{controllable} \;+\; \text{valued losses}
+  \;+\; \sum \text{selected non-controllable} \;-\; \text{regulatory fees},
 \]
-där de värderade förlusterna ges av
+where the valued losses are given by
 \[
-  \text{värderade förluster} = \text{förlustfaktor} \times \text{gemensamt pris} \times
-  \text{inmatad energi},
+  \text{adjusted losses} = \text{loss factor} \times \text{common price} \times
+  \text{energy fed in},
 \]
-summerade över prognosåren och medelvärdesbildade.
+summed over the forecast years and averaged.
 
-Nätförluster förs in i TOTEX, vilket samtidigt innebär att det fristående incitamentet för
-nätförluster tas bort: en TOTEX-modell ger redan incitament att sänka förlusterna, eftersom en
-lägre förlustkostnad sänker den totala kostnaden \citep{Ei2025Tillampning}. I benchmarkingen värderas förlusterna till ett
-gemensamt pris i stället för till varje företags faktiska förlustkostnad, eftersom den faktiska
-kostnaden beror på elpriset i företagets elområde. Detta är principen ovan: prisskillnaden
-neutraliseras i jämförelsen, medan incitamentet utgår från de faktiska kostnaderna. Myndighetens
-inriktning tillåter att nätförluster, abonnemang eller båda värderas till ett gemensamt pris \citeyearpar{Ei2025Benchmarking}. I
-nuläget gör modellen detta enbart för nätförluster, vilket följer av att tillräckligt detaljerad
-data för abonnemang ännu saknas, inte av ett metodval.
+Network losses enter TOTEX, which at the same time means that the standalone incentive for network
+losses is removed: a TOTEX model already gives an incentive to reduce losses, because a lower loss
+cost lowers the total cost \citep{Ei2025Tillampning}. In the benchmarking, losses are valued at a
+common price rather than at each company's actual loss cost, because the actual cost depends on the
+electricity price in the company's bidding zone. This is the first principle above: the price
+difference is neutralised in the comparison, while the incentive works on the actual costs. Ei's
+direction allows network losses, subscriptions, or both to be valued at a common price
+\citep[][]{Ei2025Benchmarking}. At present the model does this for network losses only, which
+follows from a data limitation, not a methodological choice (subscriptions, the largest
+non-controllable post at about 68 percent of it on current data, lack sufficiently detailed data).
 
-Bland de icke-påverkbara posterna är abonnemang till överliggande och angränsande nät den enda
-som inriktningen namnger uttryckligen \citeyearpar{Ei2025Benchmarking}. Den inkluderas trots att den är svår att påverka på kort
-sikt, eftersom den är utbytbar mot kapitalkostnad. Ytterligare poster förs in under det generella
-kriteriet att en kostnad ska vara i någon grad utbytbar eller påverkbar. Vilka dessa är följer av
-en klassificering i datapipelinen snarare än av en uppräkning i inriktningstexten, vilket är värt
-att vara tydlig med.
+Among the non-controllable posts, subscriptions to the overlying and neighbouring grid is the only
+one the direction names explicitly \citep[][]{Ei2025Benchmarking}. It is included even though it is
+hard to influence in the short run, because it is substitutable against capital cost. Further posts
+are brought in under Ei's general criterion that a cost should be substitutable against, or
+controllable to, some degree. Beyond subscriptions, Ei names no specific posts; our working
+assumption is that grid subscription, grid connection, feed-in compensation, and capacity reserve
+are the included posts.
 
-\subsubsection{Korrigeringen för förläggningsmiljö}
+\subsubsection{The placement-environment correction}
 
-Det kostar olika mycket att anlägga elnät beroende på förläggningsmiljö, exempelvis i stadsmiljö
-jämfört med på landsbygd, vilket ett företag normalt inte kan påverka utifrån sitt nätområde. Ett
-företag med en dyrare förläggningsmiljö får en högre kapitalkostnad och faller därför ut sämre i
-benchmarkingen på ett sätt som inte speglar dess effektivitet. Inriktningen är att justera ned
-anskaffningsvärdet för jordkabel till en gemensam nivå, landsbygd normal, för de dyrare miljöerna.
-Jordkabel ingår eftersom den utgör en stor del av kapitalbasen; kabelskåp utesluts som
-försumbart; och en motsvarande korrigering görs för nätstationer \citeyearpar{Ei2025Benchmarking}.
+Building an electricity network costs different amounts depending on the placement environment, for
+example in an urban setting compared with the countryside, which a company normally cannot control
+given its network area. A company with a more expensive placement environment has a higher capital
+cost and therefore scores worse in the benchmarking in a way that does not reflect its genuine managerial efficiency.
+The direction is to adjust the acquisition value (anskaffningsvärde) of ground cable down to a common, reference level for the more expensive environments. Ground cable is included because it makes up a large
+part of the capital base (about 57 percent of total NUAV on current data); cable cabinets are excluded as negligible (about 4 percent); and a
+corresponding correction is made for substations (about 10 percent) \citep[][]{Ei2025Benchmarking}.
 
-Den metodiskt avgörande observationen är att förläggningsmiljöns premie redan ligger i prislistan.
-Varje kabeltyps pris per kilometer är satt för den exakta kabeltypen i dess specifika
-förläggningsmiljö, så en stadskabel har ett högre pris än samma kabeltyp på landsbygd.
-Korrigeringen är därför inte ett mätproblem utan ett omprissättningsproblem: för att nivellera en
-kabel ersätter man dess pris med landsbygd-normal-priset för samma kabeltyp. Premien behöver inte
-skattas externt, utan är skillnaden mellan miljöns pris och landsbygd-normal-priset i samma lista.
-Ur denna prisstruktur härleds ett schablonavdrag i procent per förläggningsmiljö, vilket är just
-den form inriktningen efterfrågar för att slippa detaljerad rapportering per kabeltyp \citeyearpar{Ei2025Benchmarking}. Att
-schablonen är tillräckligt träffsäker bekräftas av att den nära sammanfaller med en exakt
-omprissättning per kabeltyp på sektornivå.
+The methodologically decisive observation is that the placement-environment premium is already in
+the price list. In their reporting, \citep[][]{Ei2025Benchmarking} only states that a flat-percentage deduction is applied to the total
+acquisition value of ground cable, without specifying how the percentage is derived; deriving it
+from the price list, as we do, is therefore our current working operationalisation, and any uncertainty in outcomes concerns how well it matches the method Ei will
+eventually adopt and the relative magnitude of the two. Each cable type's price per kilometre is
+set for the exact cable type in its specific placement environment, so an urban cable has a higher
+price than the same cable type in the countryside. The correction is therefore not a measurement problem but a re-pricing problem: to
+level a cable, one replaces its price with the rural-normal price for the same cable type. The
+premium does not need to be estimated externally; it is the difference between the environment's
+price and the rural-normal price in the same list. From this price structure we derive a flat
+percentage deduction per placement environment, which is the form the direction asks for so that
+detailed reporting per cable type is not needed \citep[][]{Ei2025Benchmarking}. That the flat
+percentage is accurate enough is confirmed by the fact that it nearly coincides with an exact
+re-pricing per cable type at the sector level.
 
-Två egenskaper i korrigeringen är lätta att läsa fel. För det första nivelleras hela
-förläggningsmiljögradienten ned till landsbygd normal, inklusive landsbygd svår, så korrigeringen
-är inte en lättnad enbart för stadsnät. För det andra justerar den bara nedåt: en kabel billigare
-än landsbygd normal lämnas oförändrad. Korrigeringen kan därmed bara minska den mätta
-kapitalbasen. Eftersom DEA är relativ är dess effekt på det enskilda företagets krav
-fördelningsmässig, i enlighet med principen ovan.
+Two properties of the correction are easy to misread. First, the whole placement-environment
+gradient is levelled down to rural normal, including difficult rural terrain, so the correction is
+not a relief for urban networks alone. Second, it adjusts downward only: a cable cheaper than rural
+normal is left unchanged. This downward-only asymmetry is our reading; Ei says only that values are
+adjusted down to the rural-normal level. The correction can therefore only reduce the measured
+regulatory value of the capital base.
+Because DEA is relative, its effect on the individual company's requirement is distributional, in
+line with the principle above. As an illustration on current data, the correction removes
+approximately 20 percent of the sector's unadjusted capital cost, about 4.8 billion SEK per year,
+and the percentages we use are our derivation from the price list rather than figures Ei has
+published.
 
-\subsubsection{Sammanslagningen till en TOTEX-input}
+\subsubsection{Merging the two inputs into a single TOTEX}
 
-I dagens modell ingår de påverkbara löpande kostnaderna och kapitalkostnaden som två separata
-inputs i DEA. I den nya modellen slås de samman till en enda TOTEX-input. Skälet, enligt
-inriktningen \citeyearpar{Ei2025Benchmarking}, är att dagens reglering ger incitament att inte investera i för dyra anläggningar men
-inget incitament att välja den mest kostnadseffektiva lösningen, oavsett om den innebär löpande
-kostnader eller investeringar. Med en sammanslagen kostnadsvariabel bedöms ett företag på sin
-totala kostnad i stället för på fördelningen mellan löpande kostnader och kapital, vilket gör
-jämförelsen lösningsneutral. En konsekvens är att den löpande respektive kapitalmässiga
-effektiviteten inte längre kan bedömas var för sig; det är den totala kostnadseffektiviteten som
-mäts.
+In the current model the controllable running costs and the capital cost enter DEA as two separate
+inputs. In the new model they are merged into a single TOTEX input. The reason, according to the
+direction \citep[][]{Ei2025Benchmarking}, is that today's regulation gives an incentive not to
+invest in overly expensive plant but no incentive to choose the most cost-effective solution,
+whether that solution runs through operating costs or through investment. With a merged cost
+variable a company is judged on its total cost rather than on the split between running costs and
+capital, which makes the comparison solution-neutral. One consequence is that operating efficiency
+and capital efficiency can no longer be judged separately; what is measured is total cost
+efficiency.
 
-\subsection{Kravmekaniken: det tvåsidiga effektiviseringskravet}
+\subsection{Cable length: a new structural variable}
 
-Den andra förändringen gäller hur effektiviseringskravet beräknas ur DEA-utfallet. Låt $E_i$
-beteckna företag $i$:s effektivitet. I dagens modell mäts varje företag mot fronten ($E = 1$), och
-potentialen, avståndet till fronten, är alltid icke-negativ. Ett golv i beräkningen gör att även
-frontföretaget får ett avdrag på minst en viss nivå. Resultatet är att samtliga företag får ett
-avdrag, och golvet fungerar i praktiken som ett generellt effektiviseringskrav som läggs på alla.
+DEA relates costs to the outputs a network is built to deliver. The current model's DEA uses five output-side variables: four production outputs,
+the number of connection points, the maximum subscribed/withdrawn power, and energy delivered at
+low and high voltage, and one
+structural variable, the number of network stations, which corrects for differences in density. The new model adds physical line length as a second structural variable
+\citep{Ei2025Benchmarking}. Like the number of network stations, line length captures low customer
+density: two companies that deliver the same energy to the same number of customers can require
+very different amounts of plant if one covers a sparse, low-density area and the other a dense one.
+For some companies line length is the better measure of low density, which is why Ei adds it. Our working assumption is that the line-length variable counts the electrical line types and excludes optical fibre.
 
-I den nya modellen flyttas referenspunkten från fronten till tredje kvartilen, alltså till
-effektivitetsnivån $E_{75}$ vid den 75:e percentilen, beräknad exklusive outliers. Gapet definieras
-som
+\subsection{The two-sided efficiency requirement}
+
+The second change concerns how the efficiency requirement is computed from the DEA outcome. Let
+$E_i$ denote company $i$'s efficiency. In the current model each company is measured against the
+frontier ($E = 1$), and the potential, the distance to the frontier, is always non-negative. The
+potential is truncated at a lower and an upper bound. The lower bound gives every company a minimal
+requirement, set at one percent per year, in line with the sector's general productivity
+development; the upper bound caps the largest potentials \citep{Ei2024Bilaga9}. The result is that
+every company receives a deduction, and this lower bound works in practice as a general efficiency
+requirement laid on all.
+
+In the new model the reference point is moved from the frontier to the third quartile, that is, to
+the efficiency level $E_{75}$ at the 75th percentile, computed excluding outliers. The gap is
+defined as
 \[
   \text{gap} = E_{75} - E_i,
 \]
-och kan nu bli negativt. Ett företag under tröskeln får ett avdrag, ett företag vid tröskeln får
-full kostnadstäckning, och ett företag över tröskeln får ett tillägg. Eftersom tröskeln ligger vid
-den 75:e percentilen är det per definition den översta fjärdedelen som får full täckning eller mer \citep{Ei2026Effektivisering}.
-Valet av tredje kvartilen som referens är lånat från den brittiska regleringen. Tröskeln är
-rörlig: den räknas om varje tillsynsperiod ur den aktuella fördelningen, så att den höjs när
-branschen som helhet blir effektivare. I och med detta tas dagens golv och fasta outlierkrav bort,
-och det finns inget separat generellt effektiviseringskrav i den nya modellen \citeyearpar{Ei2026Effektivisering}.
+and can now be negative. A company below the threshold has its revenue frame decreased,
+a company at the threshold receives full cost coverage (no adjustment), and a company above the threshold has its
+revenue frame increased.
+Because the threshold sits at the 75th percentile, it is by definition the top quarter that
+receives full coverage or more \citep{Ei2026Effektivisering}. The choice of the third quartile as
+the reference follows practice in Great Britain, which Ei cites as
+a precedent \citep{Ei2026Effektivisering}. One implication is that the benchmark is \emph{moving}
+and relative: it is recomputed each supervision period from the current distribution, so it rises
+as the sector as a whole becomes
+more efficient. With this, today's floor and fixed outlier requirement are removed, and there is no
+separate general efficiency requirement in the new model \citep[][]{Ei2026Effektivisering}.
 
-Själva beräkningskedjan från gap till årligt krav behåller i allt väsentligt sin form från dagens
-modell. Det syns tydligast om de två formlerna ställs bredvid varandra, där $s$ är kundandelen,
-$\clip$ kapar argumentet till det angivna intervallet, och faktorn $\tfrac{4}{8}$ skalar för att
-potentialen realiseras över åtta år medan kravet sätts per fyraårig tillsynsperiod \citeyearpar{Ei2026Effektivisering}:
+The calculation chain from gap to annual requirement keeps its form in all essentials from today's
+model. This is clearest when the two formulas are set side by side, where $s$ is the customer
+share, $\clip$ truncates the argument to the stated interval, and the factor $\tfrac{4}{8}$ scales for
+the potential being realised over eight years while the requirement is set per four-year
+supervision period \citep[][]{Ei2026Effektivisering}:
 \begin{align*}
-  \text{Nuvarande:} \quad
-    & \text{krav} = \Bigl(1 + \clip\bigl(1 - E_i,\ \text{golv},\ \text{tak}\bigr)
+  \text{Current:} \quad
+    & \text{requirement} = \Bigl(1 + \clip\bigl(1 - E_i,\ \text{floor},\ \text{cap}\bigr)
       \cdot s \cdot \tfrac{4}{8}\Bigr)^{1/4} - 1, \\[2pt]
-  \text{Ny:} \quad
-    & \text{krav} = \Bigl(1 + \clip\bigl(E_{75} - E_i,\ -\text{tak},\ +\text{tak}\bigr)
+  \text{New:} \quad
+    & \text{requirement} = \Bigl(1 + \clip\bigl(E_{75} - E_i,\ -\text{cap},\ +\text{cap}\bigr)
       \cdot s \cdot \tfrac{4}{8}\Bigr)^{1/4} - 1.
 \end{align*}
-Det som har ändrats är alltså definitionen av gapet och att tecknet kan bli negativt. Tabell~\ref{tab:krav}
-sammanfattar skillnaden.
+What has changed is the definition of the gap and that the sign can become negative.
+Table~\ref{tab:req} summarises the difference.
 
 \begin{table}[h]
   \centering
-  \caption{Beräkningen av effektiviseringskravet i den nuvarande och den nya modellen.}
-  \label{tab:krav}
+  \caption{The computation of the efficiency requirement in the current and the new model.}
+  \label{tab:req}
   \begin{tabular}{lll}
     \toprule
-                          & Nuvarande                & Ny \\
+                          & Current                    & New \\
     \midrule
-    Referenspunkt         & fronten ($E = 1$)        & tredje kvartilen ($E_{75}$) \\
-    Tecken                & endast avdrag            & avdrag och tillägg \\
-    Magnitudens drivare   & gap till fronten         & gap till $E_{75}$ \\
-    Golv                  & ja, ger ett generellt krav & nej \\
+    Reference point       & frontier ($E = 1$)         & third quartile ($E_{75}$) \\
+    Sign                  & deduction only             & deduction and addition \\
+    Driver of magnitude   & gap to the frontier        & gap to $E_{75}$ \\
+    Floor                 & yes, gives a general requirement & no \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-En strukturell egenskap är värd att lyfta: tvåsidigheten är skev. Effektiviteten är kapad vid sitt
-högsta värde och tröskeln ligger nära toppen, så ett företag kan ligga bara en liten bit över
-tröskeln men betydligt längre under den. Belöningssidan är därför strukturellt begränsad medan
-avdragssidan kan bli stor, oavsett var ett symmetriskt tak sätts. Tvåsidigheten är alltså äkta men
-i sak ojämn.
+One structural property is worth raising: the two-sidedness is skewed. Efficiency is capped at its
+highest value and the threshold sits near the top, so a company can lie only a little above the
+threshold but considerably below it. The reward side is therefore structurally limited while the
+deduction side can be large, whatever level a symmetric cap is set at. The two-sidedness is genuine
+but uneven in substance.
 
-De konkreta parametervärdena i denna kedja, kundandelen, taket på gapet och realiseringsskalningen,
-är ännu inte publicerade av myndigheten. Vi har låst dem som arbetsantaganden, valda för att spegla
-dagens beräkningskedja, och redovisar dem i avsnittet om arbetsspecifikation. Takets nivå är
-uttryckligen en av myndighetens öppna frågor \citeyearpar{Ei2026Effektivisering}.
+The concrete parameter values in this chain, the customer share, the cap on the gap, and the
+realisation scaling, have not yet been published by Ei. We have fixed them as working assumptions,
+chosen to mirror today's calculation chain, and we report them in Section~\ref{sec:caveats}. The
+level of the cap is explicitly one of the authority's open questions
+\citep[][]{Ei2026Effektivisering}.
 
-\section{Del II: Att mäta förändringarnas samlade effekt}
+As an illustration on current data, the third-quartile reference is $E_{75} \approx 0.93$. Of
+the 145 scored companies (excluding three outliers), 107 receive a deduction to its revenue frame, 37 receive an addition, and 1 lands at full
+coverage. We report the outcome as the impact on the revenue frame.  The
+annual outcomes range from about $-1.82$ percentage points per year to about $+0.43$ percentage points per year, with
+a median of about $-0.61$ percentage points per year. That roughly three quarters of companies fall
+on the deduction side is expected by construction, since the threshold is the 75th percentile.
 
-De förändringar som beskrivits ovan verkar samtidigt, och vi vill kunna säga hur stor del av det
-samlade utfallet som beror på var och en av dem, på ett sätt som summerar exakt till helheten. Den
-uppenbara vägen, att slå av en förändring i taget och avläsa skillnaden, fungerar inte, och skälet
-är principen om relativ DEA ovan. Eftersom varje komponent förskjuter fronten beror dess effekt på
-vilka övriga komponenter som redan ingår. En komponents marginaleffekt är därför inte ett fast tal,
-utan skiljer sig åt beroende på i vilken ordning komponenterna betraktas.
+\subsection{From the requirement to the monetary effect: two cost bases}
 
-Låt $N$ vara mängden av komponenter, $n = |N|$, och låt $v(S)$ beteckna företagets signerade krav
-när bara komponenterna i delmängden $S \subseteq N$ ingår. De två ytterlägena för en komponent $k$
-är att ta bort den ur den fullständiga modellen och att lägga till den i den bara baslinjen:
-\[
-  \mathrm{LOO}(k) = v(N) - v(N \setminus \{k\}), \qquad
-  \mathrm{AOI}(k) = v(\{k\}) - v(\emptyset).
-\]
-Eftersom DEA är icke-linjär sammanfaller dessa inte, och summan av de enskilda marginaleffekterna
-träffar inte den faktiska totalen. Gapet mellan ytterlägena mäter hur starkt komponenten samverkar
-med de övriga, och det är detta gap som motiverar en ordningsoberoende metod.
+The efficiency requirement/addition is a percentage. The monetary effect is the percentage applied to a
+cost base over the four-year supervision period, and the two models apply their percentage to
+different bases \citep[][]{Ei2025Tillampning}. The current model applies its percentage to an operating-cost base, and the new model applies its
+percentage to the full uncorrected TOTEX: controllable costs, annualised non-controllable costs,
+the actual network losses at their actual cost, the selected non-controllable posts, and the
+unadjusted capital cost.
 
-Shapley-värdet, hämtat från den kooperativa spelteorin, löser ordningsberoendet genom att beräkna
-varje komponents marginaleffekt genomsnittad över samtliga ordningar i vilka komponenterna kan
-läggas till modellen:
-\[
-  \varphi_k = \sum_{S \subseteq N \setminus \{k\}} w(|S|)\,
-  \bigl[\, v(S \cup \{k\}) - v(S) \,\bigr], \qquad
-  w(s) = \frac{s!\,(n - s - 1)!}{n!}.
-\]
-Det är den enda uppdelning som samtidigt summerar exakt till den totala förändringen, tilldelar en
-komponent utan effekt exakt noll, behandlar utbytbara komponenter lika, och är additiv över
-oberoende delar. Den första av dessa egenskaper, som är hela poängen med uppdelningen, är
-identiteten
-\[
-  \sum_{k \in N} \varphi_k = v(N) - v(\emptyset).
-\]
-Resultatet är en exakt och rättvis bokföring av vad modellen gör.
+Two things follow. First, in line with the first principle, the benchmarking corrections, the
+common loss price and the placement-environment levelling, set the percentage but never the monetary
+base. The base is the company's actual, uncorrected costs. Second, because the new percentage is
+applied to a much larger base, an outcome can fall in percentage terms yet rise in monetary terms. On
+current data this is the case for about half of the companies (roughly 52 percent), and it is the
+headline result of the comparison. For the sector as a whole, the new model roughly doubles the
+aggregate requirement in monetary terms, from about 1.4 billion SEK to about 2.8 billion SEK over the
+four-year period. We note that this doubling is largely mechanical, the incentive applied to the
+whole TOTEX rather than to operating cost alone, and not a new empirical finding.
 
-Förändringarna i del I är just de komponenter som dekompositionen fördelar, men de är inte av samma
-slag, och vi delar därför upp dekompositionen i två skikt. De beräkningsmässiga förändringarna,
-sammanslagningen till en TOTEX-input och övergången till det tvåsidiga kravet, utgör ett yttre
-skikt: de bestämmer hur kravet beräknas. Kostnadsunderlagets enskilda poster utgör ett inre skikt:
-de bestämmer vilka kostnader som ingår. Det yttre skiktet fördelar steget från dagens krav till den
-nya modellens baslinje, och det inre skiktet fördelar därefter kravet mellan komponenterna, givet
-den nya beräkningsregimen. Båda skikten är exakta och summerar tillsammans till hela förändringen.
-Uppdelningen är medveten: komponenternas bidrag redovisas givet den modell som faktiskt gäller,
-inte genomsnittat över en avskaffad beräkningsregim.
+\section{Using the tool}
+\label{sec:tool}
 
-Två förbehåll följer av principen om relativ DEA. För det första är bidragen fördelningsmässiga,
-inte absoluta: ett bidrag som sänker ett företags krav motsvaras i regel av en höjning hos andra, så
-en komponents bidrag över företagen summerar nära noll. När vi säger att en komponent gynnar ett
-företag är det ett påstående om dess läge i förhållande till jämförelsebolagen, inte om kostnader i
-absoluta termer. För det andra kan en komponent vara liten i genomsnitt men stor i omfördelning:
-genomsnittet säger hur den påverkar sektorns samlade krav, medan spridningen säger hur den flyttar
-om de enskilda företagen. Dessa två frågor besvaras därför var för sig i resultatredovisningen.
-Slutligen är Shapley-värdet en rättvis bokföring av vad modellen gör, givet modellvalen, inte en
-kausal kontrafaktisk utsaga.
+The page is simple to operate, because the model is fixed at the reference reading described above
+and almost nothing needs to be set.
 
-\section{Arbetsspecifikation och förbehåll}
+Select a company in the sidebar. The main model runs for all companies at once; it is pre-computed,
+so the result appears immediately. The verdict at the top states whether the new model raises or
+lowers the company's revenue frame relative to the current model, with a higher cap shown as
+positive. Four cards give the supporting figures, each as the change from the current model: the
+efficiency requirement as an annual percentage, the same outcome in monetary terms over the period, the
+company's efficiency rank among the scored companies, and its DEA efficiency. A note under the
+cards repeats that these are the isolated effect of the benchmarking change on current-regulation
+data, not a forecast.
 
-Följande punkter är våra arbetsantaganden eller följer av tillgänglig data, och bör läsas som sådana
-tills myndighetens specifikation publiceras. Samtliga magnituder som redovisas separat är betingade
-på dem.
+Below the verdict the result is grouped into two views. The efficiency-and-outcome view shows where
+every company falls relative to the third-quartile benchmark $E_{75}$, the distribution of outcomes
+across the sector, the counts of companies with a lower cap, full coverage, and a higher cap, and
+three company-by-company comparisons of the new model against the current one (rank, efficiency, and
+the revenue-frame impact). The TOTEX bridge shows a waterfall from the old cost base to the new DEA
+TOTEX in two phases: first the cost posts the new model brings in that the old did not, the network
+losses and the selected non-controllable posts, then the benchmarking corrections, the losses
+revalued to a common price and the placement-environment levelling of capital cost split into cable
+and station. When an outcome improves in percentage terms but costs more in monetary terms, or the reverse,
+the tool says so in words, because the two models apply the percentage to different bases.
 
-\textit{Det tvåsidiga kravet.}
+One panel is adjustable. The Experiment expander lets a user change three things on top of the
+fixed main model: the common loss price in SEK per megawatt hour; the placement-environment
+method for cable and for station, either the exact re-pricing or a flat-percentage schablon; and
+which line types feed the cable-length output. The DEA run is heavy, so it fires only when the
+\emph{Run experiment} button is clicked; editing the controls merely marks pending changes. The
+\emph{Reset to main model} button returns to the reference reading. Everything else, the TOTEX
+composition, the outputs, and the returns to scale, is fixed at the main-model specification. These
+controls are for exploration; the defaults reproduce the reference reading on which the figures in
+this manual rest.
+
+\section{Working specification and caveats}
+\label{sec:caveats}
+
+The following points are our working assumptions or follow from the available data, and should be
+read as such until the authority's specification is published. All magnitudes reported separately
+are conditional on them.
+
+\textit{The two-sided requirement.}
 \begin{enumerate}
-  \item Kundandelen, taket på gapet och realiseringsskalningen är inte publicerade av myndigheten.
-    Vi har låst dem för att spegla dagens beräkningskedja. Takets nivå är en öppen regleringsfråga.
-  \item Att magnituden bestäms av det kardinala gapet, och att golv och fast outlierkrav tas bort,
-    är vår tolkning av en funktionsform som myndigheten inte har fastställt.
+  \item The customer share, the cap on the gap, and the realisation scaling have not been published
+    by Ei. We have fixed them to mirror today's calculation chain, which gives a customer share of
+    $0.50$, a symmetric cap of $0.30$ on the gap, and a realisation factor of $4/8$, so that the
+    maximum deduction is about $1.82$ percentage points per year, equal to today's cap. The level
+    of the cap is an open regulatory question.
+  \item That the magnitude is set by the cardinal gap, and that the floor and the fixed outlier
+    requirement are removed, is our reading of a functional form the authority has not fixed.
 \end{enumerate}
 
-\textit{Förläggningsmiljökorrigeringen.}
+\textit{The placement-environment correction.}
 \begin{enumerate}\setcounter{enumi}{2}
-  \item De konkreta procentsatserna är vår härledning ur prisstrukturen; myndighetens officiella
-    schablonavdrag är ännu inte publicerat.
-  \item Premien härleds ur normvärdeslistan, medan den kommande metoden riktar sig mot
-    anskaffningsvärde \citep{Ei2025Inriktning}, som saknas i nära all tillgänglig data. Härledningen vilar därmed på att
-    prisrelationen mellan förläggningsmiljöer är densamma i anskaffningsvärde som i normvärde.
-    Antagandet är rimligt men inte verifierbart ur denna data.
+  \item The concrete percentages are our derivation from the price structure; the authority's
+    official flat-percentage deduction has not yet been published.
+  \item The premium is derived from the norm-value list, while the coming method targets the
+    acquisition value \citep{Ei2025Inriktning}, which is missing from nearly all available data. The
+    derivation therefore rests on the assumption that the price relation between placement
+    environments is the same in acquisition value as in norm value. The assumption is reasonable but
+    not verifiable from this data.
 \end{enumerate}
 
-\textit{OPEX-variabeln.}
+\textit{The OPEX variable.}
 \begin{enumerate}\setcounter{enumi}{4}
-  \item Att i nuläget bara värdera nätförluster, och inte abonnemang, till ett gemensamt pris följer
-    av en databegränsning, inte av ett metodval.
-  \item Urvalet av icke-påverkbara poster utöver abonnemang vilar på det generella
-    utbytbarhetskriteriet och är klassificerat i datapipelinen.
-  \item Blandningen av perioder och valet av prognosperiod är kända modellförenklingar som speglar
-    dagens modell.
+  \item Valuing only network losses, and not subscriptions, at a common price at present follows from
+    a data limitation, not from a methodological choice.
+  \item The selection of non-controllable posts beyond subscriptions rests on the general
+    substitutability criterion and is classified in the data pipeline.
+  \item The mixing of periods and the choice of forecast period are known model simplifications that
+    mirror today's model.
 \end{enumerate}
 
-\section{Sammanfattning}
+\textit{Scope and inference.}
+\begin{enumerate}\setcounter{enumi}{7}
+  \item Three companies that Ei treats as unsuitable for DEA are removed from the reference set and
+    from the third-quartile benchmark and are left unscored, so the reported outcome figures cover
+    145 scored companies.
+\end{enumerate}
+
+\section{Summary}
+\label{sec:summary}
 
 \begin{enumerate}
-  \item Kostnadsunderlaget byggs som en TOTEX: samtliga poster utom myndighetsavgifter samlas i en
-    kostnadsvariabel, så att företagen jämförs på total kostnad i stället för på
-    kostnadssammansättning, och de två tidigare inputerna slås samman till en.
-  \item Nätförluster värderas till ett gemensamt pris och förläggningsmiljön nivelleras till en
-    gemensam nivå, båda enligt principen att normalisera i jämförelsen men ge incitament på de
-    faktiska kostnaderna.
-  \item Effektiviseringskravet blir tvåsidigt: referensen flyttas från fronten till tredje
-    kvartilen, kravet kan bli negativt, den översta fjärdedelen får full täckning eller mer, och
-    dagens golv tas bort. Tvåsidigheten är strukturellt skev.
-  \item För att mäta varje förändrings bidrag till det samlade utfallet används Shapley-värdet, som
-    ger en exakt och ordningsoberoende uppdelning. Bidragen är fördelningsmässiga och betingade på
-    modellvalen, inte absoluta eller kausala.
-  \item Parametervärden och vissa dataval är arbetsantaganden, inte myndighetens beslut, och de
-    magnituder som redovisas separat är betingade på dem.
+  \item The cost base is built as a TOTEX: every post except regulatory fees is collected into one
+    cost variable, so that companies are compared on total cost rather than on cost composition, and
+    the two earlier inputs are merged into one.
+  \item Network losses are valued at a common price and the placement environment is levelled to a
+    common level, both under the principle of normalising in the comparison while giving the
+    incentive on the actual costs. Physical line length is added as a new structural output.
+  \item The efficiency requirement becomes two-sided: the reference moves from the frontier to the
+    third quartile, the requirement can become negative, the top quarter receives full coverage or
+    more, and today's floor is removed. The two-sidedness is structurally skewed.
+  \item Because the new percentage is applied to the full TOTEX rather than to operating cost alone,
+    an outcome can fall in percentage terms yet rise in monetary terms, which holds for about half of the
+    companies and roughly doubles the sector's aggregate requirement in monetary terms on current data. The
+    combined effect should be read as the joint effect of all the changes at once.
+  \item Parameter values and several data choices are working assumptions, not the authority's
+    decisions, and the magnitudes reported separately are conditional on them.
 \end{enumerate}
 
 \bibliographystyle{plainnat}

@@ -279,7 +279,7 @@ M5_EFFICIENCY = ModuleDefinition(
 
 M7_BENCHMARKING = ModuleDefinition(
     key="m7",
-    title="7. Benchmarking module",
+    title="7. Benchmarking",
     description="Custom DEA specification",
     parameters=(
         ModuleParameter("DEA", "DEA model specification", 
@@ -475,12 +475,17 @@ def infer_selected_from_ui_config(ui_config: Dict[str, Any]) -> Set[str]:
     ]):
         selected.add("m4.opex_vars")
     
-    # Module 5: Efficiency (1 section)
+    # Module 5: Efficiency (1 section). Check every key the M5 renderer / adapter
+    # actually writes, so a saved case that changed only realization time, customer
+    # sharing, outlier requirement or cost base is still detected on load.
     m5 = ui_config.get("m5_efficiency", {})
     if any([
         m5.get("trunkering_max") is not None,
         m5.get("trunkering_min") is not None,
-        m5.get("efficiency_override") is not None,
+        m5.get("outlier_krav") is not None,
+        m5.get("realiseringstid") is not None,
+        m5.get("kunddelning") is not None,
+        m5.get("paverkbara_method") is not None,
     ]):
         selected.add("m5.efficiency_params")
     

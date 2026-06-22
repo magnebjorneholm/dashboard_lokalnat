@@ -13,6 +13,12 @@
     },
     "terminal.integrated.defaultProfile.osx": "zsh (venv)",
     "r.lsp.promptToInstall": false,
+    "github.copilot.enable": {
+        "*": true,
+        "latex": false,
+        "plaintext": false,
+        "markdown": false
+    },
     "latex-workshop.latex.outDir": "%DIR%/build",
     "latex-workshop.latex.recipe.default": "latexmk",
     "latex-workshop.view.pdf.viewer": "tab",

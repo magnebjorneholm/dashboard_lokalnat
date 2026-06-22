@@ -174,4 +174,14 @@ linkcolor=black]{hyperref}
 \graphicspath{{../../../graphs/}}
 
 
+% *****************************************************************
+% TODO comments (todonotes ships with TeX Live / MacTeX)
+% *****************************************************************
+% Load after hyperref/xcolor. \TODO{...} drops an inline highlighted note;
+% \listoftodos prints a collected list. Pass [disable] to hide them all for
+% a clean build: \usepackage[disable]{todonotes}.
+\usepackage[colorinlistoftodos,textsize=small]{todonotes}
+\newcommand{\TODO}[1]{\todo[inline,color=yellow!60]{\textbf{TODO:} #1}}
+
+
 

@@ -41,7 +41,9 @@ from config.incentive_parameters import BASELINE_INCENTIVE
 from calculations.frontier.dea_calculations import BASELINE_DEA_SPEC
 from config.column_names import COL_CAPITAL_COST_2024, COL_CONTROLLABLE_AVG, COL_OPEXP_DEA, COL_TOTEX_DEA
 from config.glossary import (
-    PID_GENERAL_SCALING, PID_WACC_REAL, PID_LOSS_SCALING, PID_LOSS_SHARING,
+    PID_GENERAL_SCALING, PID_WACC_REAL,
+    PID_MAX_TOTAL_ADJUSTMENT, PID_LOSS_SHARING, PID_LOSS_COST_AVG,
+    PID_CEMI4_CORRECTION,
     PID_MAX_POTENTIAL_CAP, PID_REALIZATION_TIME, PID_CUSTOMER_SHARING,
     PID_MIN_ANNUAL_REQ,
     PID_OPEX_SCALING, PID_FLEX_SCALING, PID_NON_ADJ_SCALING,
@@ -504,8 +506,9 @@ def _build_post_dea_config(ui_config: Dict[str, Any]) -> PostDeaConfig:
     # otherwise leave as None → auto-derived from outlier_req in efficiency_requirement.py
     truncation_min = m5.get("trunkering_min")  # None unless explicitly set
 
-    # controllable_method is set in M5 (5.4.1 Cost base application)
-    controllable_method_str = m5.get("paverkbara_method", "OPEX")
+    # controllable_method is set in M5 (5.4.1 Cost base application).
+    # `or "OPEX"` so an explicit None in the config scaffold falls back to baseline.
+    controllable_method_str = m5.get("paverkbara_method") or "OPEX"
     incentive = _build_incentive_config(ui_config)
 
     # M4 OPEX: Post-DEA parameters (from M4)
@@ -540,7 +543,7 @@ def get_baseline_value(param_id: str) -> Any:
     PARAM_BASELINE = {
         PID_WACC_REAL: BASELINE_WACC,
         PID_LOSS_SHARING: BASELINE_INCENTIVE["sharing_netloss"],
-        "3.6.1": BASELINE_INCENTIVE["adj_max_agg"],
+        PID_MAX_TOTAL_ADJUSTMENT: BASELINE_INCENTIVE["adj_max_agg"],
         PID_MAX_POTENTIAL_CAP: 0.30,
         PID_REALIZATION_TIME: 8,
         PID_CUSTOMER_SHARING: 0.50,
@@ -580,23 +583,26 @@ def get_changed_parameters(ui_config: Dict[str, Any]) -> List[str]:
         changed.append(f"{PID_WACC_REAL} WACC")
     
     # Module 3: Quality adjustments
+    # IDs follow the User Manual / glossary: aggregate cap = 3.3.1, network-loss
+    # sharing = 3.4.2, electricity price = 3.4.3, CEMI4 correction = 3.6.6.
+    # The enable toggles map to the thematic sections 3.3 / 3.4 / 3.5.
     m3q = ui_config.get("m3_quality_adjustments", {})
     if not _is_empty_or_none(m3q.get("kpi")):
-        changed.append("3.7.X KPI factors")
+        changed.append("3.7.1-3.7.4 KPI factors")
     if not _is_empty_or_none(m3q.get("k_nf")):
-        changed.append(f"{PID_LOSS_SCALING} Electricity price (K_NF)")
+        changed.append(f"{PID_LOSS_COST_AVG} Electricity price (K_NF)")
     if m3q.get("sharing_netloss") is not None:
         changed.append(f"{PID_LOSS_SHARING} Network loss sharing")
     if m3q.get("adj_max_agg") is not None:
-        changed.append("3.6.1 Max aggregate incentive")
+        changed.append(f"{PID_MAX_TOTAL_ADJUSTMENT} Max aggregate incentive")
     if m3q.get("adj_max_cemi4") is not None:
-        changed.append("3.3.X CEMI correction")
+        changed.append(f"{PID_CEMI4_CORRECTION} CEMI4 correction")
     if not m3q.get("enable_quality", True):
-        changed.append("3.6.1 Quality incentive OFF")
+        changed.append("3.3 Quality incentive OFF")
     if not m3q.get("enable_netloss", True):
-        changed.append("3.6.2 Network loss incentive OFF")
+        changed.append("3.4 Network loss incentive OFF")
     if not m3q.get("enable_load", True):
-        changed.append("3.6.3 Load incentive OFF")
+        changed.append("3.5 Utilization rate incentive OFF")
     
     # Module 4: Operating expenditures
     m4 = ui_config.get("m4_operating_exp", {})

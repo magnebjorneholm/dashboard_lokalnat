@@ -73,6 +73,8 @@ window, read across multiple passes until the whole file is covered.
 
 Each tool ships its own user manual. The LaTeX sources live in `user_manual_latex/`, one folder per tool: `user_manual_latex/manuals/<slug>/main.tex`. All manuals share `user_manual_latex/shared/` (`preamble.tex`, `references.bib`). Toolchain (MacTeX + `latexmk` + VS Code **LaTeX Workshop**) is wired up via `user_manual_latex/latexmkrc` and the `latex-workshop.*` keys in `.vscode/settings.json`. Install MacTeX with `brew install --cask mactex` (or the smaller `brew install --cask basictex`); `latexmk` ships with it.
 
+**When working with LaTeX, only write/edit the `.tex` sources — do not try to compile or build the PDF.** Erik has a working local LaTeX setup (MacTeX + LaTeX Workshop) and runs the build himself. The build commands below are his to run; Claude should not attempt to compile (and the Cowork sandbox can't anyway — it lacks the full MacTeX packages like swedish-babel/siunitx).
+
 - **Add a manual:** `cp -r user_manual_latex/manuals/_template user_manual_latex/manuals/<slug>`, edit `main.tex`, then build. Serve it in the app with `manual_download_button("<slug>")` (see `frontend/common/manuals.py`).
 - **Build all (terminal):** `cd user_manual_latex && ./build.sh` — builds every manual and publishes each PDF to `static/manuals/<slug>.pdf` (the path the app serves). Build one: `./build.sh <slug>`.
 - **Build in VS Code:** open the tool's `manuals/<slug>/main.tex`, press **Ctrl+Alt+B**. Preview with **Ctrl+Alt+V**. (This writes only to `manuals/<slug>/build/`; run `build.sh` to publish into `static/manuals/`.)
@@ -86,6 +88,15 @@ Each tool ships its own user manual. The LaTeX sources live in `user_manual_late
 - Swedish column names only appear in `data_loaders/` (the load boundary).
 - `calculations/` is pure logic — no UI or Streamlit imports allowed.
 - Dependencies flow strictly downward (see ARCHITECTURE.md layer diagram).
+- **Data access:** never hardcode `data/` paths. Resolve every dataset through the
+  `config/data_paths.py` registry (`dataset_path` / `require_dataset`); a logical
+  name maps to one path. `data/` is organised by provenance
+  (`raw/`, `derived/`, `reference/`, `fixtures/`); see `data/README.md`. Data root
+  is overridable with `REGUMETRICA_DATA_DIR`.
+- **Loaders** cache with `@cached` from `data_loaders/_cache.py` (not `st.cache_data`
+  directly) and assert a non-mutating column contract from `data_loaders/schemas.py`.
+  `TEST_MODE` lives in `config/runtime.py`. Heavy Excel sources are read from frozen
+  parquet snapshots (`scripts/freeze_raw_sources.py`); rerun it when a raw source changes.
 - **Charts:** Plotly `graph_objects` (`import plotly.graph_objects as go`) is the
   drawing engine; Streamlit is the host/UI layer and renders figures with
   `st.plotly_chart(...)`. This is the default convention — assume it whenever a new
