@@ -31,7 +31,9 @@ if str(REPO_ROOT) not in sys.path:
 
 from config.column_names import (  # noqa: E402
     COL_REID,
-    COL_CONTROLLABLE_AVG, COL_LOSS_VALUED, COL_NONCTRL_SELECTED,
+    COL_CONTROLLABLE_AVG, COL_OPEXP_DEA, COL_LOSS_VALUED, COL_NONCTRL_SELECTED,
+    COL_NONCTRL_GRID_SUBSCRIPTION, COL_NONCTRL_GRID_CONNECTION,
+    COL_NONCTRL_FEED_IN, COL_NONCTRL_CAPACITY_RESERVE,
     COL_CAPITAL_COST_2024, COL_CAPITAL_COST_ENV_ADJ, COL_OPEX_NEW, COL_TOTEX_NEW,
     COL_DEA_EFFICIENCY, COL_EFF_REQ_ANNUAL, COL_DEA_REFERENCE,
     COL_KR_NEW, COL_KR_CURRENT,
@@ -97,8 +99,13 @@ def load_analysis_df() -> pd.DataFrame:
     # ── cost parts + kr (totex frame) ────────────────────────────────────────
     totex = b["totex"].rename(columns={
         COL_CONTROLLABLE_AVG: "controllable",
+        COL_OPEXP_DEA: "opexp_dea",
         COL_LOSS_VALUED: "loss_valued",
         COL_NONCTRL_SELECTED: "nonctrl_selected",
+        COL_NONCTRL_GRID_SUBSCRIPTION: "grid_subscription",
+        COL_NONCTRL_GRID_CONNECTION: "grid_connection",
+        COL_NONCTRL_FEED_IN: "feed_in",
+        COL_NONCTRL_CAPACITY_RESERVE: "capacity_reserve",
         COL_CAPITAL_COST_2024: "capex_unadj",
         COL_CAPITAL_COST_ENV_ADJ: "capex_adj",
         COL_OPEX_NEW: "opex_new",
@@ -106,7 +113,8 @@ def load_analysis_df() -> pd.DataFrame:
         COL_KR_NEW: "kr_new",
         COL_KR_CURRENT: "kr_cur",
     })[[
-        COL_REID, "controllable", "loss_valued", "nonctrl_selected",
+        COL_REID, "controllable", "opexp_dea", "loss_valued", "nonctrl_selected",
+        "grid_subscription", "grid_connection", "feed_in", "capacity_reserve",
         "capex_unadj", "capex_adj", "opex_new", "totex_new", "kr_new", "kr_cur",
         COL_APPLICATION_BASE_NEW,
     ]]
@@ -167,7 +175,8 @@ def load_analysis_df() -> pd.DataFrame:
     # ── column order: id → cost parts → capex-corr → new → current → deltas → outputs
     cols = [
         COL_REID, "name_short",
-        "controllable", "loss_valued", "nonctrl_selected",
+        "controllable", "opexp_dea", "loss_valued", "nonctrl_selected",
+        "grid_subscription", "grid_connection", "feed_in", "capacity_reserve",
         "capex_unadj", "capex_adj", "opex_new", "totex_new", "totex_unadj",
         COL_APPLICATION_BASE_NEW,
         "capex_cut", "capex_cut_pct",

@@ -34,7 +34,7 @@ After logging in, you enter the main environment by opening a \emph{case}. A cas
 Once you have adjusted the assumptions to your preferred levels, the model is run. Simulations usually complete within a few seconds, though more complex configurations may take longer. Regumetrica then provides downloadable data detailing the revenue frame for the selected concession area, along with all underlying calculation components. In addition to data downloads, results can also be displayed graphically, for example as charts decomposing different components of the revenue frame. After running a model, you may choose to save the case for later use.
 
 \subsection*{Model Components}
-The regulatory model is organized into \emph{Base modules} and \emph{Add-on modules}. Base modules represent the core components of the revenue frame calculation: Regulatory asset base valuation, Depreciation, Cost of capital, Operating expenditures, and the Efficiency incentive. Each base module contains \emph{Parameters} and \emph{Variables}:
+The regulatory model is organized into \emph{Base modules} and \emph{Add-on modules}. Base modules represent the core components of the revenue frame calculation: Regulatory asset base valuation, Depreciation, Cost of capital, Operating expenditures, and the Efficiency incentive. Modules contain \emph{Parameters} and \emph{Variables}:
 
 \begin{itemize}
   \item \emph{Parameters} are fixed values that define the structural relationships within the regulatory model. They capture assumptions or policy choices that apply uniformly across all regulated entities. For example, the regulatory \emph{WACC} (Weighted Average Cost of Capital) determines the allowed rate of return on capital and is itself derived from a set of \emph{sub-parameters}, such as the risk-free rate of return. Another example of a parameter is the \emph{economic lifetime} assigned to a specific asset category, which determines the rate of capital depreciation over time. \textbf{A change to a parameter applies to every company in the model.}
@@ -54,7 +54,7 @@ The revenue cap tool is organized as a four-step workflow, and this manual follo
   \item \textbf{Revenue Frame}: run the calculation and read, compare, and export the results.
 \end{enumerate}
 
-Two conventions recur throughout. First, anything you do not change keeps its \emph{baseline} value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a \emph{Parameter-ID} (e.g.\ 1.1.1) or a \emph{Variable-ID} (e.g.\ 10.2). These IDs are cited next to each field in the tool and used consistently in this manual; the complete catalogue is collected in the appendices.
+Two conventions recur throughout. First, anything you do not change keeps its \emph{baseline} value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a \emph{Parameter-ID} (e.g.\ 1.1.1) or a \emph{Variable-ID} (e.g.\ 10.2). These IDs are cited next to each field in the tool and used consistently in this manual; the complete catalogue is collected in the Appendix.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -131,7 +131,7 @@ Norm values are the per-unit asset values set by the regulator. Two kinds of sca
   \item \textbf{Category scaling factors (1.2.1--1.2.17)}: one multiplier per asset category, applied on top of the general factor. Baseline 1.00 for every category.
 \end{itemize}
 
-\noindent A factor of 1.00 leaves the norm value unchanged; 1.20 raises it by 20\%, 0.80 lowers it by 20\%. The 17 asset categories are listed in Appendix~\ref{app:categories}.
+\noindent A factor of 1.00 leaves the norm value unchanged; 1.20 raises it by 20\%, 0.80 lowers it by 20\%. The 17 asset categories are listed in Table~\ref*{tab:app-cat} in Appendix~\ref*{app:categories}.
 
 \subsubsection{Asset quantities (variables)}
 Here you scale the quantity of assets in your own concession area, by category, relative to the reported baseline (Variable-IDs 10.2--10.18). This changes the size of your asset base without touching the norm values. Scaling affects the ordinary portion of the capital base only.
@@ -150,7 +150,7 @@ This module sets the economic lifetimes used to depreciate the asset base. For e
   \item \textbf{Tail period (2.X.2)}: the additional period during which an asset remains in service beyond its ordinary lifetime.
 \end{itemize}
 
-\noindent Lifetimes are edited in a table, one row per category. The tail period cannot exceed the ordinary lifetime; if you enter a larger value it is treated as equal to the ordinary lifetime in the calculation. Baseline lifetimes are listed in Appendix~\ref{app:categories}.
+\noindent Lifetimes are edited in a table, one row per category. The tail period cannot exceed the ordinary lifetime; if you enter a larger value it is treated as equal to the ordinary lifetime in the calculation. Baseline lifetimes are listed in Table~\ref*{tab:app-cat} in Appendix~\ref*{app:categories}.
 
 
 \subsection{M3: Cost of capital}
@@ -162,23 +162,23 @@ This module covers the allowed return on capital, the WACC, and the incentive sc
 The WACC is the real, pre-tax weighted average cost of capital. You can specify it in three ways; in every case the result is an ``active WACC'' that you apply to the case.
 
 \begin{itemize}
-  \item \textbf{Base parameters}: enter the underlying CAPM inputs and let the tool derive the WACC. The inputs are debt ratio (3.1.1), asset beta (3.1.2), risk-free rate (3.1.3), market risk premium (3.1.4), credit risk premium (3.1.5), tax rate (3.1.6), and inflation (3.1.7). The tool displays the resulting derived quantities: equity beta (3.2.1), cost of equity (3.2.2), cost of debt (3.2.3), and the final real WACC (3.2.5).
-  \item \textbf{Derived}: modify the intermediate quantities directly: cost of equity (3.2.2), cost of debt (3.2.3), debt ratio (3.1.1), tax rate (3.1.6), and inflation (3.1.7). Use this when you want to set, say, the cost of equity without specifying the full CAPM chain behind it.
-  \item \textbf{Direct input}: enter the real, pre-tax WACC (3.2.5) directly.
+  \item \textbf{Base parameters}: enter the underlying CAPM inputs (debt ratio, asset beta, risk-free rate, market risk premium, credit risk premium, tax rate, and inflation) and let the tool derive the WACC, displaying the resulting equity beta, cost of equity, cost of debt, and the final real, pre-tax WACC used in the calculations.
+  \item \textbf{Derived}: modify the intermediate quantities directly, such as the cost of equity, cost of debt, debt ratio, tax rate, and inflation. Use this when you want to set, say, the cost of equity without specifying the full CAPM chain behind it.
+  \item \textbf{Direct input}: enter the real, pre-tax WACC directly.
 \end{itemize}
 
-\noindent Baseline values for all WACC parameters are given in Appendix~\ref{app:params}. When you set a derived quantity directly, that value overrides any sub-parameters behind it.
+\noindent Baseline values for all WACC parameters, with their Parameter-IDs, are given in Table~\ref*{tab:app-m3-wacc} in Appendix~\ref*{app:params}. When you set a derived quantity directly, that value overrides any sub-parameters behind it.
 
-\subsubsection{Incentive parameters}
+\subsubsection{Incentive parameters} 
 The allowed return is adjusted by three incentive schemes, each of which can be switched on or off:
 
 \begin{itemize}
-  \item \textbf{Quality (3.3)}: compensates for the quality of supply, based on interruptions. You can adjust the maximum CEMI4 correction (3.6.6) and the underlying interruption cost tables for interruption energy (ILE, kr/kWh) and interruption power (ILEffekt, kr/kW), listed by customer type in Table~\ref{tab:app-m3-ile}.
-  \item \textbf{Network loss (3.4)}: rewards or penalizes network losses relative to a norm. You can set the sharing factor (3.4.2), i.e.\ the share of the gain or loss retained by the company, and the electricity price used to value losses, per year (3.4.3).
+  \item \textbf{Quality (3.3)}: compensates for the quality of supply, based on interruptions. You can adjust the maximum CEMI4 correction and the underlying interruption cost tables for interruption energy (ILE, kr/kWh) and interruption power (ILEffekt, kr/kW), listed by customer type in Table~\ref*{tab:app-m3-ile} in Appendix~\ref*{app:params}.
+  \item \textbf{Network loss (3.4)}: rewards or penalizes network losses relative to a norm. You can set the sharing factor, i.e.\ the share of the gain or loss retained by the company, and the electricity price used to value losses, per year.
   \item \textbf{Utilization rate (3.5)}: rewards higher capacity utilization. This scheme is computed automatically from company data; here you only enable or disable it.
 \end{itemize}
 
-\noindent In addition, you can set the cap on the \textbf{total} incentive adjustment per year, expressed as a share of the allowed return (3.3.1), and the KPI factors used to index interruption costs to the price level of the reference year (3.7.1--3.7.4, one per year).
+\noindent In addition, you can set the cap on the \textbf{total} incentive adjustment per year, expressed as a share of the allowed return, and the KPI factors used to index interruption costs to the price level of the reference year (one per year).
 
 \subsubsection{Incentive variables (own area)}
 These are the company-specific inputs to the incentive schemes for your concession area (Variable-IDs 30.x). An override you enter here applies to all years of the regulatory period. They are grouped as:
@@ -189,7 +189,7 @@ These are the company-specific inputs to the incentive schemes for your concessi
   \item \textbf{Interruptions (30.4)}: the CEMI4 measure, and, per customer type, the average interruption time (AIT), average interruption frequency (AIF), and annual average power.
 \end{itemize}
 
-\noindent The full set of interruption variables, broken down by customer type and by planned/unplanned and norm/observed, is listed in Appendix~\ref{app:variables}.
+\noindent The full set of interruption variables, broken down by customer type and by planned/unplanned and norm/observed, is listed in Table~\ref*{tab:app-var-m3} in Appendix~\ref*{app:variables}.
 
 
 \subsection{M4: Operating expenditures}
@@ -232,7 +232,7 @@ The Benchmarking module lets you define a custom Data Envelopment Analysis (DEA)
 
 \begin{itemize}
   \item \textbf{Input variables}: the cost measures used as DEA inputs (e.g.\ capital cost, adjustable OPEX, or TOTEX).
-  \item \textbf{Output variables}: the service measures used as DEA outputs (number of connections, power, substations, and energy delivered at low and high voltage).
+  \item \textbf{Output variables}: the service measures used as DEA outputs (number of connections, subscribed power, substations, and energy delivered at low and high voltage).
   \item \textbf{Returns to scale}: constant (CRS) or variable (VRS).
   \item \textbf{Outlier identification (5.1.1)}: the lower and upper percentiles and the multiplier of the interquartile range that define which firms are treated as outliers.
 \end{itemize}
@@ -257,36 +257,34 @@ The results are presented in several complementary ways:
   \item \textbf{Revenue frame summary}: the total revenue frame for the case, the baseline total, and the difference between them.
   \item \textbf{Decomposition}: a breakdown of the revenue frame into its components (capital costs, depreciation, return, operating expenditures, efficiency and incentive adjustments, flexibility services, interruption compensation, and deductions), each labeled with its Variable-ID.
   \item \textbf{Geographic comparison}: a map placing your concession area in the context of all areas for a selected result variable.
-  \item \textbf{Module outputs}: per-module detail (asset base, depreciation, cost of capital, and the efficiency incentive), each compared against baseline. The output variables shown here are catalogued in Appendix~\ref{app:variables}.
+  \item \textbf{Module outputs}: per-module detail (asset base, depreciation, cost of capital, and the efficiency incentive), each compared against baseline. The output variables shown here are catalogued in Table~\ref*{tab:app-var-out} in Appendix~\ref*{app:variables}.
 \end{itemize}
 
 \subsection{Export}
 The full revenue frame and all underlying calculation components can be downloaded for your own analysis and documentation.
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%REFERENCES%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%    APPENDIX   %%%%%%%%%%%%%%%%
 \newpage
 \singlespacing
 \baselineskip=10pt
-\addcontentsline{toc}{section}{References}
-\bibliographystyle{aer}
-\bibliography{references}
 
+\section*{Appendix}
+\addcontentsline{toc}{section}{Appendix}
 
-%%%%%%%%%%%%%%%%%%%%    APPENDICES   %%%%%%%%%%%%%%%%
-\newpage
+% The Appendix has a single heading; the three reference catalogues are lettered
+% subsections (A, B, C). \thesubsection is redefined to print just the letter
+% (the parent section is unnumbered). Tables take the appendix letter and restart
+% in each subsection (\setcounter{table}{0} below), so cross-references read
+% ``Table B2 in Appendix B''.
+\setcounter{subsection}{0}
+\renewcommand{\thesubsection}{\Alph{subsection}}
+\renewcommand{\thetable}{\thesubsection\arabic{table}}
+\renewcommand{\thefigure}{\thesubsection\arabic{figure}}
 
-\begin{subappendices}
-	\setcounter{figure}{0}
-	\renewcommand{\thefigure}{A\arabic{figure}}
-	\setcounter{table}{0}
-	\renewcommand{\thetable}{A\arabic{table}}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	\section{Parameter reference}
+	\subsection{Parameter reference}
 	\label{app:params}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	\addcontentsline{toc}{section}{Appendix A: Parameter reference}
+	\setcounter{table}{0}\setcounter{figure}{0}
 
 This appendix lists the adjustable parameters by module, with their baseline values. Parameters apply to all companies.
 
@@ -324,7 +322,7 @@ Transformator & 1.00 & 1.2.17 \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}
-\item Scaling factors are applied multiplicatively to the asset norm values. Full category names are given in Appendix~\ref{app:categories}.
+\item Scaling factors are applied multiplicatively to the asset norm values. Full category names are given in Table~\ref*{tab:app-cat} in Appendix~\ref*{app:categories}.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
@@ -382,7 +380,7 @@ KPI indexation factor (per year) & 1.1546 & 3.7.1--3.7.4 \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}
-\item The electricity price (3.4.3) and the KPI indexation factors (3.7.1--3.7.4) are set per year. The interruption cost tables (ILE/ILEffekt) underlying the quality scheme are listed by customer type in Table~\ref{tab:app-m3-ile}.
+\item The electricity price (3.4.3) and the KPI indexation factors (3.7.1--3.7.4) are set per year. The interruption cost tables (ILE/ILEffekt) underlying the quality scheme are listed by customer type in Table~\ref*{tab:app-m3-ile} in Appendix~\ref*{app:params}.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
@@ -409,7 +407,7 @@ KPI indexation factor (per year) & 1.1546 & 3.7.1--3.7.4 \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}
-\item ILE (interruption energy cost, kr/kWh) and ILEffekt (interruption power cost, kr/kW) are the per-customer-type cost rates underlying the quality (interruption) incentive (M3, Section~\ref{sec:spec-m3}); each is reported for unplanned and planned interruptions. They are adjustable parameters, Parameter-IDs 3.6.7--3.6.18 (ILE) and 3.6.19--3.6.30 (ILEffekt), two per customer type in the order shown (unplanned then planned). The same six customer types index the interruption variables (30.4.x) in Appendix~\ref{app:variables}.
+\item ILE (interruption energy cost, kr/kWh) and ILEffekt (interruption power cost, kr/kW) are the per-customer-type cost rates underlying the quality (interruption) incentive (M3, Section~\ref{sec:spec-m3}); each is reported for unplanned and planned interruptions. They are adjustable parameters, Parameter-IDs 3.6.7--3.6.18 (ILE) and 3.6.19--3.6.30 (ILEffekt), two per customer type in the order shown (unplanned then planned). The same six customer types index the interruption variables (30.4.x) in Table~\ref*{tab:app-var-m3} in Appendix~\ref*{app:variables}.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
@@ -459,11 +457,9 @@ Apply efficiency requirement on TOTEX & No (OPEX only) & 5.4.1 \\
 \end{table}
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	\section{Variable reference}
+	\subsection{Variable reference}
 	\label{app:variables}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	\addcontentsline{toc}{section}{Appendix B: Variable reference}
+	\setcounter{table}{0}\setcounter{figure}{0}
 
 This appendix lists the input variables you can adjust and the main output variables shown in the results. Input variables apply only to your own concession area.
 
@@ -532,7 +528,7 @@ Average interruption frequency (AIF), norm and observed, per customer type & 30.
 \bottomrule
 \end{tabular}
 \begin{tablenotes}
-\item Customer types: Household, Agriculture, Trade/Services, Industry, Public sector, Boundary points (Table~\ref{tab:app-m3-ile}). AIT and AIF are reported for planned and unplanned interruptions, each as a norm and an observed value. An override applies to all years 2024--2027.
+\item Customer types: Household, Agriculture, Trade/Services, Industry, Public sector, Boundary points (Table~\ref*{tab:app-m3-ile} in Appendix~\ref*{app:params}). AIT and AIF are reported for planned and unplanned interruptions, each as a norm and an observed value. An override applies to all years 2024--2027.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
@@ -589,11 +585,9 @@ Efficiency adjustment, OPEX / CAPEX & 50.4.1 / 50.4.2 \\
 \end{table}
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	\section{Asset categories}
+	\subsection{Asset categories}
 	\label{app:categories}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	\addcontentsline{toc}{section}{Appendix C: Asset categories}
+	\setcounter{table}{0}\setcounter{figure}{0}
 
 \begin{table}[H]
 \centering
@@ -629,7 +623,5 @@ Efficiency adjustment, OPEX / CAPEX & 50.4.1 / 50.4.2 \\
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
-
-\end{subappendices}
 
 \end{document}

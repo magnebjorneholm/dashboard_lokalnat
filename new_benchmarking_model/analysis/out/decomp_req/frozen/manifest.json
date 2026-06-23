@@ -1,0 +1,28 @@
+{
+  "outcome": "req",
+  "outlier_mode": "frozen",
+  "scale": "pp/yr",
+  "players": [
+    "losses",
+    "grid_subscription",
+    "grid_connection",
+    "feed_in",
+    "capacity_reserve",
+    "capex_adj",
+    "cable"
+  ],
+  "n_subsets": 128,
+  "n_companies_scored": 145,
+  "frozen_reids": [
+    "REL00024",
+    "REL00257",
+    "REL00965",
+    "REL03016"
+  ],
+  "checks": {
+    "shapley_identity_max_resid": 6.661338147750939e-16,
+    "outer_C4_eq_v_empty": 0.0,
+    "outer_additivity": 0.0
+  },
+  "generated_at": "2026-06-23T12:13:28"
+}

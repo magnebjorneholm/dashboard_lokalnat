@@ -1,352 +1,244 @@
-# TOTEX/CAPEX-dekomposition vs benchmarkingutfall
+# Dekomposition av benchmarkingutfallet (Shapley)
 
-Explorativ analys av hur den nya benchmarkingmodellens kostnadskomponenter hänger ihop
-med utfallet, och om förläggningsmiljö-justeringen ger den avsedda fördelningseffekten
-mellan urbana och rurala bolag. Körs offline (inte vid request), cell-för-cell, **endast
-tabell-output** (`.csv` i [out/](out/)); appens chart-grupp läser dessa via
+Offline-analys som delar upp den nya benchmarkingmodellens utfall i dess kostnadskomponenter
+med Shapley-värden. Körs cell-för-cell / som skript, skriver **endast tabeller** (`.csv` +
+`manifest.json` i [out/](out/)); appens (dolda) chart-grupp läser dem via
 [data/analysis_loader.py](../data/analysis_loader.py).
 
-Planen i sin helhet: [PLAN.md](PLAN.md). Implementationsnoterna om variabler och baser
-finns där under "Implementationsnoter".
+> **För framtida Claude-konversationer:** läs detta avsnitt först. Den här analysen gjordes
+> **om från grunden** (2026-06). Det som ändrades mot den gamla `s4`/`s5`-versionen, och
+> varför, står under [Vad som ändrades i omgörningen](#vad-som-ändrades-i-omgörningen). Den
+> gamla versionen var förankrad i fel kostnadspost och bör inte användas som referens.
 
 ---
 
-## Snabbstart
+## Vad som ändrades i omgörningen
 
-```bash
-.venv/bin/python new_benchmarking_model/analysis/s1_descriptive.py   # bundle, instant
-.venv/bin/python new_benchmarking_model/analysis/s2_urban.py         # light live (capbase + kalibrering)
-.venv/bin/python new_benchmarking_model/analysis/s3_channels.py      # heavy live, 2 DEA
-.venv/bin/python new_benchmarking_model/analysis/s4_decomposition.py # heavy live, ~9 DEA
-.venv/bin/python new_benchmarking_model/analysis/s5_shapley.py       # heavy live, 16 DEA
-.venv/bin/python new_benchmarking_model/analysis/s3_inference.py     # DEA-aware bootstrap CIs for s3 (~15 min, parallel)
+Fem saker, alla bekräftade med Erik:
+
+1. **Frontbasen är `opexp_dea`, inte `controllable_cost_average`.** DEA/fronten körs på Ei:s
+   råa OPEXp; kravet appliceras separat på SDF-baserade `controllable_cost_average` (kr-sidan,
+   orörd här). De två är olika tal och får aldrig blandas. Detta är en ändring i **produktions-
+   modellen** ([Steg A](#steg-a--opexp_dea-som-frontbas-produktionsmodellen)), inte bara i
+   analysen, och bundlen är omregenererad. Bekräftelse: vår omräknade legacy-DEA på `opexp_dea`
+   reproducerar Ei:s **publicerade** krav exakt (median |Δ| = 0.000 pp), mot brus i den gamla
+   controllable-versionen.
+2. **Två utfall, inte ett.** `req` (signerat tvåsidigt krav, pp) **och** `eff` (cappad
+   DEA-effektivitet `min(θ,1)`, 0–1). Skilda mappar `decomp_req/` resp. `decomp_eff/`.
+3. **Sju spelare, inte fyra.** Den hopslagna `nonctrl`-spelaren är uppdelad i sina fyra
+   kategorier (grid_subscription, grid_connection, feed_in, capacity_reserve). Spelarna går
+   4→7, Shapleyn 2⁴=16 → 2⁷=128 DEA-delmängder.
+4. **Två outlier-lägen, jämförda.** `dynamic` (iterera outlier-detektionen per delmängd, som
+   förr) och `frozen` (frys fulla modellens outlier-set och tvinga det i varje delmängd). Båda
+   körs så att robustheten kan jämföras.
+5. **Ingen restterm.** Den gamla `residual_vs_current_pp` (en hopbuntad stapel `v(∅) − nuvarande`)
+   var en V1-relik och är borttagen. Det nästlade **yttre skiktet** (mekanik + input-aggregering,
+   "hur kravet beräknas") finns kvar som en exakt 2-faktors-uppdelning, men utan
+   reconciliation/publikationsgap-term (vår legacy = Ei:s publicerade, så det stänger ändå).
+
+Parametriseringen gör de fyra kombinationerna (`req`/`eff` × `dynamic`/`frozen`) till
+parameterval i **en** runner, inte kopierad kod. `s4_decomposition.py` och `s5_shapley.py` är
+borttagna och ersatta av [run_decomposition.py](run_decomposition.py) + paketet
+[decomp/](decomp/).
+
+---
+
+## Steg A — `opexp_dea` som frontbas (produktionsmodellen)
+
+| Fil | Ändring |
+|---|---|
+| [totex/totex.py](../totex/totex.py) | `opex_new = opexp_dea + loss_valued + nonctrl_selected` (var: `controllable + …`); `totex_new = opex_new + capex_env_adj`. `controllable_cost_average` bärs vidare i framen för kravsidan. |
+| [model.py](../model.py) | `opexp_dea` exponeras i `new_model_inputs` (bundlen) så analysen kan läsa frontposten direkt. |
+| [data/precompute.py](../data/precompute.py) | Bundlen omregenererad: `totex.parquet` (22 kol, +opexp_dea), `new_model_inputs.parquet` (9 kol, +opexp_dea). |
+| [tests/test_new_benchmarking.py](../../tests/test_new_benchmarking.py) | `test_component_toggle_excludes_losses` omförankrad på `opexp_dea`. |
+
+Konsekvens: appens nya-modell-utfall (`req_new`, `eff_new`) skiftar. E75 = 0.9309,
+utfallstyper 108 avdrag / 37 belöning (var 107/37/1). Kravbasen/kr (`application_base_new`,
+`controllable_cost_average`) är **oförändrad**. Kör om bundlen med
+`uv run python new_benchmarking_model/data/precompute.py` om en källa ändras.
+
+---
+
+## Datagrund (spine)
+
+[`load_analysis_df`](_helpers.py) bygger spine (en rad per REId, ren bundle-läsning). Omgörningen
+lade till `opexp_dea` och de fyra non-ctrl-kategorierna (`grid_subscription`, `grid_connection`,
+`feed_in`, `capacity_reserve`). Invarianter (verifierade): kategorierna summerar till
+`nonctrl_selected`; `opexp_dea + loss_valued + nonctrl_selected + capex_adj == totex_new`
+(DEA-inputen).
+
+**DEA-exkludering:** tre bolag Ei bedömer olämpliga (REL00024, REL00257, REL00965) tas ur
+referenssetet/E75 och lämnas oscorade. Alla utfallsmått gäller därför **145** scorade bolag.
+
+---
+
+## Kvarvarande steg (oförändrade i sak)
+
+| Fil | Steg | Innehåll | Status efter omgörning |
+|---|---|---|---|
+| [s1_descriptive.py](s1_descriptive.py) | 1 | Spine + validering | Giltig; kör om för uppdaterad `analysis_df.csv` |
+| [s2_urban.py](s2_urban.py) | 2 | Urban-mått + korrelation + validering | Giltig; urban-axeln är oberoende av frontbasen |
+| [s3_channels.py](s3_channels.py) | 3 | Tvåkanals-isolering (capex vs ledningslängd) | Giltig metod; **kör om** (`run_variant` läser nu opexp-baserad spine) |
+| [s3_inference.py](s3_inference.py) | 3 | DEA-medveten bootstrap-CI | Som ovan |
+
+`run_variant` i [_helpers.py](_helpers.py) är oförändrad men matar nu opexp-baserade
+input-kolumner (spine bytte bas), så s3 ger nya siffror vid omkörning.
+
+---
+
+## Dekompositionen ([run_decomposition.py](run_decomposition.py) + [decomp/](decomp/))
+
+### Parametrisering
+
+```
+outcome      ∈ {"req", "eff"}        # signerat tvåsidigt krav (pp) | cappad effektivitet (0-1)
+outlier_mode ∈ {"dynamic", "frozen"} # iterera per delmängd | frys fulla modellens set
 ```
 
-All delad logik (spine-laddning, urban-proxies, variant-DEA-runner) ligger i
-[_helpers.py](_helpers.py). Stegen läser den committade bundlen
-([new_benchmarking_model/data/precomputed/](../../new_benchmarking_model/data/precomputed/))
-och importerar produktionsmodulens funktioner — de skriver inget tillbaka in i appen.
+För varje outlier-läge löses de 128 DEA-delmängderna **en gång** och återanvänds för båda
+utfallen (effektivitet och krav delar samma DEA-lösning). Ett fullt svep = 128 × 2 = **256**
+DEA-lösningar, inte 512.
 
----
+### Spelarna (7) och den nästlade strukturen
 
-## Konventioner (läs först)
+Följer waterfallen i [ui/charts.py](../ui/charts.py) `render_shapley_waterfall`, bidrag för
+bidrag, i två faser:
 
-**Utfallsvariabeln är det signerade årliga effektiviseringskravet `req`** (decimaler, ×100
-för pp/år), inte effektivitet och inte kronor. `req` är slutkravet bolaget möter och fångar
-*både* bolagets egen effektivitetsändring och referensförskjutningen (E75) — till skillnad
-från effektivitet ensam.
+**Fas 1 — "hur kravet beräknas"** (yttre skikt, baslinjen `v(∅)`). Hörn över v(∅)-
+kompositionen `opexp_dea + capex_unadj` (basoutputs, miljöjustering av):
+- *input-aggregering*: 2 separata DEA-inputs `[opexp_dea, capex_unadj]` → 1 summerad TOTEX.
+- *mekanik* (**endast `req`**): legacy front-referens → tvåsidig E75. `eff` har **inget**
+  referensbyte, bara input-aggregeringen.
+- `req`: C1=2in/legacy, C2=2in/tvåsidig, C3=1in/legacy, C4=1in/tvåsidig (= `v(∅)_req`).
+  `φ_mekanik = ½[(C2−C1)+(C4−C3)]`, `φ_input = ½[(C3−C1)+(C4−C2)]`, summa = C4−C1.
+- `eff`: `φ_input = eff(1in) − eff(2in)`. Ingen mekanik.
 
-| `req` | innebörd | bolaget |
-|---|---|---|
-| `> 0` | avdrag (deduction) | **missgynnat** |
-| `< 0` | belöning (reward) | **gynnat** |
-| `≈ 0` | full täckning | neutralt |
+**Fas 2 — "kostnadskomponenterna"** (de 7 spelarna ovanpå `v(∅)`):
 
-Klassificeringen görs av [`outcome_kind`](../../new_benchmarking_model/ui/charts.py).
-Drivkraft: `gap = E75 − E_i`, `req` har samma tecken som gap
-([efficiency_requirement_two_sided.py](../../new_benchmarking_model/efficiency/efficiency_requirement_two_sided.py)).
-
-**Konvention (a) för komponentbidrag** (steg 3–5): en komponents bidrag är
-`φ = req(med komponenten) − req(utan)`. **`φ < 0` = komponenten sänker kravet = gynnar
-bolaget.** Detta ger den rena additiva Shapley-identiteten `Σ φ_k = req_full − req_baseline`.
-
-**kr utelämnas ur all regression/rangordning** (skalar med bolagsstorlek →
-heteroskedasticitet). Per-bolags-kr finns kvar som rådata i CSV:erna, plus enstaka
-deskriptiva summor.
-
----
-
-## Datagrund
-
-- **Bundle** = committad förberäkning av default-specen, läst per bolag. Snabbt.
-- **DEA-exkludering:** tre bolag som Ei bedömer olämpliga för DEA (REL00024 Carlfors Bruk,
-  REL00257 Övik Energi, REL00965 Sörbylunds Elnät) tas ur referenssetet och E75 i den nya
-  modellen, och lämnas oscorade (`req = NaN`). Se
-  [`NewBenchmarkingConfig.exclude_reids`](../../new_benchmarking_model/config.py) och
-  [`detect_outliers_iterative(forced_outliers=…)`](../../calculations/frontier/outliers.py).
-  **Konsekvens:** alla utfallsmått nedan gäller **145** scorade bolag; de tre faller ur Δ,
-  lutningar och φ.
-
----
-
-## Steg 1 — Deskriptiv spine ([s1_descriptive.py](s1_descriptive.py))
-
-Bygger `analysis_df` (en rad per REId, ren bundle-läsning) i
-[`load_analysis_df`](_helpers.py). Output: [out/analysis_df.csv](out/analysis_df.csv).
-
-**Resultat (145 scorade bolag):**
-
-| Storhet | Värde |
+| Spelare | Effekt på DEA-specen |
 |---|---|
-| Utfallstyper (ny modell) | 107 avdrag, 37 belöning, 1 full täckning |
-| E75 (referens, 75:e percentilen excl. outliers) | 0.931 |
-| eff_new (min / median / max) | 0.51 / 0.83 / 1.00 |
-| req_new pp/år (min / median / max) | −0.43 / +0.61 / +1.82 |
-| Σ kr ny modell (4-årig periodsumma, tkr) | 2 839 762 |
-| Σ kr nuvarande modell (tkr) | 1 368 744 |
-| Σ Δkr (ny − nuv) | +1 474 257 |
-| Förläggningsmiljö-avdrag Σ capex_cut | 4 818 763 tkr/år (20.4 % av ojusterad capex) |
+| `losses` | + `loss_valued` (input) |
+| `grid_subscription` | + kategori (input) |
+| `grid_connection` | + kategori (input) |
+| `feed_in` | + kategori (input) |
+| `capacity_reserve` | + kategori (input) |
+| `capex_adj` | byter `capex_unadj` → `capex_adj` (förläggningsmiljö-justering) |
+| `cable` | + `cable_length_km` (output) |
 
-**Tolkning.** Att ~75 % hamnar i avdrag är väntat by construction (E75 = 75:e percentilen).
-Att req_cur har golv vid +1.00 %/år speglar Ei:s generella 1%-krav + en individuell del.
-Headline: nya modellen ungefär **fördubblar** sektorns samlade krav i kronor.
+`v(N)` (alla på) reproducerar bundlens `totex_new`-DEA exakt (verifierat max |Δ| = 0).
 
-**Begränsningar.** Fördubblingen är till stor del **mekanisk** — incitamentet appliceras på
-hela TOTEX i nya modellen mot bara OPEX i den nuvarande — inte ett nytt empiriskt fynd.
-Nuvarande modell är läst rakt ur Ei:s publicerade baseline, inte omräknad, så jämförelsen
-blandar mekanikbyte och basbyte (kvantifieras separat i steg 5:s restterm). Två
-källanomalier är hanterade och dokumenterade i s1: de tre exkluderade bolagen och REL00024
-(`capex_unadj = 0`, ger `capex_cut_pct = NaN` istället för −∞).
+### Outlier-lägen
+
+- **dynamic:** varje delmängd kör om den iterativa supereff + IQR-detektionen
+  ([outliers.py](../../calculations/frontier/outliers.py), `max_rounds=None`). Outlier-setet, och
+  därmed E75, kan skilja mellan delmängder. De 3 Ei-bolagen tvingas ut; dynamiskt funna
+  outliers scoras ändå.
+- **frozen:** fulla modellens outlier-set (`{REL00024, REL00257, REL00965, REL03016}`) fryses
+  och tvingas ut ur referens/E75 i **varje** delmängd, ingen omdetektion. De 3 Ei-bolagen
+  lämnas oscorade; övriga frysta (REL03016) scoras mot den fixa referensen, så **samma 145
+  bolag** scoras i båda lägena och de är direkt jämförbara.
+
+### Shapley, LOO/AOI
+
+Per bolag och spelare: `φ_k = Σ_S w(|S|)·[v(S∪k) − v(S)]`, `Σ_k φ_k = v(N) − v(∅)` exakt
+(identitet verifieras till maskinprecision per körning, se `manifest.json`). LOO (full minus
+spelaren) och AOI (baslinje plus spelaren) är ändpunkterna som omsluter varje spelares effekt;
+deras gap är interaktionssignalen. **Teckenkonvention:** `req` → `φ < 0` gynnar bolaget (sänker
+kravet); `eff` → `φ > 0` gynnar bolaget (höjer effektiviteten).
 
 ---
 
-## Steg 2 — Urban-proxies + validering ([s2_urban.py](s2_urban.py))
+## Köra
 
-Tre urban-mått (light live; capbase-läsning + jordkabel-kalibrering, ingen DEA) byggda i
-[`add_urban_proxies`](_helpers.py). Vikterna härleds ur premiestrukturen:
-`w_city = 1`, `w_tätort = percent[tätort]/percent[city] = 0.87` (känslighet på `sek_per_km`:
-0.61).
+```bash
+.venv/bin/python new_benchmarking_model/analysis/run_decomposition.py                 # alla 4
+.venv/bin/python new_benchmarking_model/analysis/run_decomposition.py --outcomes req  # bara req
+.venv/bin/python new_benchmarking_model/analysis/run_decomposition.py --modes frozen  # bara frozen
+```
 
-**Mått (148 bolag):** density_cu_km [3.3 / 9.9 / 30.4], jordkabel_share [0.23 / 0.94 / 1.00],
-urbanity_index [0.00 / 0.39 / 0.83].
+Ett fullt svep tar storleksordningen ~15–25 min (256 DEA, offline). Körningen skriver
+cross-check-residualer till stdout och till varje `manifest.json`.
 
-**Korrelationer** ([out/s2_urban_corr.csv](out/s2_urban_corr.csv)):
+---
 
-|  | density | jordkabel | urbanity | capex_cut_pct | cable_eff_pct |
-|---|---|---|---|---|---|
-| density_cu_km | 1.00 | 0.53 | 0.82 | 0.62 | 0.70 |
-| jordkabel_share | | 1.00 | 0.60 | 0.52 | 0.44 |
-| urbanity_index | | | 1.00 | **0.89** | **0.91** |
+## Resultat (körning 2026-06-23, 145 scorade bolag)
 
-**Validering** (luftledning = landsbygd, [out/s2_validation.csv](out/s2_validation.csv)):
+Alla cross-checks exakta i alla fyra körningarna: Shapley-identitet ≤ 7e-16 (maskinprecision),
+`C4 == v(∅)` och outer-additivitet = 0.0.
 
-| Test | Pearson | Spearman | konsistent |
+**req — spelare efter mean |φ| (pp), dynamic vs frozen:**
+
+| Spelare | dynamic | frozen | dominant-andel |
 |---|---|---|---|
-| A: luftledning vs jordkabel-landsbygd | +0.44 | +0.66 | ✓ |
-| B: luftledning vs kunddensitet | −0.53 | −0.70 | ✓ |
+| grid_subscription | **0.380** | **0.386** | 71.7 % |
+| capex_adj | 0.120 | 0.118 | 11.7 % |
+| cable | 0.101 | 0.098 | 5.5 % |
+| losses | 0.072 | 0.074 | ~3 % |
+| feed_in | 0.069 | 0.080 | 6.9 % |
+| grid_connection | 0.030 | 0.026 | 1.4 % |
+| capacity_reserve | 0.007 | 0.007 | 0 % |
 
-**Tolkning.** De tre måtten samstämmer (urban-etiketten håller), och båda
-valideringstesterna pekar åt väntat håll → luftledning ≈ landsbygd är rimligt.
+**Yttre skikt (req, median pp):** `φ_mekanik` −0.342 (dynamic) / −0.320 (frozen) dominerar;
+`φ_input` −0.105 / −0.107 litet. `eff` har bara input-aggregering: median −0.004.
 
-**Begränsningar (viktiga).** `urbanity_index` är **endogent mot behandlingsdosen** (korr
-0.89–0.91 mot capex-justeringen) eftersom vikterna kommer ur samma premiestruktur — det är
-en **deskriptor, inte identifikation**. `density_cu_km` är det renaste (mest exogena)
-ankaret. Valideringen är "konsistent med", inte bevis (luftledning saknar egen
-miljöetikett). Spearman > Pearson i båda testerna → monotont men icke-linjärt samband.
-Stations-urbanitet fångas inte av det km-viktade indexet.
+**Tre fynd.**
+1. **Uppdelningen lokaliserar dominansen.** Den gamla hopslagna `nonctrl`-spelaren splittras,
+   och hela dominansen sitter i **grid_subscription** (mean |φ| 0.38 pp, avgörande för 72 % av
+   bolagen). De tre andra non-ctrl-kategorierna är små; capacity_reserve är försumbar.
+2. **Robust mot outlier-läget.** Magnituderna rör sig knappt mellan dynamic och frozen
+   (grid_subscription 0.380 vs 0.386, capex_adj 0.120 vs 0.118). Valet av outlier-strategi
+   ändrar inte den kvalitativa bilden. Rangordningen är identisk.
+3. **req och eff är ungefär spegelvända**, med `cable` som undantag: cable gynnar nästan alla
+   bolag i `eff` (128/145) och de rurala hög-km-bolagen i `req` — den enda output-sidiga
+   spelaren beter sig annorlunda än de input-sidiga.
 
----
-
-## Steg 3 — Tvåkanals-isolering ([s3_channels.py](s3_channels.py))
-
-Analysens centrum. Isolerar de två motverkande kanalerna via
-[`run_variant`](_helpers.py) (full modell läst ur bundlen; 2 DEA-varianter live) och
-projicerar dem på urban-axeln. Per bolag: `φ = req(med kanal) − req(utan)`.
-
-**Lutningar mot urbanity_index** ([out/s3_slopes.csv](out/s3_slopes.csv), allt i pp). Punkt =
-OLS; två CI:n: naiv OLS-t och DEA-medveten bootstrap (subsampling m=75, se nedan):
-
-| Kanal | lutning | naiv OLS-CI | **DEA-medveten CI** |
-|---|---|---|---|
-| A: capex-justering | **−0.148** | [−0.242, −0.054] (p=0.002, exkl. 0) | **[−0.274, +0.124] (inkl. 0)** |
-| B: ledningslängd | **+0.129** | [−0.004, 0.262] (p=0.058) | **[−0.244, +0.210] (inkl. 0)** |
-| Netto: full modell (nivå) | −0.109 | [−0.63, +0.41] | [−0.61, +0.31] (inkl. 0) |
-
-**Tolkning (konservativ).** Punktskattningarna pekar åt mekanismen: kanal A gynnar urbant
-(negativ), kanal B gynnar ruralt (positiv), motriktade och nästan lika stora → konsistent
-med att kanalerna **neutraliserar varandra** längs urban-axeln (netto platt). **Men under
-DEA-medveten inferens är ingen av de tre gradienterna skild från noll.** Vi kan alltså inte
-fastställa att kanalerna har nollskilda motverkande gradienter, bara att data är förenligt
-med modesta motverkande effekter som tar ut varandra.
-
-**Den naiva OLS:en var anti-konservativ.** De DEA-medvetna standardfelen är ~2.5–3× större;
-kanal A:s skenbara signifikans (p=0.002) försvinner när frontier- och E75-beroendet
-propageras. Punktestimaten flyttar inte — det är osäkerheten som var underskattad. Tecknet:
-r² var redan litet (0.06 / 0.025), så signifikansen vilade på n=145-antagandet om oberoende,
-inte på en tät relation; när det effektiva n kollapsar pga beroendet faller signifikansen.
-
-**Begränsningar.** Gradienten är **deskriptiv, inte kausal** (urbanitet endogen, se steg 2);
-den rena isoleringen är kanal-Δ:t i sig (regressionsfritt, oförändrat), inte regressionen.
-kr-lutningar är medvetet bortvalda.
-
-### DEA-medveten inferens ([s3_inference.py](s3_inference.py))
-
-Det naiva t-intervallet antar oberoende bolag; DEA gör dem beroende (delad front + E75 är en
-sampel-percentil). [s3_inference.py](s3_inference.py) räknar om **hela** pipelinen
-(full/offA/offB + tvåsidiga kravet + E75) på varje resample, så beroendet propageras in i
-CI:t. OLS-lutningen behålls som punktskattning; kopplat by construction (β_A = β_full − β_offA
-exakt per replikat). Output: [out/s3_slopes_robustness.csv](out/s3_slopes_robustness.csv).
-
-- **Primärt: subsampling utan återläggning** (m<n), √m-omskalat CI. Undviker dubblett-DMU:er
-  (som n-av-n med återläggning skapar och som konstlat lyfter effektivitet). Stabilt mellan
-  m=75 och m=110 → takt-/m-valet ändrar inte slutsatsen.
-- **n-av-n-kontrast** ger smalare, noll-*exkluderande* CI:n — dubblett-snedvridningen/
-  inkonsistensen biter, så den avfärdas (förregistrerat att lita på subsampling).
+`eff` är genomgående mindre i magnitud (mean |φ| 0.06 för grid_subscription) eftersom den bara
+fångar fronteffekten, inte E75-referensförskjutningen som `req` lägger till.
 
 ---
 
-## Steg 4 — Leave-one-out + add-one-in ([s4_decomposition.py](s4_decomposition.py))
+## Output ([out/](out/))
 
-Rangordnar de fyra spelarna (förluster, non-controllable, capex-justering, ledningslängd)
-på marginaleffekt från båda ändar: LOO = full minus spelaren, AOI = bar baslinje plus
-spelaren. Rangordning på `median |Δ pp|`. Output: [out/s4_loo.csv](out/s4_loo.csv),
-[out/s4_aoi.csv](out/s4_aoi.csv), [out/s4_ranking.csv](out/s4_ranking.csv).
+```
+out/
+  analysis_df.csv                       spine (s1/s2)
+  s2_*.csv  s3_*.csv                      urban + kanaler (oförändrad metod)
+  decomp_<outcome>/<outlier_mode>/        en mapp per (outcome × mode)
+    shapley_percompany.csv               per REId: v_empty, v_full, phi_<7 spelare>, sum_phi
+    shapley_summary.csv                  per spelare: mean_phi, mean_abs_phi, share_dominant, n_favoured, n_penalised
+    loo.csv / aoi.csv                    per REId: d_<spelare> (LOO resp. AOI ändpunkt)
+    ranking.csv                          per spelare: loo/aoi/shapley_median_abs, loo_aoi_gap
+    value_grid.csv                       FINASTE NIVÅ: varje v(S) per firma (128×145 rader): REId, subset_mask, n_players, players, value, e75
+    outer_layer.csv                      fas-1-hörn per REId (req: C1–C4 + phi_mechanic/phi_input; eff: E1/E2 + phi_input)
+    manifest.json                        parametrar, frozen_reids, cross-checks, timestamp
+```
 
-| Spelare | LOO median \|Δ\| pp | AOI median \|Δ\| pp | gap (interaktion) |
-|---|---|---|---|
-| **nonctrl** | 0.307 | 0.303 | 0.004 |
-| capex_adj | 0.074 | 0.108 | 0.034 |
-| losses | 0.043 | 0.066 | 0.023 |
-| **cable** | 0.021 | 0.131 | **0.110** |
-
-**Tolkning.** Non-controllable dominerar (~4× näst största), och stabilt (LOO ≈ AOI) → dess
-effekt är nästan kontextoberoende. Ledningslängd har den **starkaste interaktionen**: liten
-marginaleffekt i full kontext men stor från bar baslinje → dess värde är ordningsberoende.
-
-**Begränsningar.** DEA är icke-linjär → LOO och AOI **summerar inte** till full−baslinje;
-de är två ändpunkter som omsluter varje spelares effekt, inte en additiv uppdelning. Det är
-just gapet (särskilt cable) som motiverar Shapley. Rangordningen bygger på `|Δ|` (storlek),
-inte riktning. kr endast deskriptivt.
-
----
-
-## Steg 5 — Shapley-attribution ([s5_shapley.py](s5_shapley.py))
-
-Den exakta additiva uppdelningen `Σ φ_k = req_full − req_baseline` över 16 delmängder
-(4 spelare). Output: [out/s5_shapley_percompany.csv](out/s5_shapley_percompany.csv),
-[out/s5_shapley_summary.csv](out/s5_shapley_summary.csv).
-
-**Exakthet verifierad:** `V(full)` reproducerar bundlens modell exakt (max |Δ| = 0), och
-Shapley-identiteten håller till maskinprecision (max residual 4.4e-16).
-
-| Spelare | mean φ pp | mean \|φ\| pp | dominant-andel | gynnade / missgynnade |
-|---|---|---|---|---|
-| **nonctrl** | −0.014 | **0.381** | **77.9 %** | 78 / 67 |
-| capex_adj | +0.039 | 0.110 | 11.7 % | 49 / 96 |
-| cable | −0.013 | 0.097 | 6.2 % | 44 / 101 |
-| losses | −0.017 | 0.070 | 4.1 % | 75 / 70 |
-
-**Tolkning.** Non-controllable dominerar attributionen (avgörande spelare för 78 % av
-bolagen) men `mean φ ≈ 0` med jämn split 78/67 → den **omfördelar** snarare än skiftar alla
-åt samma håll. Shapley försonar LOO/AOI för cable (0.097, mellan LOO 0.021 och AOI 0.131).
-Tecknen är konsistenta med steg 3: capex_adj missgynnar de flesta men gynnar den urbana
-delmängden; cable gynnar de rurala hög-km-bolagen.
-
-**Begränsningar.** Shapley är en rättvis fördelning **given** värdefunktionen
-(spelardefinitioner + baslinjeval) — ett modelleringsval, inte en kausal policy-kontrafaktisk.
-
-### Restterm-dekomposition ([s5_shapley.py](s5_shapley.py), samma fil)
-
-Resttermen `v(∅) − nuvarande` (median −0.443 pp) hålls utanför spelarna. Den splittras med en
-2×2 (mekanik × input-struktur) + 2-faktors-Shapley, plus en reconciliation-term:
-
-| Term | median pp | tolkning |
-|---|---|---|
-| **φ_mekanik** (legacy front-ref → tvåsidig) | **−0.375** | dominerar |
-| **φ_input** (2 separata DEA-inputs → 1 TOTEX) | −0.095 | liten |
-| **reconciliation** (vår omräknade legacy C1 vs Ei publicerad) | **+0.000** | ≈ noll |
-
-Output: [out/s5_residual_decomp.csv](out/s5_residual_decomp.csv). Hörn: C1=2-input+legacy
-(≈ nuvarande), C2=2-input+tvåsidig, C3=1-input+legacy, C4=1-input+tvåsidig (=`v(∅)`).
-`φ_mekanik=½[(C2−C1)+(C4−C3)]`, `φ_input=½[(C3−C1)+(C4−C2)]`; summan + reconciliation =
-resttermen (alla cross-checks exakta, 0.00). Konsekvent tvingad exkludering över alla hörn.
-
-**Två fynd.** (1) **reconciliation ≈ 0** (median |.| = 0.000): vår legacy (2-input DEA +
-front-referens-mekanik) reproducerar Ei:s *publicerade* krav i princip exakt → resttermen är
-ren mekanik + input, ingen publikationsgap-kontaminering. (2) **Resttermen är överväldigande
-mekanikbytet, inte basstrukturen:** ~0.375 av 0.443 pp är hur kravet beräknas (front-referens
-→ tvåsidig E75), bara ~0.095 är input-aggregeringen (2 inputs → 1 TOTEX). φ_mekanik < 0 =
-tvåsidig sänker kravet relativt legacy vid medianen. Mekanikbytet buntar hela legacy-paketet
-(front-referens + trunkering + 1 %-golv), per design.
-
----
-
-## Genomgående begränsningar
-
-- **Relativ DEA:** alla effekter är **fördelningsmässiga**, inte absoluta — att flytta en
-  komponent förskjuter fronten/E75 och därmed allas relativa utfall. Aggregat- och
-  gradient-utsagor kan peka åt olika håll (t.ex. capex-justeringen höjer aggregatkravet
-  något men gynnar urbant i gradienten).
-- **Tre exkluderade bolag** lämnas oscorade; av mindre intresse men påverkar E75 och därmed
-  andras utfall marginellt.
-- **Endogenitet:** urban-axeln är korrelerad med behandlingsdosen by construction → all
-  urban-regression är deskriptiv, inte kausal.
-- **Inferens (åtgärdad):** naiva OLS-CI:n ignorerar DEA-korsberoende och var anti-konservativa.
-  DEA-medveten subsampling (s3_inference.py) ger ~2.5–3× bredare CI:n; under dem är ingen
-  kanalgradient skild från noll. Punktskattningarna kvarstår som deskriptiva. Gäller bara
-  s3:s gradienter; s4/s5 (regressionsfria) är opåverkade.
-- **kr** är medvetet utelämnat ur regression/rangordning (storleksheteroskedasticitet).
-- **En spec, en period:** default-konfigurationen; viktkänslighet (premie vs sek_per_km) är
-  bara delvis utforskad.
-
----
-
-## Output-scheman ([out/](out/))
-
-Enheter genomgående: **kostnader = årliga tkr** (utom `kr_*` = 4-årig periodsumma i tkr,
-signerad, `<0` = belöning); **`req_*` = signerat årsdecimal** (×100 = pp/år); **`*_pp` /
-`d*_pp` / `phi_*` / lutningar = procentenheter (pp)**; **`*_pct` / `*_share` / index /
-`eff*` = andel/index 0–1**; **`cable_ded` / `station_ded` = SEK på NUAV-kapitalbasen**
-(annan storhet än `capex_cut`, se konventionsavsnittet).
-
-### `analysis_df.csv` — spine, en rad per REId (148)
-| Grupp | Kolumner | Enhet |
-|---|---|---|
-| Id | `REId`, `name_short` | — |
-| TOTEX-delar | `controllable`, `loss_valued`, `nonctrl_selected`, `capex_unadj`, `capex_adj`, `opex_new`, `totex_new`, `totex_unadj`, `application_base_new` | årlig tkr |
-| Capex-korr | `capex_cut` (tkr), `capex_cut_pct` (andel), `cable_ded`/`station_ded` (SEK), `cable_eff_pct`/`station_eff_pct` (andel) | se ovan |
-| Utfall ny | `eff_new` (0–1), `rank_new` (1=bäst), `req_new_pct` (decimal), `kr_new` (tkr, 4 år), `e75` (0–1), `gap`=`e75−eff_new`, `kind` (reward/deduction/coverage) | se ovan |
-| Utfall nuv | `eff_cur`, `rank_cur`, `req_cur_pct`, `kr_cur` | se ovan |
-| Deltan | `d_eff`, `d_rank`, `d_req_pp` (pp), `d_kr` (tkr) | se ovan |
-| DEA-outputs | `CU`, `MW`, `NS`, `MWhl`, `MWhh` (Ei:s outputmått), `cable_length_km` (km) | — |
-| Urban (steg 2) | `jordkabel_km`/`luftledning_km`/`city_km`/`tatort_km`/`lb_km` (km), `density_cu_km` (kund/km), `jordkabel_share`/`luftledning_share`/`urbanity_index`/`jordkabel_landsbygd_share` (andel/index) | — |
-
-De tre DEA-exkluderade bolagen har NaN i alla utfallskolumner; `capex_cut_pct` är NaN för
-REL00024 (`capex_unadj=0`). Kostnads- och urban-kolumner är ifyllda för alla 148.
-
-### `s2_urban_corr.csv` / `s2_urban_corr_spearman.csv` — korrelationsmatris (5×5)
-Pearson resp. Spearman mellan `density_cu_km`, `jordkabel_share`, `urbanity_index`,
-`capex_cut_pct`, `cable_eff_pct`. Enhetslöst [−1, 1]. Första kolumnen = radnamn.
-
-### `s2_validation.csv` — valideringstester (2 rader)
-`test`, `expect` (positive/negative), `pearson`, `spearman`, `n`, `consistent_with_expectation` (bool).
-
-### `s3_channels.csv` — per REId (145 scorade)
-`urbanity_index`; full modell `req_full` (decimal), `kr_full` (tkr); varianter `eff_offA`/`req_offA`/`kr_offA` (kanal A av), `eff_offB`/`req_offB`/`kr_offB` (kanal B av); bidrag **`dA_pp`/`dB_pp` = φ = req(med)−req(utan) i pp** (φ<0 = gynnar); `dA_kr`/`dB_kr` (tkr); `req_full_pp` (pp, för netto-regressionen).
-
-### `s3_slopes.csv` — lutningar (3 rader)
-`channel`, `expect`, `slope` (pp per indexenhet), `ci_low`/`ci_high` (naiv OLS-t, pp), `r2`, `p`, `n`, `consistent`; plus `boot_ci_low`/`boot_ci_high` (DEA-medveten subsampling m=75, pp) och `boot_se`. Läs `boot_ci_*`, inte de naiva.
-
-### `s3_slopes_robustness.csv` — alla resampling-scheman (9 rader)
-`scheme` (subsample/nofn), `m`, `B`, `slope` (beta_net/beta_A/beta_B), `point` (OLS-punkt), `ci_low`/`ci_high` (pp), `boot_se`. Subsampling m=75 = primär, m=110 = stabilitet, nofn = brasklappad kontrast.
-
-### `s4_loo.csv` / `s4_aoi.csv` — per REId (145)
-LOO: `req_full_pp`; AOI: `req_base_pp`. Per spelare (`losses`/`nonctrl`/`capex_adj`/`cable`): `dpp_<spelare>` (pp marginaleffekt), `dkr_<spelare>` (tkr). LOO har även `kind_<spelare>` (variantens utfallstyp, för kind-flip).
-
-### `s4_ranking.csv` — per spelare (4 rader)
-`loo_median_abs_pp`, `aoi_median_abs_pp` (pp), `loo_kind_flip_share` (andel), `loo_sum_abs_kr`, `aoi_sum_abs_kr` (tkr, deskriptivt).
-
-### `s5_shapley_percompany.csv` — per REId (145)
-`v_empty_pp` (baslinje), `v_full_pp` (full); `phi_<spelare>` (pp Shapley-bidrag, φ<0 = gynnar); `sum_phi` (pp, = `v_full_pp−v_empty_pp`); `residual_vs_current_pp` (pp, mekanik + struktur, utanför spelarna).
-
-### `s5_shapley_summary.csv` — per spelare (4 rader)
-`mean_phi_pp`, `mean_abs_phi_pp` (pp), `share_dominant` (andel), `n_favoured(phi<0)`, `n_penalised(phi>0)` (antal bolag).
-
-### `s5_residual_decomp.csv` — restterm-dekomposition, per REId (145)
-`phi_mechanic` (legacy→tvåsidig, pp), `phi_input` (2 inputs→1 TOTEX, pp), `reconciliation` (C1 vs Ei publicerad, pp), `interaction` (diagnostik, pp), `residual_total` (=`v(∅)−publicerad`, pp); samt hörnvärdena `C1_legacy_2in`, `C4_twosided_1in`, `published` (pp). φ<0 = sänker kravet. De tre exkluderade är NaN.
+Enheter: `req`-utfall i **pp/år** (`value`, `phi_*`, `v_*`, `d_*`, `C*`); `eff`-utfall i
+**andel 0–1**. `subset_mask` = bitmask över spelarordningen i
+[decomp/players.py](decomp/players.py). De tre Ei-exkluderade har NaN i utfallskolumnerna.
 
 ---
 
 ## Filöversikt
 
-| Fil | Steg | Innehåll |
-|---|---|---|
-| [PLAN.md](PLAN.md) | — | Fullständig plan + implementationsnoter |
-| [_helpers.py](_helpers.py) | alla | Spine, urban-proxies, `run_variant` |
-| [s1_descriptive.py](s1_descriptive.py) | 1 | Spine + validering |
-| [s2_urban.py](s2_urban.py) | 2 | Urban-mått + korrelation + validering |
-| [s3_channels.py](s3_channels.py) | 3 | Tvåkanals-isolering |
-| [s3_inference.py](s3_inference.py) | 3 | DEA-medveten bootstrap-CI för kanal-lutningarna |
-| [s4_decomposition.py](s4_decomposition.py) | 4 | Leave-one-out + add-one-in |
-| [s5_shapley.py](s5_shapley.py) | 5 | Shapley-attribution |
-| [out/](out/) | — | Persisterade tabeller (`.csv`) |
+| Fil | Innehåll |
+|---|---|
+| [_helpers.py](_helpers.py) | Spine-laddning, urban-proxies, `run_variant` |
+| [decomp/players.py](decomp/players.py) | De 7 spelarna + `subset_input`/`subset_outputs` (fas-2-komposition) |
+| [decomp/engine.py](decomp/engine.py) | Scoring (båda outlier-lägen), value-grid, Shapley, LOO/AOI, fas-1-outer-layer |
+| [decomp/io.py](decomp/io.py) | Mappstruktur, writers, manifest |
+| [run_decomposition.py](run_decomposition.py) | Drivern (parametriserad, ersätter s4/s5) |
+| [s1/s2/s3*.py](.) | Spine, urban, kanaler (oförändrade i sak) |
+
+---
+
+## Kvarvarande (ej i detta steg)
+
+- **UI-graduering:** [ui/charts.py](../ui/charts.py) / [data/analysis_loader.py](../data/analysis_loader.py)
+  pekar fortfarande på de gamla `s5_*`-filnamnen och den hopslagna `nonctrl`-spelaren. De
+  uppdateras i ett separat implementeringssteg (PLAN-principen: tabeller först, grafik en gång
+  efter validering). Chart-gruppen är dold i V1, så appen degraderar tyst tills dess.
+- **TOTEX-bryggan** i [ui/company_view.py](../ui/company_view.py) rekonstruerar från
+  `controllable_cost_average` och stänger inte längre mot den opexp-baserade `totex_new`; fixas
+  i samma UI-steg.
+- **s3 omkörning:** kör om s3/s3_inference för uppdaterade kanal-CSV:er på opexp-basen.

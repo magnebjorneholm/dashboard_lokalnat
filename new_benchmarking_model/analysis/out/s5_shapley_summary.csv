@@ -1,5 +1,0 @@
-player,mean_phi_pp,mean_abs_phi_pp,share_dominant,n_favoured(phi<0),n_penalised(phi>0)
-nonctrl,-0.0136,0.3809,0.779,78,67
-capex_adj,0.0391,0.1095,0.117,49,96
-cable,-0.013,0.0965,0.062,44,101
-losses,-0.017,0.0699,0.041,75,70

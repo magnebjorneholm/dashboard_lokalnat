@@ -1,0 +1,8 @@
+player,loo_median_abs,aoi_median_abs,shapley_median_abs,loo_aoi_gap
+grid_subscription,0.31878,0.25516,0.28779,0.06363
+capex_adj,0.09062,0.11402,0.09524,0.0234
+cable,0.02497,0.13438,0.07351,0.10941
+losses,0.06692,0.07422,0.05951,0.00731
+feed_in,0.04127,0.05739,0.03856,0.01612
+grid_connection,0.0073,0.00686,0.01166,0.00043
+capacity_reserve,0.0,0.02715,0.00419,0.02715

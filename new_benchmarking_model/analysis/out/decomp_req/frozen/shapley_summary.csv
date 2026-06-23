@@ -1,0 +1,8 @@
+player,mean_phi,mean_abs_phi,share_dominant,n_favoured,n_penalised
+grid_subscription,-0.06835,0.38571,0.717,85,60
+capex_adj,0.06044,0.11785,0.117,43,102
+cable,-0.00125,0.09828,0.055,35,110
+feed_in,0.02044,0.08041,0.069,69,76
+losses,-0.03067,0.07422,0.028,97,48
+grid_connection,0.00478,0.02596,0.014,121,24
+capacity_reserve,-0.00415,0.00745,0.0,140,5

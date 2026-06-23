@@ -1,5 +1,10 @@
 # Explorativ analys: TOTEX/CAPEX-dekomposition vs benchmarkingutfall
 
+> **OBS (2026-06): dekompositionen (steg 4–5) gjordes om från grunden.** Aktuellt tillstånd,
+> parametrisering (req/eff × dynamic/frozen), 7 spelare och opexp_dea-frontbasen står i
+> [README.md](README.md) — läs den först. Detta dokument är den ursprungliga planen och är
+> historiskt; steg 1–3 gäller fortfarande, men s4/s5 nedan är ersatta av `run_decomposition.py`.
+
 > Arbetsdokument / implementationsplan. Analys i `new_benchmarking_model/analysis/`, körd
 > offline (inte vid request); CSV-outputen läses av appen via `data/analysis_loader.py`.
 > Mål: förstå hur den nya benchmarkingmodellens kostnads-

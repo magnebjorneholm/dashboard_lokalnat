@@ -1,0 +1,22 @@
+{
+  "outcome": "eff",
+  "outlier_mode": "dynamic",
+  "scale": "efficiency (0-1)",
+  "players": [
+    "losses",
+    "grid_subscription",
+    "grid_connection",
+    "feed_in",
+    "capacity_reserve",
+    "capex_adj",
+    "cable"
+  ],
+  "n_subsets": 128,
+  "n_companies_scored": 145,
+  "frozen_reids": [],
+  "checks": {
+    "shapley_identity_max_resid": 1.1102230246251565e-16,
+    "outer_E1_eq_v_empty": 0.0
+  },
+  "generated_at": "2026-06-23T12:01:17"
+}

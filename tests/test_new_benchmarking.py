@@ -202,6 +202,7 @@ def test_component_toggle_excludes_losses(baseline_data):
         NewBenchmarkingConfig(include_losses=False), baseline_data=baseline_data
     )
     t = off.totex
-    # loss column still computed for transparency, but not in opex_new
-    expected_opex = t["controllable_cost_average"] + t[COL_NONCTRL_SELECTED]
+    # loss column still computed for transparency, but not in opex_new. The frontier
+    # payable post is opexp_dea (not controllable_cost_average — see totex.py docstring).
+    expected_opex = t["opexp_dea"] + t[COL_NONCTRL_SELECTED]
     assert np.allclose(t[COL_OPEX_NEW], expected_opex)

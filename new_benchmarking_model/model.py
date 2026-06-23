@@ -23,7 +23,7 @@ import pandas as pd
 
 from config.column_names import (
     COL_REID, COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH,
-    COL_TOTEX_NEW, COL_CABLE_LENGTH_KM,
+    COL_OPEXP_DEA, COL_TOTEX_NEW, COL_CABLE_LENGTH_KM,
     COL_DEA_EFFICIENCY, COL_DEA_POTENTIAL, COL_IS_OUTLIER, COL_EFF_REQ_ANNUAL,
     COL_DEA_EFFICIENCY_NEW, COL_DEA_EFFICIENCY_CURRENT,
     COL_POTENTIAL_NEW, COL_POTENTIAL_CURRENT,
@@ -112,8 +112,10 @@ def run_new_benchmarking(
 
     # 2. New-model DEA: single TOTEX input + base outputs (+ cable length)
     new_outputs = list(cfg.new_base_outputs)
+    # Carry opexp_dea into new_model_inputs so the offline decomposition analysis can read
+    # the frontier payable post straight from the bundle (the DEA input itself is totex_new).
     new_df = totex[[COL_REID, COL_TOTEX_NEW]].merge(
-        baseline_df[[COL_REID, COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH]],
+        baseline_df[[COL_REID, COL_OPEXP_DEA, COL_CU, COL_MW, COL_NS, COL_MWH_LOW, COL_MWH_HIGH]],
         on=COL_REID, how="left",
     )
     if cfg.include_cable_length:
