@@ -2,7 +2,7 @@
 Company directory helpers.
 
 Single source for the company list / name lookups used by the sidebar company
-selectors (streamlit_app.py) and the registration dropdown (auth_dialog.py).
+selectors (streamlit_app.py) and the registration dropdown (auth_page.py).
 Names come from the curated baseline (`COL_DISPLAY_NAME` = "Short (REId)").
 
 Lazily imports the (heavy) baseline loader and caches the result.

@@ -144,7 +144,7 @@ dashboard_lokalnat/
 |   |-- common/                   # Shared Streamlit components
 |   |   |-- parameter_input.py    # Reusable input component with baseline comparison
 |   |   |-- styling.py            # apply_base_styling() (both zones) + apply_tool_chrome() (tool sidebar); re-exports colors
-|   |   |-- auth_dialog.py        # Sign-in dialog (login/register/reset/verify) for the landing zone
+|   |   |-- auth_page.py          # Full-page sign-in gate (login/register/reset/verify) for the tool zone
 |   |   |-- landing_shell.py      # Landing theme (faded bg) + frozen top bar (brand + anchor nav + auth-aware CTA: Sign in / Open tool) + shared helpers (landing_anchor/cards/heading/profile/footer)
 |   |   |-- manuals.py            # Reads published per-tool manual PDFs (static/manuals/<slug>.pdf)
 |   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
@@ -349,7 +349,7 @@ Layer 2: FRONTEND (Streamlit-dependent only)
         state_manager.py, company_directory.py, case_storage.py,
         case_actions.py, result_snapshot.py, export_button.py
     Right side: FRONTEND COMMON + MODULES
-        parameter_input.py, styling.py, auth_dialog.py, landing_shell.py,
+        parameter_input.py, styling.py, auth_page.py, landing_shell.py,
         manuals.py, save_bar.py, case_comparison.py,
         m1_asset_base.py .. m5_efficiency.py, benchmarking.py
         |
@@ -416,21 +416,29 @@ landing_pages/landing.py             sidebar nav, two groups:
   #home / #tools / #team             group "Revenue cap tool":
   (in-page anchor nav)                 pages/1_create_and_select_case.py  (Create & Select)
         |                                    |
-  [Sign in] -> auth_dialog()                 v
-        |  success: _login_redirect   pages/2_case_setup.py              (Case Setup)
-        |  flag + st.rerun()                 |
-        v                                     v
-  controller switch_page's into       pages/3_specification.py          (Specification)
-  the tool  ───────────────────►            |
-                                        [Compute] (on page 4)
-  [Open tool ↗] when already authed         |
-  (new tab; landing stays open)             v
-                                       pages/4_revenue_frame.py          (Revenue Frame)
-  ◄─── [Back to Home ↗] (sidebar,
-       new tab; tool stays open)      group "Standalone tools":  (decoupled, not part of 1 → 4)
+  [Open tool] (all visitors,             v
+   new tab; landing stays open) ──►   pages/2_case_setup.py              (Case Setup)
+        |                                    |
+  opens the tool window; if logged          v
+  out, that window shows the          pages/3_specification.py          (Specification)
+  sign-in gate -> render_auth_gate()        |
+  in place, then renders the tool     [Compute] (on page 4)
+                                            |
+  ◄─── [Back to Home] (sidebar,          v
+       new tab; tool stays open)      pages/4_revenue_frame.py          (Revenue Frame)
+
+                                     group "Standalone tools":  (decoupled, not part of 1 → 4)
                                        pages/5_new_benchmarking.py        (New benchmarking model)
                                        pages/6_placeholder.py             (Placeholder — empty stub)
 ```
+
+**Window-target policy.** Zone navigation (Open tool, Back to Home), manuals and
+external links open the destination in its own window (new tab), so a user can
+keep the landing — with its manuals — open beside the tool. Sign-in / log-out
+(identity events) and forced redirects act in the current window. A logged-in
+user can therefore have the public landing in one window and a tool in another at
+the same time; window reuse is intentionally not managed (closing windows is the
+user's job). The new-tab links are plain buttons with no visual new-tab marker.
 
 **Entrypoint:** `streamlit_app.py` — a route-based two-zone controller.
 - Configures page (`st.set_page_config`); `apply_base_styling()` (fonts +
@@ -443,21 +451,28 @@ landing_pages/landing.py             sidebar nav, two groups:
   page `pg` decides the zone: `pg in TOOL_PAGES` → Zon 2, else → Zon 1.
   - **Zon 1 (landing):** `pg.run()` runs `landing.py`, which calls
     `apply_landing_shell()` (theme + a frozen top bar: brand + in-page anchor nav,
-    the native menu hidden via CSS). The right-hand CTA is auth-aware: **Sign in**
-    (opens `auth_dialog()`) when anonymous, **Open tool ↗** (new tab) when already
-    authenticated. Shown regardless of auth.
-  - **Zon 2 (tool):** gated by `check_auth()` — a tool URL hit while logged out
-    `switch_page`s back to the landing. Otherwise `apply_tool_chrome()` (locked
-    sidebar + Nordic Energy refinements) + `render_sidebar()` (company selector,
-    **Back to Home ↗** new-tab link, logout), then `pg.run()`.
-- **Login → tool:** `auth_dialog()` can't `switch_page` from its fragment, so on a
-  verified login it sets a one-shot `_login_redirect` flag and reruns; the
-  controller then `switch_page`s into page 1 (before the cookie write, so the JS
-  cookie component renders cleanly on the next full run).
+    the native menu hidden via CSS). The right-hand CTA is a single **Open tool**
+    link (new tab) for everyone — no auth branching; the landing is a purely public
+    surface. Sign-in happens in the tool window it opens (see below).
+  - **Zon 2 (tool):** gated by `check_auth()`. A tool window opened while logged
+    out renders the **full-page sign-in gate in place** (`render_auth_gate()`,
+    frontend/common/auth_page.py: a glass-card login/register over the faded
+    login_pic backdrop), not a bounce back to the landing — so the landing (and
+    its manuals) can stay open beside it. Once authed: `apply_tool_chrome()`
+    (locked sidebar + Nordic Energy refinements) + `render_sidebar()` (company
+    selector, **Back to Home** new-tab link, logout), then `pg.run()`.
+- **Launch / login (Option B):** the landing's **Open tool** link opens the tool
+  window with one reliable click (a link gesture is never popup-blocked). If logged
+  out, the user signs in *in that window* on the full-page gate
+  (`render_auth_gate()`); a verified login reruns the app and the same window
+  renders the tool (the controller writes the deferred auth cookie once auth
+  passes). No `_login_redirect` flag and no
+  cross-zone `switch_page` are involved — those were removed with this flow.
 - **Logout:** clears auth + deletes the cookie and reruns → the (now logged-out)
-  tool URL bounces to the landing. *Caveat:* logout is per-window — other open tool
-  windows keep their in-memory session until reloaded (cookie reads are a
-  connection-time snapshot). Cross-window "global logout" is a known post-V1 item.
+  tool window falls back to the sign-in gate in place. *Caveat:* logout is
+  per-window — other open tool windows keep their in-memory session until reloaded
+  (cookie reads are a connection-time snapshot). Cross-window "global logout" is a
+  known post-V1 item.
 
 
 ## 6. Module Architecture (M1-M7)
@@ -679,7 +694,7 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 
 **Flow:**
 1. `streamlit_app.py` -> `try_restore_auth_from_cookie()` -> `check_auth()` -> dev mode OR Firebase
-2. Login via the sign-in dialog (`frontend/common/auth_dialog.py`, email/password)
+2. Login via the full-page sign-in gate (`frontend/common/auth_page.py`, email/password)
 3. Custom claims: `{REId: "REL00886", role: "company"}`
 4. Session state: `auth_email`, `auth_role`, `auth_reid`, `auth_uid`, `auth_token`
 
@@ -688,7 +703,7 @@ All downstream code (calculations, pipeline, frontend) uses `COL_*` constants ex
 Authentication survives page refreshes via a browser cookie storing the Firebase refresh token.
 
 **Files:** `auth/cookie_session.py` (helpers), `streamlit_app.py` (restore + deferred save),
-`frontend/common/auth_dialog.py` (defers the token on login)
+`frontend/common/auth_page.py` (defers the token on login)
 
 **Flow on login:**
 1. Firebase `sign_in` → returns `refreshToken`
@@ -916,18 +931,17 @@ streamlit_app.py
     |-- frontend.utils.state_manager      (init, get/set functions)
     |-- frontend.utils.company_directory  (get_company_records, get_company_display)
     |-- frontend.common.styling           (apply_base_styling, apply_tool_chrome)
+    |-- frontend.common.auth_page         (render_auth_gate: full-page sign-in gate)
+    |     |-- frontend.common.landing_shell    (apply_auth_backdrop)
+    |     |-- frontend.utils.company_directory  (get_company_options)
+    |     |-- frontend.utils.state_manager      (set_user_reid)
+    |     |-- auth.firebase_auth                (initialize_firebase_auth)
     |-- auth.firebase_auth                (is_dev_mode, initialize_firebase_auth)
     |-- auth.cookie_session               (auth + case cookie helpers)
 
 landing_pages/landing.py                  (ZON 1 — single page)
     |-- frontend.common.landing_shell     (apply_landing_shell, landing_anchor, landing_cards,
     |                                       landing_heading, landing_profile, landing_footer)
-    |     |-- frontend.common.auth_dialog (auth_dialog: login/register/reset/verify)
-    |     |     |-- frontend.utils.company_directory (get_company_options)
-    |     |     |-- frontend.utils.state_manager     (set_user_reid)
-    |     |     |-- auth.firebase_auth               (initialize_firebase_auth)
-    |     |-- frontend.utils.state_manager (is_authenticated — auth-aware top-bar CTA)
-    |     |-- auth.firebase_auth           (is_dev_mode)
     |-- config.tools_registry             (#tools section: tools_for, ToolSpec)
     |-- frontend.common.manuals           (#tools section: manual_path)
 

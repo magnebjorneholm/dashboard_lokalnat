@@ -5,9 +5,10 @@ Design layer only — touches no app infrastructure (auth, routing, controller).
 ``apply_landing_shell()`` is called at the top of every landing page and:
 - injects the landing theme (faded ``login_pic.jpg`` background + soft gradient
   overlay, full-width, no sidebar),
-- renders the brand wordmark + the top-bar CTA: a "Sign in" button that opens
-  ``auth_dialog()`` for anonymous visitors, or an "Open tool" link (new tab) for
-  an already-authenticated user.
+- renders the brand wordmark + a single top-bar CTA: an "Open tool" link that
+  opens the tool in its own window (new tab). Sign-in happens in that tool window
+  when it is opened while logged out (see streamlit_app.py), so the landing is a
+  purely public surface.
 
 Section navigation (Home / Tools / Team) is drawn here as the in-page anchor nav
 in the frozen top bar (``.rm-topbar``); the native st.navigation menu is hidden on
@@ -30,12 +31,10 @@ from typing import List, Dict, Optional
 import streamlit as st
 
 from config.colors import COLORS, CHART_COLORS
-from frontend.common.auth_dialog import auth_dialog
-from frontend.utils.state_manager import is_authenticated
-from auth.firebase_auth import is_dev_mode
 
 # Tool entry URL — the first revenue-cap page (pages/1_create_and_select_case.py;
-# its inferred url_path). The "Open tool" CTA links here when already signed in.
+# its inferred url_path). The "Open tool" CTA always links here; a logged-out
+# visitor signs in inside the opened tool window (see streamlit_app.py).
 _TOOL_ENTRY_URL = "/create_and_select_case"
 
 
@@ -53,7 +52,7 @@ _CSS = """
    stHeader is the native sticky bar (top:0). Make it a solid, opaque bar that
    stays above all content while the page scrolls beneath it. The bar's contents
    are ours: the native nav links are hidden and replaced by the brand wordmark +
-   in-page anchor nav (.rm-topbar, pinned left) and the Sign-in CTA (pinned
+   in-page anchor nav (.rm-topbar, pinned left) and the "Open tool" CTA (pinned
    right, see .st-key-rm_signin). The anchor nav scrolls within this one page
    instead of switching pages. */
 [data-testid="stHeader"]{
@@ -80,12 +79,12 @@ _CSS = """
 .rm-nav a:target{ color:var(--rm-primary); }
 @media (max-width:560px){ .rm-nav{ display:none; } }
 
-/* Sign-in CTA pinned into the frozen top bar */
+/* "Open tool" CTA pinned into the frozen top bar */
 .st-key-rm_signin{
     position:fixed; top:.5rem; right:1.1rem; width:auto !important; z-index:1001;
 }
-/* "Open tool" CTA — anchor styled as the primary button (authed visitors). It
-   replaces the Sign-in button in the same pinned slot and opens a new tab. */
+/* "Open tool" CTA — anchor styled as the primary button (all visitors); opens
+   a new tab. A logged-out visitor signs in inside the opened tool window. */
 .rm-cta{ display:inline-block; background:var(--rm-primary); color:#fff !important;
     font-size:.92rem; font-weight:600; text-decoration:none; padding:.42rem .95rem;
     border-radius:8px; transition:filter .15s ease; }
@@ -238,6 +237,35 @@ def _inject_theme() -> None:
     st.markdown(f"<style>{dynamic}{_CSS}</style>", unsafe_allow_html=True)
 
 
+def apply_auth_backdrop() -> None:
+    """Inject only the faded ``login_pic.jpg`` backdrop (no top bar, no nav).
+
+    Shared visual: the public landing uses the full theme; the tool's sign-in
+    gate (streamlit_app.py) uses just this backdrop behind the auto-opened auth
+    dialog, so a logged-out tool window matches the landing's look.
+    """
+    bg = _bg_data_uri()
+    bg_rule = f'background-image:url("{bg}");' if bg else f'background:{COLORS["bg_page"]};'
+    st.markdown(
+        f"""
+        <style>
+        [data-testid="stAppViewContainer"]{{
+            {bg_rule}
+            background-size:cover; background-position:center;
+            background-repeat:no-repeat; background-attachment:fixed;
+        }}
+        [data-testid="stAppViewContainer"]::before{{
+            content:""; position:fixed; inset:0; width:100%; height:100%;
+            background:linear-gradient(180deg, rgba(248,250,252,0.66) 0%, rgba(248,250,252,0.85) 55%);
+            backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); z-index:0;
+        }}
+        [data-testid="stAppViewContainer"] > div{{ position:relative; z-index:1; }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def apply_landing_shell() -> None:
     """Inject the landing theme and the frozen top bar (brand + anchor nav + CTA).
 
@@ -246,8 +274,9 @@ def apply_landing_shell() -> None:
     section nav as in-page anchor links: clicking one scrolls to that section
     instead of switching pages. The native st.navigation top-nav is hidden (CSS);
     the bar's contents are rendered here. The right-hand CTA is pinned via the
-    ``.st-key-rm_signin`` container class: a real "Sign in" button for anonymous
-    visitors, or an "Open tool" link (new tab) once authenticated.
+    ``.st-key-rm_signin`` container class (name kept for the stable CSS hook): a
+    single "Open tool" link (new tab) for everyone; a logged-out visitor signs
+    in inside the opened tool window.
     """
     _inject_theme()
 
@@ -263,20 +292,15 @@ def apply_landing_shell() -> None:
     )
 
     with st.container(key="rm_signin"):
-        if is_dev_mode() or is_authenticated():
-            # Already signed in: offer the tool instead. A named window
-            # (regumetrica-tool) keeps the landing open (landing + tool side by
-            # side) while reusing the one tool window on repeated clicks.
-            st.markdown(
-                # No rel="noopener": with it, browsers treat a named target like
-                # _blank (always a new window), defeating the window reuse. Same
-                # origin (our own app), so dropping it is safe.
-                f'<a class="rm-cta" href="{_TOOL_ENTRY_URL}" '
-                'target="regumetrica-tool">Open tool ↗</a>',
-                unsafe_allow_html=True,
-            )
-        elif st.button("Sign in", type="primary"):
-            auth_dialog()
+        # Single CTA for everyone (Option B): a real link that opens the tool in
+        # its own window with one reliable click (a link gesture is never
+        # popup-blocked). A logged-out visitor signs in *in that tool window*; the
+        # landing (with its manuals) stays open beside it, side by side.
+        st.markdown(
+            f'<a class="rm-cta" href="{_TOOL_ENTRY_URL}" target="_blank" '
+            'rel="noopener">Open tool</a>',
+            unsafe_allow_html=True,
+        )
 
 
 def landing_anchor(anchor_id: str) -> None:
@@ -314,7 +338,7 @@ def landing_cards(items: List[Dict[str, str]]) -> None:
             label = it.get("manual_label", "Manual (PDF)")
             parts.append(
                 f'<a class="rm-card-link" href="{it["manual_url"]}" target="_blank">'
-                f'{label} ↗</a>'
+                f'{label}</a>'
             )
         card_class = "rm-card rm-card--soon" if it.get("status") == "coming_soon" else "rm-card"
         cards.append(f'<div class="{card_class}">{"".join(parts)}</div>')
@@ -377,7 +401,7 @@ def landing_profile(
     if link:
         label, url = link
         actions.append(
-            f'<a class="rm-profile-link" href="{url}" target="_blank">{label} ↗</a>'
+            f'<a class="rm-profile-link" href="{url}" target="_blank">{label}</a>'
         )
     if actions:
         parts.append(f'<div class="rm-profile-links">{"".join(actions)}</div>')

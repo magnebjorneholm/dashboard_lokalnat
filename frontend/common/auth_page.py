@@ -1,22 +1,18 @@
 """
-Sign-in dialog for the public landing zone.
+Full-page sign-in gate for the tool zone.
 
-A single ``st.dialog`` that handles login, registration, password reset and the
-email-verification follow-up. Opened from the landing shell's "Sign in" CTA.
+The tool window's "Open tool" launch (see streamlit_app.py) lands a logged-out
+visitor here: ``render_auth_gate()`` fills the window with a glass-card sign-in
+panel over the faded ``login_pic.jpg`` backdrop (the landing's photo), with the
+sidebar hidden and the native header made transparent. It handles login,
+registration, password reset and the email-verification follow-up.
 
-Why a dialog (not a page): the user stays in context on the landing page, and a
-successful login closes the dialog via ``st.rerun()`` (app scope). It also sets a
-one-shot ``_login_redirect`` flag so ``streamlit_app.py`` ``switch_page``s into
-the tool zone (switch_page itself can't be called from a dialog/fragment).
-
-Dialog/rerun mechanics (verified against Streamlit 1.55, see
-landing_pages/auth_dialog_forslag.md):
-- The dialog body is an ``st.fragment``: widget interactions rerun only the
-  fragment, so the dialog stays open.
-- ``st.rerun(scope="fragment")`` switches the in-dialog view (login -> verify)
-  without closing it.
-- ``st.rerun()`` (default app scope) closes the dialog and reruns the app — used
-  only on a successful, verified login.
+Why a full page (not a dialog): the launch flow is "open tool -> sign in ->
+tool", so sign-in is a *destination*, not a popup over the landing. A page has no
+close button (the visitor signs in or stays out), fills the window, and lets us
+own the header. A verified login defers the auth cookie and reruns the app
+(app scope); the controller then renders the tool in the same window. Sub-view
+switches (login -> verify) ride on session-state flags across app reruns.
 
 Cookie deferral matches the established pattern: the refresh token is stashed in
 ``st.session_state["_pending_auth_cookie"]`` and written by streamlit_app.py
@@ -25,9 +21,11 @@ after the auth check passes (the JS cookie component needs a clean render).
 
 import streamlit as st
 
+from config.colors import COLORS, CHART_COLORS
 from auth.firebase_auth import initialize_firebase_auth
 from frontend.utils.state_manager import set_user_reid
 from frontend.utils.company_directory import get_company_options
+from frontend.common.landing_shell import apply_auth_backdrop
 
 
 # =============================================================================
@@ -50,6 +48,45 @@ def _store_auth_session(user: dict, email: str, claims: dict | None) -> None:
 
 
 # =============================================================================
+# Page styling
+# =============================================================================
+
+def _apply_auth_page_style() -> None:
+    """Faded login_pic backdrop + glass card + transparent header, sidebar hidden."""
+    apply_auth_backdrop()
+    st.markdown(
+        f"""
+        <style>
+        /* Let the backdrop show through the native bar (no bare white strip) */
+        [data-testid="stHeader"]{{ background:transparent; }}
+        [data-testid="stToolbar"]{{ display:none !important; }}
+        [data-testid="stSidebar"],
+        [data-testid="collapsedControl"]{{ display:none !important; }}
+
+        /* The whole content column becomes the centered glass card */
+        .main .block-container{{
+            max-width:480px; margin:7vh auto 2rem;
+            background:rgba(255,255,255,0.72);
+            backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+            border:1px solid {COLORS['bg_muted']}; border-radius:16px;
+            padding:2.2rem 2.4rem; box-shadow:0 8px 32px rgba(15,23,42,.12);
+        }}
+        /* Hero typography lifted from the landing (landing_shell.py): blue->teal
+           gradient accent (background-clip:text) + compact "financial" type. */
+        .rm-auth-brand{{ font-size:1.4rem; font-weight:700; letter-spacing:-0.01em;
+            line-height:1.1; margin-bottom:.2rem; }}
+        .rm-auth-title{{ font-size:clamp(1.9rem, 5vw, 2.3rem); font-weight:700;
+            letter-spacing:-0.025em; line-height:1.1; color:{COLORS['text_primary']};
+            margin:0 0 1.5rem; }}
+        .rm-accent{{ background:linear-gradient(90deg, {COLORS['primary']}, {CHART_COLORS[1]});
+            -webkit-background-clip:text; background-clip:text; color:transparent; }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =============================================================================
 # Sub-views
 # =============================================================================
 
@@ -69,10 +106,10 @@ def _render_login(auth_manager) -> None:
             if not ok:
                 st.error(error or "Login failed.")
             elif not user.get("emailVerified", False):
-                # Switch to the verification view without closing the dialog.
+                # Switch to the verification view on the next app run.
                 st.session_state[_PENDING_VERIFY_TOKEN] = user.get("idToken")
                 st.session_state[_STEP] = "verify"
-                st.rerun(scope="fragment")
+                st.rerun()
             else:
                 # Defer the cookie write; streamlit_app sets it after auth passes.
                 st.session_state["_pending_auth_cookie"] = user.get("refreshToken", "")
@@ -80,10 +117,8 @@ def _render_login(auth_manager) -> None:
                 _store_auth_session(user, email, claims)
                 if claims and claims.get("role") == "company" and claims.get("reid"):
                     set_user_reid(claims["reid"])
-                # Ask the controller to land straight in the tool zone (switch_page
-                # can't be called from a dialog/fragment, so signal via a flag).
-                st.session_state["_login_redirect"] = True
-                # App-scope rerun: close dialog + re-enter the controller.
+                # App-scope rerun: auth now passes, so the controller renders the
+                # tool in this same window (no redirect needed).
                 st.rerun()
 
     with st.expander("Forgot your password?"):
@@ -187,21 +222,29 @@ def _render_verify(auth_manager) -> None:
         if st.button("Back to sign in", width="stretch"):
             st.session_state[_STEP] = "login"
             st.session_state.pop(_PENDING_VERIFY_TOKEN, None)
-            st.rerun(scope="fragment")
+            st.rerun()
 
 
 # =============================================================================
-# Dialog entry point
+# Page entry point
 # =============================================================================
 
-@st.dialog("Sign in to Regumetrica", width="large")
-def auth_dialog() -> None:
-    """Open the sign-in dialog. Call this from a button on the landing pages."""
+def render_auth_gate() -> None:
+    """Render the full-page sign-in gate (tool window, logged out)."""
+    _apply_auth_page_style()
+
     try:
         auth_manager = initialize_firebase_auth()
     except Exception as e:  # noqa: BLE001
         st.error(f"Could not connect to the authentication service: {e}")
         return
+
+    st.markdown(
+        '<div class="rm-auth-brand"><span class="rm-accent">Regumetrica</span></div>'
+        '<div class="rm-auth-title">Revenue-cap analysis for the '
+        '<span class="rm-accent">Swedish electricity grid</span></div>',
+        unsafe_allow_html=True,
+    )
 
     if st.session_state.get(_STEP) == "verify":
         _render_verify(auth_manager)

@@ -23,7 +23,8 @@ kontext kring landningssidornas frontend.
    fästa till vänster, Sign in-CTA till höger. Den native `st.navigation`
    topp-naven **döljs med CSS** (den finns kvar enbart för att registrera/köra
    sidor och för deep-link-bouncen).
-3. **`pages/login.py` retireras helt** — `auth_dialog()` sköter all inloggning.
+3. **`pages/login.py` retireras helt** — den helsides-grinden `render_auth_gate()`
+   (`auth_page.py`) sköter all inloggning, visad i verktygsfönstret när man är utloggad.
 4. **`contact.py` slås in i `team.py`**; **`user_manual.py` → `tools.py`**
    (manual-PDF:en bäddas in på Tools-sidan).
 5. Faded `login_pic.jpg`-bakgrunden återanvänds som landningstema (utan
@@ -39,11 +40,12 @@ ZON 1 — Landning (publik)            ZON 2 — Verktyget (auth-grindat)
 ────────────────────────            ──────────────────────────────
 • egen topp-bar, inget sidofält      • sidofält + Nordic Energy (som idag)
 • faded login_pic-bakgrund           • "Revenue cap tool" + "Standalone tools"
-• CTA: Sign in / Open tool ↗         • render_sidebar(): företagsväljare,
-  (auth-medveten)                      Back to Home ↗, logout
-• egna designregler                           ▲
-          │ login: _login_redirect →  switch_page in i verktyget
-          └───────────────────────────────────┘
+• CTA: Open tool (alla, ny flik)   • render_sidebar(): företagsväljare,
+• egna designregler                    Back to Home, logout
+          │                                   ▲
+          │ Open tool öppnar verktygs-      │ utloggad → sign-in-grind
+          └ fönstret (ny flik); login ───────┘ in place (render_tool_gate)
+            sker i grinden där
 ```
 
 `streamlit_app.py` är en **route-baserad tvåzons-kontroller**: zonen avgörs av
@@ -58,7 +60,6 @@ st.set_page_config(...)              # behålls
 apply_base_styling()                 # BARA fonts + branding-borttagning (båda zonerna)
 init_session_state()
 try_restore_auth_from_cookie()
-login_redirect = st.session_state.pop("_login_redirect", False)
 
 # EN navigation för allt — Streamlit löser begärd sida från riktiga URL:en (pålitligt).
 # landing_main är HIDDEN DEFAULT (äger "/", syns ej i verktygets sidofältsnav).
@@ -67,17 +68,14 @@ pg = st.navigation({
     "Standalone tools": STANDALONE_PAGES,
 })
 
-# Färsk login hoppar rakt in i verktyget (switch_page går ej i auth_dialogs fragment).
-if login_redirect and check_auth():
-    st.switch_page(REVENUE_CAP_PAGES[0])
-
 if pg in TOOL_PAGES:
     # ZON 2 — verktyget, grindat av auth
     if not check_auth():
-        st.switch_page(landing_main) # tool-URL utloggad (bokmärke) → landningen
+        render_tool_gate()           # utloggad: sign-in-grind in place (ingen bounce);
+        st.stop()                    # lyckad login → rerun → samma fönster visar verktyget
     apply_tool_chrome()
     ... cookie/case-sync ...
-    render_sidebar()                 # företagsväljare + Back to Home ↗ + logout
+    render_sidebar()                 # företagsväljare + Back to Home + logout
     pg.run()
 else:
     # ZON 1 — landningen (pg == landing_main), oavsett auth
@@ -88,8 +86,8 @@ Varför en enad nav i stället för att läsa pathen själv: `st.context.url` ä
 ögonblicksbild från anslutningstillfället och kan vara stale/`None` på första
 körningen → opålitlig för zonval. `st.navigation` löser sidan korrekt internt, så
 vi grenar på den returnerade sidan. landing_main är default + `visibility="hidden"`,
-så bokmärkta tool-URL:er routar fortfarande (och bouncar till landningen om
-utloggad), men landningen skräpar inte ner verktygets sidofältsnav.
+så bokmärkta tool-URL:er routar fortfarande (och visar sign-in-grinden in place om
+utloggad — ingen bounce), men landningen skräpar inte ner verktygets sidofältsnav.
 
 ---
 
@@ -106,8 +104,8 @@ utloggad), men landningen skräpar inte ner verktygets sidofältsnav.
 
 | Fil | Roll |
 |---|---|
-| `frontend/common/landing_shell.py` | `apply_landing_shell()` — landningstema (full-bredd, **inget** sidofält, faded `login_pic`-bakgrund) + frusen topp-bar (wordmark + ankar-nav + auth-medveten CTA: **Sign in** / **Open tool ↗**) + helpers (landing_anchor/cards/heading/profile/footer). Anropas överst i `landing.py`. Bygger själv baren; `st.navigation`-menyn döljs (landningen är dess dolda default-sida). |
-| `frontend/common/auth_dialog.py` | `auth_dialog()` + omflyttade formulär-renderare (login/register/reset/verify). Se `auth_dialog_forslag.md`. |
+| `frontend/common/landing_shell.py` | `apply_landing_shell()` — landningstema (full-bredd, **inget** sidofält, faded `login_pic`-bakgrund) + frusen topp-bar (wordmark + ankar-nav + en enda CTA: **Open tool** för alla, ny flik) + helpers (landing_anchor/cards/heading/profile/footer). Anropas överst i `landing.py`. Bygger själv baren; `st.navigation`-menyn döljs (landningen är dess dolda default-sida). |
+| `frontend/common/auth_page.py` | `render_auth_gate()` — helsides sign-in-grind (glas-kort över faded `login_pic`, transparent header, dolt sidofält) + formulär-renderare (login/register/reset/verify). Visas i verktygsfönstret när man är utloggad. Ersatte den tidigare `auth_dialog.py` (popup); se historiska `auth_dialog_forslag.md`. |
 | `static/regumetrica_user_manual.pdf` | Asset; kopieras från `user_manual_latex/build/Regumetrica user manual.pdf` (serveras via `enableStaticServing`). |
 
 ### Att ändra
@@ -121,7 +119,7 @@ utloggad), men landningen skräpar inte ner verktygets sidofältsnav.
 
 | Fil | Varför |
 |---|---|
-| `pages/login.py` | Retireras — `auth_dialog()` sköter inloggningen; `landing_home` är landningsplats för deep-links. |
+| `pages/login.py` | Retireras — `render_auth_gate()` (`auth_page.py`) sköter inloggningen i verktygsfönstrets grind. |
 
 ### Oförändrat
 
@@ -139,8 +137,9 @@ stället av `apply_landing_shell()`:
 - **Wordmark + ankar-nav** (`.rm-topbar`, fixerad till vänster i stHeader-baren):
   `<a href="#home">` / `#tools` / `#team`. `html{scroll-behavior:smooth}` ger den
   mjuka glidningen; `.rm-anchor{scroll-margin-top}` håller målet fritt från baren.
-- **CTA** (fäst till höger via `.st-key-rm_signin`): **Sign in** (öppnar dialogen,
-  navigerar inte) när utloggad, eller **Open tool ↗** (länk, ny flik) när inloggad.
+- **CTA** (fäst till höger via `.st-key-rm_signin`, namnet behållet som CSS-hook):
+  en enda **Open tool** (länk, ny flik) för alla. Verktyget öppnas i eget
+  fönster; är man utloggad sker inloggningen i det fönstrets sign-in-grind.
 
 Varje sektion i `landing.py` inleds med `landing_anchor("<id>")` (osynligt
 scroll-mål). *Begränsning:* ingen levande scroll-spy (kräver JS som Streamlit inte
@@ -148,21 +147,24 @@ kör i huvuddokumentet); `:target` ger enkel highlight av den klickade länken.
 
 ---
 
-## Auth-dialogen (sammanfattning)
+## Sign-in-grinden (sammanfattning)
 
-Sign in sker i en `st.dialog` ovanpå landningen — ingen navigering bort.
-Detaljer + pseudokod i **`auth_dialog_forslag.md`**. Centralt fynd (verifierat
-mot Streamlit 1.55):
+Sign in sker på en **helsida**, `render_auth_gate()` i `auth_page.py`, visad i
+verktygsfönstret när man är utloggad (controllern kallar den i stället för att
+bounca till landningen). Den ersatte den tidigare popup-dialogen (vars
+rerun-mekanik finns historiskt beskriven i `auth_dialog_forslag.md`):
 
-- Dialog-kroppen är en `st.fragment`. Widget-klick inuti → **fragment-rerun**,
-  dialogen förblir öppen.
-- `st.rerun(scope="fragment")` → byter vy **inom** dialogen (t.ex. login →
-  väntar-på-verifiering), dialogen förblir öppen.
-- `st.rerun()` (default `scope="app"`) → **stänger** dialogen och bygger om
-  appen — exakt vad vi vill vid lyckad inloggning (nav byts till zon 2).
+- Ingen `st.dialog` och inga fragment-reruns längre. Vy-byten (login →
+  vänta-på-verifiering, reset) sker via session-flaggor (`_auth_step`) + vanlig
+  app-rerun, eftersom det inte finns någon dialog att hålla öppen.
+- En helsida har ingen stäng-X: man loggar in eller kommer inte in. Sidan ritar
+  glas-kortet över faded `login_pic`-bakgrunden (`apply_auth_backdrop`), gör
+  `stHeader` transparent och döljer sidofältet.
+- Vid lyckad, verifierad login: `st.rerun()` (app-scope) → auth passerar →
+  controllern renderar verktyget i samma fönster (ingen `switch_page`).
 
-Cookie-deferralen (`_pending_auth_cookie`) är oförändrad; triggern flyttar bara
-från en sida till dialogen.
+Cookie-deferralen (`_pending_auth_cookie`) är oförändrad: controllern skriver
+cookien så fort auth passerar (efter login-rerun), innan verktyget renderas.
 
 ---
 
@@ -189,6 +191,7 @@ från en sida till dialogen.
   om logout → `landing_home` räcker. *(Uppskjutet — beslutas senare.)*
 
 ## Se även
-- `auth_dialog_forslag.md` — auth-dialogen i detalj (struktur, pseudokod,
-  verifierat rerun-beteende, körbart test `dialog_rerun_test.py`).
+- `auth_dialog_forslag.md` — **historisk**: den tidigare popup-dialogen i detalj
+  (struktur, pseudokod, verifierat rerun-beteende). Inloggningen är numera en
+  helsida (`auth_page.py`), så dokumentet beskriver inte längre nuläget.
 - `efter_möte.md`, `tankar.md` — ursprungliga diskussionsanteckningar.

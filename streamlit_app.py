@@ -9,15 +9,17 @@ and a tool in another at the same time:
 
   ZON 1 — Landing (public): the hidden default page (root URL), shown regardless
           of auth. No sidebar; it draws its own top bar
-          (frontend/common/landing_shell.py). Sign in happens in a dialog
-          (frontend/common/auth_dialog.py); when already authenticated the top-bar
-          CTA becomes "Open tool" instead.
-  ZON 2 — Tool: the tool pages, gated by auth (a tool URL hit while logged out
-          bounces to the landing). Locked sidebar + company selector + logout, and
-          a link back to the landing (opens a new tab).
+          (frontend/common/landing_shell.py). Its single CTA is an "Open tool"
+          link that opens the tool in its own window (new tab), for everyone.
+  ZON 2 — Tool: the tool pages, gated by auth. A tool window opened while logged
+          out shows the sign-in gate *in place* (no bounce); once auth passes the
+          same window renders the tool. Locked sidebar + company selector +
+          logout, and a link back to the landing (opens a new tab).
 
-A successful login sets a one-shot flag; the controller then ``switch_page``s
-straight into the tool zone.
+Launch flow (Option B): the landing's "Open tool" link opens the tool window
+with one reliable click; a logged-out visitor signs in there on the full-page
+sign-in gate (frontend/common/auth_page.py), keeping the landing (and its
+manuals) open beside it. No cross-zone redirect is needed.
 See landing_pages/FRONTEND_FILES.md for the full architecture.
 """
 
@@ -36,6 +38,7 @@ from frontend.utils.state_manager import (
 )
 from frontend.utils.company_directory import get_company_records, get_company_display
 from frontend.common.styling import apply_base_styling, apply_tool_chrome
+from frontend.common.auth_page import render_auth_gate
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
 from auth.cookie_session import (
     get_auth_cookie, set_auth_cookie, delete_auth_cookie,
@@ -174,11 +177,8 @@ def _sync_case_cookie() -> None:
 def _render_home_button():
     """Sidebar link back to the public landing.
 
-    Opens in a NAMED window (``regumetrica-landing``) so the tool window stays
-    open (landing + tool side by side) but repeated clicks reuse the one landing
-    window instead of spawning a new tab each time. No ``rel="noopener"``: with
-    it, browsers treat a named target like ``_blank`` (always new), which would
-    defeat the reuse — and it is safe to drop since the target is our own origin.
+    Opens in a NEW tab (``target="_blank"``) so the tool window stays open — the
+    point of the route-based zones is to allow landing + tool side by side.
     """
     st.markdown(
         f"""
@@ -190,7 +190,7 @@ def _render_home_button():
             transition:border-color .15s ease, color .15s ease; }}
         .rm-home-btn:hover{{ border-color:{COLORS['primary']}; color:{COLORS['primary']}; }}
         </style>
-        <a class="rm-home-btn" href="/" target="regumetrica-landing">Back to Home ↗</a>
+        <a class="rm-home-btn" href="/" target="_blank" rel="noopener">Back to Home</a>
         """,
         unsafe_allow_html=True,
     )
@@ -287,7 +287,9 @@ def _render_authenticated_sidebar():
                 auth_manager.sign_out()
                 st.session_state["user_reid"] = None
                 delete_case_cookie()
-                # Auth is now cleared; the rerun lands on the public landing zone.
+                # Land on the public landing (not the sign-in gate): the controller
+                # switch_page's to Home when it sees this one-shot flag.
+                st.session_state["_post_logout_home"] = True
                 st.rerun()
         with col2:
             if st.button("Cancel", width="stretch"):
@@ -337,10 +339,6 @@ TOOL_PAGES = REVENUE_CAP_PAGES + STANDALONE_PAGES
 # Restore auth from cookie if the session was lost (page refresh).
 try_restore_auth_from_cookie()
 
-# One-shot: a fresh login (set in auth_dialog) asks to land in the tool zone, even
-# though the login happened on the landing URL.
-login_redirect = st.session_state.pop("_login_redirect", False)
-
 # One navigation for everything. Streamlit resolves the requested page from the
 # real URL (reliable — no guessing the path ourselves); we branch the zone on the
 # returned page. landing_main is the hidden default, so it owns the root URL but
@@ -350,32 +348,34 @@ pg = st.navigation({
     "Standalone tools": STANDALONE_PAGES,
 })
 
-# A fresh login jumps straight into the tool (decision: land in the tool zone).
-# switch_page runs AFTER st.navigation (so the target page is registered) and
-# BEFORE the cookie write below, so the cookie is written on the next run that
-# renders a page in full — the JS cookie component needs a clean render.
-if login_redirect and check_auth():
-    st.switch_page(REVENUE_CAP_PAGES[0])
+# A fresh logout returns to the public landing, not the sign-in gate. switch_page
+# runs after st.navigation (so landing_main is registered) and is a no-op on every
+# other run (one-shot flag set by the logout dialog).
+if st.session_state.pop("_post_logout_home", False):
+    st.switch_page(landing_main)
 
 if pg in TOOL_PAGES:
     # ZON 2 — the tool, gated by auth.
     if not check_auth():
-        # Tool URL hit while logged out (e.g. a bookmark) → back to the landing.
-        st.switch_page(landing_main)
+        # Tool window opened while logged out (Option B launch, or a bookmark):
+        # sign in right here instead of bouncing to the landing, so the landing
+        # (and its manuals) can stay open beside it. A verified login reruns the
+        # app; auth then passes and this same window renders the tool.
+        render_auth_gate()
+    else:
+        apply_tool_chrome()
 
-    apply_tool_chrome()
+        # Set pending auth cookie (deferred from the sign-in dialog so JS renders).
+        pending_token = st.session_state.pop("_pending_auth_cookie", None)
+        if pending_token:
+            set_auth_cookie(pending_token)
 
-    # Set pending auth cookie (deferred from the sign-in dialog so JS renders).
-    pending_token = st.session_state.pop("_pending_auth_cookie", None)
-    if pending_token:
-        set_auth_cookie(pending_token)
+        # Restore last saved case on refresh (once) + keep the case cookie in sync.
+        try_restore_case_from_cookie()
+        _sync_case_cookie()
 
-    # Restore last saved case on refresh (once) + keep the case cookie in sync.
-    try_restore_case_from_cookie()
-    _sync_case_cookie()
-
-    render_sidebar()
-    pg.run()
+        render_sidebar()
+        pg.run()
 
 else:
     # ZON 1 — the public landing (pg is landing_main), shown regardless of auth so
