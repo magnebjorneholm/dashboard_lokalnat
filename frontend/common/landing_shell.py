@@ -264,11 +264,15 @@ def apply_landing_shell() -> None:
 
     with st.container(key="rm_signin"):
         if is_dev_mode() or is_authenticated():
-            # Already signed in: offer the tool instead. New tab keeps the
-            # landing open (landing + tool side by side).
+            # Already signed in: offer the tool instead. A named window
+            # (regumetrica-tool) keeps the landing open (landing + tool side by
+            # side) while reusing the one tool window on repeated clicks.
             st.markdown(
-                f'<a class="rm-cta" href="{_TOOL_ENTRY_URL}" target="_blank" '
-                'rel="noopener">Open tool ↗</a>',
+                # No rel="noopener": with it, browsers treat a named target like
+                # _blank (always a new window), defeating the window reuse. Same
+                # origin (our own app), so dropping it is safe.
+                f'<a class="rm-cta" href="{_TOOL_ENTRY_URL}" '
+                'target="regumetrica-tool">Open tool ↗</a>',
                 unsafe_allow_html=True,
             )
         elif st.button("Sign in", type="primary"):

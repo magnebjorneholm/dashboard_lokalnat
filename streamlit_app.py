@@ -174,8 +174,11 @@ def _sync_case_cookie() -> None:
 def _render_home_button():
     """Sidebar link back to the public landing.
 
-    Opens in a NEW tab (``target="_blank"``) so the tool window stays open — the
-    point of the route-based zones is to allow landing + tool side by side.
+    Opens in a NAMED window (``regumetrica-landing``) so the tool window stays
+    open (landing + tool side by side) but repeated clicks reuse the one landing
+    window instead of spawning a new tab each time. No ``rel="noopener"``: with
+    it, browsers treat a named target like ``_blank`` (always new), which would
+    defeat the reuse — and it is safe to drop since the target is our own origin.
     """
     st.markdown(
         f"""
@@ -187,7 +190,7 @@ def _render_home_button():
             transition:border-color .15s ease, color .15s ease; }}
         .rm-home-btn:hover{{ border-color:{COLORS['primary']}; color:{COLORS['primary']}; }}
         </style>
-        <a class="rm-home-btn" href="/" target="_blank" rel="noopener">Back to Home ↗</a>
+        <a class="rm-home-btn" href="/" target="regumetrica-landing">Back to Home ↗</a>
         """,
         unsafe_allow_html=True,
     )
