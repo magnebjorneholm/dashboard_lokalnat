@@ -82,8 +82,7 @@ tab_labels = [
     _tab_label("m2", "M2 Depreciation"),
     _tab_label("m3", "M3 Cost of Capital"),
     _tab_label("m4", "M4 Operating expenditures"),
-    _tab_label("m5", "M5 Efficiency incentive"),
-    _tab_label("m7", "M7 Benchmarking"),
+    _tab_label("m5", "M5 Efficiency incentive (benchmarking)"),
 ]
 
 tabs = st.tabs(tab_labels)
@@ -213,24 +212,12 @@ def _render_m5_tab():
         _render_not_selected_message()
         return
 
-    st.markdown("#### 5. Efficiency Incentive")
+    st.markdown("#### 5. Efficiency Incentive (benchmarking)")
 
-    if is_section_selected("m5", "efficiency_params"):
-        config = m5_efficiency.render_efficiency_params()
-        set_module_config("m5_efficiency", config)
-
-
-@st.fragment
-def _render_m7_tab():
-    if not is_module_selected("m7"):
-        _render_not_selected_message()
-        return
-
-    st.markdown("#### 7. Benchmarking")
-
-    if is_section_selected("m7", "dea_spec"):
+    # Section: Benchmarking (DEA specification) — measures relative efficiency
+    if is_section_selected("m5", "benchmarking"):
         config = benchmarking.render_dea_spec()
-        set_module_config("addon_benchmarking", config)
+        set_module_config("m5_benchmarking", config)
 
         # --- Mini-run ---
         if st.button("Run DEA", type="secondary", key="mini_run_dea_btn"):
@@ -243,6 +230,13 @@ def _render_m7_tab():
         if mini_result is not None and mini_baseline is not None:
             from frontend.modules.addons.mini_run_output import render_mini_results
             render_mini_results(mini_result, mini_baseline)
+
+    # Section: Efficiency requirement — applies the measured efficiency to the frame
+    if is_section_selected("m5", "efficiency_params"):
+        if is_section_selected("m5", "benchmarking"):
+            st.divider()
+        config = m5_efficiency.render_efficiency_params()
+        set_module_config("m5_efficiency", config)
 
 
 def _build_eff_req_params() -> dict:
@@ -295,7 +289,7 @@ def _execute_dea_mini_run(addon_config: dict) -> None:
 
             baseline_data = load_baseline_data()
 
-            # Build DEA config from current M7 settings
+            # Build DEA config from current M5 benchmarking settings
             ui_config = st.session_state.get("ui_config", {})
             dea_config = build_dea_config(ui_config)
 
@@ -319,7 +313,7 @@ def _execute_dea_mini_run(addon_config: dict) -> None:
             st.session_state["mini_run_result"] = case_result
             st.session_state["mini_run_baseline"] = baseline_result
             st.session_state["mini_run_config_snapshot"] = {
-                "addon_benchmarking": copy.deepcopy(addon_config),
+                "m5_benchmarking": copy.deepcopy(addon_config),
                 "m5_efficiency": copy.deepcopy(
                     ui_config.get("m5_efficiency", {})
                 ),
@@ -329,16 +323,16 @@ def _execute_dea_mini_run(addon_config: dict) -> None:
 
 
 def _render_mini_run_stale_indicator() -> None:
-    """Show warning if M7/M5 config changed since last mini-run."""
+    """Show warning if the M5 benchmarking/requirement config changed since last mini-run."""
     snapshot = st.session_state.get("mini_run_config_snapshot")
     if snapshot is None:
         return
 
     ui_config = st.session_state.get("ui_config", {})
-    current_m7 = ui_config.get("addon_benchmarking", {})
+    current_bench = ui_config.get("m5_benchmarking", {})
     current_m5 = ui_config.get("m5_efficiency", {})
 
-    if current_m7 != snapshot.get("addon_benchmarking") or current_m5 != snapshot.get("m5_efficiency"):
+    if current_bench != snapshot.get("m5_benchmarking") or current_m5 != snapshot.get("m5_efficiency"):
         st.caption(":orange[Config changed since last run]")
 
 
@@ -360,6 +354,3 @@ with tabs[3]:
 
 with tabs[4]:
     _render_m5_tab()
-
-with tabs[5]:
-    _render_m7_tab()

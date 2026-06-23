@@ -253,9 +253,11 @@ M4_OPERATING_EXP = ModuleDefinition(
 
 M5_EFFICIENCY = ModuleDefinition(
     key="m5",
-    title="5. Efficiency incentive",
-    description="DEA efficiency requirements and bounds",
+    title="5. Efficiency incentive (benchmarking)",
+    description="Benchmarking (DEA) and the efficiency requirement it feeds",
     parameters=(
+        ModuleParameter("DEA", "DEA model specification",
+                       "Input/output selection, RTS assumption, outlier detection"),
         ModuleParameter(PID_OUTLIER_THRESHOLD, "Outlier identification",
                        "Outlier threshold (IQRs above Q3)"),
         ModuleParameter(PID_MAX_POTENTIAL_CAP, "Efficiency requirement conversion",
@@ -268,34 +270,20 @@ M5_EFFICIENCY = ModuleDefinition(
     variables=(),
     sections=(
         ModuleSection(
+            key="benchmarking",
+            label="5.1.1 Benchmarking: DEA specification (inputs, outputs, RTS, outliers)",
+            ui_config_keys=("m5_benchmarking",),
+            default_enabled=True,
+            help_text="Define the DEA model (inputs/outputs/RTS) and the outlier fence that excludes extreme firms.",
+        ),
+        ModuleSection(
             key="efficiency_params",
-            label="5.1-5.4 Efficiency requirement parameters (bounds, outliers, cost base)",
+            label="5.2-5.4 Efficiency requirement (conversion, bounds, cost base)",
             ui_config_keys=("m5_efficiency",),
             default_enabled=True,
-            help_text="Truncation bounds, outlier treatment, TOTEX vs OPEX application.",
+            help_text="Truncation bounds, realization time, customer sharing, TOTEX vs OPEX application.",
         ),
     ),
-)
-
-M7_BENCHMARKING = ModuleDefinition(
-    key="m7",
-    title="7. Benchmarking",
-    description="Custom DEA specification",
-    parameters=(
-        ModuleParameter("DEA", "DEA model specification", 
-                       "Input/output selection, RTS assumption, outlier detection"),
-    ),
-    variables=(),
-    sections=(
-        ModuleSection(
-            key="dea_spec",
-            label="DEA model specification (inputs, outputs, RTS)",
-            ui_config_keys=("addon_benchmarking",),
-            default_enabled=True,
-            help_text="Define custom DEA model with different inputs/outputs than Ei baseline.",
-        ),
-    ),
-    is_addon=True,
 )
 
 
@@ -309,7 +297,6 @@ ALL_MODULES: Tuple[ModuleDefinition, ...] = (
     M3_COST_OF_CAPITAL,
     M4_OPERATING_EXP,
     M5_EFFICIENCY,
-    M7_BENCHMARKING,
 )
 
 BASE_MODULES: Tuple[ModuleDefinition, ...] = tuple(
@@ -475,7 +462,7 @@ def infer_selected_from_ui_config(ui_config: Dict[str, Any]) -> Set[str]:
     ]):
         selected.add("m4.opex_vars")
     
-    # Module 5: Efficiency (1 section). Check every key the M5 renderer / adapter
+    # Module 5: Efficiency requirement section. Check every key the M5 renderer / adapter
     # actually writes, so a saved case that changed only realization time, customer
     # sharing, outlier requirement or cost base is still detected on load.
     m5 = ui_config.get("m5_efficiency", {})
@@ -489,11 +476,11 @@ def infer_selected_from_ui_config(ui_config: Dict[str, Any]) -> Set[str]:
     ]):
         selected.add("m5.efficiency_params")
     
-    # Module 7: Benchmarking (1 section)
-    m7 = ui_config.get("addon_benchmarking", {})
-    if m7.get("dea_method") == "custom":
-        selected.add("m7.dea_spec")
-    
+    # Module 5: Benchmarking section (DEA spec)
+    m5_bench = ui_config.get("m5_benchmarking", {})
+    if m5_bench.get("dea_method") == "custom":
+        selected.add("m5.benchmarking")
+
     return selected
 
 

@@ -34,7 +34,7 @@ After logging in, you enter the main environment by opening a \emph{case}. A cas
 Once you have adjusted the assumptions to your preferred levels, the model is run. Simulations usually complete within a few seconds, though more complex configurations may take longer. Regumetrica then provides downloadable data detailing the revenue frame for the selected concession area, along with all underlying calculation components. In addition to data downloads, results can also be displayed graphically, for example as charts decomposing different components of the revenue frame. After running a model, you may choose to save the case for later use.
 
 \subsection*{Model Components}
-The regulatory model is organized into \emph{Base modules} and \emph{Add-on modules}. Base modules represent the core components of the revenue frame calculation: Regulatory asset base valuation, Depreciation, Cost of capital, Operating expenditures, and the Efficiency incentive. Modules contain \emph{Parameters} and \emph{Variables}:
+The regulatory model is organized into \emph{Base modules} and \emph{Add-on modules}. Base modules represent the core components of the revenue frame calculation: Regulatory asset base valuation, Depreciation, Cost of capital, Operating expenditures, and the Efficiency incentive (benchmarking). Modules contain \emph{Parameters} and \emph{Variables}:
 
 \begin{itemize}
   \item \emph{Parameters} are fixed values that define the structural relationships within the regulatory model. They capture assumptions or policy choices that apply uniformly across all regulated entities. For example, the regulatory \emph{WACC} (Weighted Average Cost of Capital) determines the allowed rate of return on capital and is itself derived from a set of \emph{sub-parameters}, such as the risk-free rate of return. Another example of a parameter is the \emph{economic lifetime} assigned to a specific asset category, which determines the rate of capital depreciation over time. \textbf{A change to a parameter applies to every company in the model.}
@@ -42,7 +42,7 @@ The regulatory model is organized into \emph{Base modules} and \emph{Add-on modu
   \item \emph{Variables} are measurable inputs that vary across regulated entities. They correspond to real-world data, such as asset quantities, operating costs, or energy delivered, that the model uses to calculate revenue frames. Most variables are reported to the regulator through the KENT excel reporting template. \textbf{A change to a variable applies only to your own concession area.} Regumetrica users have the option of adjusting such variables manually, or by uploading standardized KENT excel sheets.
 \end{itemize}
 
-\emph{Add-on modules} extend the base regulatory model. They are designed either to explore regulatory scenarios that fall outside the scope of the current regulatory framework, or to facilitate the computation of revenue frames for specific strategic choices made by the regulated entity. An example of an add-on module exploring alternative regulatory scenarios is the \emph{Benchmarking} module, which computes efficiency scores using the currently employed Data Envelopment Analysis (DEA) model under a user-defined specification.
+\emph{Add-on modules} extend the base regulatory model with analyses that fall outside the scope of the current regulatory framework. Each add-on is delivered as a separate tool with its own user manual. The first is the \emph{New benchmarking model}, which estimates how a network's efficiency requirement would change under Ei's proposed total-expenditure (TOTEX) benchmarking model for the 2028--2031 regulatory period. For more information, see its separate user manual. Further add-on modules will be added over time.
 
 \subsection*{How to use this manual}
 The revenue cap tool is organized as a four-step workflow, and this manual follows that order. You move through the steps using the sidebar:
@@ -97,16 +97,12 @@ The base modules correspond to the components of the revenue frame:
   \item \textbf{M2: Depreciation}
   \item \textbf{M3: Cost of capital}
   \item \textbf{M4: Operating expenditures}
-  \item \textbf{M5: Efficiency incentive}
+  \item \textbf{M5: Efficiency incentive (benchmarking)}
 \end{itemize}
 
-\noindent and the available add-on module is:
+\noindent The revenue cap tool has no add-on modules of its own: the benchmarking analysis is a section within the efficiency incentive (M5), not a separate module. Add-on modules, such as the New benchmarking model, are delivered as separate tools with their own manuals (see the Introduction).
 
-\begin{itemize}
-  \item \textbf{M7: Benchmarking} (custom DEA specification)
-\end{itemize}
-
-Most modules are divided into sections so that you can, for example, adjust cost-of-capital \emph{parameters} without also opening the company-specific \emph{variables}. Sections that adjust parameters affect all companies; sections that adjust variables affect only your own concession area. The individual sections are described together with their fields in Section~\ref{sec:page-spec}.
+Most modules are divided into sections so that you can, for example, adjust cost-of-capital \emph{parameters} without also opening the company-specific \emph{variables}, or configure the benchmarking specification of the efficiency incentive separately from its requirement parameters. Sections that adjust parameters affect all companies; sections that adjust variables affect only your own concession area. The individual sections are described together with their fields in Section~\ref{sec:page-spec}.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -207,12 +203,31 @@ Three multipliers are available (baseline 1.00 each):
 \end{itemize}
 
 \subsubsection{OPEX variables (own area)}
-Instead of scaling, you can set the level of each component directly for your concession area, in tkr: adjustable OPEX (40.1.1), flexibility services (40.1.2), and non-adjustable costs (40.2.1). A direct override takes precedence over the corresponding scaling factor for your company.
+Instead of scaling, you can set the level of each component directly for your concession area, in tkr: adjustable OPEX, flexibility services, and non-adjustable costs. A direct override takes precedence over the corresponding scaling factor for your company.
 
-\subsection{M5: Efficiency incentive}
+\subsection{M5: Efficiency incentive (benchmarking)}
 \label{sec:spec-m5}
 
-This module converts the efficiency potential measured by the DEA benchmarking into an annual efficiency requirement. The adjustable parameters are:
+This module measures each company's efficiency by benchmarking and converts the resulting efficiency potential into an annual efficiency requirement. It has two sections: the \emph{benchmarking} specification, which defines the model that measures efficiency, and the \emph{efficiency requirement}, which sets how the measured potential is translated into an annual requirement.
+
+\subsubsection{Benchmarking (DEA specification)}
+\label{sec:spec-m5-benchmarking}
+
+The benchmarking section lets you define a custom Data Envelopment Analysis (DEA) specification, the model that measures each company's efficiency relative to the frontier. You can change:
+
+\begin{itemize}
+  \item \textbf{Input variables}: the cost measures used as DEA inputs (e.g.\ capital cost, adjustable OPEX, or TOTEX).
+  \item \textbf{Output variables}: the service measures used as DEA outputs (number of connections, subscribed power, substations, and energy delivered at low and high voltage).
+  \item \textbf{Returns to scale}: constant (CRS) or variable (VRS).
+  \item \textbf{Outlier identification (5.1.1)}: the lower and upper percentiles and the multiplier of the interquartile range that define which firms are treated as outliers.
+\end{itemize}
+
+\noindent You can run the DEA directly from this section to preview efficiency scores before computing the full revenue frame. Two points are worth noting. First, the DEA always operates on the original, historical cost data; changes you make to OPEX, capital costs, or WACC elsewhere do not alter the benchmarking. Only the model specification (inputs, outputs, returns to scale, and outlier treatment) changes the result. Second, the resulting efficiency potential feeds the efficiency requirement below.
+
+\subsubsection{Efficiency requirement}
+\label{sec:spec-m5-requirement}
+
+The efficiency requirement section converts the efficiency potential measured by the benchmarking into an annual efficiency requirement. The adjustable parameters are:
 
 \begin{itemize}
   \item \textbf{Maximum efficiency potential cap (5.2.1)}: an upper bound on the assessed potential. Baseline 30\%.
@@ -222,22 +237,7 @@ This module converts the efficiency potential measured by the DEA benchmarking i
   \item \textbf{Cost base (5.4.1)}: whether the efficiency requirement is applied to OPEX only (baseline) or to TOTEX (including capital costs).
 \end{itemize}
 
-\noindent The tool shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold used to exclude extreme firms (5.1.1) is part of the DEA specification and is set in the Benchmarking module, Section~\ref{sec:spec-m7}.
-
-
-\subsection{M7: Benchmarking (add-on)}
-\label{sec:spec-m7}
-
-The Benchmarking module lets you define a custom Data Envelopment Analysis (DEA) specification, the model that measures each company's efficiency relative to the frontier. You can change:
-
-\begin{itemize}
-  \item \textbf{Input variables}: the cost measures used as DEA inputs (e.g.\ capital cost, adjustable OPEX, or TOTEX).
-  \item \textbf{Output variables}: the service measures used as DEA outputs (number of connections, subscribed power, substations, and energy delivered at low and high voltage).
-  \item \textbf{Returns to scale}: constant (CRS) or variable (VRS).
-  \item \textbf{Outlier identification (5.1.1)}: the lower and upper percentiles and the multiplier of the interquartile range that define which firms are treated as outliers.
-\end{itemize}
-
-\noindent You can run the DEA directly from this module to preview efficiency scores before computing the full revenue frame. Two points are worth noting. First, the DEA always operates on the original, historical cost data; changes you make to OPEX, capital costs, or WACC elsewhere do not alter the benchmarking. Only the model specification (inputs, outputs, returns to scale, and outlier treatment) changes the result. Second, the resulting efficiency potential feeds the efficiency requirement configured in M5.
+\noindent The tool shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -431,12 +431,12 @@ Scaling factor non-adjustable OPEX & 1.00 & 4.1.3 \\
 \end{threeparttable}
 \end{table}
 
-% --- M5 + M7 ---
+% --- M5 ---
 \begin{table}[H]
 \centering
 \footnotesize
 \begin{threeparttable}
-\caption{M5: Efficiency incentive parameters (with M7 outlier threshold)}
+\caption{M5: Efficiency incentive parameters}
 \label{tab:app-m5}
 \begin{tabular}{@{}p{9cm}cl@{}}
 \toprule
@@ -451,7 +451,7 @@ Apply efficiency requirement on TOTEX & No (OPEX only) & 5.4.1 \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}
-\item[a] The outlier threshold is configured in the Benchmarking module (M7) as part of the DEA specification.
+\item[a] The outlier threshold is configured in the benchmarking section of the efficiency incentive (M5, Section~\ref{sec:spec-m5-benchmarking}) as part of the DEA specification.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}

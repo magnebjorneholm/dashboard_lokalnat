@@ -183,12 +183,17 @@ def _render_home_button():
     st.markdown(
         f"""
         <style>
-        .rm-home-btn{{ display:block; text-align:center; padding:.45rem .5rem;
+        /* Match Streamlit's secondary button (the "Log out" button below it):
+           white fill, light border, dark centred label, full width. !important
+           overrides Streamlit's default markdown-link theme (blue + underline). */
+        .rm-home-btn{{ display:block; width:100%; box-sizing:border-box; text-align:center;
+            padding:.5rem 1rem; line-height:1.6; background:#FFFFFF;
             border:1px solid {COLORS['bg_muted']}; border-radius:.5rem;
-            color:{COLORS['text_secondary']}; text-decoration:none; font-weight:500;
-            font-size:.9rem; margin-bottom:.5rem;
+            color:{COLORS['text_primary']} !important; text-decoration:none !important;
+            font-weight:400; font-size:.9rem; margin-bottom:.5rem;
             transition:border-color .15s ease, color .15s ease; }}
-        .rm-home-btn:hover{{ border-color:{COLORS['primary']}; color:{COLORS['primary']}; }}
+        .rm-home-btn:hover{{ border-color:{COLORS['primary']};
+            color:{COLORS['primary']} !important; text-decoration:none !important; }}
         </style>
         <a class="rm-home-btn" href="/" target="_blank" rel="noopener">Back to Home</a>
         """,

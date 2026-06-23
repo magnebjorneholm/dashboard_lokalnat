@@ -70,6 +70,7 @@ TOOLS: List[ToolSpec] = [
         branch="standalone",
         status="coming_soon",
         summary="A future standalone analysis. Details will be announced here.",
+        public=False,  # kept in the registry, but not rendered on the landing yet
     ),
 ]
 

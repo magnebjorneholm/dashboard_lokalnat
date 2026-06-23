@@ -1,7 +1,7 @@
 """
-M7 Benchmarking - Mini-run inline results.
+Benchmarking (M5) - Mini-run inline results.
 
-Renders DEA mini-run results inside the M7 config tab, reusing M5's
+Renders DEA mini-run results inside the M5 benchmarking section, reusing M5's
 efficiency distribution and summary visualizations.
 """
 

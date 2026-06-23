@@ -48,7 +48,7 @@ def render_efficiency_params() -> Dict[str, Any]:
     config: Dict[str, Any] = {}
     
     st.markdown("##### 5.1 Outlier identification")
-    st.caption(f"Outlier threshold ({PID_OUTLIER_THRESHOLD}): configured in Add-on Benchmarking")
+    st.caption(f"Outlier threshold ({PID_OUTLIER_THRESHOLD}): configured in the Benchmarking section above")
     
     st.divider()
     

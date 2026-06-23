@@ -151,11 +151,13 @@ for module in BASE_MODULES:
     with st.container(border=True):
         render_module_card(module, is_addon=False)
 
-st.markdown("")
-
 # --- ADD-ON MODULES ---
-st.markdown("**Add-on modules**")
+# The revenue cap tool currently has no add-on modules. Render the group only if
+# some module declares is_addon, so it never shows as an empty header.
+if ADDON_MODULES:
+    st.markdown("")
+    st.markdown("**Add-on modules**")
 
-for module in ADDON_MODULES:
-    with st.container(border=True):
-        render_module_card(module, is_addon=True)
+    for module in ADDON_MODULES:
+        with st.container(border=True):
+            render_module_card(module, is_addon=True)

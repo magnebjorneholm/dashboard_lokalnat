@@ -94,7 +94,7 @@ DEFAULT_UI_CONFIG: Dict[str, Dict[str, Any]] = {
         "kunddelning": None,        # 5.2.3 customer sharing; None = baseline (0.50)
         "paverkbara_method": None,  # 5.4.1 cost base "OPEX"/"TOTEX"; None = baseline (OPEX)
     },
-    "addon_benchmarking": {
+    "m5_benchmarking": {
         "dea_method": "baseline",  # 'baseline' or 'custom'
         "dea_inputs": None,        # List[str] - input variable names
         "dea_outputs": None,       # List[str] - output variable names

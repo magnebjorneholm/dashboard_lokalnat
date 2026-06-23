@@ -86,9 +86,9 @@ _CSS = """
 /* "Open tool" CTA — anchor styled as the primary button (all visitors); opens
    a new tab. A logged-out visitor signs in inside the opened tool window. */
 .rm-cta{ display:inline-block; background:var(--rm-primary); color:#fff !important;
-    font-size:.92rem; font-weight:600; text-decoration:none; padding:.42rem .95rem;
+    font-size:.92rem; font-weight:600; text-decoration:none !important; padding:.42rem .95rem;
     border-radius:8px; transition:filter .15s ease; }
-.rm-cta:hover{ filter:brightness(1.07); }
+.rm-cta:hover{ filter:brightness(1.07); text-decoration:none !important; }
 
 /* === In-page anchor scrolling ===
    Smooth glide to a section; scroll-margin keeps the target clear of the bar. */

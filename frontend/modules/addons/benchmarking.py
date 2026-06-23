@@ -1,5 +1,5 @@
 """
-Add-on Module: Benchmarking
+Benchmarking section of Module 5 (Efficiency incentive).
 
 Handles DEA configuration. New DEA runs only if configuration differs from
 baseline.
@@ -15,7 +15,7 @@ from frontend.utils.state_manager import get_config_value
 from config.column_names import COL_CAPITAL_COST_2024, COL_OPEXP_DEA, COL_TOTEX_DEA
 from config.glossary import PID_OUTLIER_THRESHOLD
 
-MODULE_KEY = "addon_benchmarking"
+MODULE_KEY = "m5_benchmarking"
 
 # Cost-model choice for the DEA inputs. The frontier inputs are LOCKED to the
 # frontier track (raw OPEXp + capex): the user only chooses whether they enter as
@@ -62,8 +62,8 @@ def is_baseline_dea_config(config: Dict[str, Any]) -> bool:
 
 def render_dea_spec() -> Dict[str, Any]:
     """
-    Render M7 DEA specification section.
-    
+    Render the benchmarking (DEA specification) section of Module 5.
+
     DEA configuration is always displayed. If config differs from baseline,
     new DEA runs at calculation time; otherwise cached results are used.
     

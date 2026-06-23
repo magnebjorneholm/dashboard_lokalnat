@@ -352,8 +352,8 @@ _ALLOWED_DEA_INPUTS = {COL_CAPITAL_COST_2024, COL_OPEXP_DEA, COL_TOTEX_DEA}
 
 
 def build_dea_config(ui_config: Dict[str, Any]) -> DeaConfig:
-    """Build DeaConfig from addon_benchmarking."""
-    addon = ui_config.get("addon_benchmarking", {})
+    """Build DeaConfig from the M5 benchmarking section (m5_benchmarking)."""
+    addon = ui_config.get("m5_benchmarking", {})
 
     # Custom DEA
     _op = BASELINE_DEA_SPEC['outlier_params']
