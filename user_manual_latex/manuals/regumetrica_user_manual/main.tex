@@ -127,7 +127,7 @@ Norm values are the per-unit asset values set by the regulator. Two kinds of sca
   \item \textbf{Category scaling factors (1.2.1--1.2.17)}: one multiplier per asset category, applied on top of the general factor. Baseline 1.00 for every category.
 \end{itemize}
 
-\noindent A factor of 1.00 leaves the norm value unchanged; 1.20 raises it by 20\%, 0.80 lowers it by 20\%. The 17 asset categories are listed in Table~\ref*{tab:app-cat} in Appendix~\ref*{app:categories}.
+\noindent A factor of 1.00 leaves the norm value unchanged; 1.20 raises it by 20\%, 0.80 lowers it by 20\%. The 17 asset categories are listed in Table~\ref*{tab:app-m1} in Appendix~\ref*{app:params}.
 
 \subsubsection{Asset quantities (variables)}
 Here you scale the quantity of assets in your own concession area, by category, relative to the reported baseline (Variable-IDs 10.2--10.18). This changes the size of your asset base without touching the norm values. Scaling affects the ordinary portion of the capital base only.
@@ -146,7 +146,7 @@ This module sets the economic lifetimes used to depreciate the asset base. For e
   \item \textbf{Tail period (2.X.2)}: the additional period during which an asset remains in service beyond its ordinary lifetime.
 \end{itemize}
 
-\noindent Lifetimes are edited in a table, one row per category. The tail period cannot exceed the ordinary lifetime; if you enter a larger value it is treated as equal to the ordinary lifetime in the calculation. Baseline lifetimes are listed in Table~\ref*{tab:app-cat} in Appendix~\ref*{app:categories}.
+\noindent Lifetimes are edited in a table, one row per category. The tail period cannot exceed the ordinary lifetime; if you enter a larger value it is treated as equal to the ordinary lifetime in the calculation. Baseline lifetimes are listed in Table~\ref*{tab:app-m2} in Appendix~\ref*{app:params}.
 
 
 \subsection{M3: Cost of capital}
@@ -272,8 +272,8 @@ The full revenue frame and all underlying calculation components can be download
 \section*{Appendix}
 \addcontentsline{toc}{section}{Appendix}
 
-% The Appendix has a single heading; the three reference catalogues are lettered
-% subsections (A, B, C). \thesubsection is redefined to print just the letter
+% The Appendix has a single heading; the two reference catalogues are lettered
+% subsections (A, B). \thesubsection is redefined to print just the letter
 % (the parent section is unnumbered). Tables take the appendix letter and restart
 % in each subsection (\setcounter{table}{0} below), so cross-references read
 % ``Table B2 in Appendix B''.
@@ -322,7 +322,43 @@ Transformator & 1.00 & 1.2.17 \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}
-\item Scaling factors are applied multiplicatively to the asset norm values. Full category names are given in Table~\ref*{tab:app-cat} in Appendix~\ref*{app:categories}.
+\item Scaling factors are applied multiplicatively to the asset norm values.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+% --- M2 ---
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{threeparttable}
+\caption{M2: Depreciation parameters}
+\label{tab:app-m2}
+\begin{tabular}{@{}p{8cm}ccl@{}}
+\toprule
+\textbf{Description} & \textbf{Ordinary} & \textbf{Tail} & \textbf{Parameter-IDs} \\
+\midrule
+Andra markarbeten och byggnader, linjekoncession & 100 & 24 & 2.1.1; 2.1.2 \\
+Annan ledning, linjekoncession & 100 & 24 & 2.2.1; 2.2.2 \\
+Annan ledning, områdeskoncession & 100 & 24 & 2.3.1; 2.3.2 \\
+Annan luftledning, linjekoncession & 100 & 24 & 2.4.1; 2.4.2 \\
+It-system & 20 & 4 & 2.5.1; 2.5.2 \\
+Kabelskåp & 60 & 14 & 2.6.1; 2.6.2 \\
+Ledning $\geq$ 220 kV (ej luftledning), linjekoncession & 80 & 20 & 2.7.1; 2.7.2 \\
+Luftledning $\geq$ 220 kV, linjekoncession & 120 & 30 & 2.8.1; 2.8.2 \\
+Luftledning, områdeskoncession & 80 & 20 & 2.9.1; 2.9.2 \\
+Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession & 80 & 20 & 2.10.1; 2.10.2 \\
+Markarbeten och byggnader, områdeskoncession & 100 & 24 & 2.11.1; 2.11.2 \\
+Mätare & 20 & 4 & 2.12.1; 2.12.2 \\
+Nätstation & 80 & 20 & 2.13.1; 2.13.2 \\
+Shuntreaktor & 80 & 20 & 2.14.1; 2.14.2 \\
+Styr- och kontrollutrustning & 30 & 6 & 2.15.1; 2.15.2 \\
+Ställverk utan sekundärapparater & 80 & 20 & 2.16.1; 2.16.2 \\
+Transformator & 100 & 24 & 2.17.1; 2.17.2 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item Ordinary and tail lifetimes in years. The tail period cannot exceed the ordinary lifetime; a larger value is treated as equal to the ordinary lifetime in the calculation.
 \end{tablenotes}
 \end{threeparttable}
 \end{table}
@@ -584,44 +620,5 @@ Efficiency adjustment, OPEX / CAPEX & 50.4.1 / 50.4.2 \\
 \end{threeparttable}
 \end{table}
 
-
-	\subsection{Asset categories}
-	\label{app:categories}
-	\setcounter{table}{0}\setcounter{figure}{0}
-
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{threeparttable}
-\caption{Asset categories and baseline lifetimes}
-\label{tab:app-cat}
-\begin{tabular}{@{}cp{7.3cm}ccc@{}}
-\toprule
-\textbf{Code} & \textbf{Category} & \textbf{Ordinary} & \textbf{Tail} & \textbf{Parameter-IDs} \\
-\midrule
-1 & Andra markarbeten och byggnader, linjekoncession & 100 & 24 & 2.1.1; 2.1.2 \\
-2 & Annan ledning, linjekoncession & 100 & 24 & 2.2.1; 2.2.2 \\
-3 & Annan ledning, områdeskoncession & 100 & 24 & 2.3.1; 2.3.2 \\
-4 & Annan luftledning, linjekoncession & 100 & 24 & 2.4.1; 2.4.2 \\
-5 & It-system & 20 & 4 & 2.5.1; 2.5.2 \\
-6 & Kabelskåp & 60 & 14 & 2.6.1; 2.6.2 \\
-7 & Ledning $\geq$ 220 kV (ej luftledning), linjekoncession & 80 & 20 & 2.7.1; 2.7.2 \\
-8 & Luftledning $\geq$ 220 kV, linjekoncession & 120 & 30 & 2.8.1; 2.8.2 \\
-9 & Luftledning, områdeskoncession & 80 & 20 & 2.9.1; 2.9.2 \\
-10 & Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession & 80 & 20 & 2.10.1; 2.10.2 \\
-11 & Markarbeten och byggnader, områdeskoncession & 100 & 24 & 2.11.1; 2.11.2 \\
-12 & Mätare & 20 & 4 & 2.12.1; 2.12.2 \\
-13 & Nätstation & 80 & 20 & 2.13.1; 2.13.2 \\
-14 & Shuntreaktor & 80 & 20 & 2.14.1; 2.14.2 \\
-15 & Styr- och kontrollutrustning & 30 & 6 & 2.15.1; 2.15.2 \\
-16 & Ställverk utan sekundärapparater & 80 & 20 & 2.16.1; 2.16.2 \\
-17 & Transformator & 100 & 24 & 2.17.1; 2.17.2 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item Ordinary and tail lifetimes in years. The category code is used throughout the scaling (1.2.x), quantity (10.x), and lifetime (2.x) parameters and variables.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
 
 \end{document}
