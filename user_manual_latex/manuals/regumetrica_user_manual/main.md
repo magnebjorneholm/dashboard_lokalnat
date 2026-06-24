@@ -1,35 +1,9 @@
-# Regumetrica
-
-*Beta version*  
-User manual  
-Version 1.0
-
-[www.regumetrica.com/um](https://www.regumetrica.com/um)
-
 ---
-
-## Contents
-
-- [Introduction](#introduction)
-  - [Model Components](#model-components)
-  - [How to use this manual](#how-to-use-this-manual)
-- [1. Create and select case](#1-create-and-select-case)
-  - [1.1 Creating a case](#11-creating-a-case)
-  - [1.2 Working with saved cases](#12-working-with-saved-cases)
-  - [1.3 Comparing cases](#13-comparing-cases)
-- [2. Case Setup](#2-case-setup)
-- [3. Specification](#3-specification)
-  - [3.1 M1: Regulatory asset base valuation](#31-m1-regulatory-asset-base-valuation)
-  - [3.2 M2: Depreciation](#32-m2-depreciation)
-  - [3.3 M3: Cost of capital](#33-m3-cost-of-capital)
-  - [3.4 M4: Operating expenditures](#34-m4-operating-expenditures)
-  - [3.5 M5: Efficiency incentive (benchmarking)](#35-m5-efficiency-incentive-benchmarking)
-- [4. Revenue Frame](#4-revenue-frame)
-- [Appendix](#appendix)
-  - [A. Parameter reference](#a-parameter-reference)
-  - [B. Variable reference](#b-variable-reference)
-  - [C. Asset categories](#c-asset-categories)
-
+title: Regumetrica
+subtitle: User manual
+version: "1.0"
+status: beta
+url: https://www.regumetrica.com/um
 ---
 
 ## Introduction

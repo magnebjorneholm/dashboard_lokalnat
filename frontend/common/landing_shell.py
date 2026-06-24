@@ -224,6 +224,16 @@ div[class*="st-key-toolcard_"] button:hover *{
 /* Landing button + dialog polish */
 [data-testid="stMain"] [data-testid="stBaseButton-primary"]{ border-radius:8px; }
 [data-testid="stDialog"] div[role="dialog"]{ border-radius:16px; }
+/* The manual reader (a two-pane TOC+content iframe) wants width: widen the dialog
+   well past "large" and strip the body padding so the iframe fills the card. */
+[data-testid="stDialog"] div[role="dialog"]:has(iframe){
+    width:min(1180px, 94vw); max-width:min(1180px, 94vw); padding:0; overflow:hidden; }
+[data-testid="stDialog"] div[role="dialog"]:has(iframe) iframe{
+    display:block; border:none; border-radius:0 0 16px 16px; }
+/* Keep the dialog's close-button row clear of the flush iframe */
+[data-testid="stDialog"] div[role="dialog"]:has(iframe) [data-testid="stMainBlockContainer"],
+[data-testid="stDialog"] div[role="dialog"]:has(iframe) [data-testid="stVerticalBlock"]{
+    gap:0; }
 
 /* === Footer === */
 .rm-footer{ color:var(--rm-muted); font-size:.85rem; text-align:center; line-height:1.8; }

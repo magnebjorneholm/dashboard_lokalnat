@@ -1,0 +1,176 @@
+/* Regumetrica manual reader — framework-agnostic styles.
+ *
+ * This file is intentionally Streamlit-free. The Streamlit host inlines it into a
+ * components.html iframe today; a future React/Next.js port can import it as-is (or
+ * map the design tokens below onto a Tailwind theme). Nothing here knows about the
+ * host: the only contract is the DOM that reader.js builds and the CSS variables.
+ *
+ * Design tokens are CSS custom properties with Nordic-Energy defaults. The host
+ * overrides them with a :root block (so the reader always matches the app palette);
+ * a Tailwind port maps the same names onto its theme. */
+
+:root {
+    --rm-primary: #2563EB;
+    --rm-text: #0F172A;
+    --rm-text2: #475569;
+    --rm-muted: #64748B;
+    --rm-card: #FFFFFF;
+    --rm-subtle: #F1F5F9;
+    --rm-border: #E2E8F0;
+    --rm-warning: #D97706;
+    --rm-warning-bg: #FEF3C7;
+
+    --rm-font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --rm-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --rm-toc-w: 270px;
+    --rm-reader-pad: 2.2rem;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--rm-card);
+    color: var(--rm-text);
+    font-family: var(--rm-font-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* === Two-pane shell ====================================================== */
+.reader {
+    display: grid;
+    grid-template-columns: var(--rm-toc-w) 1fr;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* --- Left: table of contents --- */
+.reader-toc {
+    height: 100%;
+    overflow-y: auto;
+    border-right: 1px solid var(--rm-border);
+    background: var(--rm-subtle);
+    padding: 1.4rem 1rem 2rem;
+}
+.reader-toc-label {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--rm-muted);
+    padding: 0 .6rem;
+    margin-bottom: .7rem;
+}
+.reader-toc ul { list-style: none; margin: 0; padding: 0; }
+.reader-toc a {
+    display: block;
+    padding: .3rem .6rem;
+    border-left: 2px solid transparent;
+    border-radius: 0 6px 6px 0;
+    color: var(--rm-text2);
+    font-size: .86rem;
+    line-height: 1.35;
+    text-decoration: none;
+    transition: color .12s ease, background .12s ease, border-color .12s ease;
+}
+.reader-toc a:hover { color: var(--rm-text); background: rgba(37, 99, 235, .06); }
+/* Indent by depth (h2 is top-level, no extra indent) */
+.reader-toc a.lvl-3 { padding-left: 1.5rem; font-size: .83rem; }
+.reader-toc a.lvl-4 { padding-left: 2.4rem; font-size: .81rem; }
+/* Scroll-spy: the section currently in view is bold + accented */
+.reader-toc a.active {
+    color: var(--rm-primary);
+    font-weight: 700;
+    border-left-color: var(--rm-primary);
+    background: rgba(37, 99, 235, .08);
+}
+
+/* --- Right: content --- */
+.reader-content {
+    height: 100%;
+    overflow-y: auto;
+    padding: var(--rm-reader-pad) calc(var(--rm-reader-pad) + .4rem);
+    scroll-behavior: smooth;
+}
+.reader-article {
+    max-width: 760px;
+    margin: 0 auto;
+    font-size: .96rem;
+    line-height: 1.65;
+    color: var(--rm-text2);
+}
+
+/* --- Document header (from frontmatter) --- */
+.reader-head { margin: 0 0 1.8rem; padding-bottom: 1.2rem; border-bottom: 1px solid var(--rm-border); }
+.reader-head h1 { margin: 0; font-size: 2rem; font-weight: 700; letter-spacing: -.02em; color: var(--rm-text); }
+.reader-head .reader-subtitle { margin-top: .3rem; font-size: 1.05rem; color: var(--rm-text2); }
+.reader-meta { display: flex; flex-wrap: wrap; gap: .5rem .8rem; align-items: center; margin-top: .9rem; font-size: .82rem; color: var(--rm-muted); }
+.reader-badge {
+    font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    padding: .14rem .5rem; border-radius: 999px;
+    color: var(--rm-warning); background: var(--rm-warning-bg);
+}
+.reader-meta a { color: var(--rm-primary); text-decoration: none; }
+.reader-meta a:hover { text-decoration: underline; }
+
+/* === Article typography ================================================== */
+.reader-article h1, .reader-article h2, .reader-article h3, .reader-article h4 {
+    color: var(--rm-text);
+    font-weight: 700;
+    letter-spacing: -.01em;
+    line-height: 1.25;
+    scroll-margin-top: 1rem;
+}
+.reader-article h2 { font-size: 1.5rem; margin: 2.4rem 0 .9rem; padding-top: .4rem; }
+.reader-article h3 { font-size: 1.18rem; margin: 1.8rem 0 .6rem; }
+.reader-article h4 { font-size: 1.02rem; margin: 1.3rem 0 .5rem; }
+.reader-article > h2:first-child { margin-top: 0; }
+
+.reader-article p { margin: 0 0 1rem; }
+.reader-article a { color: var(--rm-primary); text-decoration: none; }
+.reader-article a:hover { text-decoration: underline; }
+.reader-article ul, .reader-article ol { margin: 0 0 1rem; padding-left: 1.4rem; }
+.reader-article li { margin: .25rem 0; }
+.reader-article strong { color: var(--rm-text); font-weight: 600; }
+.reader-article hr { border: none; border-top: 1px solid var(--rm-border); margin: 2rem 0; }
+.reader-article blockquote {
+    margin: 1.2rem 0; padding: .2rem 1.1rem;
+    border-left: 3px solid var(--rm-border);
+    color: var(--rm-muted); font-style: italic;
+}
+.reader-article code {
+    font-family: var(--rm-font-mono); font-size: .86em;
+    background: var(--rm-subtle); padding: .1rem .35rem; border-radius: 4px;
+}
+.reader-article pre {
+    background: var(--rm-subtle); border: 1px solid var(--rm-border); border-radius: 8px;
+    padding: 1rem; overflow-x: auto; margin: 0 0 1rem;
+}
+.reader-article pre code { background: none; padding: 0; font-size: .84rem; }
+
+/* --- Tables (financial-data styling: tabular figures, light grid) --- */
+.reader-article table {
+    width: 100%; border-collapse: collapse; margin: 0 0 1.2rem;
+    font-size: .88rem; font-variant-numeric: tabular-nums;
+}
+.reader-article th, .reader-article td {
+    border: 1px solid var(--rm-border); padding: .45rem .7rem; text-align: left; vertical-align: top;
+}
+.reader-article thead th { background: var(--rm-subtle); color: var(--rm-text); font-weight: 600; }
+.reader-article tbody tr:nth-child(even) { background: rgba(241, 245, 249, .5); }
+
+/* KaTeX should not overflow its line */
+.reader-article .katex-display { overflow-x: auto; overflow-y: hidden; padding: .2rem 0; }
+
+/* === Responsive: stack the TOC above the content on narrow screens ======= */
+@media (max-width: 720px) {
+    .reader { grid-template-columns: 1fr; }
+    .reader-toc {
+        height: auto; max-height: 38vh;
+        border-right: none; border-bottom: 1px solid var(--rm-border);
+    }
+    :root { --rm-reader-pad: 1.3rem; }
+}

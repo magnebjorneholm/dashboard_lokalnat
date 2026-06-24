@@ -1,36 +1,13 @@
-# Regumetrica
-
-*Beta version*  
-The new benchmarking model  
-Method, results, and user guide  
-Version 1.0
-
-[www.regumetrica.com/um](https://www.regumetrica.com/um)
-
-June 2026
-
+---
+title: The new benchmarking model
+subtitle: Method, results, and user guide
+version: "1.0"
+status: beta
+date: June 2026
+url: https://www.regumetrica.com/um
 ---
 
 > *Status: this is a method description. It sets out our operationalisation and reading of the direction the Swedish Energy Markets Inspectorate (Energimarknadsinspektionen, Ei) has taken for the benchmarking model, given the information the authority has published up to June 2026. Throughout, we separate what Ei has stated as its direction from our own working assumptions. Where the model rests on working assumptions, above all in parameter values and in the handling of data, the outcomes that follow are conditional on those assumptions. The figures in this manual are reported as conditional illustrations computed on current-regulation data; the manual explains the method and how to read the tool, not a forecast of the 2028 to 2031 levels.*
-
----
-
-## Contents
-
-- [1. Introduction](#1-introduction)
-- [2. General principles](#2-general-principles)
-- [3. Changes in the new model](#3-changes-in-the-new-model)
-  - [3.1 The cost base](#31-the-cost-base)
-    - [3.1.1 The OPEX variable](#311-the-opex-variable)
-    - [3.1.2 The placement-environment correction](#312-the-placement-environment-correction)
-    - [3.1.3 The merged TOTEX input](#313-the-merged-totex-input)
-  - [3.2 Cable length as a structural variable](#32-cable-length-as-a-structural-variable)
-  - [3.3 The two-sided efficiency requirement](#33-the-two-sided-efficiency-requirement)
-  - [3.4 The monetary effect: two cost bases](#34-the-monetary-effect-two-cost-bases)
-- [4. Using the tool](#4-using-the-tool)
-- [5. Working assumptions and limitations](#5-working-assumptions-and-limitations)
-- [6. Summary](#6-summary)
-- [References](#references)
 
 ---
 

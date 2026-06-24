@@ -12,13 +12,14 @@ Content sources:
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from config.tools_registry import tools_for
 from frontend.common.landing_shell import (
     apply_landing_shell, landing_anchor, landing_cards, landing_heading,
     landing_profile, landing_footer,
 )
-from frontend.common.manuals import manual_markdown, manual_path
+from frontend.common.manuals import manual_path, manual_reader_html
 
 apply_landing_shell()
 
@@ -31,12 +32,22 @@ apply_landing_shell()
 # under the card grid. The button is a real Streamlit widget on purpose: a click
 # is a websocket rerun in place, so the manual opens in a wide dialog without a
 # new tab, a URL change, or a full reload (a plain ``<a href>`` link can't do
-# this — Streamlit opens markdown links in a new tab). The manual's own H1
-# carries its title, so the dialog chrome only needs a generic label.
+# this — Streamlit opens markdown links in a new tab).
+#
+# The dialog hosts the framework-agnostic *manual reader* (a two-pane HTML doc:
+# table of contents + content, with click-to-scroll and scroll-spy) in a
+# components.html iframe. The iframe is required, not cosmetic: scroll-spy and
+# smooth in-pane scrolling need client-side JS, which st.markdown cannot run. The
+# reader's title comes from the markdown frontmatter, so the dialog chrome only
+# needs a generic label. ``_READER_HEIGHT`` is the fixed iframe height; the two
+# panes scroll internally within it.
+_READER_HEIGHT = 680
+
+
 @st.dialog("User manual", width="large")
-def _manual_dialog(md: str) -> None:
-    """Render a manual's Markdown in a wide dialog (KaTeX math + tables + HTML)."""
-    st.markdown(md, unsafe_allow_html=True)
+def _manual_dialog(reader_html: str) -> None:
+    """Render a manual in the two-pane reader (TOC + content, scroll-spy)."""
+    components.html(reader_html, height=_READER_HEIGHT, scrolling=False)
 
 
 def _render_tool_cards(branch: str) -> None:
@@ -66,13 +77,13 @@ def _render_tool_cards(branch: str) -> None:
 
             # Both actions on one row (a real button + the PDF link), styled
             # alike via .rm-card-link / the toolcard button CSS in landing_shell.
-            md = manual_markdown(t.manual)
+            reader_html = manual_reader_html(t.manual)
             with st.container(horizontal=True, gap="medium",
                               vertical_alignment="center"):
-                if md is not None:
+                if reader_html is not None:
                     if st.button("User manual (inline)", key=f"read_{t.key}",
                                  type="tertiary"):
-                        _manual_dialog(md)
+                        _manual_dialog(reader_html)
                 if manual_path(t.manual).exists():
                     st.markdown(
                         f'<a class="rm-card-link rm-card-link--inline" '

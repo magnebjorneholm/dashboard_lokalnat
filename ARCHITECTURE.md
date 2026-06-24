@@ -113,6 +113,7 @@ dashboard_lokalnat/
 |-- .streamlit/config.toml        # Streamlit config (theme, port 8501)
 |-- static/                       # Statically served assets (enableStaticServing; served at app/static/)
 |   |-- manuals/<slug>.pdf            # Per-tool manual PDFs (published by user_manual_latex/build.sh)
+|   |-- manual_reader/                # Framework-agnostic in-page manual reader (reader.css + reader.js)
 |   |-- login_pic.jpg                 # Landing background photo (served as app/static/login_pic.jpg)
 |
 |-- landing_pages/                # ZON 1: public landing (no sidebar, own top bar)
@@ -146,7 +147,7 @@ dashboard_lokalnat/
 |   |   |-- styling.py            # apply_base_styling() (both zones) + apply_tool_chrome() (tool sidebar); re-exports colors
 |   |   |-- auth_page.py          # Full-page sign-in gate (login/register/reset/verify) for the tool zone
 |   |   |-- landing_shell.py      # Landing theme (faded bg) + frozen top bar (brand + anchor nav + auth-aware CTA: Sign in / Open tool) + shared helpers (landing_anchor/cards/heading/profile/footer)
-|   |   |-- manuals.py            # Reads per-tool manuals: published PDF (static/manuals/<slug>.pdf) + Markdown twin (user_manual_latex/manuals/<slug>/main.md, rendered in-page)
+|   |   |-- manuals.py            # Host seam for per-tool manuals: published PDF (static/manuals/<slug>.pdf) + builds the in-page reader doc (manual_reader_html) from the Markdown twin (user_manual_latex/manuals/<slug>/main.md)
 |   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
 |   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
 |   |
@@ -943,7 +944,7 @@ landing_pages/landing.py                  (ZON 1 — single page)
     |                                       landing_heading, landing_profile, landing_footer)
     |-- config.tools_registry             (#tools section: tools_for, ToolSpec)
     |-- frontend.common.manuals           (#tools cards: manual_path for the PDF link,
-    |                                       manual_markdown for the in-page dialog)
+    |                                       manual_reader_html for the in-page reader dialog)
 
 pages/1_create_and_select_case.py
     |-- frontend.utils.state_manager     (init, get/set, reset_case)
@@ -1157,26 +1158,43 @@ being pure data it ports directly to the future React landing.
 
 | Location | Role |
 |----------|------|
-| `user_manual_latex/manuals/<slug>/main.tex` | **Source** (one folder per tool; `shared/` holds the common preamble + `references.bib`) |
-| `user_manual_latex/manuals/<slug>/main.md` | **Markdown twin** of the manual, rendered in-page on the landing (committed) |
+| `user_manual_latex/manuals/<slug>/main.tex` | **Source** for the PDF (one folder per tool; `shared/` holds the common preamble + `references.bib`) |
+| `user_manual_latex/manuals/<slug>/main.md` | **Content store** for the in-page reader: a Markdown twin with YAML frontmatter (`title`, `subtitle`, `version`, `status`, `date`, `url`). Committed |
 | `user_manual_latex/manuals/<slug>/build/main.pdf` | Build artifact (gitignored) |
 | `static/manuals/<slug>.pdf` | **Published** PDF the app serves (committed) |
+| `static/manual_reader/{reader.css,reader.js}` | The framework-agnostic in-page reader (Streamlit-free; committed) |
 
-`user_manual_latex/build.sh` is the bridge: `./build.sh` builds every manual (or
-`./build.sh <slug>` just one), runs `latexmk -r latexmkrc`, and copies
-`build/main.pdf` -> `static/manuals/<slug>.pdf`.
+`main.tex` and `main.md` are **separate twins, not auto-converted**: build.sh only
+touches the PDF, and the in-page reader only reads `main.md`. To change the in-page
+manual, edit `main.md` (no build step). To change the downloadable PDF, edit
+`main.tex` and rebuild. `user_manual_latex/build.sh` is the PDF bridge: `./build.sh`
+builds every manual (or `./build.sh <slug>` just one), runs `latexmk -r latexmkrc`,
+and copies `build/main.pdf` -> `static/manuals/<slug>.pdf`.
 
 Each tool card on the landing offers the manual two ways: **"User manual (PDF)"**
 opens the published PDF in a new window (a static `<a
-href="app/static/manuals/<slug>.pdf">` link), and **"User manual (inline)"**
-renders the Markdown twin in-page in a wide `@st.dialog` (`st.markdown` with
-KaTeX math + tables, no new tab, no reload). Both read through
-`frontend/common/manuals.py`: `manual_bytes` / `manual_path` for the PDF,
-`manual_markdown` / `manual_markdown_path` for the `main.md`. The cards are built
-natively (`landing.py` `_render_tool_cards`, a keyed `st.container`) rather than
-as an HTML string, because the inline action is a real `st.button` and a Streamlit
-widget cannot live inside an HTML blob (and a plain `<a>` link can't stay in the
-same window — Streamlit opens markdown links in a new tab).
+href="app/static/manuals/<slug>.pdf">` link), and **"User manual (inline)"** opens
+the **manual reader** in a wide `@st.dialog` (widened past "large" via CSS in
+`landing_shell.py`). The reader is a self-contained, framework-agnostic HTML
+document (`static/manual_reader/reader.css` + `reader.js`): a two-pane layout
+(sticky table of contents + scrolling content) with click-to-scroll and a
+scroll-spy that bolds the section in view. It auto-builds the TOC from the
+markdown's `h2`-`h4` headings (shared `slugify`, so anchors/deep links are stable)
+and renders math/tables client-side (`markdown-it` + `markdown-it-anchor` +
+`markdown-it-texmath`/KaTeX, pinned CDN). The iframe is required, not cosmetic:
+scroll-spy and smooth in-pane scrolling need client-side JS, which `st.markdown`
+cannot run.
+
+`frontend/common/manuals.py` is the thin host seam (the only Streamlit-aware part;
+a future React/Next.js landing reuses the `static/manual_reader/` bundle and drops
+it): `manual_bytes` / `manual_path` for the PDF; `manual_reader_html` builds the
+reader document from `main.md` (inlining the reader bundle, loading the libs from
+CDN, injecting the markdown + the Nordic-Energy theme tokens); `manual_markdown` /
+`manual_markdown_path` read the raw `main.md`. The cards are built natively
+(`landing.py` `_render_tool_cards`, a keyed `st.container`) rather than as an HTML
+string, because the inline action is a real `st.button` and a Streamlit widget
+cannot live inside an HTML blob (and a plain `<a>` link can't stay in the same
+window — Streamlit opens markdown links in a new tab).
 
 **Naming rule:** the LaTeX folder name, the `main.md` twin, the published
 `static/manuals/<slug>.pdf` filename, and the registry's `manual_slug` must all be
