@@ -113,7 +113,7 @@ dashboard_lokalnat/
 |-- .streamlit/config.toml        # Streamlit config (theme, port 8501)
 |-- static/                       # Statically served assets (enableStaticServing; served at app/static/)
 |   |-- manuals/<slug>.pdf            # Per-tool manual PDFs (published by user_manual_latex/build.sh)
-|   |-- login_pic.jpg                 # Landing background photo (inlined as a data URI)
+|   |-- login_pic.jpg                 # Landing background photo (served as app/static/login_pic.jpg)
 |
 |-- landing_pages/                # ZON 1: public landing (no sidebar, own top bar)
 |   |-- landing.py                # Single page, three anchored sections: #home (hero),

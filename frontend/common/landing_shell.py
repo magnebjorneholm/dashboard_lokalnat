@@ -24,7 +24,6 @@ it is a separate, business-facing layer (and will be replaced by the future
 React/Next landing — kept intentionally lean here).
 """
 
-import base64
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -234,23 +233,26 @@ div[class*="st-key-toolcard_"] button:hover *{
 
 
 @st.cache_data
-def _bg_data_uri() -> Optional[str]:
-    """Base64 data URI for the landing background image, or None if missing.
+def _bg_url() -> Optional[str]:
+    """Static URL for the landing background image, or None if missing.
 
-    The asset lives in ``static/`` (with the repo root kept as a fallback).
+    Served from ``static/`` via Streamlit static serving (``app/static/<name>``).
+    Returned as a URL, NOT an inlined base64 data URI: inlining the ~400 KB photo
+    into the stylesheet delayed the sidebar-hiding rule (it sat behind the blob in
+    the same ``<style>`` block), which is what made zon 2 flash for ~1 s on load.
     """
     for name in ("login_pic.jpg", "login_pic.jpeg", "login_pic.png"):
-        for path in (Path("static") / name, Path(name)):
-            if path.exists():
-                mime = "png" if path.suffix == ".png" else "jpeg"
-                return f"data:image/{mime};base64,{base64.b64encode(path.read_bytes()).decode()}"
+        if (Path("static") / name).exists():
+            return f"app/static/{name}"
     return None
 
 
 def _inject_theme() -> None:
-    bg = _bg_data_uri()
-    bg_rule = f'background-image:url("{bg}");' if bg else f'background:{COLORS["bg_page"]};'
-    dynamic = f"""
+    # Critical CSS first — :root vars + all structural rules, including the rules
+    # that hide the native sidebar and top-nav. This block carries no image, so it
+    # ships in the first delta and the tool sidebar is hidden on the first paint
+    # instead of lingering as a zon-2 flash.
+    root_vars = f"""
     :root {{
         --rm-primary:{COLORS['primary']};
         --rm-text:{COLORS['text_primary']};
@@ -263,13 +265,23 @@ def _inject_theme() -> None:
         --rm-warning:{COLORS['warning']};
         --rm-warning-bg:{COLORS['warning_light']};
     }}
-    [data-testid="stAppViewContainer"] {{
-        {bg_rule}
-        background-size:cover; background-position:center;
-        background-repeat:no-repeat; background-attachment:fixed;
-    }}
     """
-    st.markdown(f"<style>{dynamic}{_CSS}</style>", unsafe_allow_html=True)
+    st.markdown(f"<style>{root_vars}{_CSS}</style>", unsafe_allow_html=True)
+
+    # Background photo second (decorative). Loaded via a static URL so it never
+    # bloats the critical stylesheet above; the browser fetches it asynchronously.
+    bg = _bg_url()
+    bg_rule = f'background-image:url("{bg}");' if bg else f'background:{COLORS["bg_page"]};'
+    st.markdown(
+        f"""<style>
+        [data-testid="stAppViewContainer"] {{
+            {bg_rule}
+            background-size:cover; background-position:center;
+            background-repeat:no-repeat; background-attachment:fixed;
+        }}
+        </style>""",
+        unsafe_allow_html=True,
+    )
 
 
 def apply_auth_backdrop() -> None:
@@ -279,7 +291,7 @@ def apply_auth_backdrop() -> None:
     gate (streamlit_app.py) uses just this backdrop behind the auto-opened auth
     dialog, so a logged-out tool window matches the landing's look.
     """
-    bg = _bg_data_uri()
+    bg = _bg_url()
     bg_rule = f'background-image:url("{bg}");' if bg else f'background:{COLORS["bg_page"]};'
     st.markdown(
         f"""
