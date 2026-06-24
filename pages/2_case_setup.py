@@ -36,10 +36,9 @@ if st.session_state.get("_toast_message"):
 # =============================================================================
 
 case_name = get_case_name()
+st.subheader("2. Select modules to modify")
 if case_name:
-    st.title(f"Case Setup: {case_name}")
-else:
-    st.title("Case Setup")
+    st.caption(f"Active case: {case_name}")
 
 # Check company selection
 user_reid = get_user_reid()

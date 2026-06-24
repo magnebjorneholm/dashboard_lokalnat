@@ -82,10 +82,9 @@ def render_metric_row(
 # =============================================================================
 
 case_name = get_case_name()
+st.subheader("4. Compute revenue frame and save")
 if case_name:
-    st.title(f"Results: {case_name}")
-else:
-    st.title("Results")
+    st.caption(f"Active case: {case_name}")
 
 from frontend.utils.case_actions import run_calculation, do_save_case
 

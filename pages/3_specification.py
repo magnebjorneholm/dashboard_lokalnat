@@ -36,10 +36,9 @@ init_session_state()
 # =============================================================================
 
 case_name = get_case_name()
+st.subheader("3. Configure selected modules")
 if case_name:
-    st.title(f"Specification: {case_name}")
-else:
-    st.title("Specification")
+    st.caption(f"Active case: {case_name}")
 
 from frontend.common.save_bar import render_save_bar
 render_save_bar()

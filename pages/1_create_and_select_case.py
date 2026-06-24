@@ -211,6 +211,9 @@ else:
     st.title("Welcome to Regumetrica")
 
 st.subheader("1. Create and select case")
+active_case = get_case_name()
+if active_case:
+    st.caption(f"Active case: {active_case}")
 
 # Check company selection
 if user_reid is None:
