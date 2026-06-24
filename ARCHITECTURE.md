@@ -146,7 +146,7 @@ dashboard_lokalnat/
 |   |   |-- styling.py            # apply_base_styling() (both zones) + apply_tool_chrome() (tool sidebar); re-exports colors
 |   |   |-- auth_page.py          # Full-page sign-in gate (login/register/reset/verify) for the tool zone
 |   |   |-- landing_shell.py      # Landing theme (faded bg) + frozen top bar (brand + anchor nav + auth-aware CTA: Sign in / Open tool) + shared helpers (landing_anchor/cards/heading/profile/footer)
-|   |   |-- manuals.py            # Reads published per-tool manual PDFs (static/manuals/<slug>.pdf)
+|   |   |-- manuals.py            # Reads per-tool manuals: published PDF (static/manuals/<slug>.pdf) + Markdown twin (user_manual_latex/manuals/<slug>/main.md, rendered in-page)
 |   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
 |   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
 |   |
@@ -943,7 +943,8 @@ landing_pages/landing.py                  (ZON 1 — single page)
     |-- frontend.common.landing_shell     (apply_landing_shell, landing_anchor, landing_cards,
     |                                       landing_heading, landing_profile, landing_footer)
     |-- config.tools_registry             (#tools section: tools_for, ToolSpec)
-    |-- frontend.common.manuals           (#tools section: manual_path)
+    |-- frontend.common.manuals           (#tools cards: manual_path for the PDF link,
+    |                                       manual_markdown for the in-page dialog)
 
 pages/1_create_and_select_case.py
     |-- frontend.utils.state_manager     (init, get/set, reset_case)
@@ -1158,21 +1159,33 @@ being pure data it ports directly to the future React landing.
 | Location | Role |
 |----------|------|
 | `user_manual_latex/manuals/<slug>/main.tex` | **Source** (one folder per tool; `shared/` holds the common preamble + `references.bib`) |
+| `user_manual_latex/manuals/<slug>/main.md` | **Markdown twin** of the manual, rendered in-page on the landing (committed) |
 | `user_manual_latex/manuals/<slug>/build/main.pdf` | Build artifact (gitignored) |
 | `static/manuals/<slug>.pdf` | **Published** PDF the app serves (committed) |
 
 `user_manual_latex/build.sh` is the bridge: `./build.sh` builds every manual (or
 `./build.sh <slug>` just one), runs `latexmk -r latexmkrc`, and copies
-`build/main.pdf` -> `static/manuals/<slug>.pdf`. The app reads the published PDFs
-via `frontend/common/manuals.py` (`manual_bytes` / `manual_path`); the landing
-serves them as static `<a href="app/static/manuals/<slug>.pdf">` links.
+`build/main.pdf` -> `static/manuals/<slug>.pdf`.
 
-**Naming rule:** the LaTeX folder name, the published `static/manuals/<slug>.pdf`
-filename, and the registry's `manual_slug` must all be the same `<slug>`, or the
-manual link silently disappears. build.sh couples the first two; the registry is
-linked to the build output and guarded by `tests/test_tools_registry.py` (every
-`available` tool has a published PDF; no orphan PDFs). The one deliberate
-divergence is `revenue_cap` (key) -> `regumetrica_user_manual` (manual_slug).
+Each tool card on the landing offers the manual two ways: **"User manual (PDF)"**
+opens the published PDF in a new window (a static `<a
+href="app/static/manuals/<slug>.pdf">` link), and **"User manual (inline)"**
+renders the Markdown twin in-page in a wide `@st.dialog` (`st.markdown` with
+KaTeX math + tables, no new tab, no reload). Both read through
+`frontend/common/manuals.py`: `manual_bytes` / `manual_path` for the PDF,
+`manual_markdown` / `manual_markdown_path` for the `main.md`. The cards are built
+natively (`landing.py` `_render_tool_cards`, a keyed `st.container`) rather than
+as an HTML string, because the inline action is a real `st.button` and a Streamlit
+widget cannot live inside an HTML blob (and a plain `<a>` link can't stay in the
+same window — Streamlit opens markdown links in a new tab).
+
+**Naming rule:** the LaTeX folder name, the `main.md` twin, the published
+`static/manuals/<slug>.pdf` filename, and the registry's `manual_slug` must all be
+the same `<slug>`, or a manual link silently disappears. build.sh couples the tex
+folder and the PDF; the registry is guarded by `tests/test_tools_registry.py`
+(every `available` tool has a published PDF *and* a `main.md`; no orphan PDFs). The
+one deliberate divergence is `revenue_cap` (key) -> `regumetrica_user_manual`
+(manual_slug).
 
 Requires a LaTeX toolchain (MacTeX/BasicTeX) on PATH; VS Code uses the
 `James-Yu.latex-workshop` extension. See `user_manual_latex/LATEX_VSCODE_SETUP.md`.

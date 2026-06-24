@@ -150,6 +150,41 @@ html{ scroll-behavior:smooth; }
 .rm-card-link{ margin-top:auto; padding-top:.9rem; font-size:.86rem; font-weight:600;
     color:var(--rm-primary); text-decoration:none; display:inline-flex; align-items:center; gap:.3rem; }
 .rm-card-link:hover{ text-decoration:underline; }
+/* Inline variant for native cards: sits in the actions row, not at the bottom */
+.rm-card-link--inline{ margin-top:0; padding-top:0; }
+
+/* === Native tool card (st.container, so it can hold a real button) ===
+   A pure-HTML card can't contain a Streamlit widget; building the card from a
+   keyed container lets the "Read in page" st.button live inside it. Styled to
+   match .rm-card. The key class is st-key-toolcard_<tool-key>. */
+div[class*="st-key-toolcard_"]{
+    position:relative; background:var(--rm-card);
+    border:1px solid var(--rm-border); border-radius:14px; padding:1.4rem;
+    box-shadow:0 1px 2px rgba(15,23,42,.04);
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+div[class*="st-key-toolcard_"]:hover{
+    transform:translateY(-3px); box-shadow:0 12px 30px rgba(15,23,42,.10);
+    border-color:#CBD5E1; }
+/* Make the two card actions identical: the "Manual (PDF)" link (an <a>) and the
+   "Read in page" tertiary button must share one look. Streamlit colors markdown
+   links and tertiary-button text from the theme with selectors that beat our
+   class, so we force both — every <a>/<button> and their inner label nodes — to
+   the same primary color, weight, size and underline. The button also drops its
+   chrome so it reads as a plain link. */
+div[class*="st-key-toolcard_"] button{
+    border:none !important; background:transparent !important;
+    padding:0 !important; min-height:0 !important; box-shadow:none !important;
+    opacity:1 !important; }
+div[class*="st-key-toolcard_"] a,
+div[class*="st-key-toolcard_"] a *,
+div[class*="st-key-toolcard_"] button,
+div[class*="st-key-toolcard_"] button *{
+    color:var(--rm-primary) !important; font-weight:600 !important;
+    font-size:.86rem !important; text-decoration:underline !important; }
+div[class*="st-key-toolcard_"] a:hover,
+div[class*="st-key-toolcard_"] button:hover,
+div[class*="st-key-toolcard_"] button:hover *{
+    color:var(--rm-primary) !important; background:transparent !important; }
 
 /* === Featured profile (team) === */
 .rm-profile{ display:flex; gap:1.8rem; align-items:flex-start;
@@ -320,9 +355,10 @@ def landing_heading(title: str, eyebrow: Optional[str] = None, level: int = 2) -
 def landing_cards(items: List[Dict[str, str]]) -> None:
     """Responsive grid of cards.
 
-    Each item: ``{title, body, eyebrow?, status?, manual_url?, manual_label?}``.
-    ``status`` (e.g. ``"beta"``, ``"coming_soon"``) renders a pill top-right;
-    ``manual_url`` renders a manual link pinned to the card's footer.
+    Each item: ``{title, body, eyebrow?, status?}``. ``status`` (e.g. ``"beta"``,
+    ``"coming_soon"``) renders a pill top-right. (Tool cards with manual actions
+    are rendered natively in landing.py, not here — this helper is for plain
+    content cards such as the "What you get" grid.)
     """
     cards = []
     for it in items:
@@ -334,12 +370,6 @@ def landing_cards(items: List[Dict[str, str]]) -> None:
             parts.append(f'<div class="rm-card-eyebrow">{it["eyebrow"]}</div>')
         parts.append(f'<div class="rm-card-title">{it["title"]}</div>')
         parts.append(f'<div class="rm-card-body">{it["body"]}</div>')
-        if it.get("manual_url"):
-            label = it.get("manual_label", "Manual (PDF)")
-            parts.append(
-                f'<a class="rm-card-link" href="{it["manual_url"]}" target="_blank">'
-                f'{label}</a>'
-            )
         card_class = "rm-card rm-card--soon" if it.get("status") == "coming_soon" else "rm-card"
         cards.append(f'<div class="{card_class}">{"".join(parts)}</div>')
     st.markdown(f'<div class="rm-grid">{"".join(cards)}</div>', unsafe_allow_html=True)

@@ -18,9 +18,68 @@ from frontend.common.landing_shell import (
     apply_landing_shell, landing_anchor, landing_cards, landing_heading,
     landing_profile, landing_footer,
 )
-from frontend.common.manuals import manual_path
+from frontend.common.manuals import manual_markdown, manual_path
 
 apply_landing_shell()
+
+
+# =============================================================================
+# IN-PAGE MANUAL (read the manual without leaving the landing)
+# =============================================================================
+# Each tool offers two ways into its manual: the card's "Manual (PDF)" link
+# (opens the published PDF in a new window) and a "Read in page" button rendered
+# under the card grid. The button is a real Streamlit widget on purpose: a click
+# is a websocket rerun in place, so the manual opens in a wide dialog without a
+# new tab, a URL change, or a full reload (a plain ``<a href>`` link can't do
+# this — Streamlit opens markdown links in a new tab). The manual's own H1
+# carries its title, so the dialog chrome only needs a generic label.
+@st.dialog("User manual", width="large")
+def _manual_dialog(md: str) -> None:
+    """Render a manual's Markdown in a wide dialog (KaTeX math + tables + HTML)."""
+    st.markdown(md, unsafe_allow_html=True)
+
+
+def _render_tool_cards(branch: str) -> None:
+    """Render a branch's tools as native cards (st.container, not an HTML string).
+
+    A pure-HTML card can't hold a Streamlit widget, so building the card from a
+    keyed ``st.container`` lets a real ``st.button`` ("User manual (inline)")
+    sit *inside* the card, on one row next to the "User manual (PDF)" link, while
+    keeping the look (.rm-card styling is re-applied to ``.st-key-toolcard_<key>``
+    in landing_shell). The button opens the manual in a dialog in place (no new
+    tab, no reload); the PDF stays a new-window link.
+    """
+    tools = tools_for(branch)  # type: ignore[arg-type]
+    if not tools:
+        return
+    for col, t in zip(st.columns(len(tools)), tools):
+        with col, st.container(border=False, key=f"toolcard_{t.key}"):
+            head = []
+            if t.status != "available":
+                head.append(
+                    f'<div class="rm-card-status {t.status}">'
+                    f'{t.status.replace("_", " ")}</div>'
+                )
+            head.append(f'<div class="rm-card-title">{t.name}</div>')
+            head.append(f'<div class="rm-card-body">{t.summary}</div>')
+            st.markdown("".join(head), unsafe_allow_html=True)
+
+            # Both actions on one row (a real button + the PDF link), styled
+            # alike via .rm-card-link / the toolcard button CSS in landing_shell.
+            md = manual_markdown(t.manual)
+            with st.container(horizontal=True, gap="medium",
+                              vertical_alignment="center"):
+                if md is not None:
+                    if st.button("User manual (inline)", key=f"read_{t.key}",
+                                 type="tertiary"):
+                        _manual_dialog(md)
+                if manual_path(t.manual).exists():
+                    st.markdown(
+                        f'<a class="rm-card-link rm-card-link--inline" '
+                        f'href="app/static/manuals/{t.manual}.pdf" target="_blank">'
+                        "User manual (PDF)</a>",
+                        unsafe_allow_html=True,
+                    )
 
 
 # =============================================================================
@@ -85,20 +144,6 @@ landing_cards([
 landing_anchor("tools")
 
 
-def _tool_cards(branch: str) -> list[dict]:
-    """Build card dicts for the public tools in a branch (registry-driven)."""
-    items: list[dict] = []
-    for t in tools_for(branch):  # type: ignore[arg-type]
-        item: dict = {"title": t.name, "body": t.summary}
-        if t.status != "available":
-            item["status"] = t.status
-        # Link to the manual only if its PDF has actually been built.
-        if manual_path(t.manual).exists():
-            item["manual_url"] = f"app/static/manuals/{t.manual}.pdf"
-        items.append(item)
-    return items
-
-
 landing_heading("The tools", eyebrow="What you can do", level=1)
 st.markdown(
     '<div class="rm-hero-sub">Regumetrica is a small suite of regulatory tools, and '
@@ -110,12 +155,12 @@ st.markdown(
 st.write("")
 
 landing_heading("Revenue cap tool", eyebrow="Core tool")
-landing_cards(_tool_cards("revenue_cap"))
+_render_tool_cards("revenue_cap")
 
 st.write("")
 
 landing_heading("Standalone tools", eyebrow="Add-on analyses")
-landing_cards(_tool_cards("standalone"))
+_render_tool_cards("standalone")
 
 
 # =============================================================================
@@ -158,17 +203,21 @@ landing_profile(
 )
 
 # --- Magne Björneholm ----------------------------------------------------------
-# TODO(Magne): add a portrait photo (-> static/team/) and write the bio.
+# TODO(Magne): add a portrait photo (-> static/team/magne_bjorneholm.jpg).
+#   Magne will send an iPhone photo (likely HEIC) that needs converting to JPEG
+#   and cropping to 4:5 (~700x875), e.g.:
+#       sips -s format jpeg -c 875 700 magne.heic --out magne_bjorneholm.jpg
+#   Then set photo_url below and drop the initials= fallback.
 landing_profile(
     eyebrow="Role in Regumetrica",
     name="Magne Björneholm",
-    role="Research assistant in energy economics, "
-         "Research Institute of Industrial Economics (IFN)",
+    role="Research assistant to Erik Lundin, IFN",
     initials="MB",
-    bio='<span class="rm-placeholder">Bio — to be written. Develops Regumetrica and '
-        "works as a research assistant at IFN; MSc in economics (University of "
-        "Gothenburg) with a thesis on benchmarking of Swedish distribution "
-        "networks.</span>",
+    bio="Develops Regumetrica and works as research assistant to Erik Lundin at "
+        "IFN. Holds an MSc in Economics from the University of Gothenburg, with a "
+        "thesis on frontier analysis in regulatory benchmarking. Background in "
+        "public affairs in wind power and regulatory analysis for government "
+        "agencies.",
     affiliations=["IFN", "MSc Economics, University of Gothenburg"],
 )
 

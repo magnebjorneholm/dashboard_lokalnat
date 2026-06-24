@@ -9,7 +9,7 @@ is: every ``available`` tool has a published manual; ``coming_soon`` does not.
 from pathlib import Path
 
 from config.tools_registry import TOOLS
-from frontend.common.manuals import MANUALS_DIR, manual_path
+from frontend.common.manuals import MANUALS_DIR, manual_markdown_path, manual_path
 
 
 def test_available_tools_have_published_manuals():
@@ -20,6 +20,17 @@ def test_available_tools_have_published_manuals():
                 f"{t.key}: status is 'available' but "
                 f"static/manuals/{t.manual}.pdf is missing — "
                 f"run user_manual_latex/build.sh {t.manual}"
+            )
+
+
+def test_available_tools_have_markdown_twin():
+    """Every available tool has a main.md so the landing's in-page reader works."""
+    for t in TOOLS:
+        if t.status == "available":
+            assert manual_markdown_path(t.manual).exists(), (
+                f"{t.key}: status is 'available' but "
+                f"user_manual_latex/manuals/{t.manual}/main.md is missing — "
+                f"the 'Read in page' link would silently vanish"
             )
 
 
