@@ -48,7 +48,7 @@ from auth.cookie_session import (
 # Page configuration
 st.set_page_config(
     page_title="Regumetrica",
-    page_icon="static/favicon.svg",  # monochrome "R" in the primary color
+    page_icon="static/favicon.svg",  # monochrome "R" in near-black
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -329,7 +329,6 @@ _REVENUE_CAP_SPECS = [
 ]
 _STANDALONE_TOOL_SPECS = [
     ("pages/5_new_benchmarking.py", "New benchmarking model"),
-    ("pages/6_placeholder.py", "Placeholder"),
 ]
 
 REVENUE_CAP_PAGES = [st.Page(path, title=title) for path, title in _REVENUE_CAP_SPECS]
@@ -349,8 +348,8 @@ try_restore_auth_from_cookie()
 # returned page. landing_main is the hidden default, so it owns the root URL but
 # never shows in the tool sidebar nav. The two visible groups are the tool zone.
 pg = st.navigation({
-    "Revenue cap tool": [landing_main, *REVENUE_CAP_PAGES],
-    "Standalone tools": STANDALONE_PAGES,
+    "Main module": [landing_main, *REVENUE_CAP_PAGES],
+    "Add-on modules": STANDALONE_PAGES,
 })
 
 # A fresh logout returns to the public landing, not the sign-in gate. switch_page

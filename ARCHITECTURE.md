@@ -125,7 +125,7 @@ dashboard_lokalnat/
 |   |-- 3_specification.py        # Specification: configure parameters (tabs M1-M7)
 |   |-- 4_revenue_frame.py        # Revenue Frame: display results, export
 |   |-- 5_new_benchmarking.py     # New benchmarking model (standalone add-on analysis)
-|   |-- 6_placeholder.py          # Placeholder — empty standalone-tool stub for future work
+|   |-- 6_placeholder.py          # Placeholder stub (exists, but not registered in the sidebar nav)
 |
 |-- config/                       # Constants, metadata, domain configuration (no Streamlit)
 |   |-- case_definition.py        # Dataclasses: CaseDefinition, PreDeaConfig, DeaConfig, etc.
@@ -413,7 +413,7 @@ ZON 1 — Landing (public)             ZON 2 — Tool (auth-gated)
 ------------------------             -------------------------
 landing_pages/landing.py             sidebar nav, two groups:
 (hidden DEFAULT page, root "/")
-  #home / #tools / #team             group "Revenue cap tool":
+  #home / #tools / #team             group "Main module":
   (in-page anchor nav)                 pages/1_create_and_select_case.py  (Create & Select)
         |                                    |
   [Open tool] (all visitors,             v
@@ -427,9 +427,8 @@ landing_pages/landing.py             sidebar nav, two groups:
   ◄─── [Back to Home] (sidebar,          v
        new tab; tool stays open)      pages/4_revenue_frame.py          (Revenue Frame)
 
-                                     group "Standalone tools":  (decoupled, not part of 1 → 4)
+                                     group "Add-on modules":  (decoupled, not part of 1 → 4)
                                        pages/5_new_benchmarking.py        (New benchmarking model)
-                                       pages/6_placeholder.py             (Placeholder — empty stub)
 ```
 
 **Window-target policy.** Zone navigation (Open tool, Back to Home), manuals and
@@ -445,8 +444,8 @@ user's job). The new-tab links are plain buttons with no visual new-tab marker.
   branding) applies to both zones. Initializes state; restores auth/case from
   cookies on refresh.
 - One navigation for everything:
-  `st.navigation({"Revenue cap tool": [landing_main, *REVENUE_CAP_PAGES],
-  "Standalone tools": STANDALONE_PAGES})`. `landing_main` is the **hidden default**
+  `st.navigation({"Main module": [landing_main, *REVENUE_CAP_PAGES],
+  "Add-on modules": STANDALONE_PAGES})`. `landing_main` is the **hidden default**
   page — it owns the root URL but never shows in the tool sidebar nav. The returned
   page `pg` decides the zone: `pg in TOOL_PAGES` → Zon 2, else → Zon 1.
   - **Zon 1 (landing):** `pg.run()` runs `landing.py`, which calls
