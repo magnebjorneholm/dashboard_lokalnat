@@ -1,0 +1,9 @@
+# Python deps for the rpy2 <-> Benchmarking DEA bridge.
+# Install into the project venv:  uv pip install -r dea_rpy2_benchmarking/requirements.txt
+#
+# NOTE: This also requires R (>= 4.x) on PATH and the R package 'Benchmarking'.
+# Those are NOT pip-installable — see README.md "Prerequisites".
+rpy2>=3.6
+numpy
+# pandas is optional, only used by DEAResult.as_dataframe()
+pandas

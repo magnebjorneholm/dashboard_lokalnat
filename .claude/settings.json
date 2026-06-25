@@ -13,7 +13,10 @@
       "Bash(git push --force *)",
       "Read(MIGRATION_PRINCIPER.md)",
       "Read(./MIGRATION_PRINCIPER.md)",
-      "Read(//**/MIGRATION_PRINCIPER.md)"
+      "Read(//**/MIGRATION_PRINCIPER.md)",
+      "Read(plans/**)",
+      "Read(./plans/**)",
+      "Read(//**/plans/**)"
     ]
   },
   "hooks": {
