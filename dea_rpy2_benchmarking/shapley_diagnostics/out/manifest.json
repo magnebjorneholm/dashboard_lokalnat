@@ -16,6 +16,8 @@
     "full"
   ],
   "shadow_price_nan": 73,
+  "n_peer_links": 61219,
+  "median_core_ratio": 0.0,
   "parity": {
     "max_abs_d_eff": 8.897566775578625e-07,
     "max_abs_d_req_pp": 5.443272765859319e-06,

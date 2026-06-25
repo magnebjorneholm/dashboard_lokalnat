@@ -1327,3 +1327,62 @@ changes.**
   `ui/chart_panel.py` (`render_chart_panel`), which owns the layout so a horizontal switcher
   can be restored in one place. The two-sided visuals live in `ui/charts.py` (not the
   M5-shared `frontend/results/_efficiency_charts.py`).
+
+## 21. DEA via R/Benchmarking (`dea_rpy2_benchmarking/`)
+
+An **isolated, offline** sub-project that runs DEA through the R package
+**Benchmarking** (Bogetoft & Otto) from Python via **rpy2**. It is not imported by the
+app or the pipeline; it is a research/validation tool. It depends on R + the
+Benchmarking package being installed (see its `README.md`), and it *imports from* the
+main repo (config, `new_benchmarking_model` contracts) but nothing imports it back.
+
+> **Entry README:** `dea_rpy2_benchmarking/README.md`. Capabilities catalogue:
+> `dea_rpy2_benchmarking/BENCHMARKING_CAPABILITIES.md` (every metric/diagnostic the
+> package exposes, each verified by running it).
+
+### The bridge (`src/dea_benchmarking/`)
+
+`r_session.py` owns the fragile rpy2 setup (it configures `R_HOME` and forces ABI mode
+*before* rpy2 is first imported, so import order matters); `dea.py` wraps `dea`/`sdea`
+and exposes the full package via `package()`; `conversions.py`/`results.py` handle
+numpy<->R matrices and a typed `DEAResult`. The drawing convention (Plotly) does not
+apply here — this is numeric/offline only.
+
+### `ei_replication/`
+
+Reproduces Ei's published DEA (`data/raw/ei/EIs_DEA.xlsx`) using R's `sdea` as the LP
+engine, following the exact procedure in `eis_dea_metod.md` (iterated super-efficiency +
+IQR outlier fence, raw `OPEXp`+`CAPEX` inputs). Matches the facit to ~8e-11 for all 148
+firms except the known anomaly REL00193, finding the same 3 outliers. This is the
+corroboration that R's solver reproduces the project's PuLP DEA, which the next module
+relies on.
+
+### `shapley_diagnostics/`
+
+Re-runs the `new_benchmarking_model/analysis` Shapley decomposition's per-coalition DEA
+(all 128 coalitions of the 7 cost-component players, **frozen** outlier mode) on
+R/Benchmarking to obtain the structural diagnostics PuLP does not expose. **Only the
+scoring layer is new** — spine, the 7 players, the two-sided E75 requirement and
+`NewBenchmarkingConfig` are reused by import from `new_benchmarking_model`; the
+Shapley/LOO/AOI machinery in `analysis/decomp/engine.py` is untouched.
+
+- `scoring.py` — frozen-mode efficiency + signed two-sided requirement + super-efficiency
+  θ (`sdea` + `dea` with `XREF`/`YREF`).
+- `metrics.py` — `number.peers`, `n_peers_per_firm`, **peer identities + λ weights**
+  (the sparse active lambda), and shadow prices `u`/`v` on the **standard** frontier
+  (`dea.dual`).
+- `inference.py` — Simar-Wilson bootstrap CI (`dea.boot`) on the two endpoint coalitions
+  (baseline + full), seeded for reproducibility.
+- `run_diagnostics.py` — sweeps the 128 coalitions, enforces the **parity gate**, writes
+  `out/`. The parity gate is the linchpin: R-scored efficiency and requirement must
+  reproduce the legacy PuLP `value_grid.csv` (127/128 coalitions agree to ~5e-9; one
+  degenerate coalition to ~9e-7, a CBC-vs-lpSolve vertex difference, so it passes at
+  solver tolerance, not bit-identity).
+
+Outputs under `shapley_diagnostics/out/` (committed, like the analysis `out/` tables):
+`super_efficiency.csv`, `number_peers.csv`, `peers.csv` (finest level: one row per active
+firm→peer link), `peer_stability.csv` (a pure roll-up of `peers.csv`), `shadow_prices.csv`
+(long), `inference.csv` (endpoints only), `parity.csv`, `manifest.json`. Firm tiers from
+the frozen design: 144 reference firms (peers/duals), 145 scored (super-eff/eff; adds the
+frozen-but-scored REL03016), 3 Ei-excluded (never scored). Why frozen-only and the
+`Status = 5` dual-NaN caveat are documented in the sub-project README.

@@ -45,6 +45,11 @@ class CoalitionDiagnostics:
     v: np.ndarray                 # output multipliers (n_ref x n_outputs)
     input_names: list[str]
     output_names: list[str]
+    # Sparse peer structure: one entry per active lambda (firm leans on peer with weight).
+    # Both indices point into ref_reid; a self-reference (firm == peer) is a frontier firm.
+    peer_firm_idx: np.ndarray     # row index (the firm being benchmarked)
+    peer_ref_idx: np.ndarray      # column index (the peer it leans on)
+    peer_weight: np.ndarray       # the lambda weight on that peer
 
 
 def coalition_diagnostics(spine: pd.DataFrame, S, *,
@@ -71,6 +76,9 @@ def coalition_diagnostics(spine: pd.DataFrame, S, *,
     active = np.abs(lam) > _PEER_TOL
     number_peers = active.sum(axis=0).astype(float)      # per reference (column)
     n_peers_per_firm = active.sum(axis=1).astype(float)  # per scored firm (row)
+    # Sparse peer entries (identities + weights) — already in hand from lambda.
+    peer_firm_idx, peer_ref_idx = np.where(active)
+    peer_weight = lam[peer_firm_idx, peer_ref_idx]
 
     # Shadow prices / multipliers on the standard frontier (dea.dual).
     d = bench.dea_dual(Xr, Yr, RTS=cfg.rts, ORIENTATION="in")
@@ -89,4 +97,5 @@ def coalition_diagnostics(spine: pd.DataFrame, S, *,
         u=u, v=v,
         input_names=["totex"],
         output_names=list(out_cols),
+        peer_firm_idx=peer_firm_idx, peer_ref_idx=peer_ref_idx, peer_weight=peer_weight,
     )

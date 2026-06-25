@@ -76,6 +76,35 @@ def _load_facit():
     return eff, req
 
 
+def _peer_stability(peerlinks: pd.DataFrame) -> pd.DataFrame:
+    """Per-firm peer-set stability across the coalitions (non-self peers only).
+
+    For each firm, compare its benchmark set across the coalitions in which it is
+    inefficient (a self-only firm has no peers, so it is absent here):
+      n_coalitions_with_peers  coalitions where the firm leans on someone
+      n_distinct_peer_sets     distinct benchmark configurations seen
+      n_always_peers           peers present in EVERY such coalition (the stable core)
+      n_ever_peers             peers present in ANY coalition (the full pool)
+      core_ratio               always / ever  (1 = rock-stable; low = churny / fragile)
+    """
+    nonself = peerlinks[~peerlinks["is_self"]]
+    sets = nonself.groupby(["REId", "subset_mask"])["peer_REId"].agg(frozenset)
+    rows = []
+    for reid, grp in sets.groupby(level=0):
+        s = list(grp)
+        ever = frozenset().union(*s)
+        always = s[0].intersection(*s[1:]) if len(s) > 1 else s[0]
+        rows.append({
+            "REId": reid,
+            "n_coalitions_with_peers": len(s),
+            "n_distinct_peer_sets": len(set(s)),
+            "n_always_peers": len(always),
+            "n_ever_peers": len(ever),
+            "core_ratio": round(len(always) / len(ever), 4) if ever else float("nan"),
+        })
+    return pd.DataFrame(rows).sort_values("core_ratio").reset_index(drop=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--nrep", type=int, default=DEFAULT_NREP, help="dea.boot replications")
@@ -94,7 +123,7 @@ def main() -> int:
     print(f"spine: {len(spine)} firms; sweeping {len(subsets)} coalitions (frozen); "
           f"frozen set {list(FROZEN_REIDS)}")
 
-    se_rows, peer_rows, sp_rows, par_rows = [], [], [], []
+    se_rows, peer_rows, sp_rows, par_rows, peerlink_rows = [], [], [], [], []
     max_eff_d = max_req_d = 0.0
 
     for k, S in enumerate(subsets):
@@ -132,6 +161,13 @@ def main() -> int:
                 sp_rows.append({"subset_mask": mask, "players": pcsv, "REId": rid,
                                 "kind": "v", "variable": name, "value": float(dg.v[j, c])})
 
+        # Peer identities + weights (sparse lambda): who each firm leans on.
+        ref = dg.ref_reid
+        for fi, pj, w in zip(dg.peer_firm_idx, dg.peer_ref_idx, dg.peer_weight):
+            peerlink_rows.append({"subset_mask": mask, "players": pcsv,
+                                  "REId": ref[fi], "peer_REId": ref[pj],
+                                  "is_self": bool(fi == pj), "lambda_weight": float(w)})
+
         if (k + 1) % 16 == 0 or k + 1 == len(subsets):
             print(f"  {k + 1}/{len(subsets)} coalitions  (running max|Δeff|={max_eff_d:.1e}, "
                   f"max|Δreq|={max_req_d:.1e})")
@@ -148,9 +184,14 @@ def main() -> int:
         df.insert(1, "subset_mask", subset_mask(S))
         inf_rows.append(df)
 
+    peerlinks = pd.DataFrame(peerlink_rows)
+    stability = _peer_stability(peerlinks)
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(se_rows).to_csv(OUT_DIR / "super_efficiency.csv", index=False)
     pd.DataFrame(peer_rows).to_csv(OUT_DIR / "number_peers.csv", index=False)
+    peerlinks.to_csv(OUT_DIR / "peers.csv", index=False)
+    stability.to_csv(OUT_DIR / "peer_stability.csv", index=False)
     pd.DataFrame(sp_rows).to_csv(OUT_DIR / "shadow_prices.csv", index=False)
     pd.DataFrame(par_rows).to_csv(OUT_DIR / "parity.csv", index=False)
     pd.concat(inf_rows, ignore_index=True).to_csv(OUT_DIR / "inference.csv", index=False)
@@ -165,6 +206,8 @@ def main() -> int:
         "bootstrap_nrep": nrep,
         "bootstrap_endpoints": [lbl for lbl, _ in endpoints],
         "shadow_price_nan": int(pd.DataFrame(sp_rows)["value"].isna().sum()),
+        "n_peer_links": int(len(peerlinks)),
+        "median_core_ratio": round(float(stability["core_ratio"].median()), 4),
         "parity": {"max_abs_d_eff": max_eff_d, "max_abs_d_req_pp": max_req_d,
                    "eff_tol": EFF_TOL, "req_tol_pp": REQ_TOL_PP,
                    "passed": bool(max_eff_d < EFF_TOL and max_req_d < REQ_TOL_PP)},

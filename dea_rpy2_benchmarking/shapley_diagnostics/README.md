@@ -26,6 +26,7 @@ For each of the **128 coalitions** (subsets of the 7 cost-component players), in
 | **super-efficiency** θ (uncapped) | leave-one-out super-efficiency per scored firm (`sdea`). |
 | **number.peers** | how many firms each frontier firm benchmarks — its "load-bearing" weight. A frontier defined by one firm everyone leans on is fragile. |
 | **n_peers_per_firm** | how many peers each firm leans on. |
+| **peer identities + weights** | *who* each firm is benchmarked against and with what λ weight (the sparse active lambda), plus a per-firm **peer-set stability** summary across coalitions — the most direct relativity/fragility signal (does my benchmark set churn as cost posts enter?). |
 | **shadow prices** u, v | input/output multipliers on the **standard frontier** (`dea.dual`) — how much each input/output "counts". Matrix form: u is n_ref×1, v is n_ref×(5 or 6). |
 
 And for the **two endpoint coalitions** (baseline `v(∅)` and full `v(N)`):
@@ -106,6 +107,8 @@ shapley_diagnostics/
 out/
   super_efficiency.csv   per coalition × scored firm: subset_mask, players, REId, super_eff, eff
   number_peers.csv       per coalition × ref firm:    subset_mask, players, REId, number_peers, n_peers_per_firm, eff_standard
+  peers.csv              LONG (active lambda): subset_mask, players, REId, peer_REId, is_self, lambda_weight
+  peer_stability.csv     per firm: n_coalitions_with_peers, n_distinct_peer_sets, n_always_peers, n_ever_peers, core_ratio
   shadow_prices.csv      LONG: subset_mask, players, REId, kind(u/v), variable(totex/CU/…), value
   inference.csv          endpoints × ref firm:        coalition, subset_mask, REId, eff, eff_bc, bias, var, ci_low, ci_high
   parity.csv             per coalition:               subset_mask, players, e75, max_abs_d_eff, max_abs_d_req
@@ -114,6 +117,12 @@ out/
 
 `subset_mask` = bitmask over the player order in `analysis/decomp/players.py` (same
 encoding as the legacy value grid, so the two join directly).
+
+`peer_stability.csv` is **not a separate source** — it is a pure roll-up of
+`peers.csv` (drop the `is_self` links, then group per firm across coalitions). So
+`peers.csv` is the finest level and fully reconstructs the stability table; cutting
+stability a different way (e.g. "peer present in > 50 % of coalitions" instead of the
+strict always/ever) needs only `peers.csv`, no re-run.
 
 ### Granularity & firm coverage
 
@@ -130,6 +139,8 @@ frozen design — there are three firm tiers out of the 148:
 |--------|------|---|
 | `super_efficiency.csv` | 18 560 | 128 coalitions × 145 scored firms |
 | `number_peers.csv` | 18 432 | 128 × 144 reference firms |
+| `peers.csv` | ~64 000 | 128 × the active λ links that coalition (one row per firm→peer) |
+| `peer_stability.csv` | ≤ 144 | one row per firm that is ever inefficient (has non-self peers) |
 | `shadow_prices.csv` | 119 808 | 128 × 144 × (1 input u + 5 or 6 output v); 73 NaN from Status=5 |
 | `inference.csv` | 288 | **2 endpoint coalitions** × 144 reference firms |
 | `parity.csv` | 128 | one row per coalition |

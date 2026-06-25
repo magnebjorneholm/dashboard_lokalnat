@@ -94,3 +94,17 @@ def test_diagnostics_shapes(ctx):
     assert dg.v.shape == (n, len(dg.output_names))
     # Frontier firms (efficiency 1) should be exactly those with few own peers.
     assert dg.number_peers.sum() > 0
+
+
+def test_peers_reconstruct_number_peers(ctx):
+    """The sparse peer links must reproduce number.peers (column counts of lambda)."""
+    spine, *_rest = ctx
+    from shapley_diagnostics.metrics import coalition_diagnostics
+
+    dg = coalition_diagnostics(spine, frozenset())
+    # number_peers[j] = how many firms have ref j as an active peer.
+    recon = np.bincount(dg.peer_ref_idx, minlength=len(dg.ref_reid)).astype(float)
+    np.testing.assert_array_equal(recon, dg.number_peers)
+    # weights line up with the active mask count.
+    assert dg.peer_weight.shape == dg.peer_firm_idx.shape
+    assert np.all(np.isfinite(dg.peer_weight))
