@@ -1,9 +1,8 @@
 """
 Shared efficiency visualization components.
 
-Used by M5 (full pipeline results) and the benchmarking mini-run (isolated DEA).
-All functions accept pre-extracted data -- no PipelineResult or MiniRunResult
-dependencies.
+Used by the M5 efficiency results (full pipeline output).
+All functions accept pre-extracted data -- no PipelineResult dependency.
 """
 
 import streamlit as st
@@ -439,7 +438,7 @@ def render_efficiency_summary(
             f"applies instead of DEA-based calculation."
         )
 
-    # --- Detail tables (optional, M5 shows these, M7 mini-run skips) ---
+    # --- Detail tables (optional; gated by show_detail_tables) ---
     if show_detail_tables:
         _render_detail_tables(
             eff_case, eff_baseline,

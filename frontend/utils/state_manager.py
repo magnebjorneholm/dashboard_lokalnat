@@ -159,11 +159,6 @@ def init_session_state() -> None:
         "saved_ui_config": None,
         "saved_selected_modules": None,
 
-        # Mini-run (M7 DEA)
-        "mini_run_result": None,           # MiniRunResult or None
-        "mini_run_baseline": None,         # MiniRunResult (baseline comparison)
-        "mini_run_config_snapshot": None,  # Frozen M7+M5 config at last mini-run
-
         # Authentication
         "auth_user": None,            # Firebase user object
         "auth_token": None,           # Firebase ID token
@@ -197,11 +192,6 @@ def reset_case() -> None:
     st.session_state["saved_ui_config"] = None
     st.session_state["saved_selected_modules"] = None
 
-    # Reset mini-run
-    st.session_state["mini_run_result"] = None
-    st.session_state["mini_run_baseline"] = None
-    st.session_state["mini_run_config_snapshot"] = None
-    
     # Clear module/section checkbox widget keys
     _clear_selection_widget_keys()
     # Clear all config-related widget keys so widgets re-init from ui_config

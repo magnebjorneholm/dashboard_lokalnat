@@ -161,7 +161,6 @@ dashboard_lokalnat/
 |   |   |   |-- m5_efficiency.py          # render_efficiency_params()
 |   |   |-- addons/
 |   |       |-- benchmarking.py           # render_dea_spec()
-|   |       |-- mini_run_output.py        # Inline DEA mini-run results in Configure
 |   |
 |   |-- results/                  # Output renderers per module
 |   |   |-- m1_asset_base_output.py       # NUAV, category breakdown
@@ -186,7 +185,6 @@ dashboard_lokalnat/
 |   |-- post_dea_capex_helpers.py # Helper functions for post-DEA
 |   |-- result_helpers.py         # Shared formatting/aggregation for result output modules
 |   |-- export_excel.py           # Excel generation from PipelineResult
-|   |-- mini_run.py              # Lightweight DEA mini-run (used by addons)
 |   |-- stages/
 |       |-- stage_outputs.py      # Frozen dataclasses per stage
 |       |-- baseline.py           # Stage 1: Convert BaselineData
@@ -312,7 +310,6 @@ dashboard_lokalnat/
 |   |-- test_revenue_frame.py
 |   |-- test_pipeline_integration.py
 |   |-- test_override_cascades.py    # Category override cascade tests
-|   |-- test_mini_run.py             # Mini-run (lightweight DEA) tests
 |   |-- test_result_snapshot.py      # Result snapshot extraction tests
 |   |-- test_new_benchmarking_precompute.py  # New-benchmarking bundle + freshness guard
 |   |-- test_new_benchmarking_cost_impact.py # kr quantification: pipeline-match + base/sign sanity
@@ -1130,7 +1127,6 @@ max_dep (max depreciation years).
 - `test_baseline_replication.py` -- Replicates facit values with hardcoded expected values
 - `test_cost_aggregation.py` -- Verifies grunddata aggregation matches SDF sheets
 - `test_override_cascades.py` -- OPEX/flex/non-adj scaling and override cascade through pipeline
-- `test_mini_run.py` -- Mini-run (lightweight DEA) tests
 - `test_result_snapshot.py` -- Result snapshot extraction tests
 - `test_new_benchmarking_precompute.py` -- New-benchmarking bundle shape + freshness guard
   (recomputes the main spec live and asserts it matches the committed bundle, incl. the kr columns)
