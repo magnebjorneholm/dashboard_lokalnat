@@ -9,14 +9,17 @@ lighter of the two, so its bio should stay a touch shorter than Erik's.
 
 ## Magne Björneholm
 
-**Bio** (2–3 sentences → `bio=`):
+**Role** (eyebrow stays "Role in Regumetrica"; → `role=`):
 
-> _write here_
+> Research assistant to Erik Lundin, IFN
 
-Suggested angle (from discussion): builds Regumetrica + research assistant at IFN;
-master's thesis on semiparametric alternatives to Ei's benchmarking of distribution
-networks; earlier applied work in energy-market analysis (Eolus) and regulatory
-impact analysis (HaV). NM-placering left out by default.
+**Bio** (final → `bio=`):
+
+> Develops Regumetrica and works as research assistant to Erik Lundin at IFN. Holds an MSc in Economics from the University of Gothenburg, with a thesis on frontier analysis in regulatory benchmarking. Background in public affairs in wind power and regulatory analysis for government agencies.
+
+Notes: "develops" (not "builds"); thesis kept generic, no method detail; HaV
+generalised to "government agencies" (justified — the work spans HaV and Ei).
+NM-placering left out.
 
 ---
 
