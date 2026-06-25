@@ -1,0 +1,26 @@
+{
+  "outlier_mode": "frozen",
+  "frozen_reids": [
+    "REL00024",
+    "REL00257",
+    "REL00965",
+    "REL03016"
+  ],
+  "n_coalitions": 128,
+  "n_reference_firms": 144,
+  "rts": "crs",
+  "dual_frontier": "standard (dea.dual)",
+  "bootstrap_nrep": 2000,
+  "bootstrap_endpoints": [
+    "baseline",
+    "full"
+  ],
+  "shadow_price_nan": 73,
+  "parity": {
+    "max_abs_d_eff": 8.897566775578625e-07,
+    "max_abs_d_req_pp": 5.443272765859319e-06,
+    "eff_tol": 1e-05,
+    "req_tol_pp": 0.0001,
+    "passed": true
+  }
+}
