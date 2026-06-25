@@ -15,5 +15,17 @@
       "Read(./MIGRATION_PRINCIPER.md)",
       "Read(//**/MIGRATION_PRINCIPER.md)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Project startup rule (CLAUDE.md): before responding to the first request this session, read ARCHITECTURE.md in full for project context. If the request touches asset/capital-base valuation, also read kapitalbas_vardering_och_dashboard.md; if it touches replicating Ei DEA results, also read eis_dea_metod.md.\"}}'"
+          }
+        ]
+      }
+    ]
   }
 }
