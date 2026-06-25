@@ -158,20 +158,37 @@
         article.querySelectorAll('a[href^="http"]').forEach(a => { a.target = "_top"; });
     }
 
+    // --- Section mode: a single sliced section has no sibling headings in the DOM,
+    // so in-document anchors (e.g. "see 3.4") would dangle. Strip their href so they
+    // render as plain text instead of dead links. (.reader-anchor-inert styles them.)
+    function neutralizeInternalAnchors(article) {
+        article.querySelectorAll('a[href^="#"]').forEach(a => {
+            a.classList.add("reader-anchor-inert");
+            a.removeAttribute("href");
+        });
+    }
+
     function init() {
         const dataEl = document.getElementById("manual-data");
         if (!dataEl) return;
-        const { markdown } = JSON.parse(dataEl.textContent);
+        const { markdown, mode } = JSON.parse(dataEl.textContent);
         const { meta, body } = parseFrontmatter(markdown || "");
 
         const md = buildMarkdownIt();
         const content = document.querySelector(".reader-content");
         const article = document.querySelector(".reader-article");
-        const tocEl = document.querySelector(".reader-toc-list");
 
         article.innerHTML = renderHeader(meta) + md.render(body);
         fixExternalLinks(article);
 
+        // Section mode renders one sliced section in a single column: no TOC pane,
+        // no scroll-spy, internal cross-references neutralised.
+        if (mode === "section") {
+            neutralizeInternalAnchors(article);
+            return;
+        }
+
+        const tocEl = document.querySelector(".reader-toc-list");
         const links = buildToc(article, tocEl);
         wireTocClicks(tocEl.parentElement, article);
         wireScrollSpy(content, links);

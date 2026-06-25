@@ -47,6 +47,16 @@ html, body {
     overflow: hidden;
 }
 
+/* Section mode: one sliced section, single scrolling column, no TOC pane. */
+.reader--section { grid-template-columns: 1fr; }
+.reader--section .reader-toc { display: none; }
+.reader--section .reader-article > h2:first-child,
+.reader--section .reader-article > h3:first-child { margin-top: 0; }
+/* Neutralised cross-references (dangling anchors in a sliced section) render as text */
+.reader-article a.reader-anchor-inert {
+    color: var(--rm-text2); text-decoration: none; cursor: default;
+}
+
 /* --- Left: table of contents --- */
 .reader-toc {
     height: 100%;

@@ -147,7 +147,7 @@ dashboard_lokalnat/
 |   |   |-- styling.py            # apply_base_styling() (both zones) + apply_tool_chrome() (tool sidebar); re-exports colors
 |   |   |-- auth_page.py          # Full-page sign-in gate (login/register/reset/verify) for the tool zone
 |   |   |-- landing_shell.py      # Landing theme (faded bg) + frozen top bar (brand + anchor nav + auth-aware CTA: Sign in / Open tool) + shared helpers (landing_anchor/cards/heading/profile/footer)
-|   |   |-- manuals.py            # Host seam for per-tool manuals: published PDF (static/manuals/<slug>.pdf) + builds the in-page reader doc (manual_reader_html) from the Markdown twin (user_manual_latex/manuals/<slug>/main.md)
+|   |   |-- manuals.py            # Host seam for per-tool manuals: published PDF (static/manuals/<slug>.pdf) + builds the in-page reader doc (manual_reader_html) from the Markdown twin (user_manual_latex/manuals/<slug>/main.md); also slices per-module sections for the page-3 inline panel (module_manual_panel)
 |   |   |-- save_bar.py           # Save button (update only, on pages 3-4)
 |   |   |-- case_comparison.py    # Side-by-side KPI comparison table for cases
 |   |
@@ -1191,6 +1191,20 @@ CDN, injecting the markdown + the Nordic-Energy theme tokens); `manual_markdown`
 string, because the inline action is a real `st.button` and a Streamlit widget
 cannot live inside an HTML blob (and a plain `<a>` link can't stay in the same
 window — Streamlit opens markdown links in a new tab).
+
+**Per-module inline panel (tool zone, page 3).** Beyond the landing, each module
+tab on [pages/3_specification.py](pages/3_specification.py) shows just *its* slice of
+the revenue-cap manual in a collapsible panel. `manuals.py` reuses the same reader
+bundle in a single-column **section mode**: `manual_section_markdown(slug, anchor)`
+slices one heading's subtree out of `main.md` (up to the next same-or-higher
+heading); `manual_section_reader_html` renders it with no TOC pane and no scroll-spy
+(`.reader--section` in CSS; the bundle skips TOC wiring and neutralises dangling
+cross-references when handed `mode: "section"`). `MODULE_MANUAL_ANCHORS` maps each
+module key (`m1`..`m5`) to its manual heading — kept here, not in `config/`, so the
+config layer stays free of manual heading text; guarded by
+`tests/test_module_manuals.py`. `module_manual_panel(module_key)` is the single
+host seam (an `st.expander` today; swapping to dialog/popover/columns is a change to
+that one function), called once at the top of each tab in `3_specification.py`.
 
 **Naming rule:** the LaTeX folder name, the `main.md` twin, the published
 `static/manuals/<slug>.pdf` filename, and the registry's `manual_slug` must all be
