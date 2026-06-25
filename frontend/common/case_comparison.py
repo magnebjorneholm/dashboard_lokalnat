@@ -16,7 +16,7 @@ from frontend.utils.case_storage import SavedCase
 
 # (label, snapshot_key, format_type, highlight)
 _COMPARISON_KPIS = [
-    ("Revenue frame", "revenue_frame", "tkr", True),
+    ("Revenue cap", "revenue_frame", "tkr", True),
     ("Capital cost (period)", "capital_cost_period", "tkr", False),
     ("Capital cost in RF", "capital_cost_in_rf", "tkr", False),
     ("Controllable (period)", "controllable_period", "tkr", False),

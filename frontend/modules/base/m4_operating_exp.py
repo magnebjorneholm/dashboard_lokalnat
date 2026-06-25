@@ -48,7 +48,7 @@ def render_scaling() -> Dict[str, Any]:
 
     st.caption(
         "Scale operating expenditure components for your company. "
-        "All three scaling factors (4.1.1–4.1.3) affect the revenue frame only — "
+        "All three scaling factors (4.1.1–4.1.3) affect the revenue cap only — "
         "DEA uses baseline (historical) cost data."
     )
 

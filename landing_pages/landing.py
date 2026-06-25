@@ -138,7 +138,7 @@ landing_cards([
              "requirement and incentives. Auditable, not a black box."},
     {"eyebrow": "Scenarios", "title": "Every assumption is a dial",
      "body": "Change a parameter or a company variable, run it, and see the effect "
-             "on the revenue frame side by side with the baseline. The impact of "
+             "on the revenue cap side by side with the baseline. The impact of "
              "each choice is always explicit."},
     {"eyebrow": "Always up to date", "title": "Evolves with the regulation",
      "body": "The regulation is being rebuilt for the 2028 to 2031 period, and it "

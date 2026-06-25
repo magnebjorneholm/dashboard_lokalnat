@@ -103,7 +103,7 @@ class ModuleDefinition:
 
 M1_ASSET_BASE = ModuleDefinition(
     key="m1",
-    title="1. Regulatory asset base valuation",
+    title="M1 Regulatory asset base valuation",
     description="Asset valuation using norm values or KENT upload",
     parameters=(
         ModuleParameter(PID_GENERAL_SCALING, get_description(PID_GENERAL_SCALING),
@@ -144,7 +144,7 @@ M1_ASSET_BASE = ModuleDefinition(
 
 M2_DEPRECIATION = ModuleDefinition(
     key="m2",
-    title="2. Depreciation",
+    title="M2 Depreciation",
     description="Asset lifetimes for depreciation calculation",
     parameters=(
         ModuleParameter("2.X.1", "Ordinary lifetimes", 
@@ -166,7 +166,7 @@ M2_DEPRECIATION = ModuleDefinition(
 
 M3_COST_OF_CAPITAL = ModuleDefinition(
     key="m3",
-    title="3. Cost of capital",
+    title="M3 Cost of capital",
     description="WACC and quality/incentive adjustments",
     parameters=(
         ModuleParameter(f"{PID_DEBT_RATIO}-3.1.7", "Base WACC parameters",
@@ -217,7 +217,7 @@ M3_COST_OF_CAPITAL = ModuleDefinition(
 
 M4_OPERATING_EXP = ModuleDefinition(
     key="m4",
-    title="4. Operating expenditures",
+    title="M4 Operating expenditures",
     description="OPEX scaling and adjustable cost method",
     parameters=(
         ModuleParameter(PID_OPEX_SCALING, get_description(PID_OPEX_SCALING),
@@ -253,7 +253,7 @@ M4_OPERATING_EXP = ModuleDefinition(
 
 M5_EFFICIENCY = ModuleDefinition(
     key="m5",
-    title="5. Efficiency incentive (benchmarking)",
+    title="M5 Efficiency incentive (benchmarking)",
     description="Benchmarking (DEA) and the efficiency requirement it feeds",
     parameters=(
         ModuleParameter("DEA", "DEA model specification",

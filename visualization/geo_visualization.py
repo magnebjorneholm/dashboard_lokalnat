@@ -31,7 +31,7 @@ COLUMN_LABELS = {
     COL_DEA_EFFICIENCY: "Efficiency",
     COL_DEA_SUPER_EFF: "Superefficiency",
     COL_EFF_REQ_ANNUAL: "Efficiency requirement",
-    "IR_per_CU": "Revenue frame per customer",
+    "IR_per_CU": "Revenue cap per customer",
     "CAPEX_per_CU": "Capital cost per customer",
     "OPEX_per_CU": "OPEX per customer",
     "incentive_pct_of_return": "Incentive adj. (% of return)",

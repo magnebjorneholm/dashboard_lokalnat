@@ -31,6 +31,7 @@ from visualization.geo_visualization import (
 )
 
 from frontend.common.styling import COLORS, get_plotly_template
+from config.module_registry import get_module
 from pipeline.result_helpers import (
     fmt_tkr as format_tkr,
     fmt_percent as format_percent,
@@ -82,7 +83,7 @@ def render_metric_row(
 # =============================================================================
 
 case_name = get_case_name()
-st.subheader("4. Compute revenue frame and save")
+st.subheader("4. Compute revenue cap and save")
 if case_name:
     st.caption(f"Active case: {case_name}")
 
@@ -97,7 +98,7 @@ case_id = get_case_id()
 
 col_compute, col_save, col_discard, col_spacer = st.columns([0.2, 0.15, 0.15, 0.5])
 with col_compute:
-    if st.button("Compute Revenue Frame", type="primary", key="rf_compute", use_container_width=True):
+    if st.button("Compute revenue cap", type="primary", key="rf_compute", use_container_width=True):
         run_calculation()
 with col_save:
     if case_id and st.button(
@@ -124,7 +125,7 @@ if user_reid is None:
 
 # If no calculation done yet, show case summary
 if not st.session_state.get("calculation_done"):
-    st.info("Run **Compute Revenue Frame** above to see results.")
+    st.info("Run **Compute revenue cap** above to see results.")
     st.stop()
 
 # From here on, calculation has been performed
@@ -147,7 +148,7 @@ st.markdown(f"**{company_name}** ({user_reid})")
 col_diagram, col_map = st.columns([0.50, 0.50])
 
 with col_diagram:
-    st.markdown("##### Revenue frame decomposition")
+    st.markdown("##### Revenue cap decomposition")
     diagram_data = prepare_diagram_data(case_result=case, baseline_result=baseline)
     html_content = create_interactive_diagram_html(diagram_data)
     components.html(html_content, height=560, scrolling=False)
@@ -195,7 +196,7 @@ st.divider()
 # SECTION B: REVENUE FRAME SUMMARY
 # =============================================================================
 
-st.markdown("##### Revenue frame summary")
+st.markdown("##### Revenue cap summary")
 
 total_case = case_ir[COL_REVENUE_FRAME]
 total_baseline = baseline_ir[COL_REVENUE_FRAME]
@@ -211,7 +212,7 @@ with col1:
         if base:
             delta_str = f"{base} ({pct_str}%)"
     st.metric(
-        label="Total revenue frame",
+        label="Total revenue cap",
         value=fmt_msek(total_case),
         delta=delta_str,
     )
@@ -251,7 +252,7 @@ wf_components = [
     ("40.1.2 Flexibility services",           "flexibilitetstjanster", False, "relative"),
     ("Interruption compensation",             "avbrottsersattning",    False, "relative"),
     ("State aid deduction",                   "avdrag_statligt_stod",  True,  "relative"),
-    ("Total Revenue Frame",                   "intaktsram",            False, "total"),
+    ("Total revenue cap",                     "intaktsram",            False, "total"),
 ]
 
 wf_labels = []
@@ -415,10 +416,8 @@ def tab_label(key: str, name: str) -> str:
     return name
 
 tab_labels = [
-    tab_label("m1", "M1 Regulatory asset base valuation"),
-    tab_label("m2", "M2 Depreciation"),
-    tab_label("m3", "M3 Cost of Capital"),
-    tab_label("m5", "M5 Efficiency incentive"),
+    tab_label(key, get_module(key).title)
+    for key in ("m1", "m2", "m3", "m5")
 ]
 
 tabs = st.tabs(tab_labels)

@@ -28,6 +28,7 @@ from frontend.modules.base import (
 )
 from frontend.modules.addons import benchmarking
 from frontend.common.manuals import module_manual_panel
+from config.module_registry import get_module
 
 init_session_state()
 
@@ -78,11 +79,8 @@ def _render_not_selected_message():
 
 
 tab_labels = [
-    _tab_label("m1", "M1 Regulatory asset base valuation"),
-    _tab_label("m2", "M2 Depreciation"),
-    _tab_label("m3", "M3 Cost of Capital"),
-    _tab_label("m4", "M4 Operating expenditures"),
-    _tab_label("m5", "M5 Efficiency incentive (benchmarking)"),
+    _tab_label(key, get_module(key).title)
+    for key in ("m1", "m2", "m3", "m4", "m5")
 ]
 
 tabs = st.tabs(tab_labels)
@@ -101,7 +99,7 @@ def _render_m1_tab():
         return
 
     user_id_network = get_user_id_network()
-    st.markdown("#### 1. Regulatory Asset Base")
+    st.markdown(f"#### {get_module('m1').title}")
     module_manual_panel("m1")
 
     # Section: Scaling factors (1.1, 1.2)
@@ -149,7 +147,7 @@ def _render_m2_tab():
         return
 
     user_id_network = get_user_id_network()
-    st.markdown("#### 2. Depreciation")
+    st.markdown(f"#### {get_module('m2').title}")
     module_manual_panel("m2")
 
     if is_section_selected("m2", "lifetimes"):
@@ -163,7 +161,7 @@ def _render_m3_tab():
         _render_not_selected_message()
         return
 
-    st.markdown("#### 3. Cost of Capital")
+    st.markdown(f"#### {get_module('m3').title}")
     module_manual_panel("m3")
 
     # Section: WACC (3.1-3.2)
@@ -192,7 +190,7 @@ def _render_m4_tab():
         _render_not_selected_message()
         return
 
-    st.markdown("#### 4. Operating Expenditures")
+    st.markdown(f"#### {get_module('m4').title}")
     module_manual_panel("m4")
 
     # Section: OPEX scaling (4.1)
@@ -216,7 +214,7 @@ def _render_m5_tab():
         _render_not_selected_message()
         return
 
-    st.markdown("#### 5. Efficiency Incentive (benchmarking)")
+    st.markdown(f"#### {get_module('m5').title}")
     module_manual_panel("m5")
 
     # Section: Benchmarking (DEA specification) — measures relative efficiency

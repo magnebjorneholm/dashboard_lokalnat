@@ -387,7 +387,7 @@ def _create_opex_html(data: Dict[str, dict]) -> str:
         _box_html('kapitalkostnader', 'Capital costs', kapitalkostnader, col3, y4, w_large),
         
         "<!-- ROW 5: Revenue frame -->",
-        _box_html('intaktsram', 'Revenue frame', intaktsram, (580 - w_result) // 2, y5, w_result, extra_class="result"),
+        _box_html('intaktsram', 'Revenue cap', intaktsram, (580 - w_result) // 2, y5, w_result, extra_class="result"),
         
         "<!-- ROW 6: Adjustment sub-components -->",
         _adjustment_boxes(data, y6),
@@ -503,7 +503,7 @@ def _create_totex_html(data: Dict[str, dict]) -> str:
         _box_html('kapitalkostnader', 'Capital costs', kapitalkostnader, col3, y4, w_large),
         
         "<!-- ROW 5: Revenue frame -->",
-        _box_html('intaktsram', 'Revenue frame', intaktsram, (580 - w_result) // 2, y5, w_result, extra_class="result"),
+        _box_html('intaktsram', 'Revenue cap', intaktsram, (580 - w_result) // 2, y5, w_result, extra_class="result"),
         
         "<!-- ROW 6: Adjustment sub-components -->",
         _adjustment_boxes(data, y6),

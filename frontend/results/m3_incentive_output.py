@@ -229,7 +229,7 @@ def _render_kpi_hero(case_ir: pd.Series, baseline_ir: pd.Series) -> None:
             )
 
     st.caption(
-        "Positive values increase the revenue frame; "
+        "Positive values increase the revenue cap; "
         "negative values decrease it. Values in MSEK."
     )
 
