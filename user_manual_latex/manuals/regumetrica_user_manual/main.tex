@@ -3,6 +3,10 @@
 \makeatletter
 \def\input@path{ {../../../graphs/} }
 \makeatother
+% Caption: period after the table number ("Table 1. M1: ...") so the number
+% separator does not collide with the "Mx:" prefix in the title. Scoped to this
+% manual; the shared preamble is left untouched.
+\captionsetup[table]{labelsep=period}
 \begin{document}
 	\title{Regumetrica \linebreak \emph{Beta version} \linebreak User manual \linebreak Version 1.0 \emph{}  \\}
 	\author{\href{https://www.regumetrica.com/um}{www.regumetrica.com/um} }
@@ -54,7 +58,7 @@ The revenue cap tool is organized as a four-step workflow, and this manual follo
   \item \textbf{Revenue Frame}: run the calculation and read, compare, and export the results.
 \end{enumerate}
 
-Two conventions recur throughout. First, anything you do not change keeps its \emph{baseline} value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a \emph{Parameter-ID} (e.g.\ 1.1.1) or a \emph{Variable-ID} (e.g.\ 10.2). These IDs are cited next to each field in the tool and used consistently in this manual; the complete catalogue is collected in the Appendix.
+Two conventions recur throughout. First, anything you do not change keeps its \emph{baseline} value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a \emph{Parameter-ID} (e.g.\ 1.1.1) or a \emph{Variable-ID} (e.g.\ 10.2). These IDs are cited next to each field in the tool and used consistently in this manual; baseline values and the full ID catalogue are given in tables within the relevant module sections.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -127,10 +131,89 @@ Norm values are the per-unit asset values set by the regulator. Two kinds of sca
   \item \textbf{Category scaling factors (1.2.1--1.2.17)}: one multiplier per asset category, applied on top of the general factor. Baseline 1.00 for every category.
 \end{itemize}
 
-\noindent A factor of 1.00 leaves the norm value unchanged; 1.20 raises it by 20\%, 0.80 lowers it by 20\%. The 17 asset categories are listed in Table~\ref*{tab:app-m1} in Appendix~\ref*{app:params}.
+\noindent A factor of 1.00 leaves the norm value unchanged; 1.20 raises it by 20\%, 0.80 lowers it by 20\%. The 17 asset categories, with their baseline factors and Parameter-IDs, are listed in Table~\ref{tab:app-m1}.
+
+% --- M1 parameters (Table 1) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M1: Asset base valuation parameters}
+\label{tab:app-m1}
+\begin{tabular}{@{}p{9cm}cl@{}}
+\toprule
+\textbf{Description} & \textbf{Baseline} & \textbf{Parameter-ID} \\
+\midrule
+General scaling factor for asset valuation & 1.00 & 1.1.1 \\
+\midrule
+\multicolumn{3}{l}{\textit{Category scaling factors (baseline 1.00 each)}} \\
+Andra markarbeten och byggnader, linjekoncession & 1.00 & 1.2.1 \\
+Annan ledning, linjekoncession & 1.00 & 1.2.2 \\
+Annan ledning, områdeskoncession & 1.00 & 1.2.3 \\
+Annan luftledning, linjekoncession & 1.00 & 1.2.4 \\
+It-system & 1.00 & 1.2.5 \\
+Kabelskåp & 1.00 & 1.2.6 \\
+Ledning $\geq$ 220 kV (ej luftledning), linjekoncession & 1.00 & 1.2.7 \\
+Luftledning $\geq$ 220 kV, linjekoncession & 1.00 & 1.2.8 \\
+Luftledning, områdeskoncession & 1.00 & 1.2.9 \\
+Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession & 1.00 & 1.2.10 \\
+Markarbeten och byggnader, områdeskoncession & 1.00 & 1.2.11 \\
+Mätare & 1.00 & 1.2.12 \\
+Nätstation & 1.00 & 1.2.13 \\
+Shuntreaktor & 1.00 & 1.2.14 \\
+Styr- och kontrollutrustning & 1.00 & 1.2.15 \\
+Ställverk utan sekundärapparater & 1.00 & 1.2.16 \\
+Transformator & 1.00 & 1.2.17 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes:} Scaling factors are applied multiplicatively to the asset norm values.
+\end{tablenotes}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
 
 \subsubsection{Asset quantities (variables)}
-Here you scale the quantity of assets in your own concession area, by category, relative to the reported baseline (Variable-IDs 10.2--10.18). This changes the size of your asset base without touching the norm values. Scaling affects the ordinary portion of the capital base only.
+Here you scale the quantity of assets in your own concession area, by category, relative to the reported baseline; Table~\ref{tab:app-var-m1} lists the per-category Variable-IDs (10.2--10.18). This changes the size of your asset base without touching the norm values. Scaling affects the ordinary portion of the capital base only.
+
+% --- M1 asset quantity variables (Table 2) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M1: Asset quantity variables (input)}
+\label{tab:app-var-m1}
+\begin{tabular}{@{}p{10cm}l@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+Andra markarbeten och byggnader, linjekoncession & 10.2 \\
+Annan ledning, linjekoncession & 10.3 \\
+Annan ledning, områdeskoncession & 10.4 \\
+Annan luftledning, linjekoncession & 10.5 \\
+It-system & 10.6 \\
+Kabelskåp & 10.7 \\
+Ledning $\geq$ 220 kV (ej luftledning), linjekoncession & 10.8 \\
+Luftledning $\geq$ 220 kV, linjekoncession & 10.9 \\
+Luftledning, områdeskoncession & 10.10 \\
+Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession & 10.11 \\
+Markarbeten och byggnader, områdeskoncession & 10.12 \\
+Mätare & 10.13 \\
+Nätstation & 10.14 \\
+Shuntreaktor & 10.15 \\
+Styr- och kontrollutrustning & 10.16 \\
+Ställverk utan sekundärapparater & 10.17 \\
+Transformator & 10.18 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes:} Asset quantities are sourced from the KENT reporting template; units vary by asset type.
+\end{tablenotes}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
 
 \subsubsection{KENT upload}
 Instead of scaling quantities, you can upload a KENT excel file to supply the asset data for your concession area directly. A KENT upload replaces the asset-quantity adjustments above; the norm value scaling factors (1.1.1 and 1.2.x) still apply on top of the uploaded data.
@@ -146,7 +229,45 @@ This module sets the economic lifetimes used to depreciate the asset base. For e
   \item \textbf{Tail period (2.X.2)}: the additional period during which an asset remains in service beyond its ordinary lifetime.
 \end{itemize}
 
-\noindent Lifetimes are edited in a table, one row per category. The tail period cannot exceed the ordinary lifetime; if you enter a larger value it is treated as equal to the ordinary lifetime in the calculation. Baseline lifetimes are listed in Table~\ref*{tab:app-m2} in Appendix~\ref*{app:params}.
+\noindent Lifetimes are edited in a table, one row per category. The tail period cannot exceed the ordinary lifetime; if you enter a larger value it is treated as equal to the ordinary lifetime in the calculation. Baseline lifetimes are listed in Table~\ref{tab:app-m2}.
+
+% --- M2 depreciation parameters (Table 3) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M2: Depreciation parameters}
+\label{tab:app-m2}
+\begin{tabular}{@{}p{8cm}ccl@{}}
+\toprule
+\textbf{Description} & \textbf{Ordinary} & \textbf{Tail} & \textbf{Parameter-IDs} \\
+\midrule
+Andra markarbeten och byggnader, linjekoncession & 100 & 24 & 2.1.1; 2.1.2 \\
+Annan ledning, linjekoncession & 100 & 24 & 2.2.1; 2.2.2 \\
+Annan ledning, områdeskoncession & 100 & 24 & 2.3.1; 2.3.2 \\
+Annan luftledning, linjekoncession & 100 & 24 & 2.4.1; 2.4.2 \\
+It-system & 20 & 4 & 2.5.1; 2.5.2 \\
+Kabelskåp & 60 & 14 & 2.6.1; 2.6.2 \\
+Ledning $\geq$ 220 kV (ej luftledning), linjekoncession & 80 & 20 & 2.7.1; 2.7.2 \\
+Luftledning $\geq$ 220 kV, linjekoncession & 120 & 30 & 2.8.1; 2.8.2 \\
+Luftledning, områdeskoncession & 80 & 20 & 2.9.1; 2.9.2 \\
+Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession & 80 & 20 & 2.10.1; 2.10.2 \\
+Markarbeten och byggnader, områdeskoncession & 100 & 24 & 2.11.1; 2.11.2 \\
+Mätare & 20 & 4 & 2.12.1; 2.12.2 \\
+Nätstation & 80 & 20 & 2.13.1; 2.13.2 \\
+Shuntreaktor & 80 & 20 & 2.14.1; 2.14.2 \\
+Styr- och kontrollutrustning & 30 & 6 & 2.15.1; 2.15.2 \\
+Ställverk utan sekundärapparater & 80 & 20 & 2.16.1; 2.16.2 \\
+Transformator & 100 & 24 & 2.17.1; 2.17.2 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes:} Ordinary and tail lifetimes in years. The tail period cannot exceed the ordinary lifetime; a larger value is treated as equal to the ordinary lifetime in the calculation.
+\end{tablenotes}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
 
 
 \subsection{M3: Cost of capital}
@@ -163,18 +284,109 @@ The WACC is the real, pre-tax weighted average cost of capital. You can specify 
   \item \textbf{Direct input}: enter the real, pre-tax WACC directly.
 \end{itemize}
 
-\noindent Baseline values for all WACC parameters, with their Parameter-IDs, are given in Table~\ref*{tab:app-m3-wacc} in Appendix~\ref*{app:params}. When you set a derived quantity directly, that value overrides any sub-parameters behind it.
+\noindent Baseline values for all WACC parameters, with their Parameter-IDs, are given in Table~\ref{tab:app-m3-wacc}. When you set a derived quantity directly, that value overrides any sub-parameters behind it.
 
-\subsubsection{Incentive parameters} 
-The allowed return is adjusted by three incentive schemes, each of which can be switched on or off:
+% --- M3 WACC parameters (Table 4) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M3: Cost of capital (WACC) parameters}
+\label{tab:app-m3-wacc}
+\begin{tabular}{@{}lcl@{}}
+\toprule
+\textbf{Description} & \textbf{Baseline} & \textbf{Parameter-ID} \\
+\midrule
+\multicolumn{3}{l}{\textit{Base parameters}} \\
+Debt ratio & 0.36 & 3.1.1 \\
+Asset beta & 0.37 & 3.1.2 \\
+Risk-free rate & 0.0287 & 3.1.3 \\
+Market risk premium & 0.0668 & 3.1.4 \\
+Credit risk premium & 0.0114 & 3.1.5 \\
+Tax rate & 0.206 & 3.1.6 \\
+Inflation, CPIF forecast & 0.0202 & 3.1.7 \\
+\midrule
+\multicolumn{3}{l}{\textit{Derived parameters}} \\
+Equity beta & 0.54 & 3.2.1 \\
+Nominal cost of equity after tax & 0.0645 & 3.2.2 \\
+Nominal cost of debt after tax & 0.0318 & 3.2.3 \\
+Nominal WACC before tax & 0.0664 & 3.2.4 \\
+Real WACC before tax & 0.0453 & 3.2.5 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes:} Setting a derived parameter directly overrides changes to the base parameters behind it.
+\end{tablenotes}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
+
+\subsubsection{Incentive parameters}
+The allowed return is adjusted by three incentive schemes, each of which can be switched on or off; Table~\ref{tab:app-m3-inc} lists the baseline incentive parameters.
 
 \begin{itemize}
-  \item \textbf{Quality (3.3)}: compensates for the quality of supply, based on interruptions. You can adjust the maximum CEMI4 correction and the underlying interruption cost tables for interruption energy (ILE, kr/kWh) and interruption power (ILEffekt, kr/kW), listed by customer type in Table~\ref*{tab:app-m3-ile} in Appendix~\ref*{app:params}.
+  \item \textbf{Quality (3.3)}: compensates for the quality of supply, based on interruptions. You can adjust the maximum CEMI4 correction and the underlying interruption cost tables for interruption energy (ILE, kr/kWh) and interruption power (ILEffekt, kr/kW), listed by customer type in Table~\ref{tab:app-m3-ile}.
   \item \textbf{Network loss (3.4)}: rewards or penalizes network losses relative to a norm. You can set the sharing factor, i.e.\ the share of the gain or loss retained by the company, and the electricity price used to value losses, per year.
   \item \textbf{Utilization rate (3.5)}: rewards higher capacity utilization. This scheme is computed automatically from company data; here you only enable or disable it.
 \end{itemize}
 
 \noindent In addition, you can set the cap on the \textbf{total} incentive adjustment per year, expressed as a share of the allowed return, and the KPI factors used to index interruption costs to the price level of the reference year (one per year).
+
+% --- M3 incentive adjustment parameters (Table 5) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M3: Incentive adjustment parameters}
+\label{tab:app-m3-inc}
+\begin{tabular}{@{}p{9cm}cl@{}}
+\toprule
+\textbf{Description} & \textbf{Baseline} & \textbf{Parameter-ID} \\
+\midrule
+Max total adjustment (share of allowed return) & 0.333 & 3.3.1 \\
+Network loss incentive sharing factor & 0.75 & 3.4.2 \\
+Average network loss cost (kr/MWh) & 734 & 3.4.3 \\
+CEMI4 correction factor & 0.25 & 3.6.6 \\
+KPI indexation factor (per year) & 1.1546 & 3.7.1--3.7.4 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes:} The electricity price (3.4.3) and the KPI indexation factors (3.7.1--3.7.4) are set per year. The interruption cost tables (ILE/ILEffekt) underlying the quality scheme are listed by customer type in Table~\ref{tab:app-m3-ile}.
+\end{tablenotes}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
+
+% --- M3 interruption cost tables (ILE/ILEffekt) (Table 6) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M3: Interruption cost tables (ILE/ILEffekt) by customer type}
+\label{tab:app-m3-ile}
+\begin{tabular}{@{}clrrrr@{}}
+\toprule
+ & & \multicolumn{2}{c}{\textbf{ILE (kr/kWh)}} & \multicolumn{2}{c}{\textbf{ILEffekt (kr/kW)}} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+\textbf{Order} & \textbf{Customer type} & \textbf{Unplanned} & \textbf{Planned} & \textbf{Unplanned} & \textbf{Planned} \\
+\midrule
+1 & Household       & 5.84   & 4.98  & 1.95  & 1.85  \\
+2 & Agriculture     & 34.35  & 14.10 & 9.78  & 1.72  \\
+3 & Trade/Services  & 175.06 & 79.31 & 17.78 & 5.94  \\
+4 & Industry        & 159.96 & 76.00 & 70.75 & 20.71 \\
+5 & Public sector   & 96.97  & 43.70 & 7.65  & 0.92  \\
+6 & Boundary points & 96.01  & 45.16 & 22.18 & 7.08  \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes:} ILE (interruption energy cost, kr/kWh) and ILEffekt (interruption power cost, kr/kW) are the per-customer-type cost rates underlying the quality (interruption) incentive (M3, Section~\ref{sec:spec-m3}); each is reported for unplanned and planned interruptions. They are adjustable parameters, Parameter-IDs 3.6.7--3.6.18 (ILE) and 3.6.19--3.6.30 (ILEffekt), two per customer type in the order shown (unplanned then planned). The same six customer types index the interruption variables (30.4.x) in Table~\ref{tab:app-var-m3}.
+\end{tablenotes}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
 
 \subsubsection{Incentive variables (own area)}
 These are the company-specific inputs to the incentive schemes for your concession area (Variable-IDs 30.x). An override you enter here applies to all years of the regulatory period. They are grouped as:
@@ -185,7 +397,43 @@ These are the company-specific inputs to the incentive schemes for your concessi
   \item \textbf{Interruptions (30.4)}: the CEMI4 measure, and, per customer type, the average interruption time (AIT), average interruption frequency (AIF), and annual average power.
 \end{itemize}
 
-\noindent The full set of interruption variables, broken down by customer type and by planned/unplanned and norm/observed, is listed in Table~\ref*{tab:app-var-m3} in Appendix~\ref*{app:variables}.
+\noindent The full set of interruption variables, broken down by customer type and by planned/unplanned and norm/observed, is listed in Table~\ref{tab:app-var-m3}.
+
+% --- M3 incentive variables (Table 7) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M3: Incentive variables (input, own area)}
+\label{tab:app-var-m3}
+\begin{tabular}{@{}p{10cm}l@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+\multicolumn{2}{l}{\textit{30.2 Network loss}} \\
+Network loss norm level & 30.2.1 \\
+Network loss observed level & 30.2.2 \\
+Energy input & 30.2.3 \\
+\midrule
+\multicolumn{2}{l}{\textit{30.3 Utilization rate}} \\
+Utilization rate norm level & 30.3.1 \\
+Utilization rate observed level & 30.3.2 \\
+Cost for upstream network & 30.3.3 \\
+\midrule
+\multicolumn{2}{l}{\textit{30.4 Interruptions}} \\
+CEMI4 norm / observed & 30.4.1 / 30.4.2 \\
+Annual average power, per customer type & 30.4.3--30.4.8 \\
+Average interruption time (AIT), norm and observed, per customer type & 30.4.9--30.4.32 \\
+Average interruption frequency (AIF), norm and observed, per customer type & 30.4.33--30.4.56 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes:} Customer types: Household, Agriculture, Trade/Services, Industry, Public sector, Boundary points (Table~\ref{tab:app-m3-ile}). AIT and AIF are reported for planned and unplanned interruptions, each as a norm and an observed value. An override applies to all years 2024--2027.
+\end{tablenotes}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
 
 
 \subsection{M4: Operating expenditures}
@@ -202,8 +450,55 @@ Three multipliers are available (baseline 1.00 each):
   \item \textbf{Non-adjustable OPEX (4.1.3)}: costs outside the operator's direct control.
 \end{itemize}
 
+\noindent Table~\ref{tab:app-m4} lists these scaling factors with their Parameter-IDs.
+
+% --- M4 operating expenditure parameters (Table 8) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M4: Operating expenditure parameters}
+\label{tab:app-m4}
+\begin{tabular}{@{}lcl@{}}
+\toprule
+\textbf{Description} & \textbf{Baseline} & \textbf{Parameter-ID} \\
+\midrule
+Scaling factor adjustable OPEX & 1.00 & 4.1.1 \\
+Scaling factor flexibility services & 1.00 & 4.1.2 \\
+Scaling factor non-adjustable OPEX & 1.00 & 4.1.3 \\
+\bottomrule
+\end{tabular}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
+
 \subsubsection{OPEX variables (own area)}
-Instead of scaling, you can set the level of each component directly for your concession area, in tkr: adjustable OPEX, flexibility services, and non-adjustable costs. A direct override takes precedence over the corresponding scaling factor for your company.
+Instead of scaling, you can set the level of each component directly for your concession area, in tkr: adjustable OPEX, flexibility services, and non-adjustable costs. A direct override takes precedence over the corresponding scaling factor for your company. Table~\ref{tab:app-var-m4} lists the corresponding Variable-IDs.
+
+% --- M4 OPEX variables (Table 9) ---
+\begin{table}[H]
+\centering
+\begin{singlespace}
+\footnotesize
+\begin{threeparttable}
+\caption{M4: OPEX variables (input, own area)}
+\label{tab:app-var-m4}
+\begin{tabular}{@{}p{10cm}l@{}}
+\toprule
+\textbf{Description} & \textbf{Variable-ID} \\
+\midrule
+Adjustable OPEX & 40.1.1 \\
+Flexibility service cost & 40.1.2 \\
+Total non-adjustable costs & 40.2.1 \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\item \textit{Notes:} Values in tkr. A direct override takes precedence over the corresponding scaling factor (4.1.x).
+\end{tablenotes}
+\end{threeparttable}
+\end{singlespace}
+\end{table}
 
 \subsection{M5: Efficiency incentive (benchmarking)}
 \label{sec:spec-m5}
@@ -237,239 +532,12 @@ The efficiency requirement section converts the efficiency potential measured by
   \item \textbf{Cost base (5.4.1)}: whether the efficiency requirement is applied to OPEX only (baseline) or to TOTEX (including capital costs).
 \end{itemize}
 
-\noindent The tool shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above.
+\noindent The tool shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above. Table~\ref{tab:app-m5} collects these parameters with their baseline values.
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Revenue Frame}
-\label{sec:page-rf}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-This page runs the calculation and presents the results. Computing a case produces a revenue frame for your concession area, shown alongside the baseline so that the effect of your assumptions is always visible.
-
-\subsection{Running and saving}
-Compute the revenue frame to run the model with the current configuration. You can then save the case to keep the configuration and its results, or discard your changes to return to the last saved state. If you change the configuration after computing, recompute to bring the results up to date.
-
-\subsection{Reading the results}
-The results are presented in several complementary ways:
-
-\begin{itemize}
-  \item \textbf{Revenue frame summary}: the total revenue frame for the case, the baseline total, and the difference between them.
-  \item \textbf{Decomposition}: a breakdown of the revenue frame into its components (capital costs, depreciation, return, operating expenditures, efficiency and incentive adjustments, flexibility services, interruption compensation, and deductions), each labeled with its Variable-ID.
-  \item \textbf{Geographic comparison}: a map placing your concession area in the context of all areas for a selected result variable.
-  \item \textbf{Module outputs}: per-module detail (asset base, depreciation, cost of capital, and the efficiency incentive), each compared against baseline. The output variables shown here are catalogued in Table~\ref*{tab:app-var-out} in Appendix~\ref*{app:variables}.
-\end{itemize}
-
-\subsection{Export}
-The full revenue frame and all underlying calculation components can be downloaded for your own analysis and documentation.
-
-
-%%%%%%%%%%%%%%%%%%%%%%    APPENDIX   %%%%%%%%%%%%%%%%
-\newpage
-\singlespacing
-\baselineskip=10pt
-
-\section*{Appendix}
-\addcontentsline{toc}{section}{Appendix}
-
-% The Appendix has a single heading; the two reference catalogues are lettered
-% subsections (A, B). \thesubsection is redefined to print just the letter
-% (the parent section is unnumbered). Tables take the appendix letter and restart
-% in each subsection (\setcounter{table}{0} below), so cross-references read
-% ``Table B2 in Appendix B''.
-\setcounter{subsection}{0}
-\renewcommand{\thesubsection}{\Alph{subsection}}
-\renewcommand{\thetable}{\thesubsection\arabic{table}}
-\renewcommand{\thefigure}{\thesubsection\arabic{figure}}
-
-	\subsection{Parameter reference}
-	\label{app:params}
-	\setcounter{table}{0}\setcounter{figure}{0}
-
-This appendix lists the adjustable parameters by module, with their baseline values. Parameters apply to all companies.
-
-% --- M1 ---
+% --- M5 efficiency incentive parameters (Table 10) ---
 \begin{table}[H]
 \centering
-\footnotesize
-\begin{threeparttable}
-\caption{M1: Asset base valuation parameters}
-\label{tab:app-m1}
-\begin{tabular}{@{}p{9cm}cl@{}}
-\toprule
-\textbf{Description} & \textbf{Baseline} & \textbf{Parameter-ID} \\
-\midrule
-General scaling factor for asset valuation & 1.00 & 1.1.1 \\
-\midrule
-\multicolumn{3}{l}{\textit{Category scaling factors (baseline 1.00 each)}} \\
-Andra markarbeten och byggnader, linjekoncession & 1.00 & 1.2.1 \\
-Annan ledning, linjekoncession & 1.00 & 1.2.2 \\
-Annan ledning, områdeskoncession & 1.00 & 1.2.3 \\
-Annan luftledning, linjekoncession & 1.00 & 1.2.4 \\
-It-system & 1.00 & 1.2.5 \\
-Kabelskåp & 1.00 & 1.2.6 \\
-Ledning $\geq$ 220 kV (ej luftledning), linjekoncession & 1.00 & 1.2.7 \\
-Luftledning $\geq$ 220 kV, linjekoncession & 1.00 & 1.2.8 \\
-Luftledning, områdeskoncession & 1.00 & 1.2.9 \\
-Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession & 1.00 & 1.2.10 \\
-Markarbeten och byggnader, områdeskoncession & 1.00 & 1.2.11 \\
-Mätare & 1.00 & 1.2.12 \\
-Nätstation & 1.00 & 1.2.13 \\
-Shuntreaktor & 1.00 & 1.2.14 \\
-Styr- och kontrollutrustning & 1.00 & 1.2.15 \\
-Ställverk utan sekundärapparater & 1.00 & 1.2.16 \\
-Transformator & 1.00 & 1.2.17 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item Scaling factors are applied multiplicatively to the asset norm values.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
-
-% --- M2 ---
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{threeparttable}
-\caption{M2: Depreciation parameters}
-\label{tab:app-m2}
-\begin{tabular}{@{}p{8cm}ccl@{}}
-\toprule
-\textbf{Description} & \textbf{Ordinary} & \textbf{Tail} & \textbf{Parameter-IDs} \\
-\midrule
-Andra markarbeten och byggnader, linjekoncession & 100 & 24 & 2.1.1; 2.1.2 \\
-Annan ledning, linjekoncession & 100 & 24 & 2.2.1; 2.2.2 \\
-Annan ledning, områdeskoncession & 100 & 24 & 2.3.1; 2.3.2 \\
-Annan luftledning, linjekoncession & 100 & 24 & 2.4.1; 2.4.2 \\
-It-system & 20 & 4 & 2.5.1; 2.5.2 \\
-Kabelskåp & 60 & 14 & 2.6.1; 2.6.2 \\
-Ledning $\geq$ 220 kV (ej luftledning), linjekoncession & 80 & 20 & 2.7.1; 2.7.2 \\
-Luftledning $\geq$ 220 kV, linjekoncession & 120 & 30 & 2.8.1; 2.8.2 \\
-Luftledning, områdeskoncession & 80 & 20 & 2.9.1; 2.9.2 \\
-Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession & 80 & 20 & 2.10.1; 2.10.2 \\
-Markarbeten och byggnader, områdeskoncession & 100 & 24 & 2.11.1; 2.11.2 \\
-Mätare & 20 & 4 & 2.12.1; 2.12.2 \\
-Nätstation & 80 & 20 & 2.13.1; 2.13.2 \\
-Shuntreaktor & 80 & 20 & 2.14.1; 2.14.2 \\
-Styr- och kontrollutrustning & 30 & 6 & 2.15.1; 2.15.2 \\
-Ställverk utan sekundärapparater & 80 & 20 & 2.16.1; 2.16.2 \\
-Transformator & 100 & 24 & 2.17.1; 2.17.2 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item Ordinary and tail lifetimes in years. The tail period cannot exceed the ordinary lifetime; a larger value is treated as equal to the ordinary lifetime in the calculation.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
-
-% --- M3 WACC ---
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{threeparttable}
-\caption{M3: Cost of capital (WACC) parameters}
-\label{tab:app-m3-wacc}
-\begin{tabular}{@{}lcl@{}}
-\toprule
-\textbf{Description} & \textbf{Baseline} & \textbf{Parameter-ID} \\
-\midrule
-\multicolumn{3}{l}{\textit{Base parameters}} \\
-Debt ratio & 0.36 & 3.1.1 \\
-Asset beta & 0.37 & 3.1.2 \\
-Risk-free rate & 0.0287 & 3.1.3 \\
-Market risk premium & 0.0668 & 3.1.4 \\
-Credit risk premium & 0.0114 & 3.1.5 \\
-Tax rate & 0.206 & 3.1.6 \\
-Inflation, CPIF forecast & 0.0202 & 3.1.7 \\
-\midrule
-\multicolumn{3}{l}{\textit{Derived parameters}} \\
-Equity beta & 0.54 & 3.2.1 \\
-Nominal cost of equity after tax & 0.0645 & 3.2.2 \\
-Nominal cost of debt after tax & 0.0318 & 3.2.3 \\
-Nominal WACC before tax & 0.0664 & 3.2.4 \\
-Real WACC before tax & 0.0453 & 3.2.5 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item Setting a derived parameter directly overrides changes to the base parameters behind it.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
-
-% --- M3 Incentive parameters ---
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{threeparttable}
-\caption{M3: Incentive adjustment parameters}
-\label{tab:app-m3-inc}
-\begin{tabular}{@{}p{9cm}cl@{}}
-\toprule
-\textbf{Description} & \textbf{Baseline} & \textbf{Parameter-ID} \\
-\midrule
-Max total adjustment (share of allowed return) & 0.333 & 3.3.1 \\
-Network loss incentive sharing factor & 0.75 & 3.4.2 \\
-Average network loss cost (kr/MWh) & 734 & 3.4.3 \\
-CEMI4 correction factor & 0.25 & 3.6.6 \\
-KPI indexation factor (per year) & 1.1546 & 3.7.1--3.7.4 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item The electricity price (3.4.3) and the KPI indexation factors (3.7.1--3.7.4) are set per year. The interruption cost tables (ILE/ILEffekt) underlying the quality scheme are listed by customer type in Table~\ref*{tab:app-m3-ile} in Appendix~\ref*{app:params}.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
-
-% --- M3 Interruption cost tables (ILE/ILEffekt) ---
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{threeparttable}
-\caption{M3: Interruption cost tables (ILE/ILEffekt) by customer type}
-\label{tab:app-m3-ile}
-\begin{tabular}{@{}clrrrr@{}}
-\toprule
- & & \multicolumn{2}{c}{\textbf{ILE (kr/kWh)}} & \multicolumn{2}{c}{\textbf{ILEffekt (kr/kW)}} \\
-\cmidrule(lr){3-4}\cmidrule(lr){5-6}
-\textbf{Order} & \textbf{Customer type} & \textbf{Unplanned} & \textbf{Planned} & \textbf{Unplanned} & \textbf{Planned} \\
-\midrule
-1 & Household       & 5.84   & 4.98  & 1.95  & 1.85  \\
-2 & Agriculture     & 34.35  & 14.10 & 9.78  & 1.72  \\
-3 & Trade/Services  & 175.06 & 79.31 & 17.78 & 5.94  \\
-4 & Industry        & 159.96 & 76.00 & 70.75 & 20.71 \\
-5 & Public sector   & 96.97  & 43.70 & 7.65  & 0.92  \\
-6 & Boundary points & 96.01  & 45.16 & 22.18 & 7.08  \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item ILE (interruption energy cost, kr/kWh) and ILEffekt (interruption power cost, kr/kW) are the per-customer-type cost rates underlying the quality (interruption) incentive (M3, Section~\ref{sec:spec-m3}); each is reported for unplanned and planned interruptions. They are adjustable parameters, Parameter-IDs 3.6.7--3.6.18 (ILE) and 3.6.19--3.6.30 (ILEffekt), two per customer type in the order shown (unplanned then planned). The same six customer types index the interruption variables (30.4.x) in Table~\ref*{tab:app-var-m3} in Appendix~\ref*{app:variables}.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
-
-% --- M4 ---
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{threeparttable}
-\caption{M4: Operating expenditure parameters}
-\label{tab:app-m4}
-\begin{tabular}{@{}lcl@{}}
-\toprule
-\textbf{Description} & \textbf{Baseline} & \textbf{Parameter-ID} \\
-\midrule
-Scaling factor adjustable OPEX & 1.00 & 4.1.1 \\
-Scaling factor flexibility services & 1.00 & 4.1.2 \\
-Scaling factor non-adjustable OPEX & 1.00 & 4.1.3 \\
-\bottomrule
-\end{tabular}
-\end{threeparttable}
-\end{table}
-
-% --- M5 ---
-\begin{table}[H]
-\centering
+\begin{singlespace}
 \footnotesize
 \begin{threeparttable}
 \caption{M5: Efficiency incentive parameters}
@@ -490,110 +558,34 @@ Apply efficiency requirement on TOTEX & No (OPEX only) & 5.4.1 \\
 \item[a] The outlier threshold is configured in the benchmarking section of the efficiency incentive (M5, Section~\ref{sec:spec-m5-benchmarking}) as part of the DEA specification.
 \end{tablenotes}
 \end{threeparttable}
+\end{singlespace}
 \end{table}
 
 
-	\subsection{Variable reference}
-	\label{app:variables}
-	\setcounter{table}{0}\setcounter{figure}{0}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Revenue Frame}
+\label{sec:page-rf}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-This appendix lists the input variables you can adjust and the main output variables shown in the results. Input variables apply only to your own concession area.
+This page runs the calculation and presents the results. Computing a case produces a revenue frame for your concession area, shown alongside the baseline so that the effect of your assumptions is always visible.
 
-% --- M1 input ---
+\subsection{Running and saving}
+Compute the revenue frame to run the model with the current configuration. You can then save the case to keep the configuration and its results, or discard your changes to return to the last saved state. If you change the configuration after computing, recompute to bring the results up to date.
+
+\subsection{Reading the results}
+The results are presented in several complementary ways:
+
+\begin{itemize}
+  \item \textbf{Revenue frame summary}: the total revenue frame for the case, the baseline total, and the difference between them.
+  \item \textbf{Decomposition}: a breakdown of the revenue frame into its components (capital costs, depreciation, return, operating expenditures, efficiency and incentive adjustments, flexibility services, interruption compensation, and deductions), each labeled with its Variable-ID.
+  \item \textbf{Geographic comparison}: a map placing your concession area in the context of all areas for a selected result variable.
+  \item \textbf{Module outputs}: per-module detail (asset base, depreciation, cost of capital, and the efficiency incentive), each compared against baseline. The output variables shown here are catalogued in Table~\ref{tab:app-var-out}.
+\end{itemize}
+
+% --- Main output variables (Table 11) ---
 \begin{table}[H]
 \centering
-\footnotesize
-\begin{threeparttable}
-\caption{M1: Asset quantity variables (input)}
-\label{tab:app-var-m1}
-\begin{tabular}{@{}p{10cm}l@{}}
-\toprule
-\textbf{Description} & \textbf{Variable-ID} \\
-\midrule
-Andra markarbeten och byggnader, linjekoncession & 10.2 \\
-Annan ledning, linjekoncession & 10.3 \\
-Annan ledning, områdeskoncession & 10.4 \\
-Annan luftledning, linjekoncession & 10.5 \\
-It-system & 10.6 \\
-Kabelskåp & 10.7 \\
-Ledning $\geq$ 220 kV (ej luftledning), linjekoncession & 10.8 \\
-Luftledning $\geq$ 220 kV, linjekoncession & 10.9 \\
-Luftledning, områdeskoncession & 10.10 \\
-Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession & 10.11 \\
-Markarbeten och byggnader, områdeskoncession & 10.12 \\
-Mätare & 10.13 \\
-Nätstation & 10.14 \\
-Shuntreaktor & 10.15 \\
-Styr- och kontrollutrustning & 10.16 \\
-Ställverk utan sekundärapparater & 10.17 \\
-Transformator & 10.18 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item Asset quantities are sourced from the KENT reporting template; units vary by asset type.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
-
-% --- M3 incentive input ---
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{threeparttable}
-\caption{M3: Incentive variables (input, own area)}
-\label{tab:app-var-m3}
-\begin{tabular}{@{}p{10cm}l@{}}
-\toprule
-\textbf{Description} & \textbf{Variable-ID} \\
-\midrule
-\multicolumn{2}{l}{\textit{30.2 Network loss}} \\
-Network loss norm level & 30.2.1 \\
-Network loss observed level & 30.2.2 \\
-Energy input & 30.2.3 \\
-\midrule
-\multicolumn{2}{l}{\textit{30.3 Utilization rate}} \\
-Utilization rate norm level & 30.3.1 \\
-Utilization rate observed level & 30.3.2 \\
-Cost for upstream network & 30.3.3 \\
-\midrule
-\multicolumn{2}{l}{\textit{30.4 Interruptions}} \\
-CEMI4 norm / observed & 30.4.1 / 30.4.2 \\
-Annual average power, per customer type & 30.4.3--30.4.8 \\
-Average interruption time (AIT), norm and observed, per customer type & 30.4.9--30.4.32 \\
-Average interruption frequency (AIF), norm and observed, per customer type & 30.4.33--30.4.56 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item Customer types: Household, Agriculture, Trade/Services, Industry, Public sector, Boundary points (Table~\ref*{tab:app-m3-ile} in Appendix~\ref*{app:params}). AIT and AIF are reported for planned and unplanned interruptions, each as a norm and an observed value. An override applies to all years 2024--2027.
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
-
-% --- M4 input ---
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{threeparttable}
-\caption{M4: OPEX variables (input, own area)}
-\label{tab:app-var-m4}
-\begin{tabular}{@{}p{10cm}l@{}}
-\toprule
-\textbf{Description} & \textbf{Variable-ID} \\
-\midrule
-Adjustable OPEX & 40.1.1 \\
-Flexibility service cost & 40.1.2 \\
-Total non-adjustable costs & 40.2.1 \\
-\bottomrule
-\end{tabular}
-\begin{tablenotes}
-\item Values in tkr. A direct override takes precedence over the corresponding scaling factor (4.1.x).
-\end{tablenotes}
-\end{threeparttable}
-\end{table}
-
-% --- Output variables ---
-\begin{table}[H]
-\centering
+\begin{singlespace}
 \footnotesize
 \begin{threeparttable}
 \caption{Main output variables (shown in results)}
@@ -615,10 +607,14 @@ Efficiency adjustment, OPEX / CAPEX & 50.4.1 / 50.4.2 \\
 \bottomrule
 \end{tabular}
 \begin{tablenotes}
-\item Output variables are computed by the model and shown in the results; they are not directly editable. Values in kr unless noted. For each adjustment, the variants shown are before and after the applicable cap.
+\item \textit{Notes:} Output variables are computed by the model and shown in the results; they are not directly editable. Values in kr unless noted. For each adjustment, the variants shown are before and after the applicable cap.
 \end{tablenotes}
 \end{threeparttable}
+\end{singlespace}
 \end{table}
+
+\subsection{Export}
+The full revenue frame and all underlying calculation components can be downloaded for your own analysis and documentation.
 
 
 \end{document}

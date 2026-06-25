@@ -35,7 +35,7 @@ The revenue cap tool is organized as a four-step workflow, and this manual follo
 3. **Specification**: adjust the parameters and variables of the selected modules.
 4. **Revenue Frame**: run the calculation and read, compare, and export the results.
 
-Two conventions recur throughout. First, anything you do not change keeps its *baseline* value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a *Parameter-ID* (e.g. 1.1.1) or a *Variable-ID* (e.g. 10.2). These IDs are cited next to each field in the tool and used consistently in this manual; the complete catalogue is collected in the Appendix.
+Two conventions recur throughout. First, anything you do not change keeps its *baseline* value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a *Parameter-ID* (e.g. 1.1.1) or a *Variable-ID* (e.g. 10.2). These IDs are cited next to each field in the tool and used consistently in this manual; baseline values and the full ID catalogue are given in tables within the relevant module sections.
 
 ---
 
@@ -99,11 +99,61 @@ Norm values are the per-unit asset values set by the regulator. Two kinds of sca
 - **General scaling factor (1.1.1)**: a single multiplier applied to *all* asset norm values. Baseline 1.00.
 - **Category scaling factors (1.2.1–1.2.17)**: one multiplier per asset category, applied on top of the general factor. Baseline 1.00 for every category.
 
-A factor of 1.00 leaves the norm value unchanged; 1.20 raises it by 20%, 0.80 lowers it by 20%. The 17 asset categories are listed in Table C1 in Appendix C.
+A factor of 1.00 leaves the norm value unchanged; 1.20 raises it by 20%, 0.80 lowers it by 20%. The 17 asset categories, with their baseline factors and Parameter-IDs, are listed in Table 1.
+
+**Table 1. M1: Asset base valuation parameters**
+
+| Description | Baseline | Parameter-ID |
+|---|:---:|---|
+| General scaling factor for asset valuation | 1.00 | 1.1.1 |
+| *Category scaling factors (baseline 1.00 each)* | | |
+| Andra markarbeten och byggnader, linjekoncession | 1.00 | 1.2.1 |
+| Annan ledning, linjekoncession | 1.00 | 1.2.2 |
+| Annan ledning, områdeskoncession | 1.00 | 1.2.3 |
+| Annan luftledning, linjekoncession | 1.00 | 1.2.4 |
+| It-system | 1.00 | 1.2.5 |
+| Kabelskåp | 1.00 | 1.2.6 |
+| Ledning $\geq$ 220 kV (ej luftledning), linjekoncession | 1.00 | 1.2.7 |
+| Luftledning $\geq$ 220 kV, linjekoncession | 1.00 | 1.2.8 |
+| Luftledning, områdeskoncession | 1.00 | 1.2.9 |
+| Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession | 1.00 | 1.2.10 |
+| Markarbeten och byggnader, områdeskoncession | 1.00 | 1.2.11 |
+| Mätare | 1.00 | 1.2.12 |
+| Nätstation | 1.00 | 1.2.13 |
+| Shuntreaktor | 1.00 | 1.2.14 |
+| Styr- och kontrollutrustning | 1.00 | 1.2.15 |
+| Ställverk utan sekundärapparater | 1.00 | 1.2.16 |
+| Transformator | 1.00 | 1.2.17 |
+
+*Notes: Scaling factors are applied multiplicatively to the asset norm values.*
 
 #### 3.1.2 Asset quantities (variables)
 
-Here you scale the quantity of assets in your own concession area, by category, relative to the reported baseline (Variable-IDs 10.2–10.18). This changes the size of your asset base without touching the norm values. Scaling affects the ordinary portion of the capital base only.
+Here you scale the quantity of assets in your own concession area, by category, relative to the reported baseline; Table 2 lists the per-category Variable-IDs (10.2–10.18). This changes the size of your asset base without touching the norm values. Scaling affects the ordinary portion of the capital base only.
+
+**Table 2. M1: Asset quantity variables (input)**
+
+| Description | Variable-ID |
+|---|---|
+| Andra markarbeten och byggnader, linjekoncession | 10.2 |
+| Annan ledning, linjekoncession | 10.3 |
+| Annan ledning, områdeskoncession | 10.4 |
+| Annan luftledning, linjekoncession | 10.5 |
+| It-system | 10.6 |
+| Kabelskåp | 10.7 |
+| Ledning $\geq$ 220 kV (ej luftledning), linjekoncession | 10.8 |
+| Luftledning $\geq$ 220 kV, linjekoncession | 10.9 |
+| Luftledning, områdeskoncession | 10.10 |
+| Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession | 10.11 |
+| Markarbeten och byggnader, områdeskoncession | 10.12 |
+| Mätare | 10.13 |
+| Nätstation | 10.14 |
+| Shuntreaktor | 10.15 |
+| Styr- och kontrollutrustning | 10.16 |
+| Ställverk utan sekundärapparater | 10.17 |
+| Transformator | 10.18 |
+
+*Notes: Asset quantities are sourced from the KENT reporting template; units vary by asset type.*
 
 #### 3.1.3 KENT upload
 
@@ -116,7 +166,31 @@ This module sets the economic lifetimes used to depreciate the asset base. For e
 - **Ordinary lifetime (2.X.1)**: the economic lifetime over which an asset is depreciated.
 - **Tail period (2.X.2)**: the additional period during which an asset remains in service beyond its ordinary lifetime.
 
-Lifetimes are edited in a table, one row per category. The tail period cannot exceed the ordinary lifetime; if you enter a larger value it is treated as equal to the ordinary lifetime in the calculation. Baseline lifetimes are listed in Table C1 in Appendix C.
+Lifetimes are edited in a table, one row per category. The tail period cannot exceed the ordinary lifetime; if you enter a larger value it is treated as equal to the ordinary lifetime in the calculation. Baseline lifetimes are listed in Table 3.
+
+**Table 3. M2: Depreciation parameters**
+
+| Description | Ordinary | Tail | Parameter-IDs |
+|---|:---:|:---:|---|
+| Andra markarbeten och byggnader, linjekoncession | 100 | 24 | 2.1.1; 2.1.2 |
+| Annan ledning, linjekoncession | 100 | 24 | 2.2.1; 2.2.2 |
+| Annan ledning, områdeskoncession | 100 | 24 | 2.3.1; 2.3.2 |
+| Annan luftledning, linjekoncession | 100 | 24 | 2.4.1; 2.4.2 |
+| It-system | 20 | 4 | 2.5.1; 2.5.2 |
+| Kabelskåp | 60 | 14 | 2.6.1; 2.6.2 |
+| Ledning $\geq$ 220 kV (ej luftledning), linjekoncession | 80 | 20 | 2.7.1; 2.7.2 |
+| Luftledning $\geq$ 220 kV, linjekoncession | 120 | 30 | 2.8.1; 2.8.2 |
+| Luftledning, områdeskoncession | 80 | 20 | 2.9.1; 2.9.2 |
+| Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession | 80 | 20 | 2.10.1; 2.10.2 |
+| Markarbeten och byggnader, områdeskoncession | 100 | 24 | 2.11.1; 2.11.2 |
+| Mätare | 20 | 4 | 2.12.1; 2.12.2 |
+| Nätstation | 80 | 20 | 2.13.1; 2.13.2 |
+| Shuntreaktor | 80 | 20 | 2.14.1; 2.14.2 |
+| Styr- och kontrollutrustning | 30 | 6 | 2.15.1; 2.15.2 |
+| Ställverk utan sekundärapparater | 80 | 20 | 2.16.1; 2.16.2 |
+| Transformator | 100 | 24 | 2.17.1; 2.17.2 |
+
+*Notes: Ordinary and tail lifetimes in years. The tail period cannot exceed the ordinary lifetime; a larger value is treated as equal to the ordinary lifetime in the calculation.*
 
 ### 3.3 M3: Cost of capital
 
@@ -130,17 +204,63 @@ The WACC is the real, pre-tax weighted average cost of capital. You can specify 
 - **Derived**: modify the intermediate quantities directly, such as the cost of equity, cost of debt, debt ratio, tax rate, and inflation. Use this when you want to set, say, the cost of equity without specifying the full CAPM chain behind it.
 - **Direct input**: enter the real, pre-tax WACC directly.
 
-Baseline values for all WACC parameters, with their Parameter-IDs, are given in Table A2 in Appendix A. When you set a derived quantity directly, that value overrides any sub-parameters behind it.
+Baseline values for all WACC parameters, with their Parameter-IDs, are given in Table 4. When you set a derived quantity directly, that value overrides any sub-parameters behind it.
+
+**Table 4. M3: Cost of capital (WACC) parameters**
+
+| Description | Baseline | Parameter-ID |
+|---|:---:|---|
+| *Base parameters* | | |
+| Debt ratio | 0.36 | 3.1.1 |
+| Asset beta | 0.37 | 3.1.2 |
+| Risk-free rate | 0.0287 | 3.1.3 |
+| Market risk premium | 0.0668 | 3.1.4 |
+| Credit risk premium | 0.0114 | 3.1.5 |
+| Tax rate | 0.206 | 3.1.6 |
+| Inflation, CPIF forecast | 0.0202 | 3.1.7 |
+| *Derived parameters* | | |
+| Equity beta | 0.54 | 3.2.1 |
+| Nominal cost of equity after tax | 0.0645 | 3.2.2 |
+| Nominal cost of debt after tax | 0.0318 | 3.2.3 |
+| Nominal WACC before tax | 0.0664 | 3.2.4 |
+| Real WACC before tax | 0.0453 | 3.2.5 |
+
+*Notes: Setting a derived parameter directly overrides changes to the base parameters behind it.*
 
 #### 3.3.2 Incentive parameters
 
-The allowed return is adjusted by three incentive schemes, each of which can be switched on or off:
+The allowed return is adjusted by three incentive schemes, each of which can be switched on or off; Table 5 lists the baseline incentive parameters.
 
-- **Quality (3.3)**: compensates for the quality of supply, based on interruptions. You can adjust the maximum CEMI4 correction and the underlying interruption cost tables for interruption energy (ILE, kr/kWh) and interruption power (ILEffekt, kr/kW), listed by customer type in Table A4 in Appendix A.
+- **Quality (3.3)**: compensates for the quality of supply, based on interruptions. You can adjust the maximum CEMI4 correction and the underlying interruption cost tables for interruption energy (ILE, kr/kWh) and interruption power (ILEffekt, kr/kW), listed by customer type in Table 6.
 - **Network loss (3.4)**: rewards or penalizes network losses relative to a norm. You can set the sharing factor, i.e. the share of the gain or loss retained by the company, and the electricity price used to value losses, per year.
 - **Utilization rate (3.5)**: rewards higher capacity utilization. This scheme is computed automatically from company data; here you only enable or disable it.
 
 In addition, you can set the cap on the **total** incentive adjustment per year, expressed as a share of the allowed return, and the KPI factors used to index interruption costs to the price level of the reference year (one per year).
+
+**Table 5. M3: Incentive adjustment parameters**
+
+| Description | Baseline | Parameter-ID |
+|---|:---:|---|
+| Max total adjustment (share of allowed return) | 0.333 | 3.3.1 |
+| Network loss incentive sharing factor | 0.75 | 3.4.2 |
+| Average network loss cost (kr/MWh) | 734 | 3.4.3 |
+| CEMI4 correction factor | 0.25 | 3.6.6 |
+| KPI indexation factor (per year) | 1.1546 | 3.7.1–3.7.4 |
+
+*Notes: The electricity price (3.4.3) and the KPI indexation factors (3.7.1–3.7.4) are set per year. The interruption cost tables (ILE/ILEffekt) underlying the quality scheme are listed by customer type in Table 6.*
+
+**Table 6. M3: Interruption cost tables (ILE/ILEffekt) by customer type**
+
+| Order | Customer type | ILE unplanned (kr/kWh) | ILE planned (kr/kWh) | ILEffekt unplanned (kr/kW) | ILEffekt planned (kr/kW) |
+|:---:|---|---:|---:|---:|---:|
+| 1 | Household | 5.84 | 4.98 | 1.95 | 1.85 |
+| 2 | Agriculture | 34.35 | 14.10 | 9.78 | 1.72 |
+| 3 | Trade/Services | 175.06 | 79.31 | 17.78 | 5.94 |
+| 4 | Industry | 159.96 | 76.00 | 70.75 | 20.71 |
+| 5 | Public sector | 96.97 | 43.70 | 7.65 | 0.92 |
+| 6 | Boundary points | 96.01 | 45.16 | 22.18 | 7.08 |
+
+*Notes: ILE (interruption energy cost, kr/kWh) and ILEffekt (interruption power cost, kr/kW) are the per-customer-type cost rates underlying the quality (interruption) incentive (M3, Section 3.3); each is reported for unplanned and planned interruptions. They are adjustable parameters, Parameter-IDs 3.6.7–3.6.18 (ILE) and 3.6.19–3.6.30 (ILEffekt), two per customer type in the order shown (unplanned then planned). The same six customer types index the interruption variables (30.4.x) in Table 7.*
 
 #### 3.3.3 Incentive variables (own area)
 
@@ -150,7 +270,27 @@ These are the company-specific inputs to the incentive schemes for your concessi
 - **Utilization rate (30.3)**: norm and observed utilization and the cost of the upstream network.
 - **Interruptions (30.4)**: the CEMI4 measure, and, per customer type, the average interruption time (AIT), average interruption frequency (AIF), and annual average power.
 
-The full set of interruption variables, broken down by customer type and by planned/unplanned and norm/observed, is listed in Table B2 in Appendix B.
+The full set of interruption variables, broken down by customer type and by planned/unplanned and norm/observed, is listed in Table 7.
+
+**Table 7. M3: Incentive variables (input, own area)**
+
+| Description | Variable-ID |
+|---|---|
+| *30.2 Network loss* | |
+| Network loss norm level | 30.2.1 |
+| Network loss observed level | 30.2.2 |
+| Energy input | 30.2.3 |
+| *30.3 Utilization rate* | |
+| Utilization rate norm level | 30.3.1 |
+| Utilization rate observed level | 30.3.2 |
+| Cost for upstream network | 30.3.3 |
+| *30.4 Interruptions* | |
+| CEMI4 norm / observed | 30.4.1 / 30.4.2 |
+| Annual average power, per customer type | 30.4.3–30.4.8 |
+| Average interruption time (AIT), norm and observed, per customer type | 30.4.9–30.4.32 |
+| Average interruption frequency (AIF), norm and observed, per customer type | 30.4.33–30.4.56 |
+
+*Notes: Customer types: Household, Agriculture, Trade/Services, Industry, Public sector, Boundary points (Table 6). AIT and AIF are reported for planned and unplanned interruptions, each as a norm and an observed value. An override applies to all years 2024–2027.*
 
 ### 3.4 M4: Operating expenditures
 
@@ -164,9 +304,29 @@ Three multipliers are available (baseline 1.00 each):
 - **Flexibility services (4.1.2)**: the cost of flexibility services.
 - **Non-adjustable OPEX (4.1.3)**: costs outside the operator's direct control.
 
+Table 8 lists these scaling factors with their Parameter-IDs.
+
+**Table 8. M4: Operating expenditure parameters**
+
+| Description | Baseline | Parameter-ID |
+|---|:---:|---|
+| Scaling factor adjustable OPEX | 1.00 | 4.1.1 |
+| Scaling factor flexibility services | 1.00 | 4.1.2 |
+| Scaling factor non-adjustable OPEX | 1.00 | 4.1.3 |
+
 #### 3.4.2 OPEX variables (own area)
 
-Instead of scaling, you can set the level of each component directly for your concession area, in tkr: adjustable OPEX (40.1.1), flexibility services (40.1.2), and non-adjustable costs (40.2.1). A direct override takes precedence over the corresponding scaling factor for your company.
+Instead of scaling, you can set the level of each component directly for your concession area, in tkr: adjustable OPEX, flexibility services, and non-adjustable costs. A direct override takes precedence over the corresponding scaling factor for your company. Table 9 lists the corresponding Variable-IDs.
+
+**Table 9. M4: OPEX variables (input, own area)**
+
+| Description | Variable-ID |
+|---|---|
+| Adjustable OPEX | 40.1.1 |
+| Flexibility service cost | 40.1.2 |
+| Total non-adjustable costs | 40.2.1 |
+
+*Notes: Values in tkr. A direct override takes precedence over the corresponding scaling factor (4.1.x).*
 
 ### 3.5 M5: Efficiency incentive (benchmarking)
 
@@ -193,7 +353,20 @@ The efficiency requirement section converts the efficiency potential measured by
 - **Minimum annual requirement (5.3.1)**: a floor on the annual requirement. Baseline 1%.
 - **Cost base (5.4.1)**: whether the efficiency requirement is applied to OPEX only (baseline) or to TOTEX (including capital costs).
 
-The tool shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above.
+The tool shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above. Table 10 collects these parameters with their baseline values.
+
+**Table 10. M5: Efficiency incentive parameters**
+
+| Description | Baseline | Parameter-ID |
+|---|:---:|---|
+| Outlier threshold (IQRs above $Q_{3}$) <sup>a</sup> | 2.00 | 5.1.1 |
+| Maximum efficiency potential cap | 0.30 | 5.2.1 |
+| Realization time (years) | 8 | 5.2.2 |
+| Customer sharing factor | 0.50 | 5.2.3 |
+| Minimum annual efficiency requirement | 0.0100 | 5.3.1 |
+| Apply efficiency requirement on TOTEX | No (OPEX only) | 5.4.1 |
+
+*<sup>a</sup> The outlier threshold is configured in the benchmarking section of the efficiency incentive (M5, Section 3.5.1) as part of the DEA specification.*
 
 ---
 
@@ -212,172 +385,9 @@ The results are presented in several complementary ways:
 - **Revenue frame summary**: the total revenue frame for the case, the baseline total, and the difference between them.
 - **Decomposition**: a breakdown of the revenue frame into its components (capital costs, depreciation, return, operating expenditures, efficiency and incentive adjustments, flexibility services, interruption compensation, and deductions), each labeled with its Variable-ID.
 - **Geographic comparison**: a map placing your concession area in the context of all areas for a selected result variable.
-- **Module outputs**: per-module detail (asset base, depreciation, cost of capital, and the efficiency incentive), each compared against baseline. The output variables shown here are catalogued in Table B4 in Appendix B.
+- **Module outputs**: per-module detail (asset base, depreciation, cost of capital, and the efficiency incentive), each compared against baseline. The output variables shown here are catalogued in Table 11.
 
-### 4.3 Export
-
-The full revenue frame and all underlying calculation components can be downloaded for your own analysis and documentation.
-
----
-
-## Appendix
-
-### A. Parameter reference
-
-This appendix lists the adjustable parameters by module, with their baseline values. Parameters apply to all companies.
-
-#### Table A1. M1: Asset base valuation parameters
-
-| Description | Baseline | Parameter-ID |
-|---|:---:|---|
-| General scaling factor for asset valuation | 1.00 | 1.1.1 |
-| *Category scaling factors (baseline 1.00 each)* | | |
-| Andra markarbeten och byggnader, linjekoncession | 1.00 | 1.2.1 |
-| Annan ledning, linjekoncession | 1.00 | 1.2.2 |
-| Annan ledning, områdeskoncession | 1.00 | 1.2.3 |
-| Annan luftledning, linjekoncession | 1.00 | 1.2.4 |
-| It-system | 1.00 | 1.2.5 |
-| Kabelskåp | 1.00 | 1.2.6 |
-| Ledning $\geq$ 220 kV (ej luftledning), linjekoncession | 1.00 | 1.2.7 |
-| Luftledning $\geq$ 220 kV, linjekoncession | 1.00 | 1.2.8 |
-| Luftledning, områdeskoncession | 1.00 | 1.2.9 |
-| Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession | 1.00 | 1.2.10 |
-| Markarbeten och byggnader, områdeskoncession | 1.00 | 1.2.11 |
-| Mätare | 1.00 | 1.2.12 |
-| Nätstation | 1.00 | 1.2.13 |
-| Shuntreaktor | 1.00 | 1.2.14 |
-| Styr- och kontrollutrustning | 1.00 | 1.2.15 |
-| Ställverk utan sekundärapparater | 1.00 | 1.2.16 |
-| Transformator | 1.00 | 1.2.17 |
-
-*Scaling factors are applied multiplicatively to the asset norm values. Full category names are given in Table C1 in Appendix C.*
-
-#### Table A2. M3: Cost of capital (WACC) parameters
-
-| Description | Baseline | Parameter-ID |
-|---|:---:|---|
-| *Base parameters* | | |
-| Debt ratio | 0.36 | 3.1.1 |
-| Asset beta | 0.37 | 3.1.2 |
-| Risk-free rate | 0.0287 | 3.1.3 |
-| Market risk premium | 0.0668 | 3.1.4 |
-| Credit risk premium | 0.0114 | 3.1.5 |
-| Tax rate | 0.206 | 3.1.6 |
-| Inflation, CPIF forecast | 0.0202 | 3.1.7 |
-| *Derived parameters* | | |
-| Equity beta | 0.54 | 3.2.1 |
-| Nominal cost of equity after tax | 0.0645 | 3.2.2 |
-| Nominal cost of debt after tax | 0.0318 | 3.2.3 |
-| Nominal WACC before tax | 0.0664 | 3.2.4 |
-| Real WACC before tax | 0.0453 | 3.2.5 |
-
-*Setting a derived parameter directly overrides changes to the base parameters behind it.*
-
-#### Table A3. M3: Incentive adjustment parameters
-
-| Description | Baseline | Parameter-ID |
-|---|:---:|---|
-| Max total adjustment (share of allowed return) | 0.333 | 3.3.1 |
-| Network loss incentive sharing factor | 0.75 | 3.4.2 |
-| Average network loss cost (kr/MWh) | 734 | 3.4.3 |
-| CEMI4 correction factor | 0.25 | 3.6.6 |
-| KPI indexation factor (per year) | 1.1546 | 3.7.1–3.7.4 |
-
-*The electricity price (3.4.3) and the KPI indexation factors (3.7.1–3.7.4) are set per year. The interruption cost tables (ILE/ILEffekt) underlying the quality scheme are listed by customer type in Table A4 in Appendix A.*
-
-#### Table A4. M3: Interruption cost tables (ILE/ILEffekt) by customer type
-
-| Order | Customer type | ILE unplanned (kr/kWh) | ILE planned (kr/kWh) | ILEffekt unplanned (kr/kW) | ILEffekt planned (kr/kW) |
-|:---:|---|---:|---:|---:|---:|
-| 1 | Household | 5.84 | 4.98 | 1.95 | 1.85 |
-| 2 | Agriculture | 34.35 | 14.10 | 9.78 | 1.72 |
-| 3 | Trade/Services | 175.06 | 79.31 | 17.78 | 5.94 |
-| 4 | Industry | 159.96 | 76.00 | 70.75 | 20.71 |
-| 5 | Public sector | 96.97 | 43.70 | 7.65 | 0.92 |
-| 6 | Boundary points | 96.01 | 45.16 | 22.18 | 7.08 |
-
-*ILE (interruption energy cost, kr/kWh) and ILEffekt (interruption power cost, kr/kW) are the per-customer-type cost rates underlying the quality (interruption) incentive (M3, Section 3.3); each is reported for unplanned and planned interruptions. They are adjustable parameters, Parameter-IDs 3.6.7–3.6.18 (ILE) and 3.6.19–3.6.30 (ILEffekt), two per customer type in the order shown (unplanned then planned). The same six customer types index the interruption variables (30.4.x) in Table B2 in Appendix B.*
-
-#### Table A5. M4: Operating expenditure parameters
-
-| Description | Baseline | Parameter-ID |
-|---|:---:|---|
-| Scaling factor adjustable OPEX | 1.00 | 4.1.1 |
-| Scaling factor flexibility services | 1.00 | 4.1.2 |
-| Scaling factor non-adjustable OPEX | 1.00 | 4.1.3 |
-
-#### Table A6. M5: Efficiency incentive parameters
-
-| Description | Baseline | Parameter-ID |
-|---|:---:|---|
-| Outlier threshold (IQRs above $Q_{3}$) <sup>a</sup> | 2.00 | 5.1.1 |
-| Maximum efficiency potential cap | 0.30 | 5.2.1 |
-| Realization time (years) | 8 | 5.2.2 |
-| Customer sharing factor | 0.50 | 5.2.3 |
-| Minimum annual efficiency requirement | 0.0100 | 5.3.1 |
-| Apply efficiency requirement on TOTEX | No (OPEX only) | 5.4.1 |
-
-*<sup>a</sup> The outlier threshold is configured in the benchmarking section of the efficiency incentive (M5, Section 3.5.1) as part of the DEA specification.*
-
-### B. Variable reference
-
-This appendix lists the input variables you can adjust and the main output variables shown in the results. Input variables apply only to your own concession area.
-
-#### Table B1. M1: Asset quantity variables (input)
-
-| Description | Variable-ID |
-|---|---|
-| Andra markarbeten och byggnader, linjekoncession | 10.2 |
-| Annan ledning, linjekoncession | 10.3 |
-| Annan ledning, områdeskoncession | 10.4 |
-| Annan luftledning, linjekoncession | 10.5 |
-| It-system | 10.6 |
-| Kabelskåp | 10.7 |
-| Ledning $\geq$ 220 kV (ej luftledning), linjekoncession | 10.8 |
-| Luftledning $\geq$ 220 kV, linjekoncession | 10.9 |
-| Luftledning, områdeskoncession | 10.10 |
-| Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession | 10.11 |
-| Markarbeten och byggnader, områdeskoncession | 10.12 |
-| Mätare | 10.13 |
-| Nätstation | 10.14 |
-| Shuntreaktor | 10.15 |
-| Styr- och kontrollutrustning | 10.16 |
-| Ställverk utan sekundärapparater | 10.17 |
-| Transformator | 10.18 |
-
-*Asset quantities are sourced from the KENT reporting template; units vary by asset type.*
-
-#### Table B2. M3: Incentive variables (input, own area)
-
-| Description | Variable-ID |
-|---|---|
-| *30.2 Network loss* | |
-| Network loss norm level | 30.2.1 |
-| Network loss observed level | 30.2.2 |
-| Energy input | 30.2.3 |
-| *30.3 Utilization rate* | |
-| Utilization rate norm level | 30.3.1 |
-| Utilization rate observed level | 30.3.2 |
-| Cost for upstream network | 30.3.3 |
-| *30.4 Interruptions* | |
-| CEMI4 norm / observed | 30.4.1 / 30.4.2 |
-| Annual average power, per customer type | 30.4.3–30.4.8 |
-| Average interruption time (AIT), norm and observed, per customer type | 30.4.9–30.4.32 |
-| Average interruption frequency (AIF), norm and observed, per customer type | 30.4.33–30.4.56 |
-
-*Customer types: Household, Agriculture, Trade/Services, Industry, Public sector, Boundary points (Table A4 in Appendix A). AIT and AIF are reported for planned and unplanned interruptions, each as a norm and an observed value. An override applies to all years 2024–2027.*
-
-#### Table B3. M4: OPEX variables (input, own area)
-
-| Description | Variable-ID |
-|---|---|
-| Adjustable OPEX | 40.1.1 |
-| Flexibility service cost | 40.1.2 |
-| Total non-adjustable costs | 40.2.1 |
-
-*Values in tkr. A direct override takes precedence over the corresponding scaling factor (4.1.x).*
-
-#### Table B4. Main output variables (shown in results)
+**Table 11. Main output variables (shown in results)**
 
 | Description | Variable-ID |
 |---|---|
@@ -392,30 +402,8 @@ This appendix lists the input variables you can adjust and the main output varia
 | Efficiency potential / applied potential | 50.3.3 / 50.3.4 |
 | Efficiency adjustment, OPEX / CAPEX | 50.4.1 / 50.4.2 |
 
-*Output variables are computed by the model and shown in the results; they are not directly editable. Values in kr unless noted. For each adjustment, the variants shown are before and after the applicable cap.*
+*Notes: Output variables are computed by the model and shown in the results; they are not directly editable. Values in kr unless noted. For each adjustment, the variants shown are before and after the applicable cap.*
 
-### C. Asset categories
+### 4.3 Export
 
-#### Table C1. Asset categories and baseline lifetimes
-
-| Code | Category | Ordinary | Tail | Parameter-IDs |
-|:---:|---|:---:|:---:|---|
-| 1 | Andra markarbeten och byggnader, linjekoncession | 100 | 24 | 2.1.1; 2.1.2 |
-| 2 | Annan ledning, linjekoncession | 100 | 24 | 2.2.1; 2.2.2 |
-| 3 | Annan ledning, områdeskoncession | 100 | 24 | 2.3.1; 2.3.2 |
-| 4 | Annan luftledning, linjekoncession | 100 | 24 | 2.4.1; 2.4.2 |
-| 5 | It-system | 20 | 4 | 2.5.1; 2.5.2 |
-| 6 | Kabelskåp | 60 | 14 | 2.6.1; 2.6.2 |
-| 7 | Ledning $\geq$ 220 kV (ej luftledning), linjekoncession | 80 | 20 | 2.7.1; 2.7.2 |
-| 8 | Luftledning $\geq$ 220 kV, linjekoncession | 120 | 30 | 2.8.1; 2.8.2 |
-| 9 | Luftledning, områdeskoncession | 80 | 20 | 2.9.1; 2.9.2 |
-| 10 | Markarbeten och byggnader, ledningsnät $\geq$ 220 kV, linjekoncession | 80 | 20 | 2.10.1; 2.10.2 |
-| 11 | Markarbeten och byggnader, områdeskoncession | 100 | 24 | 2.11.1; 2.11.2 |
-| 12 | Mätare | 20 | 4 | 2.12.1; 2.12.2 |
-| 13 | Nätstation | 80 | 20 | 2.13.1; 2.13.2 |
-| 14 | Shuntreaktor | 80 | 20 | 2.14.1; 2.14.2 |
-| 15 | Styr- och kontrollutrustning | 30 | 6 | 2.15.1; 2.15.2 |
-| 16 | Ställverk utan sekundärapparater | 80 | 20 | 2.16.1; 2.16.2 |
-| 17 | Transformator | 100 | 24 | 2.17.1; 2.17.2 |
-
-*Ordinary and tail lifetimes in years. The category code is used throughout the scaling (1.2.x), quantity (10.x), and lifetime (2.x) parameters and variables.*
+The full revenue frame and all underlying calculation components can be downloaded for your own analysis and documentation.
