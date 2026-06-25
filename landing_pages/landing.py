@@ -208,7 +208,6 @@ landing_profile(
             '<span class="rm-placeholder">Placeholder — second selected item.</span>',
         ],
     },
-    affiliations=["IFN", "Stanford (PESD)", "PhD, Stockholm School of Economics"],
     email="erik@eriklundin.org",
     link=("Personal website", "https://www.eriklundin.org"),
 )
@@ -229,7 +228,6 @@ landing_profile(
         "thesis on frontier analysis in regulatory benchmarking. Background in "
         "public affairs in wind power and regulatory analysis for government "
         "agencies.",
-    affiliations=["IFN", "MSc Economics, University of Gothenburg"],
 )
 
 landing_footer()
