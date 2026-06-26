@@ -342,7 +342,7 @@ def apply_landing_shell() -> None:
         '<span class="rm-brand">Regumetrica</span>'
         '<nav class="rm-nav">'
         '<a href="#home">Home</a>'
-        '<a href="#tools">Tools</a>'
+        '<a href="#tools">Modules</a>'
         '<a href="#team">Team</a>'
         '</nav></div>',
         unsafe_allow_html=True,
@@ -355,7 +355,7 @@ def apply_landing_shell() -> None:
         # landing (with its manuals) stays open beside it, side by side.
         st.markdown(
             f'<a class="rm-cta" href="{_TOOL_ENTRY_URL}" target="_blank" '
-            'rel="noopener">Open tool</a>',
+            'rel="noopener">Launch</a>',
             unsafe_allow_html=True,
         )
 

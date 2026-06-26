@@ -180,13 +180,16 @@ def _render_return_kpi(
     wacc_delta = wacc_case - BASELINE_WACC
     wacc_delta_str = format_pp(wacc_delta) if abs(wacc_delta) > 1e-6 else None
 
+    # Total parent "30.1.1" derived from the ordinary leaf "30.1.1.1"
+    _tot = VID_TOTAL_CAPITAL_COST_ORD.rsplit(".", 1)[0]
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total", fmt_msek(c_total), fmt_delta_msek(c_total - b_total))
+        st.metric(f"Total ({_tot})", fmt_msek(c_total), fmt_delta_msek(c_total - b_total))
     with col2:
-        st.metric("Ordinarie", fmt_msek(c_ord), fmt_delta_msek(c_ord - b_ord))
+        st.metric(f"Ordinarie ({VID_TOTAL_CAPITAL_COST_ORD})", fmt_msek(c_ord), fmt_delta_msek(c_ord - b_ord))
     with col3:
-        st.metric("Tail", fmt_msek(c_tail), fmt_delta_msek(c_tail - b_tail))
+        st.metric(f"Tail ({VID_TOTAL_CAPITAL_COST_TAIL})", fmt_msek(c_tail), fmt_delta_msek(c_tail - b_tail))
     with col4:
         st.metric(f"{PID_WACC_REAL} WACC", fmt_pct(wacc_case), delta=wacc_delta_str)
 

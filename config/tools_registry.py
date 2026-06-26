@@ -41,7 +41,7 @@ class ToolSpec:
 TOOLS: List[ToolSpec] = [
     ToolSpec(
         key="revenue_cap",
-        name="Revenue cap tool",
+        name="Revenue cap",
         branch="revenue_cap",
         status="available",
         manual_slug="regumetrica_user_manual",

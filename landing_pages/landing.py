@@ -143,7 +143,7 @@ landing_cards([
     {"eyebrow": "Always up to date", "title": "Evolves with the regulation",
      "body": "The regulation is being rebuilt for the 2028 to 2031 period, and it "
              "will keep changing after that. We interpret each change Ei makes and "
-             "build it into the tools, so Regumetrica reflects where the regulation "
+             "build it into the modules, so Regumetrica reflects where the regulation "
              "is heading, not only where it has been. The new benchmarking model is "
              "the first of these."},
 ])
@@ -155,22 +155,22 @@ landing_cards([
 landing_anchor("tools")
 
 
-landing_heading("The tools", eyebrow="What you can do", level=1)
+landing_heading("The modules", eyebrow="What you can do", level=1)
 st.markdown(
-    '<div class="rm-hero-sub">Regumetrica is a small suite of regulatory tools, and '
+    '<div class="rm-hero-sub">Regumetrica is a small suite of regulatory modules, and '
     "the suite grows as the regulation does. Sign in to use them; each card links to "
-    "that tool's manual.</div>",
+    "that module's manual.</div>",
     unsafe_allow_html=True,
 )
 
 st.write("")
 
-landing_heading("Revenue cap tool", eyebrow="Core tool")
+landing_heading("Main module", eyebrow="Core")
 _render_tool_cards("revenue_cap")
 
 st.write("")
 
-landing_heading("Standalone tools", eyebrow="Add-on analyses")
+landing_heading("Add-on modules", eyebrow="Add-on analyses")
 _render_tool_cards("standalone")
 
 

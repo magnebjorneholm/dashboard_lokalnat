@@ -37,7 +37,7 @@ from pipeline.result_helpers import (
     add_comparison_traces,
 )
 from config.glossary import (
-    depreciation_var_id, depreciation_components_var_id,
+    depreciation_components_var_id,
     VID_TOTAL_DEPRECIATION_ORD, VID_TOTAL_DEPRECIATION_TAIL,
 )
 
@@ -50,13 +50,8 @@ from config.glossary import (
 _ORD, _TAIL, _TOTAL = 'dep_ord', 'dep_tail', 'dep_total'
 
 
-def _var_id(cat_encode: int) -> str:
-    """20.{cat_encode + 1}"""
-    return depreciation_var_id(cat_encode)
-
-
 def _var_id_components(cat_encode: int) -> str:
-    """20.{cat_encode + 1}.1; 20.{cat_encode + 1}.2"""
+    """20.{cat_encode + 1}.1/.2 (ordinary/tail)"""
     return depreciation_components_var_id(cat_encode)
 
 
@@ -269,7 +264,7 @@ def _render_category_table(
         hy_vals = halfyear_values(case_hy, ce, 'dep_total', divisor=TKR_TO_MSEK)
 
         rows.append({
-            'Var-ID': _var_id(ce),
+            'Var-ID': _var_id_components(ce),
             'Category': cat.name,
             'Ord (MSEK)': c_ord / TKR_TO_MSEK,
             'Tail (MSEK)': c_tail / TKR_TO_MSEK,

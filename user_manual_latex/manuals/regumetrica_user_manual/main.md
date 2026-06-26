@@ -24,24 +24,24 @@ The regulatory model is organized into *Base modules* and *Add-on modules*. Base
 
 - *Variables* are measurable inputs that vary across regulated entities. They correspond to real-world data, such as asset quantities, operating costs, or energy delivered, that the model uses to calculate revenue frames. Most variables are reported to the regulator through the KENT excel reporting template. **A change to a variable applies only to your own concession area.** Regumetrica users have the option of adjusting such variables manually, or by uploading standardized KENT excel sheets.
 
-*Add-on modules* extend the base regulatory model with analyses that fall outside the scope of the current regulatory framework. Each add-on is delivered as a separate tool with its own user manual. The first is the *New benchmarking model*, which estimates how a network's efficiency requirement would change under Ei's proposed total-expenditure (TOTEX) benchmarking model for the 2028–2031 regulatory period. For more information, see its separate user manual. Further add-on modules will be added over time.
+*Add-on modules* extend the base regulatory model with analyses that fall outside the scope of the current regulatory framework. Each add-on is a separate module with its own user manual. The first is the *New benchmarking model*, which estimates how a network's efficiency requirement would change under Ei's proposed total-expenditure (TOTEX) benchmarking model for the 2028–2031 regulatory period. For more information, see its separate user manual. Further add-on modules will be added over time.
 
 ### How to use this manual
 
-The revenue cap tool is organized as a four-step workflow, and this manual follows that order. You move through the steps using the sidebar:
+The revenue cap module is organized as a four-step workflow, and this manual follows that order. You move through the steps using the sidebar:
 
 1. **Create and select case**: create a new case or open a saved one.
 2. **Case Setup**: choose which modules you want to configure.
 3. **Specification**: adjust the parameters and variables of the selected modules.
 4. **Revenue Frame**: run the calculation and read, compare, and export the results.
 
-Two conventions recur throughout. First, anything you do not change keeps its *baseline* value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a *Parameter-ID* (e.g. 1.1.1) or a *Variable-ID* (e.g. 10.2). These IDs are cited next to each field in the tool and used consistently in this manual; baseline values and the full ID catalogue are given in tables within the relevant module sections.
+Two conventions recur throughout. First, anything you do not change keeps its *baseline* value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a *Parameter-ID* (e.g. 1.1.1) or a *Variable-ID* (e.g. 10.2). These IDs are cited next to each field in the module and used consistently in this manual; baseline values and the full ID catalogue are given in tables within the relevant module sections.
 
 ---
 
 ## 1. Create and select case
 
-This is the entry page of the revenue cap tool. Here you create the case you want to work on, or reopen one you saved earlier. All later steps act on the case that is currently open.
+This is the entry page of the revenue cap module. Here you create the case you want to work on, or reopen one you saved earlier. All later steps act on the case that is currently open.
 
 ### 1.1 Creating a case
 
@@ -76,7 +76,7 @@ The base modules correspond to the components of the revenue frame:
 - **M4: Operating expenditures**
 - **M5: Efficiency incentive (benchmarking)**
 
-The revenue cap tool has no add-on modules of its own: the benchmarking analysis is a section within the efficiency incentive (M5), not a separate module. Add-on modules, such as the New benchmarking model, are delivered as separate tools with their own manuals (see the Introduction).
+The revenue cap module has no add-on modules of its own: the benchmarking analysis is a section within the efficiency incentive (M5), not a separate module. Add-on modules, such as the New benchmarking model, are separate, each with its own manual (see the Introduction).
 
 Most modules are divided into sections so that you can, for example, adjust cost-of-capital *parameters* without also opening the company-specific *variables*, or configure the benchmarking specification of the efficiency incentive separately from its requirement parameters. Sections that adjust parameters affect all companies; sections that adjust variables affect only your own concession area. The individual sections are described together with their fields in Section 3.
 
@@ -200,7 +200,7 @@ This module covers the allowed return on capital, the WACC, and the incentive sc
 
 The WACC is the real, pre-tax weighted average cost of capital. You can specify it in three ways; in every case the result is an "active WACC" that you apply to the case.
 
-- **Base parameters**: enter the underlying CAPM inputs (debt ratio, asset beta, risk-free rate, market risk premium, credit risk premium, tax rate, and inflation) and let the tool derive the WACC, displaying the resulting equity beta, cost of equity, cost of debt, and the final real, pre-tax WACC used in the calculations.
+- **Base parameters**: enter the underlying CAPM inputs (debt ratio, asset beta, risk-free rate, market risk premium, credit risk premium, tax rate, and inflation) and let the module derive the WACC, displaying the resulting equity beta, cost of equity, cost of debt, and the final real, pre-tax WACC used in the calculations.
 - **Derived**: modify the intermediate quantities directly, such as the cost of equity, cost of debt, debt ratio, tax rate, and inflation. Use this when you want to set, say, the cost of equity without specifying the full CAPM chain behind it.
 - **Direct input**: enter the real, pre-tax WACC directly.
 
@@ -353,7 +353,7 @@ The efficiency requirement section converts the efficiency potential measured by
 - **Minimum annual requirement (5.3.1)**: a floor on the annual requirement. Baseline 1%.
 - **Cost base (5.4.1)**: whether the efficiency requirement is applied to OPEX only (baseline) or to TOTEX (including capital costs).
 
-The tool shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above. Table 10 collects these parameters with their baseline values.
+The module shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above. Table 10 collects these parameters with their baseline values.
 
 **Table 10. M5: Efficiency incentive parameters**
 
@@ -392,8 +392,8 @@ The results are presented in several complementary ways:
 | Description | Variable-ID |
 |---|---|
 | Asset value, total and per category | 11.1; 11.2–11.18 |
-| Depreciation cost, total and per category | 20.1; 20.2–20.18 |
-| Capital cost (return), total and per category | 30.1.1; 30.1.2–30.1.18 |
+| Depreciation cost, total and per category (ordinary / tail) | 20.1.1 / 20.1.2; 20.2.1/.2–20.18.1/.2 |
+| Capital cost (return), total and per category (ordinary / tail) | 30.1.1.1 / 30.1.1.2; 30.1.2.1/.2–30.1.18.1/.2 |
 | Network loss adjustment | 30.2.4 / 30.2.5 |
 | Utilization rate adjustment | 30.3.4 / 30.3.5 |
 | Interruption adjustment | 30.4.57–30.4.59 |
@@ -402,7 +402,7 @@ The results are presented in several complementary ways:
 | Efficiency potential / applied potential | 50.3.3 / 50.3.4 |
 | Efficiency adjustment, OPEX / CAPEX | 50.4.1 / 50.4.2 |
 
-*Notes: Output variables are computed by the model and shown in the results; they are not directly editable. Values in kr unless noted. For each adjustment, the variants shown are before and after the applicable cap.*
+*Notes: Output variables are computed by the model and shown in the results; they are not directly editable. Values in kr unless noted. For each adjustment, the variants shown are before and after the applicable cap. Depreciation and capital cost (return) are split into an ordinary and a tail component, at both the total and the per-category level: the suffix `.1` denotes the ordinary component and `.2` the tail, and the per-category shorthand `.1/.2` stands for both (e.g. 20.2.1/.2 means 20.2.1 and 20.2.2).*
 
 ### 4.3 Export
 

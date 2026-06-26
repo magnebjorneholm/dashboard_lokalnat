@@ -140,9 +140,13 @@ def depreciation_tail_var_id(cat_encode: int) -> str:
     return f"20.{cat_encode + 1}.2"
 
 def depreciation_components_var_id(cat_encode: int) -> str:
-    """Combined Variable-ID string 'ord / tail' for display. Table 5."""
+    """Combined Variable-ID string '.1/.2' (ordinary/tail) for display. Table 5.
+
+    Mirrors the slash form used by capital_cost_var_id(..., "combined") so the
+    M2 (depreciation) and M3 (return) per-category Variable-IDs read symmetrically.
+    """
     base = cat_encode + 1
-    return f"20.{base}.1; 20.{base}.2"
+    return f"20.{base}.1/.2"
 
 
 # =============================================================================

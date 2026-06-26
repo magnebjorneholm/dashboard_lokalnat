@@ -27,7 +27,6 @@ from frontend.modules.base import (
     m5_efficiency,
 )
 from frontend.modules.addons import benchmarking
-from frontend.common.manuals import module_manual_panel
 from config.module_registry import get_module
 
 init_session_state()
@@ -100,7 +99,6 @@ def _render_m1_tab():
 
     user_id_network = get_user_id_network()
     st.markdown(f"#### {get_module('m1').title}")
-    module_manual_panel("m1")
 
     # Section: Scaling factors (1.1, 1.2)
     if is_section_selected("m1", "scaling"):
@@ -148,7 +146,6 @@ def _render_m2_tab():
 
     user_id_network = get_user_id_network()
     st.markdown(f"#### {get_module('m2').title}")
-    module_manual_panel("m2")
 
     if is_section_selected("m2", "lifetimes"):
         config = m2_depreciation.render_lifetimes(user_id_network=user_id_network)
@@ -162,7 +159,6 @@ def _render_m3_tab():
         return
 
     st.markdown(f"#### {get_module('m3').title}")
-    module_manual_panel("m3")
 
     # Section: WACC (3.1-3.2)
     if is_section_selected("m3", "wacc"):
@@ -191,7 +187,6 @@ def _render_m4_tab():
         return
 
     st.markdown(f"#### {get_module('m4').title}")
-    module_manual_panel("m4")
 
     # Section: OPEX scaling (4.1)
     if is_section_selected("m4", "scaling"):
@@ -215,7 +210,6 @@ def _render_m5_tab():
         return
 
     st.markdown(f"#### {get_module('m5').title}")
-    module_manual_panel("m5")
 
     # Section: Benchmarking (DEA specification) — measures relative efficiency
     if is_section_selected("m5", "benchmarking"):

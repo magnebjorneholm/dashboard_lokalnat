@@ -325,7 +325,7 @@ _REVENUE_CAP_SPECS = [
     ("pages/1_create_and_select_case.py", "1. Create and select case"),
     ("pages/2_case_setup.py", "2. Select modules to modify"),
     ("pages/3_specification.py", "3. Configure selected modules"),
-    ("pages/4_revenue_frame.py", "4. Compute revenue cap and save"),
+    ("pages/4_revenue_frame.py", "4. Compute revenue cap"),
 ]
 _STANDALONE_TOOL_SPECS = [
     ("pages/5_new_benchmarking.py", "New benchmarking model"),

@@ -46,10 +46,10 @@ The regulatory model is organized into \emph{Base modules} and \emph{Add-on modu
   \item \emph{Variables} are measurable inputs that vary across regulated entities. They correspond to real-world data, such as asset quantities, operating costs, or energy delivered, that the model uses to calculate revenue frames. Most variables are reported to the regulator through the KENT excel reporting template. \textbf{A change to a variable applies only to your own concession area.} Regumetrica users have the option of adjusting such variables manually, or by uploading standardized KENT excel sheets.
 \end{itemize}
 
-\emph{Add-on modules} extend the base regulatory model with analyses that fall outside the scope of the current regulatory framework. Each add-on is delivered as a separate tool with its own user manual. The first is the \emph{New benchmarking model}, which estimates how a network's efficiency requirement would change under Ei's proposed total-expenditure (TOTEX) benchmarking model for the 2028--2031 regulatory period. For more information, see its separate user manual. Further add-on modules will be added over time.
+\emph{Add-on modules} extend the base regulatory model with analyses that fall outside the scope of the current regulatory framework. Each add-on is a separate module with its own user manual. The first is the \emph{New benchmarking model}, which estimates how a network's efficiency requirement would change under Ei's proposed total-expenditure (TOTEX) benchmarking model for the 2028--2031 regulatory period. For more information, see its separate user manual. Further add-on modules will be added over time.
 
 \subsection*{How to use this manual}
-The revenue cap tool is organized as a four-step workflow, and this manual follows that order. You move through the steps using the sidebar:
+The revenue cap module is organized as a four-step workflow, and this manual follows that order. You move through the steps using the sidebar:
 
 \begin{enumerate}
   \item \textbf{Create and select case}: create a new case or open a saved one.
@@ -58,7 +58,7 @@ The revenue cap tool is organized as a four-step workflow, and this manual follo
   \item \textbf{Revenue Frame}: run the calculation and read, compare, and export the results.
 \end{enumerate}
 
-Two conventions recur throughout. First, anything you do not change keeps its \emph{baseline} value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a \emph{Parameter-ID} (e.g.\ 1.1.1) or a \emph{Variable-ID} (e.g.\ 10.2). These IDs are cited next to each field in the tool and used consistently in this manual; baseline values and the full ID catalogue are given in tables within the relevant module sections.
+Two conventions recur throughout. First, anything you do not change keeps its \emph{baseline} value, the value implied by the current regulatory model. Modules you do not select in Case Setup, and individual fields you do not edit, are all computed on baseline. Second, every adjustable input is identified by a \emph{Parameter-ID} (e.g.\ 1.1.1) or a \emph{Variable-ID} (e.g.\ 10.2). These IDs are cited next to each field in the module and used consistently in this manual; baseline values and the full ID catalogue are given in tables within the relevant module sections.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -66,7 +66,7 @@ Two conventions recur throughout. First, anything you do not change keeps its \e
 \label{sec:page-case}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-This is the entry page of the revenue cap tool. Here you create the case you want to work on, or reopen one you saved earlier. All later steps act on the case that is currently open.
+This is the entry page of the revenue cap module. Here you create the case you want to work on, or reopen one you saved earlier. All later steps act on the case that is currently open.
 
 \subsection{Creating a case}
 To start a new simulation, give the case a name (and, optionally, a note describing its purpose) and create it. The case opens immediately with all assumptions on baseline, ready to be configured in the following steps. You can store several cases and return to them later.
@@ -104,7 +104,7 @@ The base modules correspond to the components of the revenue frame:
   \item \textbf{M5: Efficiency incentive (benchmarking)}
 \end{itemize}
 
-\noindent The revenue cap tool has no add-on modules of its own: the benchmarking analysis is a section within the efficiency incentive (M5), not a separate module. Add-on modules, such as the New benchmarking model, are delivered as separate tools with their own manuals (see the Introduction).
+\noindent The revenue cap module has no add-on modules of its own: the benchmarking analysis is a section within the efficiency incentive (M5), not a separate module. Add-on modules, such as the New benchmarking model, are separate, each with its own manual (see the Introduction).
 
 Most modules are divided into sections so that you can, for example, adjust cost-of-capital \emph{parameters} without also opening the company-specific \emph{variables}, or configure the benchmarking specification of the efficiency incentive separately from its requirement parameters. Sections that adjust parameters affect all companies; sections that adjust variables affect only your own concession area. The individual sections are described together with their fields in Section~\ref{sec:page-spec}.
 
@@ -279,7 +279,7 @@ This module covers the allowed return on capital, the WACC, and the incentive sc
 The WACC is the real, pre-tax weighted average cost of capital. You can specify it in three ways; in every case the result is an ``active WACC'' that you apply to the case.
 
 \begin{itemize}
-  \item \textbf{Base parameters}: enter the underlying CAPM inputs (debt ratio, asset beta, risk-free rate, market risk premium, credit risk premium, tax rate, and inflation) and let the tool derive the WACC, displaying the resulting equity beta, cost of equity, cost of debt, and the final real, pre-tax WACC used in the calculations.
+  \item \textbf{Base parameters}: enter the underlying CAPM inputs (debt ratio, asset beta, risk-free rate, market risk premium, credit risk premium, tax rate, and inflation) and let the module derive the WACC, displaying the resulting equity beta, cost of equity, cost of debt, and the final real, pre-tax WACC used in the calculations.
   \item \textbf{Derived}: modify the intermediate quantities directly, such as the cost of equity, cost of debt, debt ratio, tax rate, and inflation. Use this when you want to set, say, the cost of equity without specifying the full CAPM chain behind it.
   \item \textbf{Direct input}: enter the real, pre-tax WACC directly.
 \end{itemize}
@@ -532,7 +532,7 @@ The efficiency requirement section converts the efficiency potential measured by
   \item \textbf{Cost base (5.4.1)}: whether the efficiency requirement is applied to OPEX only (baseline) or to TOTEX (including capital costs).
 \end{itemize}
 
-\noindent The tool shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above. Table~\ref{tab:app-m5} collects these parameters with their baseline values.
+\noindent The module shows the resulting range of the annual efficiency requirement as you change these values. The outlier threshold that excludes extreme firms (5.1.1) is set in the benchmarking section above. Table~\ref{tab:app-m5} collects these parameters with their baseline values.
 
 % --- M5 efficiency incentive parameters (Table 10) ---
 \begin{table}[H]
@@ -590,13 +590,13 @@ The results are presented in several complementary ways:
 \begin{threeparttable}
 \caption{Main output variables (shown in results)}
 \label{tab:app-var-out}
-\begin{tabular}{@{}p{10cm}l@{}}
+\begin{tabular}{@{}p{8.5cm}l@{}}
 \toprule
 \textbf{Description} & \textbf{Variable-ID} \\
 \midrule
 Asset value, total and per category & 11.1; 11.2--11.18 \\
-Depreciation cost, total and per category & 20.1; 20.2--20.18 \\
-Capital cost (return), total and per category & 30.1.1; 30.1.2--30.1.18 \\
+Depreciation cost, total and per category (ordinary / tail)\tnote{b} & 20.1.1 / 20.1.2; 20.2.1/.2--20.18.1/.2 \\
+Capital cost (return), total and per category (ordinary / tail)\tnote{b} & 30.1.1.1 / 30.1.1.2; 30.1.2.1/.2--30.1.18.1/.2 \\
 Network loss adjustment & 30.2.4 / 30.2.5 \\
 Utilization rate adjustment & 30.3.4 / 30.3.5 \\
 Interruption adjustment & 30.4.57--30.4.59 \\
@@ -608,6 +608,7 @@ Efficiency adjustment, OPEX / CAPEX & 50.4.1 / 50.4.2 \\
 \end{tabular}
 \begin{tablenotes}
 \item \textit{Notes:} Output variables are computed by the model and shown in the results; they are not directly editable. Values in kr unless noted. For each adjustment, the variants shown are before and after the applicable cap.
+\item[b] Depreciation and capital cost (return) are reported split into an ordinary and a tail component, at both the total and the per-category level. The suffix \texttt{.1} denotes the ordinary component and \texttt{.2} the tail; the per-category shorthand \texttt{.1/.2} stands for both (e.g.\ 20.2.1/.2 means 20.2.1 and 20.2.2).
 \end{tablenotes}
 \end{threeparttable}
 \end{singlespace}
