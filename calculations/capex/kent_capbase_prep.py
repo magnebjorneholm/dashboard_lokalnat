@@ -17,6 +17,84 @@ from typing import Dict, Optional, Any
 import warnings
 
 from config.asset_categories import BASELINE_LIFETIMES
+from config.glossary import ASSET_CATEGORY_NAMES
+
+# Authoritative exact-match map: KENT's official "Anl.kategori" text -> cat_encode.
+# Mirrors the template's "Unika värden (Anl.kategori)" list 1:1 (case-insensitive).
+# Tried before the substring CATEGORY_MAPPING so that e.g. the 220 kV category
+# "Ledning ... med undantag för luftledning ..." resolves to its own code (7)
+# instead of collapsing to Luftledning (9) on the substring "luftledning".
+_OFFICIAL_CATEGORY_TO_ENCODE = {
+    name.strip().lower(): ce for ce, name in ASSET_CATEGORY_NAMES.items()
+}
+
+# KENT sheet names expected in the template (used for upload diagnostics).
+KENT_SHEETS = ('Normvärde', 'Övriga värderingsmetoder', 'Investeringar_Utrangeringar')
+
+
+def _seek0(f):
+    """Rewind a file-like object so it can be read once per sheet."""
+    try:
+        f.seek(0)
+    except (AttributeError, OSError, ValueError):
+        pass  # plain filepath string — nothing to rewind
+
+
+def _clean_cell(v) -> str:
+    """Normalise one raw cell to a comparable string (matches _clean_columns)."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ''
+    return str(v).strip().replace('\n', ' ').replace('  ', ' ')
+
+
+def _uniquify(cols):
+    """Mangle duplicate column labels (Excel allows repeats; pandas dedupes)."""
+    seen: Dict[str, int] = {}
+    out = []
+    for c in cols:
+        if c in seen:
+            seen[c] += 1
+            out.append(f"{c}.{seen[c]}")
+        else:
+            seen[c] = 0
+            out.append(c)
+    return out
+
+
+def _read_sheet(filepath, sheet_name: str, markers: set, max_scan: int = 8) -> pd.DataFrame:
+    """
+    Read a KENT sheet, auto-detecting which row is the header.
+
+    KENT sheets disagree on header position: 'Normvärde' puts the header on
+    the first row, while 'Övriga värderingsmetoder' and
+    'Investeringar_Utrangeringar' carry a title row above it. Scan the first
+    rows and pick the first matching >=2 known header labels (cleaned,
+    case-insensitive). Falls back to the second row (legacy header=1).
+    """
+    _seek0(filepath)
+    try:
+        raw = pd.read_excel(filepath, sheet_name=sheet_name, header=None, engine='openpyxl')
+    except Exception:
+        return pd.DataFrame()
+    if raw.empty:
+        return pd.DataFrame()
+
+    header_row = None
+    for i in range(min(max_scan, len(raw))):
+        cells = {_clean_cell(v).lower() for v in raw.iloc[i].tolist()}
+        if len(markers & cells) >= 2:
+            header_row = i
+            break
+    if header_row is None:
+        header_row = 1 if len(raw) > 1 else 0
+
+    columns = _uniquify([
+        _clean_cell(v) if _clean_cell(v) else f'_unnamed_{j}'
+        for j, v in enumerate(raw.iloc[header_row].tolist())
+    ])
+    df = raw.iloc[header_row + 1:].copy()
+    df.columns = columns
+    return df.reset_index(drop=True)
 
 
 def read_kent_excel(file_obj) -> Dict[str, pd.DataFrame]:
@@ -41,13 +119,13 @@ def read_kent_excel(file_obj) -> Dict[str, pd.DataFrame]:
             if search_term in col:
                 return col
         return None
-    
+
     def read_normvarde(filepath) -> pd.DataFrame:
-        try:
-            df = pd.read_excel(filepath, sheet_name='Normvärde', header=1, engine='openpyxl')
-        except Exception:
-            return pd.DataFrame()
-        
+        df = _read_sheet(filepath, 'Normvärde',
+                         {'anl.-kategori', 'kod', 'typ av anläggning', 'antal', 'rådighet'})
+        if df.empty:
+            return df
+
         df = _clean_columns(df)
         
         column_mapping = {
@@ -82,11 +160,11 @@ def read_kent_excel(file_obj) -> Dict[str, pd.DataFrame]:
         return df
     
     def read_ovriga_metoder(filepath) -> pd.DataFrame:
-        try:
-            df = pd.read_excel(filepath, sheet_name='Övriga värderingsmetoder', header=1, engine='openpyxl')
-        except Exception:
-            return pd.DataFrame()
-        
+        df = _read_sheet(filepath, 'Övriga värderingsmetoder',
+                         {'ansk', 'bokf', 'annat', 'anl.kategori', 'rådighet'})
+        if df.empty:
+            return df
+
         df = _clean_columns(df)
         
         # Hitta NUAV-kolumn (prioritera "NUAV 2022")
@@ -146,11 +224,11 @@ def read_kent_excel(file_obj) -> Dict[str, pd.DataFrame]:
         return df
     
     def read_investeringar(filepath) -> pd.DataFrame:
-        try:
-            df = pd.read_excel(filepath, sheet_name='Investeringar_Utrangeringar', header=1, engine='openpyxl')
-        except Exception:
-            return pd.DataFrame()
-        
+        df = _read_sheet(filepath, 'Investeringar_Utrangeringar',
+                         {'anl.kategori', 'typ av anläggning', 'antal', 'halvår', 'enhet'})
+        if df.empty:
+            return df
+
         df = _clean_columns(df)
         
         column_mapping = {
@@ -189,7 +267,7 @@ def read_kent_excel(file_obj) -> Dict[str, pd.DataFrame]:
     }
     
     if result['normvarde'].empty and result['ovriga'].empty:
-        warnings.warn("Ingen befintlig kapitalbas hittades i KENT-filen")
+        warnings.warn("No existing capital base found in the KENT file.")
     
     return result
 
@@ -221,12 +299,42 @@ def get_category_encode(category_text: str) -> int:
         return 17
     
     cat_lower = str(category_text).strip().lower()
-    
+
+    # 1. Exact match against KENT's official category texts (authoritative).
+    exact = _OFFICIAL_CATEGORY_TO_ENCODE.get(cat_lower)
+    if exact is not None:
+        return exact
+
+    # 2. Fallback: substring match (handles short/free-text labels, e.g. the
+    #    reverse-engineered round-trip file's "Kabel", "Transformator", ...).
     for key, code in CATEGORY_MAPPING.items():
         if key in cat_lower:
             return code
-    
+
     return 17
+
+
+def category_match_kind(category_text) -> str:
+    """
+    Classify HOW a category text resolves to a cat_encode, for diagnostics.
+
+    Returns:
+        'exact'     - matched an official KENT category name (authoritative)
+        'substring' - matched the substring fallback table
+        'default'   - no match; silently assumed Transformator (17)
+        'empty'     - blank / NaN category cell
+    """
+    if pd.isna(category_text):
+        return 'empty'
+    cat_lower = str(category_text).strip().lower()
+    if not cat_lower:
+        return 'empty'
+    if cat_lower in _OFFICIAL_CATEGORY_TO_ENCODE:
+        return 'exact'
+    for key in CATEGORY_MAPPING:
+        if key in cat_lower:
+            return 'substring'
+    return 'default'
 
 
 def year_to_time_code(year) -> Optional[int]:
@@ -287,7 +395,7 @@ def process_kent_components(
             dfs.append(df_copy)
     
     if not dfs:
-        raise ValueError("Ingen data att kombinera fran KENT-filen")
+        raise ValueError("No data could be read from the KENT file.")
     
     df = pd.concat(dfs, ignore_index=True, sort=False)
     
@@ -394,14 +502,14 @@ def build_capbase_a_from_kent(
     
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
-        raise ValueError(f"Saknade obligatoriska kolumner: {missing}")
+        raise ValueError(f"Required columns are missing: {missing}")
     
     available = required_cols + [col for col in extra_cols if col in df.columns]
     capbase_a = df[available].copy().reset_index(drop=True)
     
     validation = validate_capbase_a(capbase_a)
     if not validation['valid']:
-        raise ValueError(f"capbase_a validering misslyckades:\n" + "\n".join(validation['errors']))
+        raise ValueError("KENT validation failed:\n" + "\n".join(validation['errors']))
     
     return capbase_a
 
@@ -416,31 +524,31 @@ def validate_capbase_a(df: pd.DataFrame) -> Dict[str, Any]:
     missing = [col for col in required if col not in df.columns]
     if missing:
         report['valid'] = False
-        report['errors'].append(f"Saknade kolumner: {missing}")
+        report['errors'].append(f"Missing columns: {missing}")
         return report
-    
+
     if df['capbase_existing'].notna().sum() > 0:
         if (~df['capbase_existing'].isin([0, 1])).any():
-            report['errors'].append("capbase_existing har ogiltiga varden")
+            report['errors'].append("capbase_existing has invalid values")
             report['valid'] = False
-    
+
     if (df['ekdep'] <= 0).any():
-        report['errors'].append("ekdep innehaller icke-positiva varden")
+        report['errors'].append("ekdep contains non-positive values")
         report['valid'] = False
-    
+
     if (df['maxdep'] <= 0).any():
-        report['errors'].append("maxdep innehaller icke-positiva varden")
+        report['errors'].append("maxdep contains non-positive values")
         report['valid'] = False
-    
+
     existing = df['capbase_existing'] == 1
     problematic = existing & df['time_from'].isna()
     if problematic.any():
-        report['warnings'].append(f"{problematic.sum()} befintliga komponenter saknar time_from")
-    
+        report['warnings'].append(f"{problematic.sum()} existing components have no time_from")
+
     if (df['maxdep'] < df['ekdep']).any():
-        report['warnings'].append("Vissa komponenter har maxdep < ekdep")
-    
-    report['info'].append(f"Totalt {len(df)} komponenter")
+        report['warnings'].append("Some components have maxdep < ekdep")
+
+    report['info'].append(f"{len(df)} components in total")
     report['info'].append(f"Total NUAV: {df['nuav_2022'].sum()/1e6:.1f} Mkr")
     
     return report
@@ -466,5 +574,163 @@ def get_kent_upload_summary(capbase_a: pd.DataFrame) -> Dict[str, Any]:
             'n_components': int(len(cat_df)),
             'nuav_mkr': float(cat_df['nuav_2022'].sum() / 1e6)
         }
-    
+
     return summary
+
+
+# Category texts that mean "no category given" once lowercased.
+_EMPTYISH_CATEGORY = {'', 'nan', 'none', 'ovrigt'}
+
+
+def _rows(n: int) -> str:
+    """Pluralise 'row'/'rows' for diagnostic copy."""
+    return "row" if n == 1 else "rows"
+
+
+def _comp(n: int) -> str:
+    """Pluralise 'component'/'components' for diagnostic copy."""
+    return "component" if n == 1 else "components"
+
+
+def _has(n: int) -> str:
+    """Agree 'has'/'have' with the count for diagnostic copy."""
+    return "has" if n == 1 else "have"
+
+
+def _isare(n: int) -> str:
+    """Agree 'is'/'are' with the count for diagnostic copy."""
+    return "is" if n == 1 else "are"
+
+
+def diagnose_kent_upload(
+    kent_file,
+    network_id: int,
+    lifetime_adjustments: Optional[Dict[int, Dict[str, int]]] = None,
+) -> Dict[str, Any]:
+    """
+    Validate an uploaded KENT file and return a structured deviation report
+    WITHOUT raising. Used at upload time so the user sees, before the file is
+    accepted into a case:
+      - blocking errors (the file cannot be used), and
+      - deviations/warnings (it can be used, but here is what we assume).
+
+    Returns a dict:
+        ok        -- bool; False if any blocking error
+        errors    -- list of {issue, detail}              (cannot proceed)
+        warnings  -- list of {issue, detail, assumption}  (proceed-but-flag)
+        summary   -- get_kent_upload_summary(capbase) | None
+    """
+    report: Dict[str, Any] = {"ok": False, "errors": [], "warnings": [], "summary": None}
+
+    def err(issue: str, detail: str = ""):
+        report["errors"].append({"issue": issue, "detail": str(detail)})
+
+    def warn(issue: str, detail: str = "", assumption: str = ""):
+        report["warnings"].append(
+            {"issue": issue, "detail": str(detail), "assumption": str(assumption)}
+        )
+
+    transformator = ASSET_CATEGORY_NAMES[17]
+
+    # 1. File must open as a real .xlsx workbook
+    try:
+        _seek0(kent_file)
+        xls = pd.ExcelFile(kent_file, engine="openpyxl")
+        sheet_names = set(xls.sheet_names)
+    except Exception as e:
+        err("File could not be read as an Excel workbook.",
+            f"Make sure it is a KENT file saved in .xlsx format ({type(e).__name__}).")
+        return report
+
+    # 2. Must contain at least one KENT sheet
+    if not any(s in sheet_names for s in KENT_SHEETS):
+        err("File does not match the KENT template.",
+            "None of the KENT sheets ("
+            + ", ".join(f"'{s}'" for s in KENT_SHEETS)
+            + f") were found. Sheets in file: {sorted(sheet_names)[:8]}.")
+        return report
+
+    # Soft: a sheet from the template is entirely missing
+    for s in KENT_SHEETS:
+        if s not in sheet_names:
+            warn(f"The '{s}' sheet is missing.",
+                 "Only the sheets present are read.",
+                 "No entries from this sheet are included.")
+
+    # 3. Parse via the real pipeline path (surfaces schema/validation errors)
+    try:
+        capbase = build_capbase_a_from_kent(kent_file, network_id, lifetime_adjustments)
+    except ValueError as e:
+        err("KENT file could not be parsed.", str(e))
+        return report
+    except Exception as e:
+        err("Unexpected error while parsing the KENT file.", f"{type(e).__name__}: {e}")
+        return report
+
+    report["summary"] = get_kent_upload_summary(capbase)
+
+    # 4a. Unknown / blank categories -> silently assumed Transformator (17)
+    if "cat" in capbase.columns:
+        vc = capbase["cat"].astype(str).str.strip().str.lower().value_counts()
+        unknown, n_empty = {}, 0
+        for text, n in vc.items():
+            if text in _EMPTYISH_CATEGORY:
+                n_empty += int(n)
+            elif category_match_kind(text) == "default":
+                unknown[text] = int(n)
+        if unknown:
+            listed = ", ".join(f'"{t}" ({n} {_rows(n)})' for t, n in unknown.items())
+            warn("Unknown asset category.",
+                 f"Does not match the KENT category list: {listed}.",
+                 f"Treated as '{transformator}' (code 17). Check the spelling in the file.")
+        if n_empty:
+            warn("Rows without a category.",
+                 f"{n_empty} {_comp(n_empty)} {_has(n_empty)} no category text.",
+                 f"Treated as '{transformator}' (code 17).")
+
+    # 4b. Existing components without a year -> no age, excluded from the base
+    existing = capbase["capbase_existing"] == 1
+    n_no_year = int((existing & capbase["time_from"].isna()).sum())
+    if n_no_year:
+        warn("Components without a year.",
+             f"{n_no_year} existing {_comp(n_no_year)} {_has(n_no_year)} no valid year.",
+             "These get no age and do not contribute to the capital base.")
+
+    # 4c. Zero / non-numeric NUAV among existing components
+    n_zero_nuav = int((existing & (capbase["nuav_2022"] == 0)).sum())
+    if n_zero_nuav:
+        warn("Components with NUAV 0.",
+             f"{n_zero_nuav} existing {_comp(n_zero_nuav)} {_has(n_zero_nuav)} NUAV 0 (blank or non-numeric).",
+             "These do not contribute to the capital base.")
+
+    # 4d. Lifetime sanity: maxdep < ekdep
+    bad_life = int((capbase["maxdep"] < capbase["ekdep"]).sum())
+    if bad_life:
+        warn("Maximum lifetime shorter than ordinary lifetime.",
+             f"{bad_life} {_comp(bad_life)} affected.",
+             "Calculation proceeds; check the lifetime parameters.")
+
+    # 4e. Best-effort: Normvärde rows that have a category but no 'Kod' are dropped
+    try:
+        _seek0(kent_file)
+        raw_norm = _read_sheet(
+            kent_file, "Normvärde",
+            {'anl.-kategori', 'kod', 'typ av anläggning', 'antal', 'rådighet'},
+        )
+        if not raw_norm.empty:
+            cols = {str(c).strip().lower(): c for c in raw_norm.columns}
+            cat_col, kod_col = cols.get("anl.-kategori"), cols.get("kod")
+            if cat_col is not None and kod_col is not None:
+                has_cat = (raw_norm[cat_col].notna()
+                           & (raw_norm[cat_col].astype(str).str.strip() != ""))
+                dropped = int((has_cat & raw_norm[kod_col].isna()).sum())
+                if dropped:
+                    warn("Rows in 'Normvärde' without a category code.",
+                         f"{dropped} {_rows(dropped)} {_has(dropped)} a category but no 'Kod' "
+                         f"and {_isare(dropped)} left out.",
+                         "Fill in the 'Kod' column for these rows.")
+    except Exception:
+        pass  # dropped-row detection is best-effort and never blocks
+
+    report["ok"] = len(report["errors"]) == 0
+    return report

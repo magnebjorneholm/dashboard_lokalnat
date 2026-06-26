@@ -110,7 +110,7 @@ def render_kent(user_id_network: Optional[int] = None) -> Dict[str, Any]:
         st.info("Log in to upload KENT file.")
         return config
     
-    kent_result = _render_kent_upload()
+    kent_result = _render_kent_upload(user_id_network)
     if kent_result.get("kent_file_bytes") is not None:
         config["kent_file_bytes"] = kent_result["kent_file_bytes"]
         config["kent_file_name"] = kent_result["kent_file_name"]
@@ -153,7 +153,7 @@ def render(user_id_network: Optional[int] = None) -> Dict[str, Any]:
         if var_scaling:
             config["var_scaling"] = var_scaling
         
-        kent_result = _render_kent_upload()
+        kent_result = _render_kent_upload(user_id_network)
         if kent_result.get("kent_file_bytes") is not None:
             config["kent_file_bytes"] = kent_result["kent_file_bytes"]
             config["kent_file_name"] = kent_result["kent_file_name"]
@@ -509,8 +509,81 @@ def _classify_ordinarie(df: pd.DataFrame) -> pd.DataFrame:
 # 1.4 KENT UPLOAD
 # =============================================================================
 
-def _render_kent_upload() -> Dict[str, Any]:
-    """Render KENT file upload UI."""
+def _kent_summary_line(summary: Dict[str, Any], prefix: str) -> str:
+    """One-line capital-base summary used in the dialog and the inline status."""
+    return (
+        f"{prefix}: {summary['n_components']} components, "
+        f"{summary['total_nuav_mkr']:.1f} Mkr NUAV, "
+        f"{summary['n_categories']} categories."
+    )
+
+
+@st.dialog("Review KENT file")
+def _kent_review_dialog(filename: str, report: Dict[str, Any],
+                        file_hash: str, decision_key: str):
+    """Modal review of a usable-but-deviating KENT file. Records the choice on
+    the file's content hash so the page can act after the dialog closes."""
+    warnings_list = report.get("warnings") or []
+    summary = report.get("summary") or {}
+    n = len(warnings_list)
+
+    st.markdown(
+        f"**{filename}** can be used, but {n} {'issue' if n == 1 else 'issues'} "
+        f"{'was' if n == 1 else 'were'} found. Review the assumptions before using it."
+    )
+    for w in warnings_list:
+        with st.container(border=True):
+            st.markdown(f"**{w['issue']}**")
+            if w.get("detail"):
+                st.caption(f"Cause: {w['detail']}")
+            if w.get("assumption"):
+                st.caption(f"If you proceed: {w['assumption']}")
+    if summary:
+        st.caption(_kent_summary_line(summary, "Summary if approved"))
+
+    col_use, col_cancel = st.columns(2)
+    if col_use.button("Use anyway", type="primary", use_container_width=True):
+        st.session_state[decision_key] = (file_hash, "approved")
+        st.rerun()
+    if col_cancel.button("Cancel", use_container_width=True):
+        st.session_state[decision_key] = (file_hash, "rejected")
+        st.rerun()
+
+
+@st.dialog("KENT file cannot be used")
+def _kent_error_dialog(filename: str, report: Dict[str, Any],
+                       file_hash: str, decision_key: str):
+    """Modal for a KENT file that fails validation (cannot be used at all)."""
+    errors_list = report.get("errors") or []
+
+    st.markdown(f"**{filename}** cannot be used.")
+    for e in errors_list:
+        with st.container(border=True):
+            st.markdown(f"**{e['issue']}**")
+            if e.get("detail"):
+                st.caption(e["detail"])
+    st.caption("Upload a corrected file to try again.")
+
+    if st.button("Close", use_container_width=True):
+        st.session_state[decision_key] = (file_hash, "rejected")
+        st.rerun()
+
+
+def _render_kent_upload(user_id_network: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Render the KENT upload field with upload-time validation.
+
+    The file is parsed on upload (diagnose_kent_upload). A clean file is accepted
+    with a short summary. A file with deviations or blocking errors opens a modal
+    (st.dialog) describing each issue and what we assume; deviating files are
+    accepted only after the user picks "Use anyway". The choice is keyed to the
+    file's content hash, so re-runs don't re-prompt and a new file re-triggers the
+    review.
+    """
+    import hashlib
+    from io import BytesIO
+    from calculations.capex.kent_capbase_prep import diagnose_kent_upload
+
     result = {
         "kent_file_bytes": None,
         "kent_file_name": None,
@@ -541,17 +614,74 @@ def _render_kent_upload() -> Dict[str, Any]:
         help="Export from KENT regulatory template"
     )
 
-    if uploaded_file is not None:
-        result["kent_file_bytes"] = uploaded_file.getvalue()
-        result["kent_file_name"] = uploaded_file.name
-        st.caption(f":orange[Modified] - KENT file: {uploaded_file.name}")
-        st.info(
-            "KENT file will be used for capital base calculations. "
-            "Parameter scaling factors (1.1, 1.2) still apply."
-        )
-    elif has_saved_capbase:
-        # Keep saved parquet and filename in config so pipeline uses them
-        result["kent_file_name"] = saved_kent_name
+    if uploaded_file is None:
+        if has_saved_capbase:
+            # Keep saved parquet and filename in config so pipeline uses them
+            result["kent_file_name"] = saved_kent_name
+        return result
+
+    file_bytes = uploaded_file.getvalue()
+    file_hash = hashlib.md5(file_bytes).hexdigest()
+    filename = uploaded_file.name
+
+    def _accept():
+        result["kent_file_bytes"] = file_bytes
+        result["kent_file_name"] = filename
+        st.caption(f":orange[Modified] - KENT file: {filename}")
+
+    # Run (and cache) the diagnosis once per distinct file to avoid re-parsing
+    # the workbook on every Streamlit rerun.
+    diag_key = f"{MODULE_KEY}_kent_diag"
+    cached = st.session_state.get(diag_key)
+    if cached and cached[0] == file_hash:
+        report = cached[1]
+    elif user_id_network is None:
+        report = None  # no company context -> skip validation (legacy path)
+    else:
+        with st.spinner("Validating KENT file..."):
+            report = diagnose_kent_upload(BytesIO(file_bytes), user_id_network)
+        st.session_state[diag_key] = (file_hash, report)
+
+    # No validation context (legacy) -> store as before
+    if report is None:
+        _accept()
+        return result
+
+    summary = report.get("summary") or {}
+    warnings_list = report.get("warnings") or []
+    n = len(warnings_list)
+
+    # Clean file -> accept, no dialog
+    if report["ok"] and not warnings_list:
+        if summary:
+            st.success(_kent_summary_line(summary, "KENT file loaded"))
+        _accept()
+        return result
+
+    # Decision tracking + one-shot auto-open of the dialog when the file changes.
+    decision_key = f"{MODULE_KEY}_kent_decision"
+    seen_key = f"{MODULE_KEY}_kent_seen_hash"
+    decision = st.session_state.get(decision_key)
+    verdict = decision[1] if (decision and decision[0] == file_hash) else None
+    auto_open = st.session_state.get(seen_key) != file_hash and verdict is None
+    st.session_state[seen_key] = file_hash
+
+    if report["ok"]:
+        # Usable, but with deviations -> approval gate via the review dialog
+        if verdict == "approved":
+            st.success(f"Using KENT file ({n} {'issue' if n == 1 else 'issues'} approved).")
+            _accept()
+        else:
+            st.warning(f"KENT file has {n} {'issue' if n == 1 else 'issues'} to review.")
+            review = st.button("Review", key=f"{MODULE_KEY}_kent_review_btn")
+            if auto_open or review:
+                _kent_review_dialog(filename, report, file_hash, decision_key)
+    else:
+        # Blocking errors -> cannot be used
+        st.error("KENT file cannot be used.")
+        details = st.button("Details", key=f"{MODULE_KEY}_kent_details_btn")
+        if auto_open or details:
+            _kent_error_dialog(filename, report, file_hash, decision_key)
 
     return result
 
