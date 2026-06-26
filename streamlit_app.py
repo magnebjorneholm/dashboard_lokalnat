@@ -37,6 +37,9 @@ from frontend.utils.state_manager import (
     get_user_reid,
 )
 from frontend.utils.company_directory import get_company_records, get_company_display
+from frontend.utils.working_state_store import (
+    persist_working_state, restore_working_state, clear_working_state,
+)
 from frontend.common.styling import apply_base_styling, apply_tool_chrome
 from frontend.common.auth_page import render_auth_gate
 from auth.firebase_auth import is_dev_mode, initialize_firebase_auth
@@ -288,6 +291,7 @@ def _render_authenticated_sidebar():
         with col1:
             if st.button("Yes, log out", type="primary", width="stretch"):
                 st.session_state["_logging_out"] = True
+                clear_working_state()
                 auth_manager = initialize_firebase_auth()
                 auth_manager.sign_out()
                 st.session_state["user_reid"] = None
@@ -374,12 +378,19 @@ if pg in TOOL_PAGES:
         if pending_token:
             set_auth_cookie(pending_token)
 
-        # Restore last saved case on refresh (once) + keep the case cookie in sync.
-        try_restore_case_from_cookie()
+        # Restore working state on refresh (once). The server-side store is the
+        # freshest source (it includes unsaved edits), so try it first; only fall
+        # back to the cookie -> Firestore saved case when the store is cold
+        # (redeploy / eviction). Keep the case cookie in sync either way.
+        if not restore_working_state():
+            try_restore_case_from_cookie()
         _sync_case_cookie()
 
         render_sidebar()
         pg.run()
+
+        # Snapshot the live working state so a reload keeps unsaved edits.
+        persist_working_state()
 
 else:
     # ZON 1 — the public landing (pg is landing_main), shown regardless of auth so

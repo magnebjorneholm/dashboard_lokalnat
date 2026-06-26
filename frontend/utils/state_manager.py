@@ -204,6 +204,11 @@ def reset_case() -> None:
     for key in ("cm_case_select", "cm_compare_multiselect"):
         st.session_state.pop(key, None)
 
+    # Drop the server-side working-state snapshot for this user (lazy import to
+    # avoid a load-order cycle with working_state_store).
+    from frontend.utils.working_state_store import clear_working_state
+    clear_working_state()
+
 
 def _clear_selection_widget_keys() -> None:
     """Clear module/section checkbox widget keys to force re-initialization."""

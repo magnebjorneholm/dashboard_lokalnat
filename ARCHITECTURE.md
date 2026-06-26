@@ -720,17 +720,34 @@ Authentication survives page refreshes via a browser cookie storing the Firebase
 1. `delete_auth_cookie()` → expires the cookie
 2. `auth_manager.sign_out()` → clears session state
 
-### Session Store (state_manager.py)
+### Session Store (working_state_store.py)
 
-Working state (ui_config, selected_modules, results, case metadata) is persisted across
-page refreshes via a server-side `@st.cache_resource` dict keyed by `auth_uid`.
+A page reload opens a new websocket, so Streamlit wipes `st.session_state`; navigation
+between pages keeps state (same websocket) but a reload does not. To keep *unsaved*
+working state across a reload, `frontend/utils/working_state_store.py` snapshots it into
+a process-global `@st.cache_resource` dict.
 
-**Save points:** after compute, after case save, after case load, after revert.
-**Clear points:** on reset ("New case"), on logout.
+- **What:** the `WORKING_KEYS` set (user_reid, ui_config, selected_modules, case metadata,
+  the saved/computed references, and the `baseline_result` / `case_result` PipelineResults
+  held by reference — so results come back instantly after a reload, no recompute). Widget
+  keys are not stored; on restore they are cleared so editors reinitialize from ui_config.
+- **Key:** per user — `auth_uid` in production, the sentinel `"dev"` in dev mode (single
+  local user; `is_dev_mode()` is never true in production). `user_reid` rides inside the
+  snapshot, so the analyzed company is restored before the sidebar runs and the key never
+  depends on it.
+- **Write:** at the END of every rerun (`persist_working_state` in `streamlit_app.py`), so
+  it captures edits made after a compute but before a save.
+- **Restore:** once per session (`restore_working_state`), and it takes precedence over the
+  cookie → Firestore saved-case restore (`try_restore_case_from_cookie`). When the store is
+  cold (redeploy / eviction) the caller falls back to the saved case.
+- **Clear points:** on reset ("New case", `reset_case`), on logout.
 
-**Limitations:** Store is cleared on server restart (Render redeploy). Config changes
-made after compute but before a new compute are not persisted. Users should save their
-case to Firestore to preserve work across sessions.
+**Preconditions / limitations:** Assumes a **single server instance** (Render Manual
+Scaling = 1; Autoscaling is Pro-only and off). If the instance count is ever raised, a
+reload may land on another instance and miss the store; it then degrades to the saved-case
+fallback — never worse than today. The store is also cleared on server restart (Render
+redeploy), so unsaved edits do not survive a redeploy; users should save the case to
+Firestore to preserve work across deploys.
 
 
 ## 12. Config Dataclasses (config/case_definition.py)
