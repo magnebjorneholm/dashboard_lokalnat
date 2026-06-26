@@ -76,35 +76,6 @@ def _load_facit():
     return eff, req
 
 
-def _peer_stability(peerlinks: pd.DataFrame) -> pd.DataFrame:
-    """Per-firm peer-set stability across the coalitions (non-self peers only).
-
-    For each firm, compare its benchmark set across the coalitions in which it is
-    inefficient (a self-only firm has no peers, so it is absent here):
-      n_coalitions_with_peers  coalitions where the firm leans on someone
-      n_distinct_peer_sets     distinct benchmark configurations seen
-      n_always_peers           peers present in EVERY such coalition (the stable core)
-      n_ever_peers             peers present in ANY coalition (the full pool)
-      core_ratio               always / ever  (1 = rock-stable; low = churny / fragile)
-    """
-    nonself = peerlinks[~peerlinks["is_self"]]
-    sets = nonself.groupby(["REId", "subset_mask"])["peer_REId"].agg(frozenset)
-    rows = []
-    for reid, grp in sets.groupby(level=0):
-        s = list(grp)
-        ever = frozenset().union(*s)
-        always = s[0].intersection(*s[1:]) if len(s) > 1 else s[0]
-        rows.append({
-            "REId": reid,
-            "n_coalitions_with_peers": len(s),
-            "n_distinct_peer_sets": len(set(s)),
-            "n_always_peers": len(always),
-            "n_ever_peers": len(ever),
-            "core_ratio": round(len(always) / len(ever), 4) if ever else float("nan"),
-        })
-    return pd.DataFrame(rows).sort_values("core_ratio").reset_index(drop=True)
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--nrep", type=int, default=DEFAULT_NREP, help="dea.boot replications")
@@ -143,11 +114,15 @@ def main() -> int:
         par_rows.append({"subset_mask": mask, "players": pcsv, "e75": cs.e75,
                          "max_abs_d_eff": d_eff, "max_abs_d_req": d_req})
 
-        # Super-efficiency (all scored firms).
+        # Per-firm coalition scores (all scored firms): super-eff, capped eff, and the
+        # signed two-sided requirement. requirement_pp is aligned to `reids` just like
+        # theta/efficiency, so reusing the same finite-theta filter is exact: a scored
+        # firm has finite theta and a finite requirement; the Ei-excluded have NaN for both.
         for i in range(len(reids)):
             if np.isfinite(cs.theta[i]):
                 se_rows.append({"subset_mask": mask, "players": pcsv, "REId": reids[i],
-                                "super_eff": cs.theta[i], "eff": cs.efficiency[i]})
+                                "super_eff": cs.theta[i], "eff": cs.efficiency[i],
+                                "requirement_pp": cs.requirement_pp[i]})
 
         # Peers + shadow prices (reference firms).
         for j, rid in enumerate(dg.ref_reid):
@@ -185,13 +160,11 @@ def main() -> int:
         inf_rows.append(df)
 
     peerlinks = pd.DataFrame(peerlink_rows)
-    stability = _peer_stability(peerlinks)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(se_rows).to_csv(OUT_DIR / "super_efficiency.csv", index=False)
+    pd.DataFrame(se_rows).to_csv(OUT_DIR / "coalition_scores.csv", index=False)
     pd.DataFrame(peer_rows).to_csv(OUT_DIR / "number_peers.csv", index=False)
     peerlinks.to_csv(OUT_DIR / "peers.csv", index=False)
-    stability.to_csv(OUT_DIR / "peer_stability.csv", index=False)
     pd.DataFrame(sp_rows).to_csv(OUT_DIR / "shadow_prices.csv", index=False)
     pd.DataFrame(par_rows).to_csv(OUT_DIR / "parity.csv", index=False)
     pd.concat(inf_rows, ignore_index=True).to_csv(OUT_DIR / "inference.csv", index=False)
@@ -207,7 +180,6 @@ def main() -> int:
         "bootstrap_endpoints": [lbl for lbl, _ in endpoints],
         "shadow_price_nan": int(pd.DataFrame(sp_rows)["value"].isna().sum()),
         "n_peer_links": int(len(peerlinks)),
-        "median_core_ratio": round(float(stability["core_ratio"].median()), 4),
         "parity": {"max_abs_d_eff": max_eff_d, "max_abs_d_req_pp": max_req_d,
                    "eff_tol": EFF_TOL, "req_tol_pp": REQ_TOL_PP,
                    "passed": bool(max_eff_d < EFF_TOL and max_req_d < REQ_TOL_PP)},

@@ -1380,9 +1380,10 @@ Shapley/LOO/AOI machinery in `analysis/decomp/engine.py` is untouched.
   solver tolerance, not bit-identity).
 
 Outputs under `shapley_diagnostics/out/` (committed, like the analysis `out/` tables):
-`super_efficiency.csv`, `number_peers.csv`, `peers.csv` (finest level: one row per active
-firm→peer link), `peer_stability.csv` (a pure roll-up of `peers.csv`), `shadow_prices.csv`
+`coalition_scores.csv` (per scored firm: super-eff, capped eff, signed two-sided
+`requirement_pp`), `number_peers.csv`, `peers.csv` (finest level: one row per active
+firm→peer link — the base for custom peer-stability/churn roll-ups), `shadow_prices.csv`
 (long), `inference.csv` (endpoints only), `parity.csv`, `manifest.json`. Firm tiers from
-the frozen design: 144 reference firms (peers/duals), 145 scored (super-eff/eff; adds the
-frozen-but-scored REL03016), 3 Ei-excluded (never scored). Why frozen-only and the
+the frozen design: 144 reference firms (peers/duals), 145 scored (super-eff/eff/requirement;
+adds the frozen-but-scored REL03016), 3 Ei-excluded (never scored). Why frozen-only and the
 `Status = 5` dual-NaN caveat are documented in the sub-project README.
